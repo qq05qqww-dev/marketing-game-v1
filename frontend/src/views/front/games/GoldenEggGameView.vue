@@ -659,8 +659,11 @@ const eggGridStyle = computed(() => {
     maxWidth: `calc(${cardSize}px * 3 + ${gap}px * 2)`,
     margin: '0 auto',
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+    gridAutoRows: `minmax(${Math.round(cardSize / 0.88)}px, auto)`,
     gap: `${gap}px`,
-    justifyContent: 'center'
+    justifyContent: 'center',
+    overflow: 'visible',
+    transform: 'none'
   }
 })
 
@@ -672,8 +675,9 @@ const eggCardStyle = computed(() => {
     maxWidth: `${cardSize}px`,
     minWidth: '0',
     aspectRatio: '0.88 / 1',
-    minHeight: '0',
-    overflow: 'hidden',
+    minHeight: `${Math.round(cardSize / 0.88)}px`,
+    overflow: 'visible',
+    transform: 'none',
     background: `linear-gradient(180deg, ${campaign.eggCardBgFrom || 'rgba(239, 68, 68, 0.4)'}, ${campaign.eggCardBgTo || 'rgba(127, 29, 29, 0.45)'})`
   }
 })
@@ -2735,7 +2739,11 @@ onUnmounted(() => {
 
 
 .golden-egg-card {
-  transform: translateZ(0);
+  position: relative;
+  z-index: 1;
+  transform: none;
+  backface-visibility: visible;
+  will-change: auto;
 }
 
 .golden-egg-card::before {
@@ -3064,18 +3072,44 @@ onUnmounted(() => {
   max-height: var(--egg-size) !important;
 }
 
-/* 第 331 批：卡牌框內固定 */
+/* 第 354 批：手機滑動重繪穩定版 */
 .golden-egg-grid {
-  overflow: hidden;
+  overflow: visible;
+  transform: none;
+  contain: layout paint;
 }
 
 .golden-egg-card {
   margin-left: auto;
   margin-right: auto;
+  transform: none;
+  backface-visibility: visible;
+  will-change: auto;
+  contain: layout paint;
 }
 
 .golden-egg-shell {
   flex-shrink: 0;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .golden-egg-card:not(.is-opened):not(:disabled):hover {
+    transform: none;
+    box-shadow: 0 10px 22px rgba(127, 29, 29, 0.24);
+  }
+
+  .golden-egg-stage {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  .golden-egg-card,
+  .golden-egg-shell,
+  .golden-egg-opened {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 </style>
