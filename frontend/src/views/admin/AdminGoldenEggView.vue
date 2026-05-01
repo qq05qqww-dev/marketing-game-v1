@@ -776,8 +776,28 @@ const loadState = () => {
   previewRefreshKey.value = Date.now()
 }
 
-const syncToFrontNow = () => {
-  saveState('已同步到右側預覽與前台遊戲畫面。')
+const syncPreviewVisualSettingsToDatabaseForm = () => {
+  databaseGameConfigForm.eggSize = Number(campaign.eggSize || databaseGameConfigForm.eggSize || 74)
+  databaseGameConfigForm.eggCardSize = Number(campaign.eggCardSize || databaseGameConfigForm.eggCardSize || 128)
+  databaseGameConfigForm.eggGridGap = Number(campaign.eggGridGap || campaign.eggGap || databaseGameConfigForm.eggGridGap || 12)
+  databaseGameConfigForm.eggColorTop = campaign.eggColorTop || databaseGameConfigForm.eggColorTop || '#fff7ad'
+  databaseGameConfigForm.eggColorMiddle = campaign.eggColorMiddle || databaseGameConfigForm.eggColorMiddle || '#fde047'
+  databaseGameConfigForm.eggColorBottom = campaign.eggColorBottom || databaseGameConfigForm.eggColorBottom || '#b45309'
+}
+
+const syncToFrontNow = async () => {
+  // 第 353 批：
+  // 這顆按鈕以前只存 localStorage，會造成電腦前台同步、手機不同步。
+  // 現在若已載入正式 campaignId，就同步寫入 PostgreSQL gameConfig.settings。
+  saveState('已同步到右側預覽。')
+
+  if (!normalizedDatabaseCampaignId.value) {
+    setDatabasePreviewSyncMessage('尚未載入正式 campaignId；目前只同步本機預覽。若要同步手機前台，請先在資料庫模式讀取活動。')
+    return
+  }
+
+  syncPreviewVisualSettingsToDatabaseForm()
+  await saveDatabaseGameConfig()
 }
 
 const refreshPreview = () => {
@@ -2876,8 +2896,14 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.showActivityCountdown = settings.showActivityCountdown !== false
   databaseGameConfigForm.activityCountdownAlwaysShowSeconds = settings.activityCountdownAlwaysShowSeconds !== false
   databaseGameConfigForm.showBottomNav = settings.showBottomNav !== false
+
+  // 第 353 批：資料庫視覺設定只能從 PostgreSQL gameConfig.settings 載入。
   databaseGameConfigForm.eggSize = Number(settings.eggSize ?? 74)
-  databaseGameConfigForm.eggGridGap = Number(settings.eggGridGap ?? 12)
+  databaseGameConfigForm.eggCardSize = Number(settings.eggCardSize ?? 128)
+  databaseGameConfigForm.eggGridGap = Number(settings.eggGridGap ?? settings.eggGap ?? 12)
+  databaseGameConfigForm.eggColorTop = settings.eggColorTop || '#fff7ad'
+  databaseGameConfigForm.eggColorMiddle = settings.eggColorMiddle || '#fde047'
+  databaseGameConfigForm.eggColorBottom = settings.eggColorBottom || '#b45309'
 }
 
 const buildDatabaseGameConfigPayload = () => {
@@ -2905,9 +2931,10 @@ const buildDatabaseGameConfigPayload = () => {
     eggSize: Number(databaseGameConfigForm.eggSize || 74),
     eggCardSize: Number(databaseGameConfigForm.eggCardSize || 128),
     eggGridGap: Number(databaseGameConfigForm.eggGridGap || 12),
-    eggColorTop: databaseGameConfigForm.eggColorTop || campaign.eggColorTop || '#fff7ad',
-    eggColorMiddle: databaseGameConfigForm.eggColorMiddle || campaign.eggColorMiddle || '#fde047',
-    eggColorBottom: databaseGameConfigForm.eggColorBottom || campaign.eggColorBottom || '#b45309'
+    // 第 353 批：三個金蛋顏色欄位必須明確寫進 PostgreSQL。
+    eggColorTop: databaseGameConfigForm.eggColorTop || '#fff7ad',
+    eggColorMiddle: databaseGameConfigForm.eggColorMiddle || '#fde047',
+    eggColorBottom: databaseGameConfigForm.eggColorBottom || '#b45309'
   }
 }
 
@@ -2925,8 +2952,8 @@ const saveDatabaseGameConfig = async () => {
       buildDatabaseGameConfigPayload()
     )
 
-    showSavedMessage('已儲存資料庫前台設定。')
-    setDatabasePreviewSyncMessage('前台設定已更新，請刷新前台正式頁查看最新文字與顯示設定。')
+    showSavedMessage('已儲存資料庫前台設定，並寫入 PostgreSQL gameConfig.settings。')
+    setDatabasePreviewSyncMessage(`資料庫前台設定已更新：金蛋顏色 ${databaseGameConfigForm.eggColorTop} / ${databaseGameConfigForm.eggColorMiddle} / ${databaseGameConfigForm.eggColorBottom}`)
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('儲存資料庫 GameConfig 失敗：', error)

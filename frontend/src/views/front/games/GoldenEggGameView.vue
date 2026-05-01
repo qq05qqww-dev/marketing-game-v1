@@ -415,6 +415,8 @@ const applyRemoteCampaignData = (apiCampaign = {}) => {
   campaign.activityStartAt = apiCampaign.startAt || ''
   campaign.activityEndAt = apiCampaign.endAt || ''
 
+  // 第 353 批：正式前台顏色唯一來源 = PostgreSQL gameConfig.settings。
+  // 手機和電腦不能再讀 localStorage 顏色，避免不同裝置不同步。
   const remoteSettings = apiCampaign.gameConfig?.settings && typeof apiCampaign.gameConfig.settings === 'object'
     ? apiCampaign.gameConfig.settings
     : {}
@@ -430,9 +432,9 @@ const applyRemoteCampaignData = (apiCampaign = {}) => {
 
   // 若正式資料庫尚未存入金蛋顏色，統一使用預設金色。
   // 之後在後台按「立即同步前台」並寫入 gameConfig 後，所有裝置會同步使用資料庫顏色。
-  campaign.eggColorTop = remoteSettings.eggColorTop ?? campaign.eggColorTop ?? '#fff7ad'
-  campaign.eggColorMiddle = remoteSettings.eggColorMiddle ?? campaign.eggColorMiddle ?? '#fde047'
-  campaign.eggColorBottom = remoteSettings.eggColorBottom ?? campaign.eggColorBottom ?? '#b45309'
+  campaign.eggColorTop = remoteSettings.eggColorTop || '#fff7ad'
+  campaign.eggColorMiddle = remoteSettings.eggColorMiddle || '#fde047'
+  campaign.eggColorBottom = remoteSettings.eggColorBottom || '#b45309'
 
   if (Array.isArray(apiCampaign.prizes) && apiCampaign.prizes.length) {
     prizes.value = apiCampaign.prizes.map(mapApiPrizeToLocalPrize)
