@@ -659,28 +659,21 @@ const eggGridStyle = computed(() => {
     maxWidth: `calc(${cardSize}px * 3 + ${gap}px * 2)`,
     margin: '0 auto',
     gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    gridAutoRows: `minmax(${Math.round(cardSize / 0.88)}px, auto)`,
     gap: `${gap}px`,
-    justifyContent: 'center',
-    overflow: 'visible',
-    transform: 'none'
+    justifyContent: 'center'
   }
 })
 
 const eggCardStyle = computed(() => {
-  const cardSize = Math.min(150, Math.max(98, Number(campaign.eggCardSize || 128)))
-  const cardHeight = Math.round(cardSize * 1.16)
+  const cardSize = Math.min(150, Math.max(104, Number(campaign.eggCardSize || 128)))
 
   return {
     width: '100%',
     maxWidth: `${cardSize}px`,
     minWidth: '0',
-    height: `${cardHeight}px`,
-    minHeight: `${cardHeight}px`,
-    maxHeight: `${cardHeight}px`,
-    overflow: 'visible',
-    transform: 'none',
-    contain: 'layout',
+    aspectRatio: '0.88 / 1',
+    minHeight: `${Math.round(cardSize * 1.08)}px`,
+    overflow: 'hidden',
     background: `linear-gradient(180deg, ${campaign.eggCardBgFrom || 'rgba(239, 68, 68, 0.4)'}, ${campaign.eggCardBgTo || 'rgba(127, 29, 29, 0.45)'})`
   }
 })
@@ -707,6 +700,7 @@ const eggShellStyle = computed(() => {
     `
   }
 })
+
 
 const eggNumberStyle = computed(() => {
   return {
@@ -2743,11 +2737,7 @@ onUnmounted(() => {
 
 
 .golden-egg-card {
-  position: relative;
-  z-index: 1;
-  transform: none;
-  backface-visibility: visible;
-  will-change: auto;
+  transform: translateZ(0);
 }
 
 .golden-egg-card::before {
@@ -3076,141 +3066,76 @@ onUnmounted(() => {
   max-height: var(--egg-size) !important;
 }
 
-/* 第 354 批：手機滑動重繪穩定版 */
+/* 第 331 批：卡牌框內固定 */
 .golden-egg-grid {
-  overflow: visible;
-  transform: none;
-  contain: layout paint;
+  overflow: hidden;
 }
 
 .golden-egg-card {
   margin-left: auto;
   margin-right: auto;
-  transform: none;
-  backface-visibility: visible;
-  will-change: auto;
-  contain: layout paint;
 }
 
 .golden-egg-shell {
   flex-shrink: 0;
-  transform: translate3d(0, 0, 0);
-  backface-visibility: hidden;
 }
 
-@media (hover: none) and (pointer: coarse) {
-  .golden-egg-card:not(.is-opened):not(:disabled):hover {
-    transform: none;
-    box-shadow: 0 10px 22px rgba(127, 29, 29, 0.24);
-  }
 
+/* 第 356 批：手機金蛋九宮格乾淨重整版
+   注意：
+   1. 本段只處理手機滑動時漏繪。
+   2. 不改資料庫、不改顏色、不覆蓋金蛋內部結構。
+   3. 不使用第 355 批那種強制 display:block，避免蛋和標籤分離。
+*/
+@media (hover: none) and (pointer: coarse) {
   .golden-egg-stage {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
 
-  .golden-egg-card,
-  .golden-egg-shell,
-  .golden-egg-opened {
-    -webkit-tap-highlight-color: transparent;
-  }
-}
-
-
-/* 第 355 批：手機固定九宮格渲染修正版
-   目的：避免手機瀏覽器 / LINE 內建瀏覽器在滾動時漏繪中間排金蛋。
-   做法：手機版不再依賴 aspect-ratio / hover / backdrop-filter / GPU layer 來撐九宮格。
-*/
-@media (max-width: 768px) {
-  .golden-egg-stage,
-  .golden-egg-board,
   .golden-egg-grid {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-    filter: none !important;
-  }
-
-  .golden-egg-grid {
-    display: grid !important;
-    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-    align-items: stretch !important;
-    justify-items: center !important;
-    overflow: visible !important;
-    transform: none !important;
-    will-change: auto !important;
-    contain: layout !important;
-    isolation: isolate !important;
+    overflow: visible;
+    transform: none;
+    will-change: auto;
+    contain: layout;
   }
 
   .golden-egg-card {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    overflow: visible !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    transform: none !important;
-    will-change: auto !important;
-    backface-visibility: visible !important;
-    -webkit-backface-visibility: visible !important;
-    contain: layout !important;
-    position: relative !important;
-    z-index: 2 !important;
+    transform: none;
+    will-change: auto;
+    backface-visibility: visible;
+    -webkit-backface-visibility: visible;
+    contain: layout paint;
+    isolation: isolate;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  .golden-egg-card::before,
-  .golden-egg-card::after {
-    transform: none !important;
-    will-change: auto !important;
+  .golden-egg-card:not(.is-opened):not(:disabled):hover,
+  .golden-egg-card:not(.is-opened):not(:disabled):active,
+  .golden-egg-card:not(.is-opened):not(:disabled):focus {
+    transform: none;
   }
 
-  .golden-egg-shell,
-  .golden-egg-opened {
-    display: block !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    transform: none !important;
-    will-change: auto !important;
-    backface-visibility: visible !important;
-    -webkit-backface-visibility: visible !important;
-    position: relative !important;
-    z-index: 3 !important;
-  }
-
-  .golden-egg-card:hover,
-  .golden-egg-card:active,
-  .golden-egg-card:focus {
-    transform: none !important;
+  .golden-egg-shell {
+    will-change: auto;
+    backface-visibility: visible;
+    -webkit-backface-visibility: visible;
   }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 430px) {
   .golden-egg-grid {
     gap: 10px !important;
   }
 
   .golden-egg-card {
-    min-height: 118px !important;
-    height: 118px !important;
-    max-height: 118px !important;
-  }
-
-  .golden-egg-shell {
-    width: min(74px, 78%) !important;
-    max-height: 92px !important;
+    min-height: 116px;
   }
 }
 
 @media (max-width: 360px) {
   .golden-egg-card {
-    min-height: 106px !important;
-    height: 106px !important;
-    max-height: 106px !important;
-  }
-
-  .golden-egg-shell {
-    width: min(66px, 78%) !important;
-    max-height: 82px !important;
+    min-height: 104px;
   }
 }
 
