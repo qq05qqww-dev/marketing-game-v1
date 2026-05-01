@@ -90,7 +90,6 @@ const databaseSerialForm = reactive({
 const databaseRecordKeyword = ref('')
 const databaseRecordWinFilter = ref('all')
 const databaseRewardStatusFilter = ref('all')
-const databaseLastDataRefreshAt = ref('')
 const databaseSectionOpen = reactive({
   links: true,
   summary: true,
@@ -136,7 +135,10 @@ const databaseGameConfigForm = reactive({
   showBottomNav: true,
   eggSize: 74,
   eggCardSize: 128,
-  eggGridGap: 12
+  eggGridGap: 12,
+  eggColorTop: '#fff7ad',
+  eggColorMiddle: '#fde047',
+  eggColorBottom: '#b45309'
 })
 const isAutoPreviewEnabled = ref(true)
 const serialCodes = ref([])
@@ -2302,83 +2304,12 @@ const databaseApiUrls = computed(() => {
   ]
 })
 
-
-const getDatabaseSerialUsedCount = (item = {}) => {
-  if (!item?.id && !item?.code) return 0
-
-  const itemId = Number(item.id || 0)
-  const itemCode = String(item.code || '').toUpperCase()
-
-  return databasePlayRecords.value.filter((record) => {
-    const recordSerialId = Number(record.serialCodeId || record.serialCode?.id || 0)
-    const recordSerialCode = String(record.serialCode?.code || '').toUpperCase()
-
-    return (itemId && recordSerialId === itemId) || (itemCode && recordSerialCode === itemCode)
-  }).length
-}
-
-const getDatabaseSerialTotalChance = (item = {}) => {
-  return Math.max(1, Number(item.rewardChance || 1))
-}
-
-const getDatabaseSerialRemainingChance = (item = {}) => {
-  return Math.max(0, getDatabaseSerialTotalChance(item) - getDatabaseSerialUsedCount(item))
-}
-
-const getDatabaseSerialEffectiveStatus = (item = {}) => {
-  const status = String(item.effectiveStatus || item.status || 'UNUSED').toUpperCase()
-
-  if (status === 'DISABLED') return 'DISABLED'
-  if (status === 'EXPIRED') return 'EXPIRED'
-  if (status === 'USED' || item.usedAt || getDatabaseSerialRemainingChance(item) <= 0) return 'USED'
-
-  return 'UNUSED'
-}
-
-const getDatabaseSerialStatusLabel = (item = {}) => {
-  const status = getDatabaseSerialEffectiveStatus(item)
-
-  if (status === 'USED') return '已用完'
-  if (status === 'DISABLED') return '已停用'
-  if (status === 'EXPIRED') return '已過期'
-
-  return '可使用'
-}
-
-const getDatabaseSerialStatusClass = (item = {}) => {
-  const status = getDatabaseSerialEffectiveStatus(item)
-
-  if (status === 'USED') return 'bg-rose-50 text-rose-700 ring-1 ring-rose-100'
-  if (status === 'DISABLED') return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
-  if (status === 'EXPIRED') return 'bg-amber-50 text-amber-700 ring-1 ring-amber-100'
-
-  return 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-}
-
-const sortedDatabaseSerialCodes = computed(() => {
-  const statusWeight = {
-    UNUSED: 1,
-    USED: 2,
-    EXPIRED: 3,
-    DISABLED: 4
-  }
-
-  return [...databaseSerialCodes.value].sort((a, b) => {
-    const aWeight = statusWeight[getDatabaseSerialEffectiveStatus(a)] || 9
-    const bWeight = statusWeight[getDatabaseSerialEffectiveStatus(b)] || 9
-
-    if (aWeight !== bWeight) return aWeight - bWeight
-
-    return String(a.code || '').localeCompare(String(b.code || ''))
-  })
-})
-
 const databaseStats = computed(() => {
   return {
     prizeCount: databasePrizes.value.length,
     serialCount: databaseSerialCodes.value.length,
-    unusedSerialCount: databaseSerialCodes.value.filter((item) => getDatabaseSerialEffectiveStatus(item) === 'UNUSED').length,
-    usedSerialCount: databaseSerialCodes.value.filter((item) => getDatabaseSerialEffectiveStatus(item) === 'USED').length,
+    unusedSerialCount: databaseSerialCodes.value.filter((item) => item.effectiveStatus === 'UNUSED' || item.status === 'UNUSED').length,
+    usedSerialCount: databaseSerialCodes.value.filter((item) => item.effectiveStatus === 'USED' || item.status === 'USED').length,
     playCount: databasePlayRecords.value.length,
     rewardCount: databaseRewardRecords.value.length
   }
@@ -2483,7 +2414,6 @@ const loadDatabaseGoldenEggCampaign = async () => {
     databasePlayRecords.value = Array.isArray(playRecordsResult) ? playRecordsResult : []
     databaseRewardRecords.value = Array.isArray(rewardRecordsResult) ? rewardRecordsResult : []
     databaseDrawPool.value = drawPoolResult
-    databaseLastDataRefreshAt.value = new Date().toLocaleString('zh-TW')
     loadDatabaseCampaignFormFromCampaign(campaignResult)
     loadDatabaseGameConfigFormFromCampaign(campaignResult)
 
@@ -2619,8 +2549,6 @@ const refreshDatabaseSerialCodes = async () => {
   if (!normalizedDatabaseCampaignId.value) return
 
   databaseSerialCodes.value = await getAdminGoldenEggSerialCodes(normalizedDatabaseCampaignId.value)
-  databaseLastDataRefreshAt.value = new Date().toLocaleString('zh-TW')
-  showSavedMessage('已重新讀取序號狀態。')
 }
 
 const generateDatabaseSerialCodes = async () => {
@@ -2976,7 +2904,10 @@ const buildDatabaseGameConfigPayload = () => {
     showBottomNav: databaseGameConfigForm.showBottomNav,
     eggSize: Number(databaseGameConfigForm.eggSize || 74),
     eggCardSize: Number(databaseGameConfigForm.eggCardSize || 128),
-    eggGridGap: Number(databaseGameConfigForm.eggGridGap || 12)
+    eggGridGap: Number(databaseGameConfigForm.eggGridGap || 12),
+    eggColorTop: databaseGameConfigForm.eggColorTop || campaign.eggColorTop || '#fff7ad',
+    eggColorMiddle: databaseGameConfigForm.eggColorMiddle || campaign.eggColorMiddle || '#fde047',
+    eggColorBottom: databaseGameConfigForm.eggColorBottom || campaign.eggColorBottom || '#b45309'
   }
 }
 
@@ -3014,19 +2945,14 @@ const refreshDatabaseRecords = async () => {
   if (!normalizedDatabaseCampaignId.value) return
 
   try {
-    const [serialCodesResult, playRecordsResult, rewardRecordsResult, drawPoolResult] = await Promise.all([
-      getAdminGoldenEggSerialCodes(normalizedDatabaseCampaignId.value),
+    const [playRecordsResult, rewardRecordsResult] = await Promise.all([
       getAdminGoldenEggPlayRecords(normalizedDatabaseCampaignId.value),
-      getAdminGoldenEggRewardRecords(normalizedDatabaseCampaignId.value),
-      getAdminGoldenEggDrawPool(normalizedDatabaseCampaignId.value)
+      getAdminGoldenEggRewardRecords(normalizedDatabaseCampaignId.value)
     ])
 
-    databaseSerialCodes.value = Array.isArray(serialCodesResult) ? serialCodesResult : []
     databasePlayRecords.value = Array.isArray(playRecordsResult) ? playRecordsResult : []
     databaseRewardRecords.value = Array.isArray(rewardRecordsResult) ? rewardRecordsResult : []
-    databaseDrawPool.value = drawPoolResult
-    databaseLastDataRefreshAt.value = new Date().toLocaleString('zh-TW')
-    showSavedMessage('已重新讀取序號、遊玩紀錄與中獎紀錄。')
+    showSavedMessage('已重新讀取資料庫紀錄。')
   } catch (error) {
     console.error('重新讀取資料庫紀錄失敗：', error)
     window.alert(error.message || '重新讀取資料庫紀錄失敗。')
@@ -3749,7 +3675,66 @@ if (typeof window !== 'undefined') {
               </label>
             </div>
 
-            <div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                        <div class="mt-4 rounded-3xl border border-amber-100 bg-amber-50/70 p-4">
+              <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h4 class="text-sm font-black text-amber-950">
+                    資料庫金蛋顏色同步
+                  </h4>
+                  <p class="mt-1 text-xs font-bold text-amber-700">
+                    這三個顏色會寫入 PostgreSQL gameConfig.settings，手機 / 電腦前台都會以這裡為準。
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                  @click="databaseGameConfigForm.eggColorTop = campaign.eggColorTop || '#fff7ad'; databaseGameConfigForm.eggColorMiddle = campaign.eggColorMiddle || '#fde047'; databaseGameConfigForm.eggColorBottom = campaign.eggColorBottom || '#b45309'"
+                >
+                  套用右側預覽顏色
+                </button>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label class="admin-field">
+                  <span>DB 金蛋亮色 eggColorTop</span>
+                  <input
+                    v-model="databaseGameConfigForm.eggColorTop"
+                    type="color"
+                  />
+                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorTop }}</code>
+                </label>
+
+                <label class="admin-field">
+                  <span>DB 金蛋主色 eggColorMiddle</span>
+                  <input
+                    v-model="databaseGameConfigForm.eggColorMiddle"
+                    type="color"
+                  />
+                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorMiddle }}</code>
+                </label>
+
+                <label class="admin-field">
+                  <span>DB 金蛋暗色 eggColorBottom</span>
+                  <input
+                    v-model="databaseGameConfigForm.eggColorBottom"
+                    type="color"
+                  />
+                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorBottom }}</code>
+                </label>
+              </div>
+
+              <div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-black text-slate-600">
+                目前準備寫入資料庫：
+                <span class="ml-2 text-slate-900">{{ databaseGameConfigForm.eggColorTop }}</span>
+                <span class="mx-1">/</span>
+                <span class="text-slate-900">{{ databaseGameConfigForm.eggColorMiddle }}</span>
+                <span class="mx-1">/</span>
+                <span class="text-slate-900">{{ databaseGameConfigForm.eggColorBottom }}</span>
+              </div>
+            </div>
+
+<div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
               <label class="admin-toggle">
                 <input v-model="databaseGameConfigForm.showActivityTimeSection" type="checkbox" />
                 <span>顯示活動時間</span>
@@ -3982,23 +3967,13 @@ if (typeof window !== 'undefined') {
                   </p>
                 </div>
 
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
-                    @click="refreshDatabaseRecords"
-                  >
-                    重新讀取序號 / 紀錄
-                  </button>
-
-                  <button
-                    type="button"
-                    class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
-                    @click="openDatabaseSerialExport"
-                  >
-                    匯出 CSV
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
+                  @click="openDatabaseSerialExport"
+                >
+                  匯出 CSV
+                </button>
               </div>
 
               <div class="mt-4 rounded-3xl bg-white/75 p-4">
@@ -4142,40 +4117,19 @@ if (typeof window !== 'undefined') {
                 </div>
               </div>
 
-              <div class="mt-4 rounded-2xl bg-white/60 px-4 py-3 text-xs font-black text-cyan-900 ring-1 ring-cyan-100">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span>序號總數：{{ databaseStats.serialCount }}</span>
-                  <span class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-100">可使用 {{ databaseStats.unusedSerialCount }}</span>
-                  <span class="rounded-full bg-rose-50 px-3 py-1 text-rose-700 ring-1 ring-rose-100">已用完 {{ databaseStats.usedSerialCount }}</span>
-                  <span v-if="databaseLastDataRefreshAt" class="text-slate-500">最後刷新：{{ databaseLastDataRefreshAt }}</span>
-                </div>
-              </div>
-
               <div class="mt-4 max-h-[560px] space-y-3 overflow-y-auto pr-1">
                 <article
-                  v-for="item in sortedDatabaseSerialCodes.slice(0, 80)"
+                  v-for="item in databaseSerialCodes.slice(0, 60)"
                   :key="item.id"
-                  class="rounded-2xl p-3 ring-1"
-                  :class="getDatabaseSerialEffectiveStatus(item) === 'USED' ? 'bg-rose-50/90 ring-rose-100' : getDatabaseSerialEffectiveStatus(item) === 'UNUSED' ? 'bg-white/90 ring-emerald-100' : 'bg-slate-50 ring-slate-100'"
+                  class="rounded-2xl bg-white/80 p-3"
                 >
                   <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div class="min-w-0 flex-1">
-                      <div class="flex flex-wrap items-center gap-2">
-                        <p class="break-all font-mono text-xs font-black text-slate-900">
-                          {{ item.code }}
-                        </p>
-                        <span
-                          class="rounded-full px-3 py-1 text-[11px] font-black"
-                          :class="getDatabaseSerialStatusClass(item)"
-                        >
-                          {{ getDatabaseSerialStatusLabel(item) }}
-                        </span>
-                      </div>
-                      <p class="mt-2 text-xs font-bold text-slate-600">
-                        批次 {{ item.batchCode || '無' }}｜已用 {{ getDatabaseSerialUsedCount(item) }} / {{ getDatabaseSerialTotalChance(item) }} 次｜剩餘 {{ getDatabaseSerialRemainingChance(item) }} 次
+                    <div>
+                      <p class="font-mono text-xs font-black text-slate-900">
+                        {{ item.code }}
                       </p>
-                      <p class="mt-1 text-xs font-bold text-slate-400">
-                        原始狀態：{{ item.effectiveStatus || item.status || 'UNUSED' }}｜usedAt：{{ item.usedAt || '尚未用完' }}
+                      <p class="mt-1 text-xs font-bold text-slate-500">
+                        {{ item.effectiveStatus || item.status }}｜批次 {{ item.batchCode || '無' }}｜增加 {{ item.rewardChance }} 次
                       </p>
                       <p class="mt-1 text-xs font-bold text-slate-400">
                         發放：{{ item.distributedAt ? `${item.distributedChannel || '未填管道'}｜${item.distributedTo || '未填對象'}` : '未發放' }}
@@ -4225,7 +4179,7 @@ if (typeof window !== 'undefined') {
                   資料庫遊玩紀錄 / 中獎紀錄
                 </h3>
                 <p class="mt-1 text-xs font-bold text-violet-700/80">
-                  讀取 PostgreSQL 正式遊玩紀錄與中獎紀錄，可核銷、取消發獎、匯出 CSV。按重新讀取時會同步刷新序號 USED / UNUSED 狀態。
+                  讀取 PostgreSQL 正式遊玩紀錄與中獎紀錄，可核銷、取消發獎、匯出 CSV。
                 </p>
               </div>
 
@@ -4235,7 +4189,7 @@ if (typeof window !== 'undefined') {
                   class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-violet-700 ring-1 ring-violet-100"
                   @click="refreshDatabaseRecords"
                 >
-                  重新讀取序號 / 紀錄
+                  重新讀取紀錄
                 </button>
 
                 <button
@@ -4322,12 +4276,9 @@ if (typeof window !== 'undefined') {
                           {{ item.playerName || item.playerPhone || item.playerEmail || '匿名玩家' }}
                         </td>
                         <td class="px-4 py-3">
-                          <code class="break-all font-mono text-[11px] font-black text-violet-700">
+                          <code class="font-mono text-[11px] font-black text-violet-700">
                             {{ item.serialCode?.code || '未綁定' }}
                           </code>
-                          <p v-if="item.serialCodeId" class="mt-1 text-[11px] font-bold text-slate-400">
-                            SerialCode ID：{{ item.serialCodeId }}
-                          </p>
                         </td>
                         <td class="px-4 py-3 font-bold text-slate-500">
                           {{ item.gameType }}
