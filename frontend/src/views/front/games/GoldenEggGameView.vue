@@ -668,19 +668,23 @@ const eggGridStyle = computed(() => {
 })
 
 const eggCardStyle = computed(() => {
-  const cardSize = Math.min(160, Math.max(96, Number(campaign.eggCardSize || 128)))
+  const cardSize = Math.min(150, Math.max(98, Number(campaign.eggCardSize || 128)))
+  const cardHeight = Math.round(cardSize * 1.16)
 
   return {
     width: '100%',
     maxWidth: `${cardSize}px`,
     minWidth: '0',
-    aspectRatio: '0.88 / 1',
-    minHeight: `${Math.round(cardSize / 0.88)}px`,
+    height: `${cardHeight}px`,
+    minHeight: `${cardHeight}px`,
+    maxHeight: `${cardHeight}px`,
     overflow: 'visible',
     transform: 'none',
+    contain: 'layout',
     background: `linear-gradient(180deg, ${campaign.eggCardBgFrom || 'rgba(239, 68, 68, 0.4)'}, ${campaign.eggCardBgTo || 'rgba(127, 29, 29, 0.45)'})`
   }
 })
+
 
 const eggShellStyle = computed(() => {
   const size = Math.min(120, Math.max(48, Number(campaign.eggSize || 74)))
@@ -3109,6 +3113,104 @@ onUnmounted(() => {
   .golden-egg-shell,
   .golden-egg-opened {
     -webkit-tap-highlight-color: transparent;
+  }
+}
+
+
+/* 第 355 批：手機固定九宮格渲染修正版
+   目的：避免手機瀏覽器 / LINE 內建瀏覽器在滾動時漏繪中間排金蛋。
+   做法：手機版不再依賴 aspect-ratio / hover / backdrop-filter / GPU layer 來撐九宮格。
+*/
+@media (max-width: 768px) {
+  .golden-egg-stage,
+  .golden-egg-board,
+  .golden-egg-grid {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    filter: none !important;
+  }
+
+  .golden-egg-grid {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    align-items: stretch !important;
+    justify-items: center !important;
+    overflow: visible !important;
+    transform: none !important;
+    will-change: auto !important;
+    contain: layout !important;
+    isolation: isolate !important;
+  }
+
+  .golden-egg-card {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    will-change: auto !important;
+    backface-visibility: visible !important;
+    -webkit-backface-visibility: visible !important;
+    contain: layout !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  .golden-egg-card::before,
+  .golden-egg-card::after {
+    transform: none !important;
+    will-change: auto !important;
+  }
+
+  .golden-egg-shell,
+  .golden-egg-opened {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+    will-change: auto !important;
+    backface-visibility: visible !important;
+    -webkit-backface-visibility: visible !important;
+    position: relative !important;
+    z-index: 3 !important;
+  }
+
+  .golden-egg-card:hover,
+  .golden-egg-card:active,
+  .golden-egg-card:focus {
+    transform: none !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .golden-egg-grid {
+    gap: 10px !important;
+  }
+
+  .golden-egg-card {
+    min-height: 118px !important;
+    height: 118px !important;
+    max-height: 118px !important;
+  }
+
+  .golden-egg-shell {
+    width: min(74px, 78%) !important;
+    max-height: 92px !important;
+  }
+}
+
+@media (max-width: 360px) {
+  .golden-egg-card {
+    min-height: 106px !important;
+    height: 106px !important;
+    max-height: 106px !important;
+  }
+
+  .golden-egg-shell {
+    width: min(66px, 78%) !important;
+    max-height: 82px !important;
   }
 }
 
