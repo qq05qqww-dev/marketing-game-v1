@@ -398,6 +398,13 @@ const getLocalAdminCampaignFallback = () => {
 }
 
 const applyRemoteCampaignData = (apiCampaign = {}) => {
+  // 第 350 批修正：
+  // 正式資料庫模式必須完全以 API / PostgreSQL 回傳資料為準。
+  // 不再混用本機 localStorage 的後台預覽設定，避免同一個正式網址：
+  // - 電腦因為曾開過後台而顯示黑色蛋
+  // - 手機因為沒有 localStorage 而顯示金色蛋
+  Object.assign(campaign, cloneByJson(defaultCampaignSnapshot))
+
   remoteCampaignTitle.value = apiCampaign.title || ''
   remoteCampaignStatus.value = apiCampaign.status || ''
   campaign.pageTitle = apiCampaign.title || campaign.pageTitle
@@ -416,12 +423,16 @@ const applyRemoteCampaignData = (apiCampaign = {}) => {
     Object.assign(campaign, remoteSettings)
   }
 
-  const localAdminFallback = getLocalAdminCampaignFallback()
-
-  campaign.eggSize = Number(remoteSettings.eggSize ?? localAdminFallback?.eggSize ?? campaign.eggSize ?? 116)
-  campaign.eggCardSize = Number(remoteSettings.eggCardSize ?? localAdminFallback?.eggCardSize ?? campaign.eggCardSize ?? 148)
-  campaign.eggGap = Number(remoteSettings.eggGap ?? remoteSettings.eggGridGap ?? localAdminFallback?.eggGap ?? localAdminFallback?.eggGridGap ?? campaign.eggGap ?? campaign.eggGridGap ?? 14)
+  campaign.eggSize = Number(remoteSettings.eggSize ?? campaign.eggSize ?? 74)
+  campaign.eggCardSize = Number(remoteSettings.eggCardSize ?? campaign.eggCardSize ?? 128)
+  campaign.eggGap = Number(remoteSettings.eggGap ?? remoteSettings.eggGridGap ?? campaign.eggGap ?? campaign.eggGridGap ?? 12)
   campaign.eggGridGap = campaign.eggGap
+
+  // 若正式資料庫尚未存入金蛋顏色，統一使用預設金色。
+  // 之後在後台按「立即同步前台」並寫入 gameConfig 後，所有裝置會同步使用資料庫顏色。
+  campaign.eggColorTop = remoteSettings.eggColorTop ?? campaign.eggColorTop ?? '#fff7ad'
+  campaign.eggColorMiddle = remoteSettings.eggColorMiddle ?? campaign.eggColorMiddle ?? '#fde047'
+  campaign.eggColorBottom = remoteSettings.eggColorBottom ?? campaign.eggColorBottom ?? '#b45309'
 
   if (Array.isArray(apiCampaign.prizes) && apiCampaign.prizes.length) {
     prizes.value = apiCampaign.prizes.map(mapApiPrizeToLocalPrize)
@@ -667,16 +678,22 @@ const eggCardStyle = computed(() => {
 
 const eggShellStyle = computed(() => {
   const size = Math.min(120, Math.max(48, Number(campaign.eggSize || 74)))
+  const eggColorTop = campaign.eggColorTop || '#fff7ad'
+  const eggColorMiddle = campaign.eggColorMiddle || '#fde047'
+  const eggColorBottom = campaign.eggColorBottom || '#b45309'
 
   return {
     width: `min(${size}px, 72%)`,
     height: 'auto',
     aspectRatio: '1 / 1.24',
-    maxHeight: '78%', 
+    maxHeight: '78%',
+    '--egg-color-top': eggColorTop,
+    '--egg-color-middle': eggColorMiddle,
+    '--egg-color-bottom': eggColorBottom,
     background: `
       radial-gradient(circle at 34% 22%, rgba(255, 255, 255, 0.95), transparent 14%),
       radial-gradient(circle at 64% 72%, rgba(161, 98, 7, 0.32), transparent 24%),
-      linear-gradient(135deg, ${campaign.eggColorTop || '#fff7ad'} 0%, ${campaign.eggColorMiddle || '#fde047'} 36%, ${campaign.eggColorBottom || '#b45309'} 100%)
+      linear-gradient(135deg, ${eggColorTop} 0%, ${eggColorMiddle} 36%, ${eggColorBottom} 100%)
     `
   }
 })
@@ -2746,7 +2763,12 @@ onUnmounted(() => {
   background:
     radial-gradient(circle at 34% 22%, rgba(255, 255, 255, 0.95), transparent 14%),
     radial-gradient(circle at 64% 72%, rgba(161, 98, 7, 0.32), transparent 24%),
-    linear-gradient(135deg, #fff7ad 0%, #fde047 26%, #f59e0b 58%, #b45309 100%);
+    linear-gradient(
+      135deg,
+      var(--egg-color-top, #fff7ad) 0%,
+      var(--egg-color-middle, #fde047) 36%,
+      var(--egg-color-bottom, #b45309) 100%
+    );
   box-shadow:
     inset -10px -14px 18px rgba(120, 53, 15, 0.24),
     inset 8px 8px 18px rgba(255, 255, 255, 0.34),
