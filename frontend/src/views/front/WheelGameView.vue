@@ -1,0 +1,4965 @@
+<script setup>
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+
+const route = useRoute()
+const router = useRouter()
+
+const PREMIUM_WHEEL_STORAGE_KEY = 'multi_game_platform_premium_wheel_v1'
+const PREMIUM_WHEEL_SYNC_PING_KEY = 'premium-wheel-sync-ping'
+const GAME_HISTORY_STORAGE_KEY = 'multi_game_platform_game_history_v1'
+
+const cloneByJson = (value) => JSON.parse(JSON.stringify(value))
+
+const safeJsonParse = (value, fallback = null) => {
+  try {
+    return value ? JSON.parse(value) : fallback
+  } catch (error) {
+    console.warn('JSON parse failed:', error)
+    return fallback
+  }
+}
+
+const urlGameId = computed(() => {
+  return String(route.query.gameId || '').trim()
+})
+
+const isAdminMode = computed(() => {
+  return String(route.query.mode || '').toLowerCase() === 'admin'
+})
+
+const currentGameId = computed(() => {
+  return urlGameId.value || 'premium-wheel'
+})
+
+const sourcePath = computed(() => {
+  const query = urlGameId.value ? `?gameId=${urlGameId.value}` : ''
+
+  return `/games/wheel${query}`
+})
+
+const adminSourcePath = computed(() => {
+  const query = urlGameId.value
+    ? `?gameId=${urlGameId.value}&mode=admin`
+    : '?mode=admin'
+
+  return `/games/wheel${query}`
+})
+
+const campaign = reactive({
+  brandName: 'Multi Game Platform',
+  pageTitle: '精緻幸運轉盤',
+  mainTitle: '幸運大轉盤',
+  subTitle: '每日登入轉好禮',
+  heroTagline: '轉出你的專屬驚喜',
+  chanceText: '還有 3 次轉盤機會',
+  buttonText: '分享活動',
+  shareHint: '分享給好友可獲得額外轉盤次數',
+  noticeText: '本活動為原創版型，可自由替換名稱、圖片與獎項內容。',
+  logoText: 'W',
+  logoImageUrl: '',
+  bannerImageUrl: '',
+  brandTagline: '打造專屬互動抽獎體驗',
+  websiteUrl: '',
+  websiteText: '官方網站',
+  themeStart: '#f97316',
+  themeMiddle: '#ef4444',
+  themeEnd: '#7c2d12',
+  enableWinConfetti: true,
+  enableGoldRain: true,
+  enableWinSound: true,
+  winSoundUrl: '',
+  winSoundVolume: 75,
+  winEffectDuration: 6,
+  confettiCount: 54,
+  goldRainCount: 48,
+  enableWinFlash: true,
+  enablePrizeBounce: true,
+  enableGoldenAura: true,
+  enableSpinSound: false,
+  spinSoundUrl: '',
+  spinSoundVolume: 45,
+  shareTitle: '',
+  shareDescription: '',
+  shareImageUrl: '',
+  shareButtonText: '分享增加機會',
+  enableShareReward: true,
+  shareRewardDailyLimit: 1,
+  shareRewardCooldownSeconds: 30
+})
+
+const player = reactive({
+  chances: 3,
+  sharedCount: 0
+})
+
+const prizes = ref([
+  {
+    id: 'coupon-200',
+    name: '折價券 200 元',
+    shortName: '200',
+    description: '下次消費可折抵 200 元',
+    icon: '🎁',
+    imageUrl: '',
+    isEnabled: true,
+    probability: 20,
+    stock: 10,
+    type: 'win',
+    rank: 'first'
+  },
+  {
+    id: 'coupon-100',
+    name: '折價券 100 元',
+    shortName: '100',
+    description: '下次消費可折抵 100 元',
+    icon: '🎟️',
+    imageUrl: '',
+    isEnabled: true,
+    probability: 30,
+    stock: 20,
+    type: 'win',
+    rank: 'second'
+  },
+  {
+    id: 'coupon-50',
+    name: '折價券 50 元',
+    shortName: '50',
+    description: '下次消費可折抵 50 元',
+    icon: '🎫',
+    imageUrl: '',
+    isEnabled: true,
+    probability: 35,
+    stock: 30,
+    type: 'win',
+    rank: 'third'
+  },
+  {
+    id: 'thanks',
+    name: '銘謝惠顧',
+    shortName: '謝謝',
+    description: '這次沒有中獎，再接再厲',
+    icon: '🙂',
+    imageUrl: '',
+    isEnabled: true,
+    probability: 15,
+    stock: 9999,
+    type: 'lose',
+    rank: 'none'
+  }
+])
+
+const isSpinning = ref(false)
+const wheelRotation = ref(0)
+const activePrizeIndex = ref(-1)
+const resultPrize = ref(null)
+const showResultModal = ref(false)
+const isResultActionProcessing = ref(false)
+const showWinEffects = ref(false)
+const winAudio = ref(null)
+const spinAudio = ref(null)
+const effectImportInput = ref(null)
+const showShareMessage = ref(false)
+const shareMessage = ref('')
+const showSharePreviewModal = ref(false)
+const isRecentLogsExpanded = ref(false)
+const isShareActionProcessing = ref(false)
+const shareRewardState = ref({
+  date: '',
+  count: 0,
+  lastRewardAt: 0
+})
+const isShareRewardStatusLoading = ref(false)
+const shareRewardStatusMessage = ref('')
+const shareRewardApiDiagnostic = ref({
+  status: '尚未測試',
+  message: '尚未執行分享獎勵 API 測試。',
+  apiBaseUrl: '',
+  hasToken: false,
+  tokenKey: '未偵測到',
+  testedAt: ''
+})
+const savedMessage = ref('')
+const lastSyncMessage = ref('')
+const lastSyncAt = ref('')
+const isApplyingPremiumWheelRemoteState = ref(false)
+const isSavingPremiumWheelState = ref(false)
+const drawLogs = ref([])
+
+const defaultCampaignSnapshot = cloneByJson(campaign)
+const defaultPlayerSnapshot = cloneByJson(player)
+const defaultPrizesSnapshot = cloneByJson(prizes.value)
+
+const prizeTypeOptions = [
+  {
+    label: '中獎',
+    value: 'win'
+  },
+  {
+    label: '未中獎',
+    value: 'lose'
+  }
+]
+
+const prizeRankOptions = [
+  {
+    label: '頭獎',
+    value: 'first'
+  },
+  {
+    label: '二獎',
+    value: 'second'
+  },
+  {
+    label: '三獎',
+    value: 'third'
+  },
+  {
+    label: '一般獎',
+    value: 'normal'
+  },
+  {
+    label: '未中獎',
+    value: 'none'
+  }
+]
+
+const adminSectionTips = {
+  basic: '調整客人前台會看到的品牌、LOGO、標題、Banner、官方網站與分享活動內容。',
+  effects: '設定中獎後的彩帶、金沙、音樂與高級特效，也可以直接測試。',
+  prizes: '管理轉盤獎項圖片、排序、啟用狀態、機率、庫存、中獎 / 未中獎類型，以及頭獎、二獎、三獎等級。',
+  reports: '查看最近抽獎紀錄、統計數據，並可匯出或清除紀錄。'
+}
+
+const playerRuleItems = [
+  '每次轉盤會消耗 1 次轉盤機會。',
+  '分享活動可增加 1 次轉盤機會。',
+  '轉盤完成後，結果會自動寫入我的遊戲紀錄。',
+  '獎項數量有限，抽完為止。',
+  '實際兌獎方式以主辦單位公告為準。'
+]
+
+const prizeNoteItems = [
+  '獎品名稱、機率與庫存可由管理版調整。',
+  '庫存為 0 的獎項不會再被抽中。',
+  '銘謝惠顧可作為未中獎結果使用。',
+  '玩家可在我的遊戲紀錄查看已抽出的結果。'
+]
+
+const showPlayerRules = ref(false)
+const showPrizeNotes = ref(false)
+const marqueeBulbs = Array.from({ length: 32 }, (_, index) => index)
+
+const confettiColors = [
+  '#f97316',
+  '#ef4444',
+  '#facc15',
+  '#22c55e',
+  '#38bdf8',
+  '#a855f7',
+  '#ec4899'
+]
+
+const normalizedEffectDuration = computed(() => {
+  return Math.min(10, Math.max(2, Number(campaign.winEffectDuration || 6)))
+})
+
+const normalizedConfettiCount = computed(() => {
+  return Math.min(120, Math.max(0, Number(campaign.confettiCount || 0)))
+})
+
+const normalizedGoldRainCount = computed(() => {
+  return Math.min(120, Math.max(0, Number(campaign.goldRainCount || 0)))
+})
+
+const normalizedWinSoundVolume = computed(() => {
+  return Math.min(100, Math.max(0, Number(campaign.winSoundVolume || 0)))
+})
+
+const normalizedSpinSoundVolume = computed(() => {
+  return Math.min(100, Math.max(0, Number(campaign.spinSoundVolume || 0)))
+})
+
+const confettiPieces = computed(() => {
+  return Array.from({ length: normalizedConfettiCount.value }, (_, index) => {
+    return {
+      id: `confetti-${index}`,
+      style: {
+        left: `${(index * 17 + 7) % 100}%`,
+        backgroundColor: confettiColors[index % confettiColors.length],
+        animationDelay: `${(index % 14) * 0.07}s`,
+        animationDuration: `${Math.max(2, normalizedEffectDuration.value - 1.2) + (index % 6) * 0.08}s`,
+        width: `${8 + (index % 4)}px`,
+        height: `${14 + (index % 5)}px`,
+        transform: `rotate(${index * 19}deg)`
+      }
+    }
+  })
+})
+
+const goldRainPieces = computed(() => {
+  return Array.from({ length: normalizedGoldRainCount.value }, (_, index) => {
+    return {
+      id: `gold-${index}`,
+      style: {
+        left: `${(index * 23 + 11) % 100}%`,
+        animationDelay: `${(index % 12) * 0.08}s`,
+        animationDuration: `${Math.max(2.4, normalizedEffectDuration.value - 0.6) + (index % 5) * 0.08}s`,
+        width: `${5 + (index % 4)}px`,
+        height: `${5 + (index % 4)}px`
+      }
+    }
+  })
+})
+
+const premiumVersionInfo = computed(() => {
+  return {
+    version: 'Premium Wheel V1 Stable',
+    platformVersion: 'Multi Game Platform V2.2 Stable',
+    batch: '第 234 批',
+    playerMode: '玩家簡潔版',
+    adminMode: '管理預覽版',
+    status: '基礎骨架 / 可測試 / 可延伸'
+  }
+})
+
+const safeWebsiteUrl = computed(() => {
+  const value = String(campaign.websiteUrl || '').trim()
+
+  if (!value) return ''
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    return value
+  }
+
+  return `https://${value}`
+})
+
+const websiteButtonText = computed(() => {
+  return String(campaign.websiteText || '').trim() || '官方網站'
+})
+
+const pageBackgroundStyle = computed(() => {
+  return {
+    background: `linear-gradient(180deg, ${campaign.themeStart} 0%, ${campaign.themeMiddle} 48%, ${campaign.themeEnd} 100%)`
+  }
+})
+
+const bannerBackgroundStyle = computed(() => {
+  if (!campaign.bannerImageUrl) {
+    return {
+      background: 'linear-gradient(135deg, rgba(255,255,255,0.24), rgba(255,255,255,0.1))'
+    }
+  }
+
+  return {
+    background: `linear-gradient(135deg, rgba(15,23,42,0.58), rgba(249,115,22,0.48)), url(${campaign.bannerImageUrl}) center/cover`
+  }
+})
+
+const activePrizes = computed(() => {
+  return prizes.value.filter((prize) => prize.isEnabled !== false)
+})
+
+const availablePrizePool = computed(() => {
+  return activePrizes.value.filter((prize) => Number(prize.stock) > 0 && Number(prize.probability) > 0)
+})
+
+const probabilitySummary = computed(() => {
+  const totalProbability = prizes.value.reduce((sum, prize) => {
+    return sum + Number(prize.probability || 0)
+  }, 0)
+
+  const winCount = prizes.value.filter((prize) => prize.type !== 'lose').length
+  const loseCount = prizes.value.filter((prize) => prize.type === 'lose').length
+  const enabledCount = activePrizes.value.length
+  const availableCount = availablePrizePool.value.length
+
+  return {
+    totalProbability,
+    winCount,
+    loseCount,
+    enabledCount,
+    availableCount,
+    isPerfectPercent: totalProbability === 100
+  }
+})
+
+const probabilityStatusText = computed(() => {
+  if (probabilitySummary.value.isPerfectPercent) {
+    return '機率總和剛好 100，可作為百分比參考。'
+  }
+
+  return '目前採權重抽選，總和不必一定等於 100。'
+})
+
+const probabilityStatusClass = computed(() => {
+  return probabilitySummary.value.isPerfectPercent
+    ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+    : 'border-amber-100 bg-amber-50 text-amber-700'
+})
+
+const recentLogCount = computed(() => {
+  return drawLogs.value.length
+})
+
+const recentLogsToggleText = computed(() => {
+  return isRecentLogsExpanded.value ? '收合紀錄' : '展開紀錄'
+})
+
+const toggleRecentLogs = () => {
+  isRecentLogsExpanded.value = !isRecentLogsExpanded.value
+}
+
+const drawLogStats = computed(() => {
+  const total = drawLogs.value.length
+  const winCount = drawLogs.value.filter((log) => log.prizeType !== 'lose').length
+  const loseCount = drawLogs.value.filter((log) => log.prizeType === 'lose').length
+  const winRate = total > 0 ? Math.round((winCount / total) * 100) : 0
+  const latestLog = drawLogs.value[0] || null
+
+  return {
+    total,
+    winCount,
+    loseCount,
+    winRate,
+    latestAt: latestLog?.createdAt || '尚無紀錄'
+  }
+})
+
+const averagePrizeProbability = () => {
+  if (!prizes.value.length) {
+    showSavedMessage('目前沒有獎項可平均分配。')
+    return
+  }
+
+  const baseValue = Math.floor(100 / prizes.value.length)
+  const remainder = 100 - baseValue * prizes.value.length
+
+  prizes.value = prizes.value.map((prize, index) => {
+    return {
+      ...prize,
+      probability: baseValue + (index < remainder ? 1 : 0)
+    }
+  })
+
+  savePremiumWheelState()
+  showSavedMessage('已平均分配轉盤機率，總和為 100。')
+}
+
+const clearAllPrizeProbability = () => {
+  const confirmed = window.confirm('確定要把所有獎項機率清零嗎？清零後玩家將暫時無法轉出獎項。')
+
+  if (!confirmed) return
+
+  prizes.value = prizes.value.map((prize) => {
+    return {
+      ...prize,
+      probability: 0
+    }
+  })
+
+  savePremiumWheelState()
+  showSavedMessage('已將所有轉盤機率清零。')
+}
+
+const restoreDefaultPrizes = () => {
+  const confirmed = window.confirm('確定要還原預設轉盤獎項嗎？目前獎項設定會被覆蓋。')
+
+  if (!confirmed) return
+
+  prizes.value = cloneByJson(defaultPrizesSnapshot)
+  savePremiumWheelState()
+  showSavedMessage('已還原精緻轉盤預設獎項。')
+}
+
+const addPrizeItem = () => {
+  const nextNumber = prizes.value.length + 1
+
+  prizes.value = [
+    ...prizes.value,
+    {
+      id: `custom-prize-${Date.now()}`,
+      name: `自訂獎項 ${nextNumber}`,
+      shortName: `獎項${nextNumber}`,
+      description: '請在後台修改獎項說明',
+      icon: '🎁',
+      imageUrl: '',
+    isEnabled: true,
+      probability: 10,
+      stock: 10,
+      type: 'win',
+      rank: 'normal'
+    }
+  ]
+
+  savePremiumWheelState()
+  showSavedMessage('已新增一個轉盤獎項。')
+}
+
+const removePrizeItem = (prize) => {
+  if (prizes.value.length <= 1) {
+    window.alert('至少需要保留 1 個獎項。')
+    return
+  }
+
+  const confirmed = window.confirm(`確定要刪除「${prize.name}」嗎？`)
+
+  if (!confirmed) return
+
+  prizes.value = prizes.value.filter((item) => item.id !== prize.id)
+
+  if (resultPrize.value?.id === prize.id) {
+    resultPrize.value = null
+    activePrizeIndex.value = -1
+  }
+
+  savePremiumWheelState()
+  showSavedMessage('已刪除轉盤獎項。')
+}
+
+const duplicatePrizeItem = (prize) => {
+  const copiedPrize = {
+    ...cloneByJson(prize),
+    id: `copy-prize-${Date.now()}`,
+    name: `${prize.name || '獎項'} 複製`,
+    shortName: prize.shortName || '複製',
+    isEnabled: true
+  }
+
+  prizes.value = [
+    ...prizes.value,
+    copiedPrize
+  ]
+
+  savePremiumWheelState()
+  showSavedMessage('已複製一個轉盤獎項。')
+}
+
+const togglePrizeEnabled = (prize) => {
+  prize.isEnabled = prize.isEnabled === false
+
+  if (resultPrize.value?.id === prize.id && prize.isEnabled === false) {
+    resultPrize.value = null
+    activePrizeIndex.value = -1
+  }
+
+  savePremiumWheelState()
+  showSavedMessage(prize.isEnabled ? '已啟用獎項。' : '已停用獎項。')
+}
+
+const movePrizeItem = (index, direction) => {
+  const targetIndex = index + direction
+
+  if (targetIndex < 0 || targetIndex >= prizes.value.length) return
+
+  const nextPrizes = [...prizes.value]
+  const currentPrize = nextPrizes[index]
+
+  nextPrizes[index] = nextPrizes[targetIndex]
+  nextPrizes[targetIndex] = currentPrize
+  prizes.value = nextPrizes
+
+  if (activePrizeIndex.value === index) {
+    activePrizeIndex.value = targetIndex
+  } else if (activePrizeIndex.value === targetIndex) {
+    activePrizeIndex.value = index
+  }
+
+  savePremiumWheelState()
+  showSavedMessage('已更新轉盤獎項排序。')
+}
+
+const canSpin = computed(() => {
+  return player.chances > 0 && availablePrizePool.value.length > 0 && !isSpinning.value
+})
+
+const wheelButtonText = computed(() => {
+  if (isSpinning.value) return '轉盤中'
+
+  if (player.chances <= 0) return '次數用完'
+
+  if (!availablePrizePool.value.length) return '獎品已抽完'
+
+  return '開始轉盤'
+})
+
+const wheelResultLabel = computed(() => {
+  if (!resultPrize.value) return ''
+
+  return resultPrize.value.type === 'lose' ? '再接再厲' : '恭喜中獎'
+})
+
+const wheelResultClass = computed(() => {
+  if (!resultPrize.value) return 'bg-slate-100 text-slate-500'
+
+  return resultPrize.value.type === 'lose'
+    ? 'bg-slate-100 text-slate-600'
+    : 'bg-orange-100 text-orange-700'
+})
+
+const resultActionText = computed(() => {
+  if (isResultActionProcessing.value) return '處理中...'
+
+  if (player.chances > 0) return '繼續轉盤'
+
+  return '分享增加機會'
+})
+
+const resultHintText = computed(() => {
+  if (!resultPrize.value) return '結果已寫入我的遊戲紀錄。'
+
+  if (player.chances > 0) {
+    return `結果已寫入我的遊戲紀錄，目前還有 ${player.chances} 次轉盤機會。`
+  }
+
+  return '結果已寫入我的遊戲紀錄，目前轉盤機會已用完，可分享活動增加 1 次。'
+})
+
+const handleResultPrimaryAction = async () => {
+  if (isResultActionProcessing.value) return
+
+  isResultActionProcessing.value = true
+
+  try {
+    if (player.chances > 0) {
+      closeResultAndContinue()
+      return
+    }
+
+    showResultModal.value = false
+    await shareCampaign()
+    resetWheelState()
+    savePremiumWheelState()
+  } finally {
+    isResultActionProcessing.value = false
+  }
+}
+
+const playerStatusMessage = computed(() => {
+  if (isSpinning.value) return '轉盤進行中，系統會自動顯示結果。'
+
+  if (!availablePrizePool.value.length) return '目前獎品庫存已抽完，請等待主辦單位更新活動。'
+
+  if (player.chances <= 0) return '目前沒有轉盤機會，可以分享活動增加 1 次。'
+
+  return `目前還有 ${player.chances} 次轉盤機會。`
+})
+
+const spinningHintText = computed(() => {
+  if (!isSpinning.value) return ''
+
+  return '轉盤轉動中，請不要重複點擊或關閉畫面。'
+})
+
+const wheelSliceStyle = (index) => {
+  const total = Math.max(1, activePrizes.value.length)
+  const angle = 360 / total
+  const rotate = index * angle
+  const skew = 90 - angle
+
+  return {
+    transform: `rotate(${rotate}deg) skewY(${skew}deg)`,
+    background: index % 2 === 0
+      ? 'linear-gradient(135deg, #fff7c2 0%, #facc15 38%, #fb923c 72%, #c2410c 100%)'
+      : 'linear-gradient(135deg, #ffe4e6 0%, #fb7185 35%, #ef4444 72%, #991b1b 100%)'
+  }
+}
+
+const wheelLabelStyle = (index) => {
+  const total = Math.max(1, activePrizes.value.length)
+  const angle = 360 / total
+  const rotate = index * angle + angle / 2
+
+  return {
+    transform: `rotate(${rotate}deg) translateY(calc(var(--wheel-size) * -0.39)) rotate(${-rotate}deg)`
+  }
+}
+
+const polarToCartesian = (centerX, centerY, radius, angleInDegrees) => {
+  const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180
+
+  return {
+    x: centerX + radius * Math.cos(angleInRadians),
+    y: centerY + radius * Math.sin(angleInRadians)
+  }
+}
+
+const getWheelSlicePath = (index) => {
+  const total = Math.max(1, activePrizes.value.length)
+  const angle = 360 / total
+  const startAngle = index * angle
+  const endAngle = startAngle + angle
+  const start = polarToCartesian(160, 160, 150, endAngle)
+  const end = polarToCartesian(160, 160, 150, startAngle)
+  const largeArcFlag = angle > 180 ? 1 : 0
+
+  return [
+    'M',
+    160,
+    160,
+    'L',
+    start.x,
+    start.y,
+    'A',
+    150,
+    150,
+    0,
+    largeArcFlag,
+    0,
+    end.x,
+    end.y,
+    'Z'
+  ].join(' ')
+}
+
+const getWheelSliceFill = (index) => {
+  return index % 2 === 0 ? 'url(#wheelGoldGradient)' : 'url(#wheelRoseGradient)'
+}
+
+const getWheelSvgLabelPosition = (index) => {
+  const total = Math.max(1, activePrizes.value.length)
+  const angle = 360 / total
+  const middleAngle = index * angle + angle / 2
+  const point = polarToCartesian(160, 160, 92, middleAngle)
+
+  return {
+    x: point.x,
+    y: point.y
+  }
+}
+
+const getWheelSliceClass = (index) => {
+  if (activePrizeIndex.value !== index) return ''
+
+  if (!resultPrize.value) return ''
+
+  return resultPrize.value.type === 'lose'
+    ? 'premium-wheel-slice-lose'
+    : 'premium-wheel-slice-win'
+}
+
+const getWheelLabelClass = (index) => {
+  if (activePrizeIndex.value !== index) return ''
+
+  if (!resultPrize.value) return ''
+
+  return resultPrize.value.type === 'lose'
+    ? 'premium-wheel-label-lose'
+    : 'premium-wheel-label-win'
+}
+
+const wheelStyle = computed(() => {
+  return {
+    transform: `rotate(${wheelRotation.value}deg)`
+  }
+})
+
+const getPrizeTypeLabel = (type) => {
+  return type === 'lose' ? '未中獎' : '中獎'
+}
+
+const getPrizeRankLabel = (rank, type = 'win') => {
+  if (type === 'lose') return '未中獎'
+
+  const option = prizeRankOptions.find((item) => item.value === rank)
+
+  return option?.label || '一般獎'
+}
+
+const getPrizeRankClass = (rank, type = 'win') => {
+  if (type === 'lose' || rank === 'none') {
+    return 'bg-slate-100 text-slate-500'
+  }
+
+  if (rank === 'first') {
+    return 'bg-yellow-100 text-yellow-700'
+  }
+
+  if (rank === 'second') {
+    return 'bg-orange-100 text-orange-700'
+  }
+
+  if (rank === 'third') {
+    return 'bg-amber-100 text-amber-700'
+  }
+
+  return 'bg-emerald-100 text-emerald-700'
+}
+
+const hasPrizeImage = (prize) => {
+  return Boolean(String(prize?.imageUrl || '').trim())
+}
+
+const getPrizeImageUrl = (prize) => {
+  return String(prize?.imageUrl || '').trim()
+}
+
+const updateChanceText = () => {
+  campaign.chanceText = `還有 ${player.chances} 次轉盤機會`
+}
+
+const showSavedMessage = (message) => {
+  savedMessage.value = message
+
+  setTimeout(() => {
+    savedMessage.value = ''
+  }, 2200)
+}
+
+const getStorageKey = () => {
+  return `${PREMIUM_WHEEL_STORAGE_KEY}_${currentGameId.value}`
+}
+
+const pingPremiumWheelSync = () => {
+  if (typeof localStorage === 'undefined') return
+
+  localStorage.setItem(
+    PREMIUM_WHEEL_SYNC_PING_KEY,
+    JSON.stringify({
+      key: getStorageKey(),
+      gameId: currentGameId.value,
+      updatedAt: new Date().toISOString()
+    })
+  )
+}
+
+const handlePremiumWheelStorageSync = (event) => {
+  if (!event) return
+  if (isSavingPremiumWheelState.value) return
+
+  if (event.key === getStorageKey()) {
+    loadPremiumWheelState()
+    return
+  }
+
+  if (event.key === PREMIUM_WHEEL_SYNC_PING_KEY) {
+    const payload = safeJsonParse(event.newValue, null)
+
+    if (payload?.key === getStorageKey()) {
+      lastSyncAt.value = new Date().toLocaleString('zh-TW')
+      lastSyncMessage.value = '已收到管理版同步，玩家畫面已更新。'
+      loadPremiumWheelState()
+    }
+  }
+}
+
+const syncPremiumWheelToPlayer = () => {
+  savePremiumWheelState()
+  pingPremiumWheelSync()
+
+  lastSyncAt.value = new Date().toLocaleString('zh-TW')
+  lastSyncMessage.value = `已同步到玩家版：${sourcePath.value}`
+
+  showSavedMessage('已同步最新轉盤設定到玩家版。')
+}
+
+const getShareUrl = () => {
+  if (typeof window === 'undefined') return sourcePath.value
+
+  return `${window.location.origin}${sourcePath.value}`
+}
+
+const getCustomShareTitle = () => {
+  return String(campaign.shareTitle || '').trim() || campaign.pageTitle
+}
+
+const getCustomShareDescription = () => {
+  return String(campaign.shareDescription || '').trim() || `${campaign.mainTitle} ${campaign.heroTagline}`
+}
+
+const getCustomShareImageUrl = () => {
+  return String(campaign.shareImageUrl || '').trim()
+}
+
+const getCustomShareButtonText = () => {
+  return String(campaign.shareButtonText || '').trim() || '分享增加機會'
+}
+
+const getOfficialWebsiteUrl = () => {
+  const rawUrl = String(campaign.websiteUrl || '').trim()
+
+  if (!rawUrl) return ''
+
+  if (/^https?:\/\//i.test(rawUrl)) {
+    return rawUrl
+  }
+
+  return `https://${rawUrl}`
+}
+
+const getShareText = () => {
+  return [
+    `${getCustomShareTitle()}｜${campaign.subTitle}`,
+    getCustomShareDescription(),
+    `立即參加：${getShareUrl()}`
+  ].join('\n')
+}
+
+const getTodayKey = () => {
+  return new Date().toISOString().slice(0, 10)
+}
+
+const normalizedShareRewardDailyLimit = computed(() => {
+  return Math.max(0, Number(campaign.shareRewardDailyLimit || 0))
+})
+
+const normalizedShareRewardCooldownSeconds = computed(() => {
+  return Math.max(0, Number(campaign.shareRewardCooldownSeconds || 0))
+})
+
+const syncShareRewardDate = () => {
+  const todayKey = getTodayKey()
+
+  if (shareRewardState.value.date !== todayKey) {
+    shareRewardState.value = {
+      date: todayKey,
+      count: 0,
+      lastRewardAt: 0
+    }
+  }
+}
+
+const shareRewardRemainingToday = computed(() => {
+  syncShareRewardDate()
+
+  return Math.max(0, normalizedShareRewardDailyLimit.value - Number(shareRewardState.value.count || 0))
+})
+
+const shareRewardCooldownRemaining = computed(() => {
+  const cooldownMs = normalizedShareRewardCooldownSeconds.value * 1000
+  const lastRewardAt = Number(shareRewardState.value.lastRewardAt || 0)
+
+  if (!cooldownMs || !lastRewardAt) return 0
+
+  const remainingMs = cooldownMs - (Date.now() - lastRewardAt)
+
+  return Math.max(0, Math.ceil(remainingMs / 1000))
+})
+
+const canClaimShareReward = computed(() => {
+  if (!campaign.enableShareReward) return false
+  if (shareRewardRemainingToday.value <= 0) return false
+  if (shareRewardCooldownRemaining.value > 0) return false
+
+  return true
+})
+
+const getShareRewardBlockedMessage = () => {
+  if (!campaign.enableShareReward) {
+    return '目前未開啟分享增加機會。'
+  }
+
+  if (shareRewardRemainingToday.value <= 0) {
+    return '今日分享增加機會已達上限。'
+  }
+
+  if (shareRewardCooldownRemaining.value > 0) {
+    return `分享獎勵冷卻中，請 ${shareRewardCooldownRemaining.value} 秒後再試。`
+  }
+
+  return ''
+}
+
+const getAuthTokenInfo = () => {
+  const tokenKeys = [
+    'token',
+    'authToken',
+    'accessToken',
+    'jwt',
+    'userToken',
+    'marketingGameToken',
+    'mg_token'
+  ]
+
+  for (const key of tokenKeys) {
+    const value = localStorage.getItem(key)
+
+    if (value) {
+      return {
+        key,
+        value
+      }
+    }
+  }
+
+  return {
+    key: '',
+    value: ''
+  }
+}
+
+const getAuthToken = () => {
+  return getAuthTokenInfo().value
+}
+
+const getAuthTokenKey = () => {
+  return getAuthTokenInfo().key || '未偵測到'
+}
+
+const isUserLoggedIn = computed(() => {
+  return Boolean(getAuthToken())
+})
+
+const getCurrentRedirectPath = () => {
+  return route.fullPath || window.location.pathname + window.location.search
+}
+
+const goLoginPage = () => {
+  router.push({
+    path: '/login',
+    query: {
+      redirect: getCurrentRedirectPath()
+    }
+  })
+}
+
+const getApiBaseUrl = () => {
+  return import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+}
+
+const syncShareRewardStateFromServer = (status) => {
+  if (!status) return
+
+  shareRewardState.value = {
+    date: getTodayKey(),
+    count: Number(status.todayCount || 0),
+    lastRewardAt: status.lastClaimedAt ? new Date(status.lastClaimedAt).getTime() : 0
+  }
+}
+
+const claimShareRewardFromServer = async () => {
+  const token = getAuthToken()
+
+  if (!token) {
+    return {
+      success: false,
+      message: '請先登入後再領取分享獎勵'
+    }
+  }
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/share-rewards/claim`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        gameId: currentGameId.value || 'wheel',
+        campaignId: campaign.id || null,
+        dailyLimit: normalizedShareRewardDailyLimit.value,
+        cooldownSeconds: normalizedShareRewardCooldownSeconds.value
+      })
+    })
+
+    const payload = await response.json().catch(() => null)
+
+    if (!response.ok || !payload?.success) {
+      if (payload?.data) {
+        syncShareRewardStateFromServer(payload.data)
+      }
+
+      return {
+        success: false,
+        message: payload?.message || '分享獎勵領取失敗'
+      }
+    }
+
+    const rewardCount = Number(payload.data?.rewardCount || 1)
+    syncShareRewardStateFromServer(payload.data?.status)
+
+    return {
+      success: true,
+      rewardCount,
+      message: payload.message || '分享獎勵領取成功'
+    }
+  } catch (error) {
+    console.error('claimShareRewardFromServer error:', error)
+
+    return {
+      success: false,
+      message: '無法連線到分享獎勵 API，請確認後端是否啟動'
+    }
+  }
+}
+
+const fetchShareRewardStatusFromServer = async () => {
+  const token = getAuthToken()
+
+  if (!token) {
+    shareRewardStatusMessage.value = '尚未登入，無法同步分享獎勵狀態。'
+    return
+  }
+
+  isShareRewardStatusLoading.value = true
+
+  try {
+    const params = new URLSearchParams({
+      gameId: currentGameId.value || 'wheel',
+      dailyLimit: String(normalizedShareRewardDailyLimit.value),
+      cooldownSeconds: String(normalizedShareRewardCooldownSeconds.value)
+    })
+
+    const response = await fetch(`${getApiBaseUrl()}/share-rewards/status?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+
+    const payload = await response.json().catch(() => null)
+
+    if (!response.ok || !payload?.success) {
+      shareRewardStatusMessage.value = payload?.message || '分享獎勵狀態同步失敗。'
+      return
+    }
+
+    syncShareRewardStateFromServer(payload.data)
+    shareRewardStatusMessage.value = '分享獎勵狀態已同步。'
+  } catch (error) {
+    console.error('fetchShareRewardStatusFromServer error:', error)
+    shareRewardStatusMessage.value = '無法連線到分享獎勵狀態 API。'
+  } finally {
+    isShareRewardStatusLoading.value = false
+  }
+}
+
+const testShareRewardApiConnection = async () => {
+  const token = getAuthToken()
+  const tokenKey = getAuthTokenKey()
+  const apiBaseUrl = getApiBaseUrl()
+
+  shareRewardApiDiagnostic.value = {
+    status: '測試中',
+    message: '正在測試分享獎勵 API...',
+    apiBaseUrl,
+    hasToken: Boolean(token),
+    tokenKey,
+    testedAt: new Date().toLocaleString('zh-TW')
+  }
+
+  if (!token) {
+    shareRewardApiDiagnostic.value = {
+      status: '失敗',
+      message: '找不到登入 Token，請先登入會員後再測試。',
+      apiBaseUrl,
+      hasToken: false,
+    tokenKey,
+      testedAt: new Date().toLocaleString('zh-TW')
+    }
+    return
+  }
+
+  try {
+    const params = new URLSearchParams({
+      gameId: currentGameId.value || 'wheel',
+      dailyLimit: String(normalizedShareRewardDailyLimit.value),
+      cooldownSeconds: String(normalizedShareRewardCooldownSeconds.value)
+    })
+
+    const response = await fetch(`${apiBaseUrl}/share-rewards/status?${params.toString()}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    })
+
+    const payload = await response.json().catch(() => null)
+
+    if (!response.ok || !payload?.success) {
+      shareRewardApiDiagnostic.value = {
+        status: '失敗',
+        message: payload?.message || `API 測試失敗，HTTP ${response.status}`,
+        apiBaseUrl,
+        hasToken: true,
+    tokenKey,
+        testedAt: new Date().toLocaleString('zh-TW')
+      }
+      return
+    }
+
+    syncShareRewardStateFromServer(payload.data)
+    shareRewardApiDiagnostic.value = {
+      status: '成功',
+      message: payload?.message || '分享獎勵 API 連線正常。',
+      apiBaseUrl,
+      hasToken: true,
+    tokenKey,
+      testedAt: new Date().toLocaleString('zh-TW')
+    }
+    shareRewardStatusMessage.value = '分享獎勵 API 測試成功，狀態已同步。'
+  } catch (error) {
+    console.error('testShareRewardApiConnection error:', error)
+    shareRewardApiDiagnostic.value = {
+      status: '失敗',
+      message: '無法連線到後端 API，請確認後端是否啟動於 http://localhost:3000。',
+      apiBaseUrl,
+      hasToken: true,
+    tokenKey,
+      testedAt: new Date().toLocaleString('zh-TW')
+    }
+  }
+}
+
+const postShareRewardAdminAction = async (endpoint, successMessage) => {
+  const token = getAuthToken()
+
+  if (!token) {
+    showSavedMessage('請先登入後再操作後台分享防作弊功能。')
+    return false
+  }
+
+  isShareRewardStatusLoading.value = true
+
+  try {
+    const response = await fetch(`${getApiBaseUrl()}/share-rewards/${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        gameId: currentGameId.value || 'wheel'
+      })
+    })
+
+    const payload = await response.json().catch(() => null)
+
+    if (!response.ok || !payload?.success) {
+      const message = payload?.message || '後端操作失敗'
+      shareRewardStatusMessage.value = message
+      showSavedMessage(message)
+      return false
+    }
+
+    shareRewardStatusMessage.value = successMessage
+    showSavedMessage(successMessage)
+    await fetchShareRewardStatusFromServer()
+    return true
+  } catch (error) {
+    console.error(`postShareRewardAdminAction ${endpoint} error:`, error)
+    shareRewardStatusMessage.value = '無法連線到分享獎勵後端 API。'
+    showSavedMessage('無法連線到分享獎勵後端 API。')
+    return false
+  } finally {
+    isShareRewardStatusLoading.value = false
+  }
+}
+
+const shareRewardAdminStatus = computed(() => {
+  syncShareRewardDate()
+
+  return {
+    date: shareRewardState.value.date || getTodayKey(),
+    usedCount: Number(shareRewardState.value.count || 0),
+    remainingCount: shareRewardRemainingToday.value,
+    dailyLimit: normalizedShareRewardDailyLimit.value,
+    cooldownSeconds: normalizedShareRewardCooldownSeconds.value,
+    cooldownRemaining: shareRewardCooldownRemaining.value,
+    lastRewardAt: shareRewardState.value.lastRewardAt
+      ? new Date(Number(shareRewardState.value.lastRewardAt)).toLocaleString('zh-TW')
+      : '尚未領取',
+    enabled: Boolean(campaign.enableShareReward)
+  }
+})
+
+const resetShareRewardToday = async () => {
+  const confirmed = window.confirm('確定要重置今日分享獎勵領取次數嗎？')
+
+  if (!confirmed) return
+
+  const success = await postShareRewardAdminAction('reset-today', '後端已重置今日分享獎勵。')
+
+  if (!success) return
+
+  shareRewardState.value = {
+    date: getTodayKey(),
+    count: 0,
+    lastRewardAt: 0
+  }
+
+  savePremiumWheelState()
+}
+
+const clearShareRewardCooldown = async () => {
+  const success = await postShareRewardAdminAction('clear-cooldown', '後端已清除分享獎勵冷卻。')
+
+  if (!success) return
+
+  shareRewardState.value = {
+    ...shareRewardState.value,
+    date: shareRewardState.value.date || getTodayKey(),
+    lastRewardAt: 0
+  }
+
+  savePremiumWheelState()
+}
+
+const exportShareRewardStatus = () => {
+  const payload = {
+    type: 'premium_wheel_share_reward_status',
+    exportedAt: new Date().toISOString(),
+    currentGameId: currentGameId.value,
+    sourcePath: sourcePath.value,
+    campaign: {
+      enableShareReward: campaign.enableShareReward,
+      shareRewardDailyLimit: campaign.shareRewardDailyLimit,
+      shareRewardCooldownSeconds: campaign.shareRewardCooldownSeconds
+    },
+    status: cloneByJson(shareRewardAdminStatus.value),
+    rawState: cloneByJson(shareRewardState.value)
+  }
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json;charset=utf-8'
+  })
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = `premium-wheel-share-reward-status-${Date.now()}.json`
+  link.click()
+
+  URL.revokeObjectURL(url)
+  showSavedMessage('已匯出分享防作弊狀態 JSON。')
+}
+
+const completeShareActivity = async (message = '分享成功，已增加 1 次轉盤機會。') => {
+  syncShareRewardDate()
+
+  if (!canClaimShareReward.value) {
+    showShareSuccess(getShareRewardBlockedMessage())
+    return false
+  }
+
+  const serverResult = await claimShareRewardFromServer()
+
+  if (!serverResult.success) {
+    showShareSuccess(serverResult.message || '分享獎勵領取失敗')
+    return false
+  }
+
+  player.sharedCount += 1
+  player.chances += Number(serverResult.rewardCount || 1)
+
+  updateChanceText()
+  savePremiumWheelState()
+  shareRewardStatusMessage.value = '後端已核准分享獎勵。'
+  showShareSuccess(message)
+  return true
+}
+
+const openSharePreviewModal = () => {
+  showSharePreviewModal.value = true
+}
+
+const closeSharePreviewModal = () => {
+  isShareActionProcessing.value = false
+  showSharePreviewModal.value = false
+}
+
+const handleShareActivity = () => {
+  openSharePreviewModal()
+}
+
+const runSystemShareFromPreview = async () => {
+  const shareText = getShareText()
+  const shareUrl = getShareUrl()
+
+  isShareActionProcessing.value = true
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: getCustomShareTitle(),
+        text: shareText,
+        url: shareUrl
+      })
+
+      const granted = await completeShareActivity('分享成功，已增加 1 次轉盤機會。')
+      if (granted) closeSharePreviewModal()
+      return
+    }
+
+    await navigator.clipboard.writeText(shareText)
+    const granted = await completeShareActivity('此裝置不支援系統分享，已改為複製文案並增加 1 次轉盤機會。')
+    if (granted) closeSharePreviewModal()
+  } catch (error) {
+    console.warn('分享活動失敗或使用者取消分享：', error)
+    isShareActionProcessing.value = false
+  }
+}
+
+const copyShareTextFromPreview = async () => {
+  const shareText = getShareText()
+
+  isShareActionProcessing.value = true
+
+  try {
+    await navigator.clipboard.writeText(shareText)
+    const granted = await completeShareActivity('已複製分享文案，並增加 1 次轉盤機會。')
+    if (granted) closeSharePreviewModal()
+  } catch (error) {
+    console.error('複製分享文案失敗：', error)
+    isShareActionProcessing.value = false
+    window.prompt('瀏覽器不支援自動複製，請手動複製：', shareText)
+  }
+}
+
+const getResultCopyText = () => {
+  const prize = resultPrize.value
+
+  return [
+    `活動名稱：${campaign.pageTitle}`,
+    `抽獎結果：${prize?.type === 'lose' ? '未中獎' : '中獎'}`,
+    `獎項名稱：${prize?.name || '未知獎項'}`,
+    `獎項等級：${getPrizeRankLabel(prize?.rank, prize?.type)}`,
+    `抽獎時間：${new Date().toLocaleString('zh-TW')}`,
+    `兌獎提醒：請截圖或保存此結果，並依主辦單位公告方式兌換。`
+  ].join('\n')
+}
+
+const copyResultText = async () => {
+  if (!resultPrize.value) return
+
+  const payload = getResultCopyText()
+
+  try {
+    await navigator.clipboard.writeText(payload)
+    showSavedMessage('已複製中獎結果。')
+  } catch (error) {
+    console.error('複製中獎結果失敗：', error)
+    window.prompt('瀏覽器不支援自動複製，請手動複製：', payload)
+  }
+}
+
+const getResultShareText = () => {
+  const prize = resultPrize.value
+
+  return [
+    `我參加「${campaign.pageTitle}」抽中了：${prize?.name || '神秘獎項'}`,
+    `獎項等級：${getPrizeRankLabel(prize?.rank, prize?.type)}`,
+    `一起來玩：${getShareUrl()}`
+  ].join('\n')
+}
+
+const shareResultText = async () => {
+  if (!resultPrize.value) return
+
+  const payload = getResultShareText()
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: campaign.pageTitle,
+        text: payload,
+        url: getShareUrl()
+      })
+      showSavedMessage('已開啟分享中獎結果。')
+      return
+    } catch (error) {
+      console.warn('原生分享取消或失敗，改用複製分享文案：', error)
+    }
+  }
+
+  try {
+    await navigator.clipboard.writeText(payload)
+    showSavedMessage('已複製分享文案。')
+  } catch (error) {
+    console.error('複製分享文案失敗：', error)
+    window.prompt('瀏覽器不支援自動分享，請手動複製：', payload)
+  }
+}
+
+const getShareSuccessText = (prefix = '已增加 1 次轉盤機會') => {
+  return `${prefix}，目前還有 ${player.chances} 次轉盤機會。`
+}
+
+const showShareSuccess = (message) => {
+  shareMessage.value = message
+  showShareMessage.value = true
+
+  setTimeout(() => {
+    showShareMessage.value = false
+    shareMessage.value = ''
+  }, 2600)
+}
+
+const pickPrize = () => {
+  const pool = availablePrizePool.value
+
+  if (!pool.length) return null
+
+  const total = pool.reduce((sum, prize) => sum + Number(prize.probability || 0), 0)
+  const target = Math.random() * total
+  let current = 0
+
+  for (const prize of pool) {
+    current += Number(prize.probability || 0)
+
+    if (target <= current) {
+      return prize
+    }
+  }
+
+  return pool[pool.length - 1]
+}
+
+const getHistoryItems = () => {
+  return safeJsonParse(localStorage.getItem(GAME_HISTORY_STORAGE_KEY), [])
+}
+
+const saveHistoryItem = (prize) => {
+  const history = Array.isArray(getHistoryItems()) ? getHistoryItems() : []
+
+  const item = {
+    id: `wheel-${Date.now()}`,
+    gameId: currentGameId.value,
+    gameType: 'premium-wheel',
+    gameName: campaign.pageTitle,
+    prizeId: prize?.id || '',
+    prizeName: prize?.name || '未知結果',
+    prizeIcon: prize?.icon || '🎁',
+    prizeImageUrl: prize?.imageUrl || '',
+    prizeType: prize?.type || 'win',
+    prizeRank: prize?.rank || (prize?.type === 'lose' ? 'none' : 'normal'),
+    prizeRankLabel: getPrizeRankLabel(prize?.rank, prize?.type),
+    sourcePath: sourcePath.value,
+    createdAt: new Date().toISOString()
+  }
+
+  localStorage.setItem(
+    GAME_HISTORY_STORAGE_KEY,
+    JSON.stringify([item, ...history].slice(0, 50))
+  )
+}
+
+const savePremiumWheelState = () => {
+  if (isApplyingPremiumWheelRemoteState.value) return
+
+  isSavingPremiumWheelState.value = true
+
+  const payload = {
+    version: premiumVersionInfo.value.version,
+    platformVersion: premiumVersionInfo.value.platformVersion,
+    batch: premiumVersionInfo.value.batch,
+    currentGameId: currentGameId.value,
+    campaign: cloneByJson(campaign),
+    player: cloneByJson(player),
+    prizes: cloneByJson(prizes.value),
+    drawLogs: cloneByJson(drawLogs.value),
+    shareRewardState: cloneByJson(shareRewardState.value),
+    savedAt: new Date().toISOString()
+  }
+
+  localStorage.setItem(getStorageKey(), JSON.stringify(payload))
+  pingPremiumWheelSync()
+
+  setTimeout(() => {
+    isSavingPremiumWheelState.value = false
+  }, 0)
+}
+
+const loadPremiumWheelState = () => {
+  isApplyingPremiumWheelRemoteState.value = true
+
+  const payload = safeJsonParse(localStorage.getItem(getStorageKey()), null)
+
+  if (!payload) {
+    updateChanceText()
+    isApplyingPremiumWheelRemoteState.value = false
+    return
+  }
+
+  if (payload.campaign) {
+    Object.assign(campaign, {
+      ...defaultCampaignSnapshot,
+      ...payload.campaign
+    })
+  }
+
+  if (payload.player) {
+    Object.assign(player, {
+      ...defaultPlayerSnapshot,
+      ...payload.player
+    })
+  }
+
+  if (Array.isArray(payload.prizes)) {
+    prizes.value = payload.prizes.map((prize) => {
+      return {
+        ...prize,
+        imageUrl: prize.imageUrl || '',
+        isEnabled: prize.isEnabled !== false,
+        rank: prize.rank || (prize.type === 'lose' ? 'none' : 'normal')
+      }
+    })
+  }
+
+  if (Array.isArray(payload.drawLogs)) {
+    drawLogs.value = payload.drawLogs.slice(0, 8)
+  }
+
+  updateChanceText()
+
+  setTimeout(() => {
+    isApplyingPremiumWheelRemoteState.value = false
+  }, 0)
+}
+
+const resetWheelState = () => {
+  stopSpinSound()
+  stopWinSound()
+  showWinEffects.value = false
+  isSpinning.value = false
+  activePrizeIndex.value = -1
+  resultPrize.value = null
+  showResultModal.value = false
+}
+
+const stopSpinSound = () => {
+  if (!spinAudio.value) return
+
+  spinAudio.value.pause()
+  spinAudio.value.currentTime = 0
+}
+
+const playSpinSound = async () => {
+  if (!campaign.enableSpinSound) return
+  if (!campaign.spinSoundUrl) return
+
+  try {
+    stopSpinSound()
+
+    spinAudio.value = new Audio(campaign.spinSoundUrl)
+    spinAudio.value.volume = normalizedSpinSoundVolume.value / 100
+    spinAudio.value.loop = true
+
+    await spinAudio.value.play()
+  } catch (error) {
+    console.warn('轉盤轉動音效播放失敗，可能被瀏覽器阻擋或音效網址無法讀取：', error)
+  }
+}
+
+const testSpinSound = async () => {
+  if (!campaign.spinSoundUrl) {
+    window.alert('請先填入轉動音效網址。')
+    return
+  }
+
+  const wasEnabled = campaign.enableSpinSound
+
+  campaign.enableSpinSound = true
+  await playSpinSound()
+  campaign.enableSpinSound = wasEnabled
+
+  showSavedMessage('正在測試轉盤轉動音效。')
+
+  setTimeout(() => {
+    stopSpinSound()
+  }, 2800)
+}
+
+const testWinSound = async () => {
+  if (!campaign.winSoundUrl) {
+    window.alert('請先填入中獎音樂網址。')
+    return
+  }
+
+  const wasEnabled = campaign.enableWinSound
+
+  campaign.enableWinSound = true
+  await playWinSound()
+  campaign.enableWinSound = wasEnabled
+
+  showSavedMessage('正在測試中獎音樂。')
+}
+
+const stopAllSounds = () => {
+  stopSpinSound()
+  stopWinSound()
+  showSavedMessage('已停止所有音效。')
+}
+
+const stopWinSound = () => {
+  if (!winAudio.value) return
+
+  winAudio.value.pause()
+  winAudio.value.currentTime = 0
+}
+
+const playWinSound = async () => {
+  if (!campaign.enableWinSound) return
+  if (!campaign.winSoundUrl) return
+
+  try {
+    stopWinSound()
+
+    winAudio.value = new Audio(campaign.winSoundUrl)
+    winAudio.value.volume = normalizedWinSoundVolume.value / 100
+
+    await winAudio.value.play()
+  } catch (error) {
+    console.warn('中獎音樂播放失敗，可能被瀏覽器阻擋或音樂網址無法讀取：', error)
+  }
+}
+
+const triggerWinEffects = (prize) => {
+  if (!prize || prize.type === 'lose') return
+
+  showWinEffects.value = Boolean(campaign.enableWinConfetti || campaign.enableGoldRain)
+
+  playWinSound()
+
+  setTimeout(() => {
+    showWinEffects.value = false
+  }, normalizedEffectDuration.value * 1000)
+}
+
+const getWinEffectSettingsPayload = () => {
+  return {
+    type: 'premium_wheel_win_effect_settings',
+    version: premiumVersionInfo.value.version,
+    exportedAt: new Date().toISOString(),
+    settings: {
+      enableWinConfetti: campaign.enableWinConfetti,
+      enableGoldRain: campaign.enableGoldRain,
+      enableWinSound: campaign.enableWinSound,
+      winSoundUrl: campaign.winSoundUrl,
+      winSoundVolume: campaign.winSoundVolume,
+      winEffectDuration: campaign.winEffectDuration,
+      confettiCount: campaign.confettiCount,
+      goldRainCount: campaign.goldRainCount,
+      enableWinFlash: campaign.enableWinFlash,
+      enablePrizeBounce: campaign.enablePrizeBounce,
+      enableGoldenAura: campaign.enableGoldenAura,
+      enableSpinSound: campaign.enableSpinSound,
+      spinSoundUrl: campaign.spinSoundUrl,
+      spinSoundVolume: campaign.spinSoundVolume
+    }
+  }
+}
+
+const applyWinEffectSettingsPayload = (payload) => {
+  const settings = payload?.settings || payload
+
+  if (!settings || typeof settings !== 'object') {
+    window.alert('匯入失敗：找不到中獎特效設定。')
+    return
+  }
+
+  Object.assign(campaign, {
+    enableWinConfetti: Boolean(settings.enableWinConfetti),
+    enableGoldRain: Boolean(settings.enableGoldRain),
+    enableWinSound: Boolean(settings.enableWinSound),
+    winSoundUrl: settings.winSoundUrl || '',
+    winSoundVolume: Number(settings.winSoundVolume ?? 75),
+    winEffectDuration: Number(settings.winEffectDuration ?? 6),
+    confettiCount: Number(settings.confettiCount ?? 54),
+    goldRainCount: Number(settings.goldRainCount ?? 48),
+    enableWinFlash: Boolean(settings.enableWinFlash),
+    enablePrizeBounce: Boolean(settings.enablePrizeBounce),
+    enableGoldenAura: Boolean(settings.enableGoldenAura),
+    enableSpinSound: Boolean(settings.enableSpinSound),
+    spinSoundUrl: settings.spinSoundUrl || '',
+    spinSoundVolume: Number(settings.spinSoundVolume ?? 45)
+  })
+
+  savePremiumWheelState()
+  showSavedMessage('已匯入中獎特效設定。')
+}
+
+const exportWinEffectSettings = () => {
+  const payload = getWinEffectSettingsPayload()
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json;charset=utf-8'
+  })
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = `premium-wheel-win-effects-${Date.now()}.json`
+  link.click()
+
+  URL.revokeObjectURL(url)
+  showSavedMessage('已匯出中獎特效設定。')
+}
+
+const openWinEffectImport = () => {
+  effectImportInput.value?.click()
+}
+
+const importWinEffectSettings = async (event) => {
+  const file = event?.target?.files?.[0]
+
+  if (!file) return
+
+  try {
+    const content = await file.text()
+    const payload = JSON.parse(content)
+
+    applyWinEffectSettingsPayload(payload)
+  } catch (error) {
+    console.error('匯入中獎特效設定失敗：', error)
+    window.alert('匯入失敗：請確認檔案是正確的 JSON。')
+  } finally {
+    if (event?.target) {
+      event.target.value = ''
+    }
+  }
+}
+
+const applyWinEffectPreset = (preset) => {
+  const presets = {
+    elegant: {
+      label: '低調質感',
+      enableWinConfetti: true,
+      enableGoldRain: true,
+      enableWinFlash: false,
+      enablePrizeBounce: true,
+      enableGoldenAura: true,
+      confettiCount: 26,
+      goldRainCount: 22,
+      winEffectDuration: 4,
+      winSoundVolume: 55
+    },
+    luxury: {
+      label: '豪華高級',
+      enableWinConfetti: true,
+      enableGoldRain: true,
+      enableWinFlash: true,
+      enablePrizeBounce: true,
+      enableGoldenAura: true,
+      confettiCount: 54,
+      goldRainCount: 48,
+      winEffectDuration: 6,
+      winSoundVolume: 75
+    },
+    party: {
+      label: '熱鬧派對',
+      enableWinConfetti: true,
+      enableGoldRain: true,
+      enableWinFlash: true,
+      enablePrizeBounce: true,
+      enableGoldenAura: true,
+      confettiCount: 96,
+      goldRainCount: 84,
+      winEffectDuration: 8,
+      winSoundVolume: 90
+    }
+  }
+
+  const selectedPreset = presets[preset]
+
+  if (!selectedPreset) return
+
+  Object.assign(campaign, {
+    enableWinConfetti: selectedPreset.enableWinConfetti,
+    enableGoldRain: selectedPreset.enableGoldRain,
+    enableWinFlash: selectedPreset.enableWinFlash,
+    enablePrizeBounce: selectedPreset.enablePrizeBounce,
+    enableGoldenAura: selectedPreset.enableGoldenAura,
+    confettiCount: selectedPreset.confettiCount,
+    goldRainCount: selectedPreset.goldRainCount,
+    winEffectDuration: selectedPreset.winEffectDuration,
+    winSoundVolume: selectedPreset.winSoundVolume
+  })
+
+  savePremiumWheelState()
+  showSavedMessage(`已套用「${selectedPreset.label}」中獎特效風格。`)
+}
+
+const previewWinEffects = () => {
+  const previewPrize = prizes.value.find((prize) => prize.type !== 'lose') || prizes.value[0]
+
+  if (!previewPrize) {
+    window.alert('目前沒有可測試的獎項。')
+    return
+  }
+
+  showWinEffects.value = false
+
+  setTimeout(() => {
+    triggerWinEffects({
+      ...previewPrize,
+      type: 'win'
+    })
+    showSavedMessage('已測試中獎彩帶 / 金沙 / 音樂特效。')
+  }, 80)
+}
+
+const finishSpin = (prize, index) => {
+  stopSpinSound()
+  resultPrize.value = prize
+  activePrizeIndex.value = index
+  isSpinning.value = false
+
+  if (prize && prize.stock < 9999) {
+    prize.stock = Math.max(0, Number(prize.stock) - 1)
+  }
+
+  const log = {
+    id: `log-${Date.now()}`,
+    prizeName: prize?.name || '未知結果',
+    prizeIcon: prize?.icon || '🎁',
+    prizeImageUrl: prize?.imageUrl || '',
+    prizeType: prize?.type || 'win',
+    prizeRank: prize?.rank || (prize?.type === 'lose' ? 'none' : 'normal'),
+    prizeRankLabel: getPrizeRankLabel(prize?.rank, prize?.type),
+    createdAt: new Date().toLocaleString('zh-TW')
+  }
+
+  drawLogs.value = [log, ...drawLogs.value].slice(0, 8)
+
+  if (prize) {
+    saveHistoryItem(prize)
+  }
+
+  savePremiumWheelState()
+  triggerWinEffects(prize)
+
+  setTimeout(() => {
+    showResultModal.value = true
+  }, 450)
+}
+
+const startSpin = () => {
+  if (!canSpin.value) {
+    if (player.chances <= 0) {
+      showShareSuccess('目前沒有轉盤機會，請先分享活動增加次數。')
+      return
+    }
+
+    if (!availablePrizePool.value.length) {
+      showShareSuccess('目前獎品已抽完，請等待主辦單位更新活動。')
+    }
+
+    return
+  }
+
+  const prize = pickPrize()
+
+  if (!prize) return
+
+  const prizeIndex = prizes.value.findIndex((item) => item.id === prize.id)
+  const activeIndex = activePrizes.value.findIndex((item) => item.id === prize.id)
+  const targetIndex = Math.max(0, activeIndex)
+  const total = Math.max(1, activePrizes.value.length)
+  const angle = 360 / total
+  const pointerOffset = 360 - (targetIndex * angle + angle / 2)
+  const extraTurns = 360 * 6
+
+  player.chances -= 1
+  updateChanceText()
+  isSpinning.value = true
+  activePrizeIndex.value = -1
+  resultPrize.value = null
+  playSpinSound()
+
+  wheelRotation.value += extraTurns + pointerOffset
+
+  setTimeout(() => {
+    finishSpin(prize, targetIndex)
+  }, 3600)
+}
+
+const shareCampaign = async () => {
+  if (isSpinning.value) return
+
+  player.sharedCount += 1
+  player.chances += 1
+  updateChanceText()
+  savePremiumWheelState()
+
+  const shareText = getShareText()
+
+  try {
+    await navigator.clipboard.writeText(shareText)
+    showShareSuccess(getShareSuccessText('已複製分享文案並增加 1 次轉盤機會'))
+  } catch (error) {
+    console.error('複製分享文案失敗：', error)
+    showShareSuccess(getShareSuccessText('已增加 1 次轉盤機會；目前瀏覽器不支援自動複製'))
+  }
+}
+
+const closeResultAndContinue = () => {
+  isResultActionProcessing.value = false
+  showWinEffects.value = false
+  stopWinSound()
+  showResultModal.value = false
+  resultPrize.value = null
+  activePrizeIndex.value = -1
+  savePremiumWheelState()
+}
+
+const goGameHistory = () => {
+  showResultModal.value = false
+  router.push('/game-history')
+}
+
+const goGamesCenter = () => {
+  router.push('/games')
+}
+
+const resetDemo = () => {
+  const confirmed = window.confirm('確定要重置精緻轉盤示範資料嗎？')
+
+  if (!confirmed) return
+
+  localStorage.removeItem(getStorageKey())
+
+  Object.assign(campaign, cloneByJson(defaultCampaignSnapshot))
+  Object.assign(player, cloneByJson(defaultPlayerSnapshot))
+  prizes.value = cloneByJson(defaultPrizesSnapshot)
+  drawLogs.value = []
+  wheelRotation.value = 0
+  resetWheelState()
+  updateChanceText()
+  savePremiumWheelState()
+  showSavedMessage('已重置精緻轉盤示範資料。')
+}
+
+const exportDemoState = () => {
+  const payload = {
+    version: premiumVersionInfo.value.version,
+    platformVersion: premiumVersionInfo.value.platformVersion,
+    batch: premiumVersionInfo.value.batch,
+    exportedAt: new Date().toISOString(),
+    currentGameId: currentGameId.value,
+    sourcePath: sourcePath.value,
+    adminSourcePath: adminSourcePath.value,
+    campaign: cloneByJson(campaign),
+    player: cloneByJson(player),
+    prizes: cloneByJson(prizes.value),
+    drawLogs: cloneByJson(drawLogs.value)
+  }
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {
+    type: 'application/json;charset=utf-8'
+  })
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = `premium-wheel-demo-${Date.now()}.json`
+  link.click()
+
+  URL.revokeObjectURL(url)
+  showSavedMessage('已匯出精緻轉盤示範資料。')
+}
+
+const downloadTextFile = (content, filename, type = 'text/plain;charset=utf-8') => {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = filename
+  link.click()
+
+  URL.revokeObjectURL(url)
+}
+
+const escapeCsvCell = (value) => {
+  const text = String(value ?? '')
+
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`
+  }
+
+  return text
+}
+
+const exportDrawLogsJson = () => {
+  const payload = {
+    type: 'premium_wheel_draw_logs',
+    version: premiumVersionInfo.value.version,
+    exportedAt: new Date().toISOString(),
+    currentGameId: currentGameId.value,
+    sourcePath: sourcePath.value,
+    total: drawLogs.value.length,
+    items: cloneByJson(drawLogs.value)
+  }
+
+  downloadTextFile(
+    JSON.stringify(payload, null, 2),
+    `premium-wheel-draw-logs-${Date.now()}.json`,
+    'application/json;charset=utf-8'
+  )
+
+  showSavedMessage('已匯出轉盤抽獎紀錄 JSON。')
+}
+
+const exportDrawLogsCsv = () => {
+  const headers = [
+    'id',
+    'prizeName',
+    'prizeIcon',
+    'prizeImageUrl',
+    'prizeType',
+    'prizeRank',
+    'prizeRankLabel',
+    'createdAt'
+  ]
+
+  const rows = drawLogs.value.map((log) => {
+    return headers.map((key) => escapeCsvCell(log[key])).join(',')
+  })
+
+  const csvContent = [
+    headers.join(','),
+    ...rows
+  ].join('\n')
+
+  downloadTextFile(
+    `\ufeff${csvContent}`,
+    `premium-wheel-draw-logs-${Date.now()}.csv`,
+    'text/csv;charset=utf-8'
+  )
+
+  showSavedMessage('已匯出轉盤抽獎紀錄 CSV。')
+}
+
+const clearDrawLogs = () => {
+  if (!drawLogs.value.length) {
+    showSavedMessage('目前沒有轉盤抽獎紀錄可清除。')
+    return
+  }
+
+  const confirmed = window.confirm('確定要清除目前這個轉盤頁面的抽獎紀錄嗎？此操作不會刪除我的遊戲紀錄。')
+
+  if (!confirmed) return
+
+  drawLogs.value = []
+  savePremiumWheelState()
+  showSavedMessage('已清除目前轉盤頁面的抽獎紀錄。')
+}
+
+onMounted(() => {
+  if (getAuthToken()) {
+    fetchShareRewardStatusFromServer()
+  }
+
+  loadPremiumWheelState()
+
+  if (typeof window === 'undefined') return
+
+  window.addEventListener('storage', handlePremiumWheelStorageSync)
+})
+
+onBeforeUnmount(() => {
+  if (typeof window === 'undefined') return
+
+  window.removeEventListener('storage', handlePremiumWheelStorageSync)
+})
+
+watch(
+  campaign,
+  () => {
+    updateChanceText()
+    savePremiumWheelState()
+  },
+  {
+    deep: true
+  }
+)
+
+watch(
+  player,
+  () => {
+    updateChanceText()
+    savePremiumWheelState()
+  },
+  {
+    deep: true
+  }
+)
+
+watch(
+  prizes,
+  () => {
+    savePremiumWheelState()
+  },
+  {
+    deep: true
+  }
+)
+</script>
+
+<template>
+  <div
+    class="min-h-screen overflow-hidden px-4 py-6 text-slate-900 sm:px-6 lg:px-8"
+    :style="pageBackgroundStyle"
+  >
+    <div class="mx-auto grid max-w-7xl gap-6 xl:grid-cols-[420px_1fr]">
+      <aside
+        v-if="isAdminMode"
+        class="rounded-[32px] bg-white/95 p-5 shadow-2xl backdrop-blur"
+      >
+        <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
+          Admin Preview
+        </p>
+
+        <h1 class="mt-2 text-2xl font-black text-slate-900">
+          精緻轉盤管理預覽
+        </h1>
+
+        <p class="mt-3 text-sm font-bold leading-7 text-slate-500">
+          後台管理只出現在 <span class="font-black text-orange-600">?mode=admin</span>，客人前台會自動保持簡潔。
+        </p>
+
+        <div class="mt-4 rounded-3xl border border-emerald-100 bg-emerald-50 p-4 text-xs font-black leading-5 text-emerald-700">
+          這裡可快速調整 LOGO、Banner、網站網址、獎項與轉盤機率。
+        </div>
+
+        <button
+          type="button"
+          class="mt-4 w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+          @click="syncPremiumWheelToPlayer"
+        >
+          同步到玩家版
+        </button>
+
+        <div class="mt-3 rounded-3xl border border-emerald-100 bg-white p-4 text-xs font-bold leading-5 text-slate-500">
+          <p class="font-black text-emerald-700">
+            同步狀態
+          </p>
+
+          <p class="mt-1 break-all">
+            玩家版網址：{{ sourcePath }}
+          </p>
+
+          <p class="mt-1">
+            最後同步：{{ lastSyncAt || '尚未手動同步' }}
+          </p>
+
+          <p
+            v-if="lastSyncMessage"
+            class="mt-2 rounded-2xl bg-emerald-50 px-3 py-2 font-black text-emerald-700"
+          >
+            {{ lastSyncMessage }}
+          </p>
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-orange-100 bg-orange-50 p-4">
+          <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-500">
+            Stable Milestone
+          </p>
+
+          <h2 class="mt-2 text-xl font-black text-orange-900">
+            {{ premiumVersionInfo.version }}
+          </h2>
+
+          <p class="mt-2 text-sm font-bold leading-6 text-orange-700">
+            {{ premiumVersionInfo.platformVersion }}｜{{ premiumVersionInfo.batch }}｜{{ premiumVersionInfo.status }}
+          </p>
+        </div>
+
+        <div class="mt-4 grid gap-2 sm:grid-cols-2">
+          <a
+            :href="sourcePath"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="rounded-2xl bg-slate-900 px-4 py-3 text-center text-sm font-black text-white transition hover:bg-orange-600"
+          >
+            開啟客人前台
+          </a>
+
+          <button
+            type="button"
+            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+            @click="syncPremiumWheelToPlayer"
+          >
+            同步到玩家版
+          </button>
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-slate-100 bg-slate-50 p-4">
+          <p class="text-sm font-black text-slate-900">
+            ① 基本畫面設定
+          </p>
+
+          <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+            {{ adminSectionTips.basic }}
+          </p>
+
+          <div class="mt-4 grid gap-3">
+          <label class="grid gap-1 text-xs font-black text-slate-600">
+            品牌名稱
+            <input
+              v-model="campaign.brandName"
+              class="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+            />
+          </label>
+
+          <label class="grid gap-1 text-xs font-black text-slate-600">
+            活動名稱
+            <input
+              v-model="campaign.pageTitle"
+              class="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+            />
+          </label>
+
+          <label class="grid gap-1 text-xs font-black text-slate-600">
+            主標題
+            <input
+              v-model="campaign.mainTitle"
+              class="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+            />
+          </label>
+
+          <label class="grid gap-1 text-xs font-black text-slate-600">
+            活動標語
+            <input
+              v-model="campaign.heroTagline"
+              class="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+            />
+          </label>
+
+          <label class="grid gap-1 text-xs font-black text-slate-600">
+            LOGO 圖片網址
+            <input
+              v-model="campaign.logoImageUrl"
+              placeholder="https://..."
+              class="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+            />
+          </label>
+
+          <label class="grid gap-1 text-xs font-black text-slate-600">
+            Banner 圖片網址
+            <input
+              v-model="campaign.bannerImageUrl"
+              placeholder="https://..."
+              class="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+            />
+          </label>
+
+          <label class="grid gap-1 text-xs font-black text-slate-600">
+            網站連結
+            <input
+              v-model="campaign.websiteUrl"
+              placeholder="example.com"
+              class="rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400"
+            />
+          </label>
+
+          <div class="rounded-3xl border border-sky-100 bg-sky-50 p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-sky-500">
+                  Share
+                </p>
+
+                <p class="mt-1 text-base font-black text-sky-900">
+                  分享活動設定
+                </p>
+
+                <p class="mt-1 text-xs font-bold leading-5 text-sky-700">
+                  可自訂客人分享活動時看到的標題、描述、圖片與官方網站按鈕。
+                </p>
+              </div>
+
+              <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-sky-700 shadow-sm">
+                前台分享卡片
+              </span>
+            </div>
+
+            <div class="mt-4 grid gap-4">
+              <div class="rounded-3xl bg-white/80 p-4 shadow-sm">
+                <p class="text-sm font-black text-sky-900">
+                  ① 分享文字
+                </p>
+
+                <div class="mt-3 grid gap-3">
+                  <label class="grid gap-1 text-xs font-black text-sky-800">
+                    分享標題
+                    <input
+                      v-model="campaign.shareTitle"
+                      placeholder="例如：幸運大轉盤，快來抽好禮"
+                      class="rounded-2xl border border-sky-200 px-4 py-3 text-base font-black outline-none focus:border-sky-400"
+                    />
+                  </label>
+
+                  <label class="grid gap-1 text-xs font-black text-sky-800">
+                    分享描述
+                    <textarea
+                      v-model="campaign.shareDescription"
+                      rows="4"
+                      placeholder="例如：每日登入可抽一次，分享活動還能增加轉盤機會。"
+                      class="resize-none rounded-2xl border border-sky-200 px-4 py-3 text-base font-bold leading-7 outline-none focus:border-sky-400"
+                    ></textarea>
+                  </label>
+                </div>
+              </div>
+
+              <div class="rounded-3xl bg-white/80 p-4 shadow-sm">
+                <p class="text-sm font-black text-sky-900">
+                  ② 分享圖片與連結
+                </p>
+
+                <div class="mt-3 grid gap-3">
+                  <label class="grid gap-1 text-xs font-black text-sky-800">
+                    分享圖片網址
+                    <input
+                      v-model="campaign.shareImageUrl"
+                      placeholder="https://example.com/share-cover.png"
+                      class="rounded-2xl border border-sky-200 px-4 py-3 text-sm outline-none focus:border-sky-400"
+                    />
+                  </label>
+
+                  <div
+                    v-if="getCustomShareImageUrl()"
+                    class="overflow-hidden rounded-3xl border border-sky-100 bg-white p-2"
+                  >
+                    <img
+                      :src="getCustomShareImageUrl()"
+                      alt="分享圖片預覽"
+                      class="h-44 w-full rounded-2xl object-cover"
+                    />
+                  </div>
+
+                  <label class="grid gap-1 text-xs font-black text-sky-800">
+                    分享按鈕文字
+                    <input
+                      v-model="campaign.shareButtonText"
+                      placeholder="分享增加機會"
+                      class="rounded-2xl border border-sky-200 px-4 py-3 text-sm outline-none focus:border-sky-400"
+                    />
+                  </label>
+
+                  <div class="rounded-2xl border border-sky-100 bg-sky-50 p-3">
+                    <p class="text-xs font-black text-sky-900">
+                      分享增加機會防作弊設定
+                    </p>
+
+                    <div class="mt-3 grid gap-3 sm:grid-cols-2">
+                      <label class="flex items-center gap-2 text-xs font-black text-sky-800 sm:col-span-2">
+                        <input
+                          v-model="campaign.enableShareReward"
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-sky-300"
+                        />
+                        開啟分享增加機會
+                      </label>
+
+                      <label class="grid gap-1 text-xs font-black text-sky-800">
+                        每日可領次數
+                        <input
+                          v-model.number="campaign.shareRewardDailyLimit"
+                          type="number"
+                          min="0"
+                          max="20"
+                          class="rounded-2xl border border-sky-200 px-4 py-3 text-sm outline-none focus:border-sky-400"
+                        />
+                      </label>
+
+                      <label class="grid gap-1 text-xs font-black text-sky-800">
+                        冷卻秒數
+                        <input
+                          v-model.number="campaign.shareRewardCooldownSeconds"
+                          type="number"
+                          min="0"
+                          max="3600"
+                          class="rounded-2xl border border-sky-200 px-4 py-3 text-sm outline-none focus:border-sky-400"
+                        />
+                      </label>
+                    </div>
+
+                    <p class="mt-3 rounded-2xl bg-white px-3 py-2 text-xs font-bold leading-5 text-sky-700">
+                      目前玩家今日剩餘 {{ shareRewardRemainingToday }} 次；冷卻 {{ shareRewardCooldownRemaining }} 秒。
+                    </p>
+                  </div>
+
+                  <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p class="text-xs font-black text-indigo-900">
+                          後台分享防作弊狀態
+                        </p>
+
+                        <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">
+                          可查看目前玩家今日分享獎勵狀態，也可直接呼叫後端重置或清除冷卻。
+                        </p>
+                      </div>
+
+                      <span
+                        class="rounded-full px-3 py-1 text-xs font-black"
+                        :class="shareRewardAdminStatus.enabled
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : 'bg-slate-100 text-slate-500'
+                        "
+                      >
+                        {{ shareRewardAdminStatus.enabled ? '已開啟' : '未開啟' }}
+                      </span>
+                    </div>
+
+                    <div class="mt-3 grid grid-cols-2 gap-2">
+                      <div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+                        <p class="text-xl font-black text-indigo-900">
+                          {{ shareRewardAdminStatus.usedCount }}
+                        </p>
+
+                        <p class="mt-1 text-[11px] font-black text-slate-400">
+                          今日已領
+                        </p>
+                      </div>
+
+                      <div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+                        <p class="text-xl font-black text-emerald-700">
+                          {{ shareRewardAdminStatus.remainingCount }}
+                        </p>
+
+                        <p class="mt-1 text-[11px] font-black text-slate-400">
+                          今日剩餘
+                        </p>
+                      </div>
+
+                      <div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+                        <p class="text-xl font-black text-orange-700">
+                          {{ shareRewardAdminStatus.cooldownRemaining }}
+                        </p>
+
+                        <p class="mt-1 text-[11px] font-black text-slate-400">
+                          冷卻秒數
+                        </p>
+                      </div>
+
+                      <div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+                        <p class="text-xs font-black leading-5 text-slate-700">
+                          {{ shareRewardAdminStatus.lastRewardAt }}
+                        </p>
+
+                        <p class="mt-1 text-[11px] font-black text-slate-400">
+                          最後領取
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-indigo-700 shadow-sm transition hover:bg-indigo-100"
+                        :disabled="isShareRewardStatusLoading"
+                        @click="resetShareRewardToday"
+                      >
+                        {{ isShareRewardStatusLoading ? '處理中' : '重置今日' }}
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-orange-700 shadow-sm transition hover:bg-orange-100"
+                        :disabled="isShareRewardStatusLoading"
+                        @click="clearShareRewardCooldown"
+                      >
+                        {{ isShareRewardStatusLoading ? '處理中' : '清除冷卻' }}
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-sky-700 shadow-sm transition hover:bg-sky-100"
+                        :disabled="isShareRewardStatusLoading"
+                        @click="fetchShareRewardStatusFromServer"
+                      >
+                        {{ isShareRewardStatusLoading ? '同步中' : '同步後端' }}
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-slate-900 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-slate-700"
+                        @click="exportShareRewardStatus"
+                      >
+                        匯出狀態
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="rounded-2xl border border-slate-100 bg-white p-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <p class="text-xs font-black text-slate-900">
+                        分享 API 診斷
+                      </p>
+
+                      <span
+                        class="rounded-full px-3 py-1 text-xs font-black"
+                        :class="shareRewardApiDiagnostic.status === '成功'
+                          ? 'bg-emerald-100 text-emerald-700'
+                          : shareRewardApiDiagnostic.status === '失敗'
+                            ? 'bg-rose-100 text-rose-700'
+                            : 'bg-slate-100 text-slate-500'
+                        "
+                      >
+                        {{ shareRewardApiDiagnostic.status }}
+                      </span>
+                    </div>
+
+                    <div class="mt-3 grid gap-2 text-xs font-bold leading-5 text-slate-600">
+                      <p class="break-all">
+                        API：{{ shareRewardApiDiagnostic.apiBaseUrl || getApiBaseUrl() }}
+                      </p>
+
+                      <p>
+                        Token：{{ shareRewardApiDiagnostic.hasToken ? '已偵測到' : '尚未偵測到' }}
+                      </p>
+
+                        <p>
+                          Token Key：{{ shareRewardApiDiagnostic.tokenKey || getAuthTokenKey() }}
+                        </p>
+
+                      <p>
+                        訊息：{{ shareRewardApiDiagnostic.message }}
+                      </p>
+
+                      <p v-if="shareRewardApiDiagnostic.testedAt">
+                        測試時間：{{ shareRewardApiDiagnostic.testedAt }}
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      class="mt-3 w-full rounded-2xl bg-sky-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-sky-700"
+                      @click="testShareRewardApiConnection"
+                    >
+                      測試分享 API
+                    </button>
+                  </div>
+
+                  <p class="rounded-2xl bg-sky-100 px-4 py-3 text-xs font-bold leading-5 text-sky-700">
+                    官方網站小按鈕會使用上方「網站連結」欄位；有填網站連結時，前台會自動顯示。正式防作弊建議再接後端會員驗證。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="rounded-3xl border border-amber-100 bg-amber-50 p-4">
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-amber-500">
+              Effects
+            </p>
+
+            <p class="mt-1 text-sm font-black text-amber-900">
+              中獎特效設定
+            </p>
+
+            <p class="mt-1 text-xs font-bold leading-5 text-amber-700">
+              中獎後可顯示彩帶、金沙、閃光、金色光暈與播放音樂；轉盤轉動時也可播放自訂音效，並可在後台直接測試 / 停止音效。
+            </p>
+
+            <div class="mt-3 grid gap-2">
+              <label class="flex items-center gap-2 text-xs font-black text-amber-800">
+                <input
+                  v-model="campaign.enableWinConfetti"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-amber-300"
+                />
+                開啟中獎彩帶
+              </label>
+
+              <label class="flex items-center gap-2 text-xs font-black text-amber-800">
+                <input
+                  v-model="campaign.enableGoldRain"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-amber-300"
+                />
+                開啟金沙粒子
+              </label>
+
+              <label class="flex items-center gap-2 text-xs font-black text-amber-800">
+                <input
+                  v-model="campaign.enableWinSound"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-amber-300"
+                />
+                開啟中獎音樂
+              </label>
+
+              <label class="grid gap-1 text-xs font-black text-amber-800">
+                中獎音樂網址
+                <input
+                  v-model="campaign.winSoundUrl"
+                  placeholder="https://example.com/win.mp3"
+                  class="rounded-2xl border border-amber-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                />
+              </label>
+
+              <div class="grid gap-2 rounded-2xl bg-white/70 p-3">
+                <p class="text-xs font-black text-amber-900">
+                  一鍵套用特效風格
+                </p>
+
+                <div class="grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
+                    @click="applyWinEffectPreset('elegant')"
+                  >
+                    低調質感
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-amber-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-amber-700"
+                    @click="applyWinEffectPreset('luxury')"
+                  >
+                    豪華高級
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-rose-500 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-rose-600"
+                    @click="applyWinEffectPreset('party')"
+                  >
+                    熱鬧派對
+                  </button>
+                </div>
+
+                <div class="grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    class="rounded-2xl border border-amber-200 bg-white px-3 py-2 text-xs font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
+                    @click="exportWinEffectSettings"
+                  >
+                    匯出特效設定
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl border border-amber-200 bg-white px-3 py-2 text-xs font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
+                    @click="openWinEffectImport"
+                  >
+                    匯入特效設定
+                  </button>
+                </div>
+
+                <input
+                  ref="effectImportInput"
+                  type="file"
+                  accept="application/json,.json"
+                  class="hidden"
+                  @change="importWinEffectSettings"
+                />
+              </div>
+
+              <div class="grid gap-2 rounded-2xl bg-white/70 p-3">
+                <label class="flex items-center gap-2 text-xs font-black text-amber-800">
+                  <input
+                    v-model="campaign.enableWinFlash"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-amber-300"
+                  />
+                  開啟中獎閃光爆發
+                </label>
+
+                <label class="flex items-center gap-2 text-xs font-black text-amber-800">
+                  <input
+                    v-model="campaign.enablePrizeBounce"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-amber-300"
+                  />
+                  開啟獎項放大跳動
+                </label>
+
+                <label class="flex items-center gap-2 text-xs font-black text-amber-800">
+                  <input
+                    v-model="campaign.enableGoldenAura"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-amber-300"
+                  />
+                  開啟金色光暈
+                </label>
+              </div>
+
+              <div class="grid gap-2 sm:grid-cols-2">
+                <label class="grid gap-1 text-xs font-black text-amber-800">
+                  彩帶數量
+                  <input
+                    v-model.number="campaign.confettiCount"
+                    type="number"
+                    min="0"
+                    max="120"
+                    class="rounded-2xl border border-amber-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                </label>
+
+                <label class="grid gap-1 text-xs font-black text-amber-800">
+                  金沙數量
+                  <input
+                    v-model.number="campaign.goldRainCount"
+                    type="number"
+                    min="0"
+                    max="120"
+                    class="rounded-2xl border border-amber-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                </label>
+
+                <label class="grid gap-1 text-xs font-black text-amber-800">
+                  特效秒數
+                  <input
+                    v-model.number="campaign.winEffectDuration"
+                    type="number"
+                    min="2"
+                    max="10"
+                    class="rounded-2xl border border-amber-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                </label>
+
+                <label class="grid gap-1 text-xs font-black text-amber-800">
+                  音樂音量 0-100
+                  <input
+                    v-model.number="campaign.winSoundVolume"
+                    type="number"
+                    min="0"
+                    max="100"
+                    class="rounded-2xl border border-amber-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                </label>
+              </div>
+
+              <div class="rounded-2xl bg-white/70 px-4 py-3 text-xs font-black leading-5 text-amber-700">
+                目前設定：彩帶 {{ normalizedConfettiCount }} 片、金沙 {{ normalizedGoldRainCount }} 顆、特效 {{ normalizedEffectDuration }} 秒、中獎音量 {{ normalizedWinSoundVolume }}%。
+              </div>
+
+              <div class="rounded-2xl bg-white/70 p-3">
+                <p class="text-xs font-black text-amber-900">
+                  轉盤轉動音效設定
+                </p>
+
+                <label class="mt-2 flex items-center gap-2 text-xs font-black text-amber-800">
+                  <input
+                    v-model="campaign.enableSpinSound"
+                    type="checkbox"
+                    class="h-4 w-4 rounded border-amber-300"
+                  />
+                  開啟轉盤轉動音效
+                </label>
+
+                <label class="mt-2 grid gap-1 text-xs font-black text-amber-800">
+                  轉動音效網址
+                  <input
+                    v-model="campaign.spinSoundUrl"
+                    placeholder="https://example.com/spin.mp3"
+                    class="rounded-2xl border border-amber-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                </label>
+
+                <label class="mt-2 grid gap-1 text-xs font-black text-amber-800">
+                  轉動音效音量 0-100
+                  <input
+                    v-model.number="campaign.spinSoundVolume"
+                    type="number"
+                    min="0"
+                    max="100"
+                    class="rounded-2xl border border-amber-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+                  />
+                </label>
+
+                <div class="mt-3 grid gap-2 sm:grid-cols-3">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
+                    @click="testSpinSound"
+                  >
+                    測試轉動音效
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-700 shadow-sm transition hover:bg-amber-100"
+                    @click="testWinSound"
+                  >
+                    測試中獎音樂
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-slate-900 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:bg-slate-700"
+                    @click="stopAllSounds"
+                  >
+                    停止所有音效
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                class="rounded-2xl bg-amber-600 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-700"
+                @click="previewWinEffects"
+              >
+                測試中獎特效
+              </button>
+            </div>
+          </div>
+        </div>
+
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-slate-100 bg-slate-50 p-4">
+          <p class="text-sm font-black text-slate-900">
+            ② 獎項與機率設定
+          </p>
+
+          <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+            {{ adminSectionTips.prizes }}
+          </p>
+        </div>
+
+        <div class="mt-3 rounded-3xl border border-slate-200 bg-white p-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="text-sm font-black text-slate-900">
+                轉盤機率總覽
+              </p>
+
+              <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+                調整獎項機率時，可先看這裡確認目前權重狀態。
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <span
+                class="rounded-full border px-3 py-1 text-xs font-black"
+                :class="probabilityStatusClass"
+              >
+                {{ probabilitySummary.totalProbability }} 權重
+              </span>
+
+              <button
+                type="button"
+                class="rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white transition hover:bg-orange-600"
+                @click="averagePrizeProbability"
+              >
+                平均分配機率
+              </button>
+            </div>
+          </div>
+
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div class="rounded-2xl bg-slate-50 p-3 text-center">
+              <p class="text-xl font-black text-slate-900">
+                {{ probabilitySummary.availableCount }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-slate-400">
+                可抽獎項
+              </p>
+            </div>
+
+            <div class="rounded-2xl bg-emerald-50 p-3 text-center">
+              <p class="text-xl font-black text-emerald-700">
+                {{ probabilitySummary.enabledCount }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-emerald-400">
+                已啟用
+              </p>
+            </div>
+
+            <div class="rounded-2xl bg-orange-50 p-3 text-center">
+              <p class="text-xl font-black text-orange-700">
+                {{ probabilitySummary.winCount }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-orange-400">
+                中獎類型
+              </p>
+            </div>
+
+            <div class="rounded-2xl bg-slate-100 p-3 text-center">
+              <p class="text-xl font-black text-slate-700">
+                {{ probabilitySummary.loseCount }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-slate-400">
+                未中獎類型
+              </p>
+            </div>
+          </div>
+
+          <p
+            class="mt-4 rounded-2xl border px-4 py-3 text-xs font-black leading-5"
+            :class="probabilityStatusClass"
+          >
+            {{ probabilityStatusText }}
+          </p>
+
+          <p class="mt-2 rounded-2xl bg-slate-50 px-4 py-3 text-xs font-bold leading-5 text-slate-500">
+            想快速改成百分比設定時，可按「平均分配機率」；若要重新設定，可先「機率清零」或「還原預設」。
+          </p>
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 class="text-sm font-black text-slate-900">
+                獎項資料
+              </h3>
+
+              <p class="mt-1 text-xs font-bold text-slate-400">
+                可新增、複製、啟用、停用、排序或刪除轉盤獎項。
+              </p>
+            </div>
+
+            <button
+              type="button"
+              class="rounded-full bg-orange-600 px-4 py-2 text-xs font-black text-white transition hover:bg-orange-700"
+              @click="addPrizeItem"
+            >
+              新增獎項
+            </button>
+          </div>
+
+          <div class="mt-3 space-y-3">
+            <article
+              v-for="(prize, index) in activePrizes"
+              :key="prize.id"
+              class="rounded-2xl bg-white p-3 shadow-sm"
+            >
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="prize.icon"
+                  class="h-10 w-12 rounded-xl border border-slate-200 px-2 text-center text-xl outline-none focus:border-orange-400"
+                />
+
+                <input
+                  v-model="prize.name"
+                  class="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold outline-none focus:border-orange-400"
+                  placeholder="獎項名稱"
+                />
+
+                <div class="flex shrink-0 gap-1">
+                  <button
+                    type="button"
+                    class="rounded-xl bg-slate-100 px-2 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    :disabled="index === 0"
+                    @click="movePrizeItem(index, -1)"
+                  >
+                    ↑
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-xl bg-slate-100 px-2 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    :disabled="index === prizes.length - 1"
+                    @click="movePrizeItem(index, 1)"
+                  >
+                    ↓
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-100"
+                    @click="duplicatePrizeItem(prize)"
+                  >
+                    複製
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-xl px-3 py-2 text-xs font-black transition"
+                    :class="prize.isEnabled === false
+                      ? 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                    "
+                    @click="togglePrizeEnabled(prize)"
+                  >
+                    {{ prize.isEnabled === false ? '啟用' : '停用' }}
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-600 transition hover:bg-rose-100"
+                    @click="removePrizeItem(prize)"
+                  >
+                    刪除
+                  </button>
+                </div>
+              </div>
+
+              <div class="mt-2 flex flex-wrap gap-2">
+                <p class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-500">
+                  轉盤順序：第 {{ index + 1 }} 格
+                </p>
+
+                <p
+                  class="inline-flex rounded-full px-3 py-1 text-[11px] font-black"
+                  :class="prize.isEnabled === false
+                    ? 'bg-slate-100 text-slate-500'
+                    : 'bg-emerald-100 text-emerald-700'
+                  "
+                >
+                  {{ prize.isEnabled === false ? '已停用' : '已啟用' }}
+                </p>
+              </div>
+
+              <label class="mt-2 grid gap-1 text-[11px] font-black text-slate-500">
+                獎項圖片網址
+                <input
+                  v-model="prize.imageUrl"
+                  class="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-orange-400"
+                  placeholder="https://example.com/prize.png"
+                />
+              </label>
+
+              <div
+                v-if="hasPrizeImage(prize)"
+                class="mt-2 overflow-hidden rounded-2xl border border-slate-100 bg-white p-2"
+              >
+                <img
+                  :src="getPrizeImageUrl(prize)"
+                  alt="獎項圖片預覽"
+                  class="h-24 w-full rounded-xl object-contain"
+                />
+              </div>
+
+              <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                <label class="grid gap-1 text-[11px] font-black text-slate-500">
+                  轉盤短名
+                  <input
+                    v-model="prize.shortName"
+                    class="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-orange-400"
+                    placeholder="例如 100 / 謝謝"
+                  />
+                </label>
+
+                <label class="grid gap-1 text-[11px] font-black text-slate-500">
+                  獎項說明
+                  <input
+                    v-model="prize.description"
+                    class="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-orange-400"
+                    placeholder="兌換或活動說明"
+                  />
+                </label>
+              </div>
+
+              <div class="mt-2 grid grid-cols-2 gap-2">
+                <label class="grid gap-1 text-[11px] font-black text-slate-500">
+                  機率 / 權重
+                  <input
+                    v-model.number="prize.probability"
+                    type="number"
+                    class="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-orange-400"
+                  />
+                </label>
+
+                <label class="grid gap-1 text-[11px] font-black text-slate-500">
+                  庫存
+                  <input
+                    v-model.number="prize.stock"
+                    type="number"
+                    class="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-orange-400"
+                  />
+                </label>
+              </div>
+
+              <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                <label class="grid gap-1 text-[11px] font-black text-slate-500">
+                  獎項類型
+                  <select
+                    v-model="prize.type"
+                    class="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-orange-400"
+                  >
+                    <option
+                      v-for="option in prizeTypeOptions"
+                      :key="option.value"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="grid gap-1 text-[11px] font-black text-slate-500">
+                  獎項等級
+                  <select
+                    v-model="prize.rank"
+                    class="rounded-xl border border-slate-200 px-3 py-2 text-xs outline-none focus:border-orange-400"
+                  >
+                    <option
+                      v-for="option in prizeRankOptions"
+                      :key="option.value"
+                      :value="option.value"
+                    >
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+              </div>
+
+              <p
+                class="mt-2 inline-flex rounded-full px-3 py-1 text-[11px] font-black"
+                :class="getPrizeRankClass(prize.rank, prize.type)"
+              >
+                {{ getPrizeRankLabel(prize.rank, prize.type) }}
+              </p>
+            </article>
+          </div>
+        </div>
+
+        <div class="mt-5 grid gap-2 sm:grid-cols-2">
+          <button
+            type="button"
+            class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-orange-600"
+            @click="exportDemoState"
+          >
+            匯出 JSON
+          </button>
+
+          <button
+            type="button"
+            class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-black text-rose-600 transition hover:bg-rose-100"
+            @click="resetDemo"
+          >
+            重置示範
+          </button>
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-slate-100 bg-slate-50 p-4">
+          <p class="text-sm font-black text-slate-900">
+            ③ 紀錄與報表
+          </p>
+
+          <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+            {{ adminSectionTips.reports }}
+          </p>
+        </div>
+
+        <div class="mt-3 rounded-3xl border border-indigo-100 bg-indigo-50 p-4">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p class="text-sm font-black text-indigo-900">
+                抽獎統計面板
+              </p>
+
+              <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">
+                依目前頁面的最近轉盤紀錄計算，方便快速檢查活動表現。
+              </p>
+            </div>
+
+            <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700 shadow-sm">
+              最近：{{ drawLogStats.latestAt }}
+            </span>
+          </div>
+
+          <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+              <p class="text-2xl font-black text-slate-900">
+                {{ drawLogStats.total }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-slate-400">
+                總抽獎次數
+              </p>
+            </div>
+
+            <div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+              <p class="text-2xl font-black text-orange-700">
+                {{ drawLogStats.winRate }}%
+              </p>
+
+              <p class="mt-1 text-xs font-black text-slate-400">
+                中獎率
+              </p>
+            </div>
+
+            <div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+              <p class="text-2xl font-black text-emerald-700">
+                {{ drawLogStats.winCount }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-slate-400">
+                中獎次數
+              </p>
+            </div>
+
+            <div class="rounded-2xl bg-white p-3 text-center shadow-sm">
+              <p class="text-2xl font-black text-slate-600">
+                {{ drawLogStats.loseCount }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-slate-400">
+                未中獎次數
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-3 rounded-3xl border border-blue-100 bg-blue-50 p-4">
+          <p class="text-sm font-black text-blue-900">
+            抽獎紀錄管理
+          </p>
+
+          <p class="mt-1 text-xs font-bold leading-5 text-blue-700">
+            可匯出或清除目前轉盤頁面的最近抽獎紀錄，不會影響獎項、庫存與機率。
+          </p>
+
+          <div class="mt-3 grid gap-2 sm:grid-cols-3">
+            <button
+              type="button"
+              class="rounded-2xl bg-blue-600 px-3 py-2 text-xs font-black text-white transition hover:bg-blue-700"
+              @click="exportDrawLogsJson"
+            >
+              匯出紀錄 JSON
+            </button>
+
+            <button
+              type="button"
+              class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-blue-700 shadow-sm transition hover:bg-blue-100"
+              @click="exportDrawLogsCsv"
+            >
+              匯出紀錄 CSV
+            </button>
+
+            <button
+              type="button"
+              class="rounded-2xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-600 transition hover:bg-rose-100"
+              @click="clearDrawLogs"
+            >
+              清除紀錄
+            </button>
+          </div>
+        </div>
+
+        <div
+          v-if="savedMessage"
+          class="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-3 text-xs font-black text-emerald-700"
+        >
+          {{ savedMessage }}
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-blue-100 bg-blue-50 p-4 text-xs font-bold leading-6 text-blue-700">
+          <p class="font-black text-blue-900">
+            預覽路徑
+          </p>
+          <p class="break-all">玩家版：{{ sourcePath }}</p>
+          <p class="break-all">管理版：{{ adminSourcePath }}</p>
+        </div>
+      </aside>
+
+      <main class="flex min-h-screen items-start justify-center">
+        <div class="w-full max-w-[430px] rounded-[40px] bg-white/10 p-2 shadow-[0_30px_80px_rgba(15,23,42,.25)] backdrop-blur sm:p-3">
+          <div class="premium-scrollbar-y relative h-[calc(100vh-3rem)] min-h-[720px] overflow-y-auto rounded-[34px] bg-orange-500 p-4 text-white shadow-inner sm:h-[860px] sm:p-5">
+            <div class="absolute inset-0 opacity-20">
+              <div class="premium-dot-bg h-full w-full"></div>
+            </div>
+
+            <div class="relative">
+              <section
+                class="overflow-hidden rounded-[30px] border border-white/25 p-3 shadow-2xl backdrop-blur sm:p-4"
+                :style="bannerBackgroundStyle"
+              >
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div class="flex min-w-0 items-center gap-3">
+                    <div
+                      v-if="campaign.logoImageUrl"
+                      class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-white/50 bg-white shadow-lg"
+                    >
+                      <img
+                        :src="campaign.logoImageUrl"
+                        alt="品牌 LOGO"
+                        class="h-full w-full object-contain"
+                      />
+                    </div>
+
+                    <div
+                      v-else
+                      class="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border-[4px] border-yellow-200 bg-gradient-to-br from-amber-300 to-orange-500 text-3xl font-black text-white shadow-2xl"
+                    >
+                      {{ campaign.logoText }}
+                    </div>
+
+                    <div class="min-w-0 text-left">
+                      <p class="truncate text-sm font-black text-white/80">
+                        {{ campaign.brandName }}
+                      </p>
+
+                      <p class="line-clamp-2 text-base font-black leading-5 text-white">
+                        {{ campaign.pageTitle }}
+                      </p>
+
+                      <p class="mt-1 line-clamp-2 text-[11px] font-bold leading-5 text-white/75">
+                        {{ campaign.brandTagline }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <a
+                    v-if="safeWebsiteUrl"
+                    :href="safeWebsiteUrl"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex w-full shrink-0 items-center justify-center rounded-full bg-white px-4 py-2.5 text-xs font-black text-orange-600 shadow-lg transition hover:bg-yellow-50 sm:w-auto"
+                  >
+                    {{ websiteButtonText }}
+                  </a>
+                </div>
+              </section>
+
+              <section class="mt-4 text-center">
+                <p class="text-2xl font-black leading-tight tracking-wide text-yellow-100 sm:text-3xl drop-shadow-[0_4px_0_rgba(154,52,18,0.45)] sm:text-4xl">
+                  {{ campaign.mainTitle }}
+                </p>
+
+                <p class="mt-1 text-lg font-black leading-tight text-yellow-200 sm:text-xl drop-shadow-[0_4px_0_rgba(154,52,18,0.45)] sm:text-2xl">
+                  {{ campaign.heroTagline }}
+                </p>
+
+                <p class="mt-3 inline-flex rounded-full bg-white/20 px-4 py-2 text-xs font-black text-white shadow-inner backdrop-blur sm:text-sm">
+                  {{ campaign.subTitle }}
+                </p>
+
+                <p
+                  v-if="!isAdminMode"
+                  class="mx-auto mt-2 max-w-xs text-[11px] font-bold leading-5 text-white/65"
+                >
+                  點擊下方按鈕開始轉盤，結果會自動顯示。
+                </p>
+              </section>
+
+              <section
+                v-if="showShareMessage || (!isAdminMode && lastSyncMessage) || spinningHintText"
+                class="mt-4 rounded-3xl border border-white/25 bg-white/15 p-4 text-center shadow-inner backdrop-blur"
+              >
+                <div
+                  v-if="showShareMessage"
+                  class="mx-auto max-w-xs rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-xs font-black leading-5 text-white shadow-inner backdrop-blur"
+                >
+                  {{ shareMessage }}
+                </div>
+
+                <div
+                  v-if="!isAdminMode && lastSyncMessage"
+                  class="mx-auto mt-3 max-w-xs rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-black leading-5 text-emerald-700 shadow-lg"
+                >
+                  {{ lastSyncMessage }}
+                </div>
+
+                <div
+                  v-if="spinningHintText"
+                  class="mx-auto mt-3 max-w-xs rounded-2xl border border-yellow-200/60 bg-yellow-100 px-4 py-3 text-xs font-black leading-5 text-orange-700 shadow-lg"
+                >
+                  {{ spinningHintText }}
+                </div>
+              </section>
+
+              <section
+                class="premium-wheel-stage relative mx-auto mt-6 w-full max-w-[350px] rounded-[36px] border border-yellow-100/60 bg-gradient-to-br from-yellow-50 via-orange-50 to-orange-200 p-3 shadow-[0_26px_60px_rgba(120,53,15,.42)] sm:max-w-[430px] sm:p-4 lg:max-w-[520px] lg:p-5"
+                :class="isSpinning ? 'premium-wheel-active' : ''"
+              >
+                <div
+                  class="premium-wheel-pointer absolute left-1/2 top-[-6px] z-30 -translate-x-1/2"
+                  :class="isSpinning ? 'premium-wheel-pointer-shake' : ''"
+                >
+                  <div class="mx-auto h-7 w-9 rounded-t-2xl bg-gradient-to-b from-slate-700 to-slate-950 shadow-xl sm:h-8 sm:w-10 lg:h-9 lg:w-12"></div>
+                  <div class="mx-auto h-0 w-0 border-l-[20px] border-r-[20px] border-t-[36px] border-l-transparent border-r-transparent border-t-slate-950 drop-shadow-[0_10px_10px_rgba(15,23,42,.45)] sm:border-l-[24px] sm:border-r-[24px] sm:border-t-[42px] lg:border-l-[28px] lg:border-r-[28px] lg:border-t-[48px]"></div>
+                  <div class="absolute left-1/2 top-3 h-3 w-3 -translate-x-1/2 rounded-full bg-yellow-300 shadow-inner"></div>
+                </div>
+
+                <div class="premium-wheel-shell relative mx-auto aspect-square w-full max-w-[335px] rounded-full p-1 sm:max-w-[410px] sm:p-2 lg:max-w-[475px] lg:p-3">
+                  <div class="premium-wheel-svg-wrap relative h-full w-full rounded-full">
+                    <svg
+                      class="premium-wheel-svg h-full w-full transition-transform duration-[3600ms] ease-out"
+                      viewBox="0 0 320 320"
+                      :style="wheelStyle"
+                    >
+                      <defs>
+                        <radialGradient id="wheelGoldGradient" cx="32%" cy="24%" r="78%">
+                          <stop offset="0%" stop-color="#fff7c2" />
+                          <stop offset="42%" stop-color="#facc15" />
+                          <stop offset="72%" stop-color="#fb923c" />
+                          <stop offset="100%" stop-color="#c2410c" />
+                        </radialGradient>
+
+                        <radialGradient id="wheelRoseGradient" cx="30%" cy="24%" r="80%">
+                          <stop offset="0%" stop-color="#ffe4e6" />
+                          <stop offset="38%" stop-color="#fb7185" />
+                          <stop offset="74%" stop-color="#ef4444" />
+                          <stop offset="100%" stop-color="#991b1b" />
+                        </radialGradient>
+
+                        <filter id="wheelInnerShadow" x="-20%" y="-20%" width="140%" height="140%">
+                          <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#7c2d12" flood-opacity="0.28" />
+                        </filter>
+                      </defs>
+
+                      <circle
+                        cx="160"
+                        cy="160"
+                        r="154"
+                        fill="#fff7ed"
+                        filter="url(#wheelInnerShadow)"
+                      />
+
+                      <g>
+                        <path
+                          v-for="(prize, index) in activePrizes"
+                          :key="prize.id"
+                          :d="getWheelSlicePath(index)"
+                          :fill="getWheelSliceFill(index)"
+                          class="premium-wheel-svg-slice"
+                          :class="getWheelSliceClass(index)"
+                        />
+                      </g>
+
+                      <circle
+                        cx="160"
+                        cy="160"
+                        r="151"
+                        fill="none"
+                        stroke="rgba(255,255,255,.86)"
+                        stroke-width="8"
+                      />
+
+                      <g
+                        v-for="(prize, index) in prizes"
+                        :key="`${prize.id}-svg-label`"
+                        class="premium-wheel-svg-label"
+                        :class="getWheelLabelClass(index)"
+                      >
+                        <foreignObject
+                          :x="getWheelSvgLabelPosition(index).x - 22"
+                          :y="getWheelSvgLabelPosition(index).y - 33"
+                          width="44"
+                          height="44"
+                        >
+                          <div class="premium-wheel-prize-media">
+                            <img
+                              v-if="hasPrizeImage(prize)"
+                              :src="getPrizeImageUrl(prize)"
+                              alt="獎項圖片"
+                            />
+                            <span v-else>{{ prize.icon }}</span>
+                          </div>
+                        </foreignObject>
+
+                        <text
+                          :x="getWheelSvgLabelPosition(index).x"
+                          :y="getWheelSvgLabelPosition(index).y + 24"
+                          text-anchor="middle"
+                          dominant-baseline="middle"
+                          class="premium-wheel-svg-text"
+                        >
+                          {{ prize.shortName || prize.name }}
+                        </text>
+                      </g>
+                    </svg>
+
+                    <div class="premium-wheel-shine pointer-events-none absolute inset-0 z-[15] rounded-full"></div>
+
+                    <div class="premium-wheel-center absolute left-1/2 top-1/2 z-20 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-center text-[10px] font-black text-white sm:h-20 sm:w-20 sm:text-xs lg:h-24 lg:w-24 lg:text-sm">
+                      <span class="relative z-10">
+                        {{ isSpinning ? '轉動中' : resultPrize ? '完成' : 'SPIN' }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  class="premium-wheel-start-button mx-auto mt-5 flex h-14 w-[76%] items-center justify-center rounded-[999px] text-sm font-black text-white transition sm:h-16 sm:text-base lg:h-[72px] lg:text-lg"
+                  :class="canSpin
+                    ? 'hover:-translate-y-0.5 active:translate-y-0'
+                    : 'cursor-not-allowed opacity-75'
+                  "
+                  :disabled="!canSpin"
+                  @click="startSpin"
+                >
+                  {{ wheelButtonText }}
+                </button>
+              </section>
+
+              <section class="relative mt-4 overflow-hidden rounded-[28px] border border-white/25 bg-white/15 p-4 text-center shadow-inner backdrop-blur">
+                <div class="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent"></div>
+
+                <div class="flex flex-col items-center justify-center gap-3 sm:flex-row sm:justify-between">
+                  <div class="text-center sm:text-left">
+                    <p class="text-[11px] font-black uppercase tracking-[0.22em] text-white/60">
+                      Play Chances
+                    </p>
+
+                    <p class="mt-1 text-lg font-black text-white">
+                      {{ campaign.chanceText }}
+                    </p>
+                  </div>
+
+                  <div
+                    v-if="player.sharedCount > 0"
+                    class="inline-flex rounded-full bg-white/20 px-3 py-1 text-[11px] font-black text-white shadow-inner"
+                  >
+                    已分享 {{ player.sharedCount }} 次
+                  </div>
+                </div>
+
+                <p class="mx-auto mt-3 max-w-sm rounded-2xl bg-white/15 px-4 py-2 text-xs font-black leading-5 text-white/80">
+                  {{ playerStatusMessage }}
+                </p>
+
+                <div
+                  v-if="!isUserLoggedIn"
+                  class="mx-auto mt-3 max-w-sm rounded-2xl border border-yellow-200/30 bg-yellow-50/15 px-4 py-3 text-center"
+                >
+                  <p class="text-xs font-black leading-5 text-yellow-50">
+                    分享獎勵需要會員登入後才能領取，登入後會回到目前轉盤頁。
+                  </p>
+
+                  <button
+                    type="button"
+                    class="mt-2 rounded-full bg-white px-4 py-2 text-xs font-black text-orange-600 shadow-lg transition hover:-translate-y-0.5 hover:bg-yellow-50"
+                    @click="goLoginPage"
+                  >
+                    會員登入
+                  </button>
+                </div>
+
+                <div
+                  v-else
+                  class="mx-auto mt-3 inline-flex rounded-full bg-emerald-100/20 px-4 py-2 text-xs font-black text-emerald-50"
+                >
+                  已登入，可領取分享獎勵
+                </div>
+              </section>
+
+              <section
+                v-if="resultPrize"
+                class="relative mt-4 rounded-[30px] bg-white p-4 text-center text-slate-900 shadow-xl"
+              >
+                <div
+                  class="rounded-3xl border border-orange-100 bg-orange-50 p-4 text-left"
+                >
+                  <div class="flex items-center justify-between gap-3">
+                    <span
+                      class="rounded-full px-3 py-1 text-xs font-black"
+                      :class="wheelResultClass"
+                    >
+                      {{ wheelResultLabel }}
+                    </span>
+
+                    <span
+                      class="rounded-full px-3 py-1 text-xs font-black"
+                      :class="getPrizeRankClass(resultPrize.rank, resultPrize.type)"
+                    >
+                      {{ getPrizeRankLabel(resultPrize.rank, resultPrize.type) }}
+                    </span>
+
+                    <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-orange-600">
+                      剩餘 {{ player.chances }} 次
+                    </span>
+                  </div>
+
+                  <div class="mt-3 flex items-center gap-3">
+                    <div class="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl shadow-sm">
+                      <img
+                        v-if="hasPrizeImage(resultPrize)"
+                        :src="getPrizeImageUrl(resultPrize)"
+                        alt="獎項圖片"
+                        class="h-full w-full object-contain p-1"
+                      />
+                      <span v-else>{{ resultPrize.icon || '🎁' }}</span>
+                    </div>
+
+                    <div class="min-w-0">
+                      <p class="truncate text-sm font-black text-slate-900">
+                        {{ resultPrize.name }}
+                      </p>
+
+                      <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+                        {{ resultPrize.description || '結果已寫入我的遊戲紀錄。' }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p class="mt-3 rounded-2xl bg-white px-3 py-2 text-xs font-black text-orange-600">
+                    已高亮顯示轉到的獎項位置。
+                  </p>
+                </div>
+              </section>
+
+              <section
+                v-if="!isAdminMode && player.chances <= 0"
+                class="relative mt-4 rounded-3xl border border-white/30 bg-white/20 p-4 text-center shadow-inner backdrop-blur"
+              >
+                <p class="text-sm font-black text-white">
+                  轉盤機會已用完
+                </p>
+
+                <p class="mt-2 text-xs font-bold leading-6 text-white/75">
+                  分享活動可立即增加 1 次轉盤機會。
+                </p>
+
+                <button
+                  type="button"
+                  class="mt-3 rounded-full bg-white px-5 py-2.5 text-xs font-black text-orange-600 shadow-lg transition hover:bg-yellow-50"
+                  @click.stop.prevent="handleShareActivity"
+                >
+                  分享增加機會
+                </button>
+              </section>
+
+              <section
+                v-if="getCustomShareImageUrl() || campaign.shareTitle || campaign.shareDescription"
+                class="relative mt-4 overflow-hidden rounded-[30px] border border-white/25 bg-white/15 p-4 shadow-inner backdrop-blur"
+              >
+                <div class="text-center text-white">
+                  <p class="text-2xl font-black leading-tight drop-shadow sm:text-3xl">
+                    {{ getCustomShareTitle() }}
+                  </p>
+
+                  <p class="mx-auto mt-3 max-w-sm text-base font-bold leading-7 text-white/85 sm:text-lg">
+                    {{ getCustomShareDescription() }}
+                  </p>
+
+                  <a
+                    v-if="getOfficialWebsiteUrl()"
+                    :href="getOfficialWebsiteUrl()"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-xs font-black text-orange-600 shadow-lg transition hover:-translate-y-0.5 hover:bg-yellow-50"
+                  >
+                    官方網站
+                  </a>
+                </div>
+
+                <div
+                  v-if="getCustomShareImageUrl()"
+                  class="mt-4 overflow-hidden rounded-3xl bg-white/20 p-2 shadow-lg"
+                >
+                  <img
+                    :src="getCustomShareImageUrl()"
+                    alt="分享活動圖片"
+                    class="h-44 w-full rounded-2xl object-cover sm:h-52"
+                  />
+                </div>
+              </section>
+
+              <section class="relative mt-4 grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
+                  :class="isSpinning ? 'cursor-not-allowed opacity-60' : ''"
+                  :disabled="isSpinning"
+                  @click.stop.prevent="handleShareActivity"
+                >
+                  {{ isSpinning ? '轉盤中...' : campaign.buttonText }}
+                </button>
+
+                <button
+                  type="button"
+                  class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
+                  :class="isSpinning ? 'cursor-not-allowed opacity-60' : ''"
+                  :disabled="isSpinning"
+                  @click="goGameHistory"
+                >
+                  {{ isSpinning ? '轉盤中...' : '查看我的紀錄' }}
+                </button>
+
+                <button
+                  type="button"
+                  class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30 sm:col-span-2"
+                  :class="isSpinning ? 'cursor-not-allowed opacity-60' : ''"
+                  :disabled="isSpinning"
+                  @click="goGamesCenter"
+                >
+                  {{ isSpinning ? '轉盤中...' : '回遊戲中心' }}
+                </button>
+              </section>
+
+              <section
+                v-if="!isAdminMode"
+                class="relative mt-4 space-y-3"
+              >
+                <div class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
+                  <button
+                    type="button"
+                    class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                    @click="showPlayerRules = !showPlayerRules"
+                  >
+                    <div>
+                      <p class="text-sm font-black text-slate-800">
+                        活動規則
+                      </p>
+
+                      <p class="mt-1 text-xs font-bold text-slate-400">
+                        點擊展開查看參加方式
+                      </p>
+                    </div>
+
+                    <span class="text-lg font-black text-orange-500">
+                      {{ showPlayerRules ? '−' : '+' }}
+                    </span>
+                  </button>
+
+                  <div
+                    v-if="showPlayerRules"
+                    class="border-t border-slate-100 px-4 pb-4 pt-3"
+                  >
+                    <ul class="space-y-2">
+                      <li
+                        v-for="rule in playerRuleItems"
+                        :key="rule"
+                        class="flex gap-2 text-xs font-bold leading-5 text-slate-500"
+                      >
+                        <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-orange-400"></span>
+                        <span>{{ rule }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
+                  <button
+                    type="button"
+                    class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                    @click="showPrizeNotes = !showPrizeNotes"
+                  >
+                    <div>
+                      <p class="text-sm font-black text-slate-800">
+                        獎品說明
+                      </p>
+
+                      <p class="mt-1 text-xs font-bold text-slate-400">
+                        點擊展開查看獎品規則
+                      </p>
+                    </div>
+
+                    <span class="text-lg font-black text-orange-500">
+                      {{ showPrizeNotes ? '−' : '+' }}
+                    </span>
+                  </button>
+
+                  <div
+                    v-if="showPrizeNotes"
+                    class="border-t border-slate-100 px-4 pb-4 pt-3"
+                  >
+                    <ul class="space-y-2">
+                      <li
+                        v-for="note in prizeNoteItems"
+                        :key="note"
+                        class="flex gap-2 text-xs font-bold leading-5 text-slate-500"
+                      >
+                        <span class="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400"></span>
+                        <span>{{ note }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </section>
+
+              <section class="mt-5 overflow-hidden rounded-3xl bg-white/95 p-3 shadow-xl">
+                <div class="flex items-center justify-between gap-3 px-2 pt-2">
+                  <div>
+                    <h3 class="text-sm font-black text-slate-900">
+                      最近轉盤紀錄
+                    </h3>
+
+                    <p class="mt-1 text-xs font-bold text-slate-400">
+                      目前共有 {{ recentLogCount }} 筆紀錄
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="rounded-full bg-orange-50 px-4 py-2 text-xs font-black text-orange-600 transition hover:bg-orange-100"
+                    @click="toggleRecentLogs"
+                  >
+                    {{ recentLogsToggleText }}
+                  </button>
+                </div>
+
+                <div
+                  v-if="!isRecentLogsExpanded"
+                  class="premium-recent-logs-collapsed mt-4 rounded-3xl px-4 py-4 text-center"
+                >
+                  <p class="text-sm font-black text-orange-700">
+                    最近紀錄已收合
+                  </p>
+
+                  <p class="mt-1 text-xs font-bold leading-5 text-orange-500">
+                    點擊展開後查看最近中獎與未中獎紀錄。
+                  </p>
+                </div>
+
+                <div
+                  v-if="isRecentLogsExpanded"
+                  class="mt-3 space-y-2"
+                >
+                  <article
+                    v-for="log in drawLogs"
+                    :key="log.id"
+                    class="flex items-center gap-3 rounded-2xl bg-slate-50 p-3"
+                  >
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white text-2xl shadow-sm">
+                      <img
+                        v-if="log.prizeImageUrl"
+                        :src="log.prizeImageUrl"
+                        alt="獎項圖片"
+                        class="h-full w-full object-contain p-1"
+                      />
+                      <span v-else>{{ log.prizeIcon }}</span>
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-sm font-black text-slate-900">
+                        {{ log.prizeName }}
+                      </p>
+
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ log.createdAt }}
+                      </p>
+
+                      <div class="mt-1 flex flex-wrap gap-1">
+                        <p
+                          class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-black"
+                          :class="log.prizeType === 'lose'
+                            ? 'bg-slate-100 text-slate-500'
+                            : 'bg-orange-100 text-orange-700'
+                          "
+                        >
+                          {{ getPrizeTypeLabel(log.prizeType) }}
+                        </p>
+
+                        <p
+                          class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-black"
+                          :class="getPrizeRankClass(log.prizeRank, log.prizeType)"
+                        >
+                          {{ log.prizeRankLabel || getPrizeRankLabel(log.prizeRank, log.prizeType) }}
+                        </p>
+                      </div>
+                    </div>
+                  </article>
+
+                  <div
+                    v-if="!drawLogs.length"
+                    class="rounded-2xl bg-slate-50 px-4 py-5 text-center text-xs font-black text-slate-400"
+                  >
+                    目前還沒有轉盤紀錄。
+                  </div>
+
+                  <p
+                    v-if="isRecentLogsExpanded && !drawLogs.length"
+                    class="rounded-2xl bg-slate-50 p-4 text-center text-xs font-bold text-slate-400"
+                  >
+                    目前尚無轉盤紀錄
+                  </p>
+                </div>
+              </section>
+
+              <p class="relative mt-4 text-center text-[11px] font-bold leading-5 text-white/70">
+                {{ isAdminMode ? campaign.noticeText : '請依照活動規則參加轉盤；獎項與兌換方式以主辦單位公告為準。' }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <div
+      v-if="showSharePreviewModal"
+      class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-md"
+    >
+      <div class="premium-share-preview-card w-full max-w-sm overflow-hidden rounded-[36px] bg-white shadow-2xl">
+        <div class="relative overflow-hidden bg-gradient-to-br from-orange-500 via-orange-600 to-red-600 p-5 text-white">
+          <div class="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/20 blur-2xl"></div>
+          <div class="absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-yellow-200/20 blur-3xl"></div>
+
+          <p class="relative text-xs font-black uppercase tracking-[0.24em] text-white/70">
+            Share Preview
+          </p>
+
+          <h3 class="relative mt-2 text-2xl font-black leading-tight">
+            分享活動預覽
+          </h3>
+
+          <p class="relative mt-1 text-sm font-bold text-white/75">
+            確認分享內容後，再選擇系統分享或複製文案。
+          </p>
+        </div>
+
+        <div class="bg-gradient-to-b from-white to-orange-50 p-5">
+          <div
+            v-if="getCustomShareImageUrl()"
+            class="overflow-hidden rounded-3xl border border-orange-100 bg-white p-2 shadow-sm"
+          >
+            <img
+              :src="getCustomShareImageUrl()"
+              alt="分享活動圖片"
+              class="h-44 w-full rounded-2xl object-cover"
+            />
+          </div>
+
+          <div class="mt-4 rounded-3xl bg-white p-4 text-center shadow-sm">
+            <p class="text-xl font-black leading-tight text-slate-900">
+              {{ getCustomShareTitle() }}
+            </p>
+
+            <p class="mx-auto mt-3 max-w-xs text-sm font-bold leading-6 text-slate-500">
+              {{ getCustomShareDescription() }}
+            </p>
+
+            <p class="mt-3 break-all rounded-2xl bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
+              {{ getShareUrl() }}
+            </p>
+
+            <a
+              v-if="getOfficialWebsiteUrl()"
+              :href="getOfficialWebsiteUrl()"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-3 inline-flex rounded-full bg-orange-50 px-4 py-2 text-xs font-black text-orange-600 transition hover:bg-orange-100"
+            >
+              官方網站
+            </a>
+          </div>
+
+          <div class="mt-4 rounded-2xl bg-sky-50 px-4 py-3 text-center text-xs font-black leading-5 text-sky-700">
+            <p>
+              今日還可領 {{ shareRewardRemainingToday }} 次分享獎勵
+              <span v-if="shareRewardCooldownRemaining > 0">
+                ，冷卻剩餘 {{ shareRewardCooldownRemaining }} 秒
+              </span>
+            </p>
+
+            <p
+              v-if="shareRewardStatusMessage"
+              class="mt-1 text-[11px] text-sky-600"
+            >
+              {{ shareRewardStatusMessage }}
+            </p>
+
+            <button
+              v-if="isUserLoggedIn"
+              type="button"
+              class="mt-2 rounded-full bg-white px-3 py-1 text-[11px] font-black text-sky-700 shadow-sm transition hover:bg-sky-100"
+              :disabled="isShareRewardStatusLoading"
+              @click="fetchShareRewardStatusFromServer"
+            >
+              {{ isShareRewardStatusLoading ? '同步中...' : '同步狀態' }}
+            </button>
+          </div>
+
+          <div
+            v-if="!isUserLoggedIn"
+            class="mt-4 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-center"
+          >
+            <p class="text-xs font-black leading-5 text-amber-700">
+              你目前尚未登入。登入後會回到目前轉盤頁，分享後系統才會發放轉盤機會。
+            </p>
+
+            <button
+              type="button"
+              class="mt-2 rounded-full bg-amber-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-amber-700"
+              @click="goLoginPage"
+            >
+              會員登入
+            </button>
+          </div>
+
+          <p
+            v-if="isShareActionProcessing"
+            class="mt-4 rounded-2xl bg-slate-100 px-4 py-3 text-center text-xs font-black leading-5 text-slate-500"
+          >
+            系統處理中，請稍候。
+          </p>
+
+          <div class="mt-5 grid gap-3">
+            <button
+              type="button"
+              class="w-full rounded-2xl bg-gradient-to-r from-orange-500 to-red-600 px-5 py-3 text-sm font-black text-white shadow-lg transition hover:brightness-110"
+              :class="isShareActionProcessing || !isUserLoggedIn ? 'cursor-not-allowed opacity-70' : ''"
+              :disabled="isShareActionProcessing || !isUserLoggedIn"
+              @click="runSystemShareFromPreview"
+            >
+              {{ !isUserLoggedIn ? '請先登入' : (canClaimShareReward ? '開啟系統分享' : '今日已達上限 / 冷卻中') }}
+            </button>
+
+            <button
+              type="button"
+              class="w-full rounded-2xl border border-orange-100 bg-orange-50 px-5 py-3 text-sm font-black text-orange-700 shadow-sm transition hover:bg-orange-100"
+              :class="isShareActionProcessing || !isUserLoggedIn ? 'cursor-not-allowed opacity-70' : ''"
+              :disabled="isShareActionProcessing || !isUserLoggedIn"
+              @click="copyShareTextFromPreview"
+            >
+              {{ !isUserLoggedIn ? '請先登入' : '複製分享文案' }}
+            </button>
+
+            <button
+              type="button"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-black text-slate-500 transition hover:bg-slate-100"
+              :class="isShareActionProcessing ? 'cursor-not-allowed opacity-70' : ''"
+              :disabled="isShareActionProcessing"
+              @click="closeSharePreviewModal"
+            >
+              先關閉
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div
+      v-if="showWinEffects"
+      class="pointer-events-none fixed inset-0 z-[60] overflow-hidden"
+    >
+      <template v-if="campaign.enableWinConfetti">
+        <span
+          v-for="piece in confettiPieces"
+          :key="piece.id"
+          class="premium-win-confetti"
+          :style="piece.style"
+        ></span>
+      </template>
+
+      <div
+        v-if="campaign.enableGoldenAura"
+        class="premium-win-golden-aura"
+      ></div>
+
+      <div
+        v-if="campaign.enableWinFlash"
+        class="premium-win-flash"
+      ></div>
+
+      <template v-if="campaign.enableGoldRain">
+        <span
+          v-for="piece in goldRainPieces"
+          :key="piece.id"
+          class="premium-gold-rain"
+          :style="piece.style"
+        ></span>
+      </template>
+    </div>
+
+    <div
+      v-if="showResultModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-md"
+    >
+      <div class="premium-result-card w-full max-w-sm overflow-hidden rounded-[36px] bg-white shadow-2xl">
+        <div
+          class="relative overflow-hidden p-6 text-center text-white"
+          :class="resultPrize?.type === 'lose'
+            ? 'bg-gradient-to-br from-slate-500 via-slate-700 to-slate-950'
+            : 'bg-gradient-to-br from-amber-400 via-orange-500 to-red-600'
+          "
+        >
+          <div class="absolute inset-0 opacity-25 premium-result-dot-bg"></div>
+          <div class="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/20 blur-2xl"></div>
+          <div class="absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-yellow-200/20 blur-3xl"></div>
+
+          <div
+            class="premium-result-prize-image relative mx-auto flex h-32 w-32 items-center justify-center overflow-hidden rounded-[36px] border border-white/40 bg-white/20 text-7xl shadow-2xl backdrop-blur sm:h-36 sm:w-36"
+            :class="campaign.enablePrizeBounce && resultPrize?.type !== 'lose' ? 'premium-prize-bounce' : ''"
+          >
+            <img
+              v-if="hasPrizeImage(resultPrize)"
+              :src="getPrizeImageUrl(resultPrize)"
+              alt="獎項圖片"
+              class="h-full w-full object-contain p-2"
+            />
+            <span v-else>{{ resultPrize?.icon || '🎁' }}</span>
+          </div>
+
+          <p class="relative mt-4 text-xs font-black uppercase tracking-[0.26em] text-white/70">
+            Wheel Result
+          </p>
+
+          <p class="relative mt-2 text-3xl font-black drop-shadow">
+            {{ resultPrize?.type === 'lose' ? '再接再厲' : '恭喜中獎' }}
+          </p>
+
+          <p class="relative mt-2 rounded-full bg-white/20 px-4 py-2 text-lg font-black text-yellow-50 shadow-inner">
+            {{ resultPrize?.name }}
+          </p>
+
+          <p class="relative mx-auto mt-3 inline-flex rounded-full bg-white px-4 py-2 text-xs font-black text-orange-600 shadow-lg">
+            {{ getPrizeRankLabel(resultPrize?.rank, resultPrize?.type) }}
+          </p>
+        </div>
+
+        <div class="bg-gradient-to-b from-white to-orange-50 p-6 text-center">
+          <p class="rounded-3xl bg-white px-4 py-4 text-sm font-bold leading-6 text-slate-500 shadow-sm">
+            {{ resultPrize?.description || '結果已寫入我的遊戲紀錄。' }}
+          </p>
+
+          <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="rounded-3xl bg-orange-100 px-3 py-4">
+              <p class="text-2xl font-black text-orange-700">
+                {{ player.chances }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-orange-500">
+                剩餘次數
+              </p>
+            </div>
+
+            <div class="rounded-3xl bg-slate-100 px-3 py-4">
+              <p class="text-2xl font-black text-slate-800">
+                {{ resultPrize?.type === 'lose' ? '未中' : '中獎' }}
+              </p>
+
+              <p class="mt-1 text-xs font-black text-slate-500">
+                結果狀態
+              </p>
+            </div>
+          </div>
+
+          <p class="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-xs font-black leading-5 text-orange-700">
+            {{ resultHintText }}
+          </p>
+
+          <div
+            v-if="resultPrize?.type !== 'lose'"
+            class="mt-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-left text-xs font-bold leading-5 text-amber-700"
+          >
+            <p class="font-black text-amber-900">
+              兌獎提醒
+            </p>
+
+            <p class="mt-1">
+              建議截圖、複製或分享中獎結果；兌換方式以主辦單位公告為準。
+            </p>
+          </div>
+
+          <p
+            v-if="isResultActionProcessing"
+            class="mt-3 rounded-2xl bg-slate-100 px-4 py-3 text-xs font-black leading-5 text-slate-500"
+          >
+            系統處理中，請稍候。
+          </p>
+
+          <div class="mt-5 grid gap-3">
+            <p
+              v-if="resultPrize?.type !== 'lose'"
+              class="rounded-2xl bg-white px-4 py-3 text-xs font-bold leading-5 text-slate-500 shadow-sm"
+            >
+              本頁僅提供中獎結果保存與分享，不產生核銷碼或兌獎碼。
+            </p>
+
+            <button
+              type="button"
+              class="w-full rounded-2xl px-5 py-3 text-sm font-black text-white shadow-lg transition"
+              :class="isResultActionProcessing
+                ? 'cursor-not-allowed bg-orange-300'
+                : 'bg-gradient-to-r from-orange-500 to-red-600 hover:brightness-110'
+              "
+              :disabled="isResultActionProcessing"
+              @click="handleResultPrimaryAction"
+            >
+              {{ resultActionText }}
+            </button>
+
+            <button
+              type="button"
+              class="w-full rounded-2xl border border-orange-100 bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-orange-50"
+              :class="isResultActionProcessing ? 'cursor-not-allowed opacity-60' : ''"
+              :disabled="isResultActionProcessing"
+              @click="goGameHistory"
+            >
+              查看我的遊戲紀錄
+            </button>
+
+            <button
+              type="button"
+              class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-black text-slate-500 transition hover:bg-slate-100"
+              :class="isResultActionProcessing ? 'cursor-not-allowed opacity-60' : ''"
+              :disabled="isResultActionProcessing"
+              @click="stopAllSounds(); showResultModal = false"
+            >
+              先關閉
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.premium-scrollbar-y {
+  scrollbar-width: none;
+}
+
+.premium-scrollbar-y::-webkit-scrollbar {
+  width: 0;
+}
+
+.premium-dot-bg {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.5) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 第 234 批：穩定版 RWD 尺寸，避免 Tailwind var 尺寸導致輪盤消失 */
+.premium-wheel-stage {
+  --wheel-size: 246px;
+  --bulb-radius: 143px;
+}
+
+@media (min-width: 640px) {
+  .premium-wheel-stage {
+    --wheel-size: 318px;
+    --bulb-radius: 192px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .premium-wheel-stage {
+    --wheel-size: 382px;
+    --bulb-radius: 232px;
+  }
+}
+
+.premium-wheel-bulb {
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--bulb-angle))
+    translateY(calc(var(--bulb-radius) * -1));
+}
+
+@keyframes premium-wheel-bulb-chase-fixed {
+  0%,
+  100% {
+    opacity: 0.35;
+    filter: brightness(0.9);
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--bulb-angle))
+      translateY(calc(var(--bulb-radius) * -1))
+      scale(0.82);
+  }
+
+  45% {
+    opacity: 1;
+    filter: brightness(1.55);
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--bulb-angle))
+      translateY(calc(var(--bulb-radius) * -1))
+      scale(1.18);
+  }
+}
+
+.premium-wheel-bulb {
+  animation-name: premium-wheel-bulb-chase-fixed;
+}
+
+
+/* 第 234 批：手機尺寸修正與圓形跑馬燈 */
+.premium-wheel-marquee {
+  display: none;
+}
+
+.premium-wheel-circle-bulb {
+  --bulb-count: 32;
+  --bulb-angle: calc(360deg / var(--bulb-count) * var(--bulb-index));
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, #fef3c7 28%, #facc15 58%, #fb923c 100%);
+  box-shadow:
+    0 0 10px rgba(250, 204, 21, 0.9),
+    0 0 18px rgba(249, 115, 22, 0.55);
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--bulb-angle))
+    translateY(calc(var(--bulb-radius) * -1));
+  animation: premium-wheel-circle-bulb-chase 1.1s linear infinite;
+  animation-delay: calc(var(--bulb-index) * -0.055s);
+}
+
+@media (min-width: 640px) {
+  .premium-wheel-circle-bulb {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .premium-wheel-circle-bulb {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+@keyframes premium-wheel-circle-bulb-chase {
+  0%,
+  100% {
+    opacity: 0.28;
+    filter: brightness(0.85);
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--bulb-angle))
+      translateY(calc(var(--bulb-radius) * -1))
+      scale(0.8);
+  }
+
+  45% {
+    opacity: 1;
+    filter: brightness(1.7);
+    transform:
+      translate(-50%, -50%)
+      rotate(var(--bulb-angle))
+      translateY(calc(var(--bulb-radius) * -1))
+      scale(1.24);
+  }
+}
+
+
+/* 第 234 批：SVG 響應式轉盤重製版 */
+.premium-wheel-stage {
+  overflow: visible;
+}
+
+.premium-wheel-shell {
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.96), transparent 22%),
+    radial-gradient(circle, #fef3c7 0%, #fbbf24 46%, #d97706 68%, #7c2d12 100%);
+  box-shadow:
+    inset 0 12px 20px rgba(255, 255, 255, 0.6),
+    inset 0 -18px 32px rgba(120, 53, 15, 0.48),
+    0 28px 45px rgba(120, 53, 15, 0.42);
+}
+
+.premium-wheel-shell::before {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  border-radius: 999px;
+  border: 3px dashed rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 0 0 6px rgba(255, 255, 255, 0.18);
+}
+
+.premium-wheel-svg-wrap {
+  border: 8px solid rgba(255, 255, 255, 0.96);
+  background: #fff7ed;
+  box-shadow:
+    inset 0 10px 22px rgba(255, 255, 255, 0.72),
+    inset 0 -18px 30px rgba(127, 29, 29, 0.35),
+    0 16px 30px rgba(120, 53, 15, 0.32);
+  overflow: hidden;
+}
+
+.premium-wheel-svg-slice {
+  stroke: rgba(255, 255, 255, 0.42);
+  stroke-width: 2;
+}
+
+.premium-wheel-svg-icon {
+  font-size: 26px;
+  filter: drop-shadow(0 2px 2px rgba(15, 23, 42, 0.25));
+}
+
+.premium-wheel-svg-text {
+  font-size: 14px;
+  font-weight: 900;
+  fill: #0f172a;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.86);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+
+.premium-wheel-circle-bulb {
+  --bulb-count: 32;
+  --bulb-angle: calc(360deg / var(--bulb-count) * var(--bulb-index));
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #ffffff 0%, #fef3c7 28%, #facc15 58%, #fb923c 100%);
+  box-shadow:
+    0 0 10px rgba(250, 204, 21, 0.9),
+    0 0 18px rgba(249, 115, 22, 0.55);
+  transform:
+    translate(-50%, -50%)
+    rotate(var(--bulb-angle))
+    translateY(calc((min(100%, 430px) / -2) + 4px));
+  animation: premium-wheel-svg-bulb-chase 1.1s linear infinite;
+  animation-delay: calc(var(--bulb-index) * -0.055s);
+}
+
+@media (min-width: 640px) {
+  .premium-wheel-circle-bulb {
+    width: 10px;
+    height: 10px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .premium-wheel-circle-bulb {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+@keyframes premium-wheel-svg-bulb-chase {
+  0%,
+  100% {
+    opacity: 0.3;
+    filter: brightness(0.88);
+    scale: 0.82;
+  }
+
+  45% {
+    opacity: 1;
+    filter: brightness(1.7);
+    scale: 1.22;
+  }
+}
+
+.premium-wheel-shine {
+  background:
+    radial-gradient(circle at 28% 20%, rgba(255, 255, 255, 0.58), transparent 22%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.36), transparent 40%, rgba(255, 255, 255, 0.18) 62%, transparent 78%);
+  mix-blend-mode: screen;
+}
+
+.premium-wheel-center {
+  border: 5px solid rgba(254, 240, 138, 0.95);
+  background:
+    radial-gradient(circle at 34% 24%, rgba(255, 255, 255, 0.35), transparent 22%),
+    linear-gradient(145deg, #1e293b 0%, #020617 65%, #000 100%);
+  box-shadow:
+    inset 0 7px 12px rgba(255, 255, 255, 0.18),
+    inset 0 -9px 14px rgba(0, 0, 0, 0.55),
+    0 14px 22px rgba(15, 23, 42, 0.42),
+    0 0 0 7px rgba(251, 191, 36, 0.22);
+}
+
+.premium-wheel-pointer {
+  transform-origin: 50% 18px;
+  filter: drop-shadow(0 12px 12px rgba(15, 23, 42, 0.45));
+}
+
+.premium-wheel-base {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.38), transparent 45%),
+    linear-gradient(180deg, #92400e 0%, #7c2d12 55%, #431407 100%);
+  box-shadow:
+    inset 0 8px 12px rgba(255, 255, 255, 0.14),
+    0 18px 28px rgba(67, 20, 7, 0.35);
+}
+
+.premium-wheel-slice-win {
+  filter: brightness(1.2) saturate(1.15);
+}
+
+.premium-wheel-slice-lose {
+  filter: grayscale(0.25) brightness(1.06);
+}
+
+
+/* 第 234 批：放大輪盤、移除外圈、底座美化 */
+.premium-wheel-shell {
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, 0.48),
+    inset 0 -14px 26px rgba(120, 53, 15, 0.34),
+    0 24px 42px rgba(120, 53, 15, 0.36);
+}
+
+.premium-wheel-shell::before {
+  display: none;
+}
+
+.premium-wheel-circle-marquee,
+.premium-wheel-circle-bulb,
+.premium-wheel-marquee,
+.premium-wheel-bulb {
+  display: none !important;
+}
+
+.premium-wheel-svg-wrap {
+  border-width: 7px;
+  box-shadow:
+    inset 0 10px 20px rgba(255, 255, 255, 0.62),
+    inset 0 -16px 26px rgba(127, 29, 29, 0.28),
+    0 18px 34px rgba(120, 53, 15, 0.34);
+}
+
+.premium-wheel-base {
+  background:
+    radial-gradient(ellipse at 50% 14%, rgba(255, 255, 255, 0.48), transparent 36%),
+    linear-gradient(180deg, #b45309 0%, #7c2d12 48%, #431407 100%);
+  box-shadow:
+    inset 0 9px 14px rgba(255, 255, 255, 0.18),
+    inset 0 -10px 18px rgba(67, 20, 7, 0.42),
+    0 16px 24px rgba(67, 20, 7, 0.32);
+  transform: perspective(420px) rotateX(58deg);
+  transform-origin: center top;
+}
+
+
+/* 第 234 批：移除黃色厚外圈，輪盤本體再放大 */
+.premium-wheel-shell {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0.25rem;
+}
+
+.premium-wheel-svg-wrap {
+  border-width: 8px;
+  border-color: rgba(255, 255, 255, 0.96);
+  box-shadow:
+    inset 0 10px 20px rgba(255, 255, 255, 0.62),
+    inset 0 -16px 26px rgba(127, 29, 29, 0.26),
+    0 20px 38px rgba(120, 53, 15, 0.36);
+}
+
+.premium-wheel-stage {
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.42), transparent 42%),
+    linear-gradient(145deg, #fff7ed 0%, #fed7aa 58%, #fb923c 100%);
+}
+
+
+/* 第 234 批：高級遊戲機外框與底座開始按鈕 */
+.premium-wheel-shell {
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.92), transparent 19%),
+    conic-gradient(from -20deg, #fef3c7, #ffffff, #facc15, #fb923c, #ffffff, #fef3c7) !important;
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, 0.75),
+    inset 0 -18px 28px rgba(120, 53, 15, 0.28),
+    0 22px 42px rgba(120, 53, 15, 0.36),
+    0 0 0 1px rgba(255, 255, 255, 0.56) !important;
+  padding: 0.45rem !important;
+}
+
+.premium-wheel-shell::after {
+  content: '';
+  position: absolute;
+  inset: 13px;
+  border-radius: 999px;
+  pointer-events: none;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 0 18px rgba(255, 255, 255, 0.48),
+    0 0 20px rgba(250, 204, 21, 0.22);
+}
+
+.premium-wheel-svg-wrap {
+  border-width: 9px;
+  border-color: rgba(255, 255, 255, 0.98);
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.92), transparent 26%),
+    #fff7ed;
+  box-shadow:
+    inset 0 12px 22px rgba(255, 255, 255, 0.72),
+    inset 0 -18px 30px rgba(127, 29, 29, 0.25),
+    0 18px 34px rgba(120, 53, 15, 0.32),
+    0 0 0 7px rgba(255, 255, 255, 0.22);
+}
+
+.premium-wheel-start-button {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 50% 12%, rgba(255, 255, 255, 0.38), transparent 32%),
+    linear-gradient(180deg, #b45309 0%, #7c2d12 52%, #431407 100%);
+  box-shadow:
+    inset 0 9px 15px rgba(255, 255, 255, 0.2),
+    inset 0 -12px 22px rgba(67, 20, 7, 0.55),
+    0 14px 0 rgba(67, 20, 7, 0.36),
+    0 22px 28px rgba(67, 20, 7, 0.34);
+  text-shadow: 0 2px 4px rgba(67, 20, 7, 0.6);
+}
+
+.premium-wheel-start-button::before {
+  content: '';
+  position: absolute;
+  inset: 8px 24px auto 24px;
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.38), transparent);
+  pointer-events: none;
+}
+
+.premium-wheel-start-button:hover {
+  filter: brightness(1.08);
+}
+
+.premium-wheel-start-button:disabled {
+  background:
+    radial-gradient(ellipse at 50% 12%, rgba(255, 255, 255, 0.28), transparent 32%),
+    linear-gradient(180deg, #94a3b8 0%, #64748b 56%, #334155 100%);
+  box-shadow:
+    inset 0 7px 12px rgba(255, 255, 255, 0.16),
+    inset 0 -10px 20px rgba(15, 23, 42, 0.42),
+    0 10px 0 rgba(15, 23, 42, 0.18),
+    0 18px 24px rgba(15, 23, 42, 0.2);
+}
+
+
+/* 第 234 批：玩家版資訊區整理 */
+.premium-wheel-start-button + section,
+.premium-wheel-stage + section {
+  backdrop-filter: blur(14px);
+}
+
+
+/* 第 234 批：結果彈窗高級視覺 */
+.premium-result-card {
+  animation: premium-result-pop 0.28s ease-out;
+}
+
+.premium-result-dot-bg {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.65) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+@keyframes premium-result-pop {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+
+/* 第 234 批：中獎彩帶 / 金沙顯示修復 */
+.premium-win-confetti {
+  position: absolute;
+  top: -14vh;
+  border-radius: 3px;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.45);
+  animation-name: premium-confetti-fall-fixed;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+
+.premium-gold-rain {
+  position: absolute;
+  top: -12vh;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, #ffffff 0%, #fef3c7 28%, #facc15 58%, #d97706 100%);
+  box-shadow:
+    0 0 12px rgba(250, 204, 21, 0.95),
+    0 0 22px rgba(249, 115, 22, 0.5);
+  animation-name: premium-gold-rain-fall-fixed;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  will-change: transform, opacity;
+}
+
+@keyframes premium-confetti-fall-fixed {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -12vh, 0) rotate(0deg);
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(24px, 116vh, 0) rotate(760deg);
+  }
+}
+
+@keyframes premium-gold-rain-fall-fixed {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -10vh, 0) scale(0.7);
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate3d(-16px, 116vh, 0) scale(1.18);
+  }
+}
+
+
+/* 第 234 批：中獎高級閃光 / 獎項跳動 / 金色光暈 */
+.premium-win-flash {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(255, 255, 255, 0.92), transparent 12%),
+    radial-gradient(circle at 50% 48%, rgba(250, 204, 21, 0.52), transparent 32%);
+  animation: premium-win-flash-burst 1.2s ease-out forwards;
+  mix-blend-mode: screen;
+}
+
+.premium-win-golden-aura {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: min(74vw, 420px);
+  height: min(74vw, 420px);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle, rgba(250, 204, 21, 0.32), transparent 62%),
+    conic-gradient(from 0deg, transparent, rgba(255, 255, 255, 0.42), transparent, rgba(250, 204, 21, 0.48), transparent);
+  filter: blur(1px);
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.72);
+  animation: premium-golden-aura-pulse 2.8s ease-out forwards;
+}
+
+.premium-prize-bounce {
+  animation: premium-prize-bounce 1.05s ease-in-out 0.12s 3;
+}
+
+@keyframes premium-win-flash-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+
+  18% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+@keyframes premium-golden-aura-pulse {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.65) rotate(0deg);
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.35) rotate(180deg);
+  }
+}
+
+@keyframes premium-prize-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  35% {
+    transform: translateY(-8px) scale(1.12) rotate(-2deg);
+  }
+
+  68% {
+    transform: translateY(2px) scale(0.98) rotate(2deg);
+  }
+}
+
+
+/* 第 234 批：前台 / 後台精簡清爽操作 */
+aside {
+  scroll-behavior: smooth;
+}
+
+.premium-admin-section-card {
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  background: rgba(248, 250, 252, 0.82);
+}
+
+
+/* 第 234 批：中獎彈窗獎項圖片放大 */
+.premium-result-prize-image {
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, 0.22),
+    inset 0 -14px 24px rgba(120, 53, 15, 0.18),
+    0 22px 38px rgba(67, 20, 7, 0.28);
+}
+
+.premium-result-prize-image img {
+  filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.28));
+}
+
+@media (max-width: 380px) {
+  .premium-result-prize-image {
+    width: 7.25rem;
+    height: 7.25rem;
+    font-size: 4rem;
+  }
+}
+
+
+/* 第 234 批：轉盤扇區獎項圖片顯示 */
+.premium-wheel-prize-media {
+  display: flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.65),
+    0 5px 12px rgba(120, 53, 15, 0.24);
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.premium-wheel-prize-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
+  filter: drop-shadow(0 3px 5px rgba(15, 23, 42, 0.22));
+}
+
+@media (max-width: 380px) {
+  .premium-wheel-prize-media {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+  }
+}
+
+
+/* 第 234 批：分享活動設定版面優化 */
+.premium-share-card-title {
+  text-wrap: balance;
+}
+
+
+/* 第 234 批：分享前自訂預覽彈窗 */
+.premium-share-preview-card {
+  animation: premium-share-preview-pop 0.25s ease-out;
+}
+
+@keyframes premium-share-preview-pop {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+
+/* 第 234 批：前台最近轉盤紀錄收合 */
+.premium-recent-logs-collapsed {
+  background: linear-gradient(135deg, rgba(255, 247, 237, 0.94), rgba(255, 237, 213, 0.88));
+}
+
+</style>

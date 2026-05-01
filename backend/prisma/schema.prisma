@@ -1,0 +1,332 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum MemberLevel {
+  NORMAL
+  VIP
+}
+
+enum AuthProvider {
+  EMAIL
+  GOOGLE
+  LINE
+  FACEBOOK
+}
+
+enum GameType {
+  WHEEL
+  SCRATCH
+  FLIP
+  GRID
+  GOLDEN_EGG
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ENDED
+}
+
+enum RewardStatus {
+  UNUSED
+  USED
+  EXPIRED
+}
+
+enum PrizeType {
+  WIN
+  LOSE
+}
+
+enum PrizeStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum SerialCodeStatus {
+  UNUSED
+  USED
+  DISABLED
+  EXPIRED
+}
+
+enum PlayStatus {
+  SUCCESS
+  FAILED
+}
+
+enum ClaimStatus {
+  PENDING
+  CLAIMED
+  CANCELLED
+}
+
+model User {
+  id          Int         @id @default(autoincrement())
+  name        String
+  email       String      @unique
+  password    String?
+  role        UserRole    @default(USER)
+  memberLevel MemberLevel @default(NORMAL)
+
+  authProvider AuthProvider @default(EMAIL)
+  socialId     String?
+  avatarUrl    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rewards         UserReward[]
+  playRecords     PlayRecord[]
+  shareRewardLogs ShareRewardLog[]
+
+  @@index([authProvider])
+  @@index([socialId])
+}
+
+model Campaign {
+  id          Int            @id @default(autoincrement())
+  title       String
+  slug        String?        @unique
+  description String?
+  gameType    GameType
+  status      CampaignStatus @default(DRAFT)
+
+  startAt DateTime?
+  endAt   DateTime?
+
+  dailyLimit    Int?    @default(3)
+  totalLimit    Int?    @default(10)
+  requireLogin  Boolean @default(true)
+  allowedRole   UserRole?
+  requiredLevel MemberLevel?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prizes        Prize[]
+  rewards       UserReward[]
+  playRecords   PlayRecord[]
+  serialCodes   SerialCode[]
+  gameConfig    GameConfig?
+  rewardRecords RewardRecord[]
+
+  @@index([gameType])
+  @@index([status])
+  @@index([startAt])
+  @@index([endAt])
+}
+
+model GameConfig {
+  id         Int      @id @default(autoincrement())
+  campaignId Int     @unique
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // 正式上線版遊戲設定集中保存：
+  // 例如金蛋顏色、倒數設定、序號區塊樣式、分享設定、底部功能列設定等。
+  settings Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Prize {
+  id         Int @id @default(autoincrement())
+  campaignId Int
+
+  // 原本欄位保留
+  title       String
+  remainStock Int   @default(0)
+  probability Float
+
+  // 正式版新增欄位
+  shortName   String?
+  description String?
+  imageUrl    String?
+  icon        String?
+  type        PrizeType   @default(WIN)
+  status      PrizeStatus @default(ACTIVE)
+
+  // stockTotal / stockUsed 用於正式庫存管理。
+  // remainStock 保留給你目前既有程式相容。
+  stockTotal Int @default(0)
+  stockUsed  Int @default(0)
+
+  sortOrder Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaign      Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  rewards       UserReward[]
+  playRecords   PlayRecord[]
+  rewardRecords RewardRecord[]
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([type])
+}
+
+model UserReward {
+  id         Int          @id @default(autoincrement())
+  userId     Int
+  campaignId Int
+  prizeId    Int
+  code       String       @unique
+  status     RewardStatus @default(UNUSED)
+  createdAt  DateTime     @default(now())
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  prize    Prize    @relation(fields: [prizeId], references: [id], onDelete: Cascade)
+}
+
+model SerialCode {
+  id         Int      @id @default(autoincrement())
+  campaignId Int
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  code String @unique
+
+  // 一組序號可以增加幾次抽獎機會
+  rewardChance Int @default(1)
+
+  status SerialCodeStatus @default(UNUSED)
+
+  batchCode String?
+  note      String?
+
+  // 發放管理
+  distributedAt      DateTime?
+  distributedTo      String?
+  distributedChannel String?
+
+  // 使用紀錄
+  usedAt DateTime?
+  usedBy String?
+
+  // 有效期限
+  expireAt DateTime?
+
+  playRecords PlayRecord[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([status])
+  @@index([batchCode])
+  @@index([expireAt])
+  @@index([distributedAt])
+  @@index([usedAt])
+}
+
+model PlayRecord {
+  id Int @id @default(autoincrement())
+
+  // 原本 userId 是必填。
+  // 正式活動可能有免登入玩家，所以改成可選。
+  userId Int?
+
+  campaignId Int
+  prizeId    Int?
+
+  isWin    Boolean  @default(false)
+  playedAt DateTime @default(now())
+
+  // 正式版新增
+  gameType GameType @default(WHEEL)
+  status   PlayStatus @default(SUCCESS)
+
+  serialCodeId Int?
+  serialCode   SerialCode? @relation(fields: [serialCodeId], references: [id], onDelete: SetNull)
+
+  // 玩家資訊，可支援免登入活動
+  playerName  String?
+  playerPhone String?
+  playerEmail String?
+  playerIp    String?
+  userAgent   String?
+
+  // 遊戲結果資料：
+  // GOLDEN_EGG：可放 eggNumber
+  // WHEEL：可放 angle / segment
+  // GRID：可放 gridIndex
+  resultPayload Json @default("{}")
+
+  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  prize    Prize?   @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+
+  rewardRecord RewardRecord?
+
+  @@index([userId])
+  @@index([campaignId])
+  @@index([gameType])
+  @@index([prizeId])
+  @@index([serialCodeId])
+  @@index([playedAt])
+}
+
+model RewardRecord {
+  id         Int      @id @default(autoincrement())
+  campaignId Int
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  playRecordId Int        @unique
+  playRecord   PlayRecord @relation(fields: [playRecordId], references: [id], onDelete: Cascade)
+
+  prizeId Int?
+  prize   Prize? @relation(fields: [prizeId], references: [id], onDelete: SetNull)
+
+  status ClaimStatus @default(PENDING)
+
+  winnerName  String?
+  winnerPhone String?
+  winnerEmail String?
+
+  claimCode String? @unique
+  claimedAt DateTime?
+  claimedBy String?
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
+  @@index([prizeId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model ShareRewardLog {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  campaignId  Int?
+  gameId      String
+  rewardType  String   @default("SHARE")
+  rewardCount Int      @default(1)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([gameId])
+  @@index([createdAt])
+  @@index([userId, gameId, createdAt])
+}
