@@ -54,6 +54,8 @@ const databaseLoadMessage = ref('')
 const databaseCampaign = ref(null)
 const databasePrizes = ref([])
 const databaseSerialCodes = ref([])
+const selectedDatabaseSerialIds = ref([])
+const isBatchDeletingDatabaseSerials = ref(false)
 const databasePlayRecords = ref([])
 const databaseRewardRecords = ref([])
 const databaseDrawPool = ref(null)
@@ -142,9 +144,6 @@ const databaseGameConfigForm = reactive({
 })
 const isAutoPreviewEnabled = ref(true)
 const serialCodes = ref([])
-
-const selectedSerialCodeIds = ref([])
-const isDeletingSelectedSerialCodes = ref(false)
 const serialCodePrefix = ref('EGG')
 const serialBatchCode = ref('')
 const serialRewardChance = ref(1)
@@ -2434,6 +2433,7 @@ const loadDatabaseGoldenEggCampaign = async () => {
     databaseCampaign.value = campaignResult
     databasePrizes.value = Array.isArray(prizesResult) ? prizesResult : []
     databaseSerialCodes.value = Array.isArray(serialCodesResult) ? serialCodesResult : []
+    syncSelectedDatabaseSerialsAfterRefresh()
     databasePlayRecords.value = Array.isArray(playRecordsResult) ? playRecordsResult : []
     databaseRewardRecords.value = Array.isArray(rewardRecordsResult) ? rewardRecordsResult : []
     databaseDrawPool.value = drawPoolResult
@@ -2567,6 +2567,102 @@ const resetDatabaseSerialForm = () => {
   databaseSerialForm.distributedTo = ''
   databaseSerialForm.distributedChannel = 'LINE'
 }
+
+
+const visibleDatabaseSerialCodes = computed(() => {
+  return Array.isArray(databaseSerialCodes.value)
+    ? databaseSerialCodes.value.slice(0, 60)
+    : []
+})
+
+const selectedDatabaseSerialIdSet = computed(() => {
+  return new Set(selectedDatabaseSerialIds.value.map((id) => Number(id)))
+})
+
+const selectedDatabaseSerialCount = computed(() => selectedDatabaseSerialIds.value.length)
+
+const isAllVisibleDatabaseSerialSelected = computed(() => {
+  return visibleDatabaseSerialCodes.value.length > 0
+    && selectedDatabaseSerialIds.value.length === visibleDatabaseSerialCodes.value.length
+})
+
+const toggleDatabaseSerialSelection = (item) => {
+  const id = Number(item?.id)
+
+  if (!Number.isFinite(id)) return
+
+  if (selectedDatabaseSerialIdSet.value.has(id)) {
+    selectedDatabaseSerialIds.value = selectedDatabaseSerialIds.value.filter((serialId) => serialId !== id)
+    return
+  }
+
+  selectedDatabaseSerialIds.value = [...selectedDatabaseSerialIds.value, id]
+}
+
+const selectAllVisibleDatabaseSerials = () => {
+  selectedDatabaseSerialIds.value = visibleDatabaseSerialCodes.value
+    .map((item) => Number(item.id))
+    .filter((id) => Number.isFinite(id))
+}
+
+const clearSelectedDatabaseSerials = () => {
+  selectedDatabaseSerialIds.value = []
+}
+
+const syncSelectedDatabaseSerialsAfterRefresh = () => {
+  const aliveIds = new Set(
+    databaseSerialCodes.value
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isFinite(id))
+  )
+
+  selectedDatabaseSerialIds.value = selectedDatabaseSerialIds.value.filter((id) => aliveIds.has(id))
+}
+
+const batchDeleteSelectedDatabaseSerials = async () => {
+  if (!selectedDatabaseSerialIds.value.length) {
+    window.alert('請先勾選要刪除的序號。')
+    return
+  }
+
+  const selectedItems = databaseSerialCodes.value.filter((item) => {
+    return selectedDatabaseSerialIdSet.value.has(Number(item.id))
+  })
+
+  const previewCodes = selectedItems
+    .slice(0, 5)
+    .map((item) => item.code)
+    .join('\n')
+
+  const confirmed = window.confirm(
+    `確定要批次刪除 ${selectedDatabaseSerialIds.value.length} 組序號嗎？\n\n` +
+    `前幾筆：\n${previewCodes || '未取得序號'}\n\n` +
+    '此動作會直接刪除 PostgreSQL 裡的 SerialCode，建議只用於刪除 TEST01 / DEMO 測試序號。'
+  )
+
+  if (!confirmed) return
+
+  isBatchDeletingDatabaseSerials.value = true
+
+  try {
+    const ids = [...selectedDatabaseSerialIds.value]
+
+    await Promise.all(
+      ids.map((id) => deleteAdminGoldenEggSerialCode(id))
+    )
+
+    selectedDatabaseSerialIds.value = []
+    showSavedMessage(`已批次刪除 ${ids.length} 組資料庫序號。`)
+    setDatabasePreviewSyncMessage(`已批次刪除 ${ids.length} 組資料庫序號，序號列表已重新讀取。`)
+    await refreshDatabaseSerialCodes()
+  } catch (error) {
+    console.error('批次刪除資料庫序號失敗：', error)
+    window.alert(error.message || '批次刪除資料庫序號失敗。')
+  } finally {
+    isBatchDeletingDatabaseSerials.value = false
+  }
+}
+
 
 const refreshDatabaseSerialCodes = async () => {
   if (!normalizedDatabaseCampaignId.value) return
@@ -3076,93 +3172,6 @@ if (typeof window !== 'undefined') {
     stopEggPlayLogAutoRefresh()
   })
 }
-
-const selectableSerialCodes = computed(() => {
-  return Array.isArray(databaseSerialCodes.value) ? databaseSerialCodes.value : []
-})
-
-const selectedSerialCodeSet = computed(() => {
-  return new Set(selectedSerialCodeIds.value)
-})
-
-const selectedSerialCodeCount = computed(() => selectedSerialCodeIds.value.length)
-
-const isAllSerialCodesSelected = computed(() => {
-  return selectableSerialCodes.value.length > 0 && selectedSerialCodeIds.value.length === selectableSerialCodes.value.length
-})
-
-const toggleSerialCodeSelection = (serialCodeId) => {
-  const id = Number(serialCodeId)
-
-  if (!Number.isFinite(id)) return
-
-  if (selectedSerialCodeSet.value.has(id)) {
-    selectedSerialCodeIds.value = selectedSerialCodeIds.value.filter((item) => item !== id)
-    return
-  }
-
-  selectedSerialCodeIds.value = [...selectedSerialCodeIds.value, id]
-}
-
-const selectAllSerialCodes = () => {
-  selectedSerialCodeIds.value = selectableSerialCodes.value
-    .map((item) => Number(item.id))
-    .filter((id) => Number.isFinite(id))
-}
-
-const clearSelectedSerialCodes = () => {
-  selectedSerialCodeIds.value = []
-}
-
-const syncSelectedSerialCodesAfterReload = () => {
-  const aliveIdSet = new Set(
-    selectableSerialCodes.value
-      .map((item) => Number(item.id))
-      .filter((id) => Number.isFinite(id))
-  )
-
-  selectedSerialCodeIds.value = selectedSerialCodeIds.value.filter((id) => aliveIdSet.has(id))
-}
-
-const deleteSelectedSerialCodes = async () => {
-  if (!selectedSerialCodeIds.value.length) {
-    showSavedMessage?.('請先勾選要刪除的序號。')
-    return
-  }
-
-  const confirmMessage = `確定要刪除已選取的 ${selectedSerialCodeIds.value.length} 組序號嗎？\n\n此動作會直接刪除資料庫序號，建議只用於清除 TEST01 / DEMO 測試序號。`
-
-  if (!window.confirm(confirmMessage)) return
-
-  isDeletingSelectedSerialCodes.value = true
-
-  try {
-    const ids = [...selectedSerialCodeIds.value]
-
-    await Promise.all(
-      ids.map((id) => http.delete(`/serial-codes/${id}`))
-    )
-
-    selectedSerialCodeIds.value = []
-
-    if (typeof fetchDatabaseSerialCodes === 'function') {
-      await fetchDatabaseSerialCodes()
-    } else if (typeof loadSerialCodes === 'function') {
-      await loadSerialCodes()
-    } else if (typeof loadDatabaseData === 'function') {
-      await loadDatabaseData()
-    }
-
-    showSavedMessage?.(`已批次刪除 ${ids.length} 組序號。`)
-  } catch (error) {
-    console.error('批次刪除序號失敗:', error)
-    setDatabasePreviewSyncMessage?.(error?.response?.data?.message || '批次刪除序號失敗，請稍後再試。')
-  } finally {
-    isDeletingSelectedSerialCodes.value = false
-  }
-}
-
-
 </script>
 
 <template>
@@ -4234,17 +4243,68 @@ const deleteSelectedSerialCodes = async () => {
                 </div>
               </div>
 
+              <div class="mt-4 rounded-3xl border border-cyan-100 bg-white/75 p-3">
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!visibleDatabaseSerialCodes.length"
+                    @click="isAllVisibleDatabaseSerialSelected ? clearSelectedDatabaseSerials() : selectAllVisibleDatabaseSerials()"
+                  >
+                    {{ isAllVisibleDatabaseSerialSelected ? '取消全選' : '全選目前 60 筆' }}
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!selectedDatabaseSerialCount"
+                    @click="clearSelectedDatabaseSerials"
+                  >
+                    清除選取
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-rose-600 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!selectedDatabaseSerialCount || isBatchDeletingDatabaseSerials"
+                    @click="batchDeleteSelectedDatabaseSerials"
+                  >
+                    {{ isBatchDeletingDatabaseSerials ? '批次刪除中...' : `批次刪除 ${selectedDatabaseSerialCount} 筆` }}
+                  </button>
+
+                  <span class="text-xs font-black text-slate-500">
+                    已選取 {{ selectedDatabaseSerialCount }} / {{ visibleDatabaseSerialCodes.length }} 筆
+                  </span>
+                </div>
+
+                <p class="mt-2 text-xs font-bold text-cyan-700">
+                  建議只批次刪除 TEST01 / DEMO / 測試序號；正式 LIVE01 序號請不要任意刪除。
+                </p>
+              </div>
+
               <div class="mt-4 max-h-[560px] space-y-3 overflow-y-auto pr-1">
                 <article
-                  v-for="item in databaseSerialCodes.slice(0, 60)"
+                  v-for="item in visibleDatabaseSerialCodes"
                   :key="item.id"
                   class="rounded-2xl bg-white/80 p-3"
+                  :class="selectedDatabaseSerialIdSet.has(Number(item.id)) ? 'ring-2 ring-rose-300 bg-rose-50/80' : ''"
                 >
                   <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p class="font-mono text-xs font-black text-slate-900">
-                        {{ item.code }}
-                      </p>
+                    <div class="flex items-start gap-3">
+                      <label class="mt-1 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-100">
+                        <input
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-slate-300"
+                          :checked="selectedDatabaseSerialIdSet.has(Number(item.id))"
+                          @change.stop="toggleDatabaseSerialSelection(item)"
+                        />
+                        選取
+                      </label>
+
+                      <div>
+                        <p class="font-mono text-xs font-black text-slate-900">
+                          {{ item.code }}
+                        </p>
                       <p class="mt-1 text-xs font-bold text-slate-500">
                         {{ item.effectiveStatus || item.status }}｜批次 {{ item.batchCode || '無' }}｜增加 {{ item.rewardChance }} 次
                       </p>
@@ -4254,6 +4314,7 @@ const deleteSelectedSerialCodes = async () => {
                       <p class="mt-1 text-xs font-bold text-slate-400">
                         期限：{{ item.expireAt || '永不過期' }}
                       </p>
+                      </div>
                     </div>
 
                     <div class="flex shrink-0 flex-wrap gap-2">
@@ -8093,12 +8154,4 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
   opacity: 0;
   transform: translate(-50%, -12px);
 }
-
-/* 第 358 批：資料庫序號批次刪除 */
-.batch-delete-serial-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 </style>
