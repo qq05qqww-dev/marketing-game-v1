@@ -142,6 +142,9 @@ const databaseGameConfigForm = reactive({
 })
 const isAutoPreviewEnabled = ref(true)
 const serialCodes = ref([])
+
+const selectedSerialCodeIds = ref([])
+const isDeletingSelectedSerialCodes = ref(false)
 const serialCodePrefix = ref('EGG')
 const serialBatchCode = ref('')
 const serialRewardChance = ref(1)
@@ -3073,6 +3076,93 @@ if (typeof window !== 'undefined') {
     stopEggPlayLogAutoRefresh()
   })
 }
+
+const selectableSerialCodes = computed(() => {
+  return Array.isArray(databaseSerialCodes.value) ? databaseSerialCodes.value : []
+})
+
+const selectedSerialCodeSet = computed(() => {
+  return new Set(selectedSerialCodeIds.value)
+})
+
+const selectedSerialCodeCount = computed(() => selectedSerialCodeIds.value.length)
+
+const isAllSerialCodesSelected = computed(() => {
+  return selectableSerialCodes.value.length > 0 && selectedSerialCodeIds.value.length === selectableSerialCodes.value.length
+})
+
+const toggleSerialCodeSelection = (serialCodeId) => {
+  const id = Number(serialCodeId)
+
+  if (!Number.isFinite(id)) return
+
+  if (selectedSerialCodeSet.value.has(id)) {
+    selectedSerialCodeIds.value = selectedSerialCodeIds.value.filter((item) => item !== id)
+    return
+  }
+
+  selectedSerialCodeIds.value = [...selectedSerialCodeIds.value, id]
+}
+
+const selectAllSerialCodes = () => {
+  selectedSerialCodeIds.value = selectableSerialCodes.value
+    .map((item) => Number(item.id))
+    .filter((id) => Number.isFinite(id))
+}
+
+const clearSelectedSerialCodes = () => {
+  selectedSerialCodeIds.value = []
+}
+
+const syncSelectedSerialCodesAfterReload = () => {
+  const aliveIdSet = new Set(
+    selectableSerialCodes.value
+      .map((item) => Number(item.id))
+      .filter((id) => Number.isFinite(id))
+  )
+
+  selectedSerialCodeIds.value = selectedSerialCodeIds.value.filter((id) => aliveIdSet.has(id))
+}
+
+const deleteSelectedSerialCodes = async () => {
+  if (!selectedSerialCodeIds.value.length) {
+    showSavedMessage?.('請先勾選要刪除的序號。')
+    return
+  }
+
+  const confirmMessage = `確定要刪除已選取的 ${selectedSerialCodeIds.value.length} 組序號嗎？\n\n此動作會直接刪除資料庫序號，建議只用於清除 TEST01 / DEMO 測試序號。`
+
+  if (!window.confirm(confirmMessage)) return
+
+  isDeletingSelectedSerialCodes.value = true
+
+  try {
+    const ids = [...selectedSerialCodeIds.value]
+
+    await Promise.all(
+      ids.map((id) => http.delete(`/serial-codes/${id}`))
+    )
+
+    selectedSerialCodeIds.value = []
+
+    if (typeof fetchDatabaseSerialCodes === 'function') {
+      await fetchDatabaseSerialCodes()
+    } else if (typeof loadSerialCodes === 'function') {
+      await loadSerialCodes()
+    } else if (typeof loadDatabaseData === 'function') {
+      await loadDatabaseData()
+    }
+
+    showSavedMessage?.(`已批次刪除 ${ids.length} 組序號。`)
+  } catch (error) {
+    console.error('批次刪除序號失敗:', error)
+    setDatabasePreviewSyncMessage?.(error?.response?.data?.message || '批次刪除序號失敗，請稍後再試。')
+  } finally {
+    isDeletingSelectedSerialCodes.value = false
+  }
+}
+
+
 </script>
 
 <template>
@@ -8003,4 +8093,12 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
   opacity: 0;
   transform: translate(-50%, -12px);
 }
+
+/* 第 358 批：資料庫序號批次刪除 */
+.batch-delete-serial-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 </style>
