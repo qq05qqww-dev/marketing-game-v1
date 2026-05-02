@@ -440,6 +440,51 @@ const applyRemoteCampaignData = (apiCampaign = {}) => {
   updateChanceText()
 }
 
+
+// 第 384 批：LINE 內建瀏覽器外部開啟提示
+const isLineInAppBrowser = ref(false)
+const isLineBrowserHintClosed = ref(false)
+const lineBrowserCopyMessage = ref('')
+
+const currentActivityUrl = computed(() => {
+  if (typeof window === 'undefined') return ''
+
+  const url = new URL(window.location.href)
+  url.searchParams.set('campaignId', String(onlineCampaignId.value || getRouteCampaignId() || 1))
+  return url.toString()
+})
+
+const shouldShowLineBrowserHint = computed(() => {
+  return isLineInAppBrowser.value && !isLineBrowserHintClosed.value
+})
+
+const detectLineInAppBrowser = () => {
+  if (typeof navigator === 'undefined') return false
+
+  const ua = navigator.userAgent || ''
+  return /Line\//i.test(ua) || /Line/i.test(ua)
+}
+
+const copyActivityUrlFromLineHint = async () => {
+  const url = currentActivityUrl.value
+
+  try {
+    await navigator.clipboard.writeText(url)
+    lineBrowserCopyMessage.value = '活動連結已複製，請貼到 Chrome 或 Safari 開啟。'
+  } catch (error) {
+    lineBrowserCopyMessage.value = url
+  }
+
+  window.setTimeout(() => {
+    lineBrowserCopyMessage.value = ''
+  }, 3500)
+}
+
+onMounted(() => {
+  isLineInAppBrowser.value = detectLineInAppBrowser()
+})
+
+
 const getRouteCampaignId = () => {
   const value = route.query.campaignId || route.query.onlineCampaignId || route.params?.campaignId
 
@@ -1792,7 +1837,53 @@ onUnmounted(() => {
       </header>
 
       <main class="relative z-10 flex flex-1 flex-col">
-        <section class="golden-egg-hero relative overflow-hidden rounded-[2rem] border border-yellow-200/30 px-5 pb-5 pt-6 text-center shadow-2xl">
+        
+      <div
+        v-if="shouldShowLineBrowserHint"
+        class="mx-auto mb-4 max-w-3xl rounded-3xl border border-amber-200 bg-amber-50/95 p-4 text-amber-950 shadow-xl"
+      >
+        <div class="flex items-start gap-3">
+          <div class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-amber-400 text-xl">
+            🌐
+          </div>
+
+          <div class="min-w-0 flex-1">
+            <h3 class="text-base font-black">
+              建議使用外部瀏覽器開啟
+            </h3>
+            <p class="mt-1 text-sm font-bold leading-6 text-amber-900/80">
+              你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。
+            </p>
+
+            <div class="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-2xl bg-amber-500 px-4 py-2 text-sm font-black text-white shadow-sm"
+                @click="copyActivityUrlFromLineHint"
+              >
+                複製活動連結
+              </button>
+
+              <button
+                type="button"
+                class="rounded-2xl bg-white px-4 py-2 text-sm font-black text-amber-800 ring-1 ring-amber-200"
+                @click="isLineBrowserHintClosed = true"
+              >
+                我知道了
+              </button>
+            </div>
+
+            <p
+              v-if="lineBrowserCopyMessage"
+              class="mt-2 break-all rounded-2xl bg-white/80 p-2 text-xs font-bold text-amber-800"
+            >
+              {{ lineBrowserCopyMessage }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+<section class="golden-egg-hero relative overflow-hidden rounded-[2rem] border border-yellow-200/30 px-5 pb-5 pt-6 text-center shadow-2xl">
           <div class="pointer-events-none absolute inset-0 opacity-60">
             <span class="golden-light golden-light-left" />
             <span class="golden-light golden-light-right" />
