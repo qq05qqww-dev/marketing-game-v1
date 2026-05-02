@@ -458,1135 +458,95 @@ const getRouteCampaignId = () => {
   return Number.isInteger(id) && id > 0 ? id : null
 }
 
+// 第 370 批：分享功能完全重建版
+// 注意：這一段取代第 364～369 批所有舊分享函式。
+// 三顆分享按鈕只綁定：
+// 1. handleSystemShare()
+// 2. handleLineShare()
+// 3. handleTelegramShare()
 const getCurrentCampaignIdForShare = () => {
-  return onlineCampaignId.value || getRouteCampaignId() || 1
+  if (typeof onlineCampaignId !== 'undefined' && onlineCampaignId.value) {
+    return onlineCampaignId.value
+  }
+
+  if (typeof getRouteCampaignId === 'function') {
+    return getRouteCampaignId() || 1
+  }
+
+  return 1
 }
 
-const loadGoldenEggRemoteState = async () => {
-  const campaignId = getRouteCampaignId()
-
-  if (!campaignId) {
-    isOnlineMode.value = false
-    onlineCampaignId.value = null
-    return
-  }
-
-  isLoadingRemoteCampaign.value = true
-  remoteLoadMessage.value = '正在讀取正式活動資料...'
-
-  try {
-    const apiCampaign = await getGoldenEggCampaign(campaignId)
-
-    onlineCampaignId.value = campaignId
-    isOnlineMode.value = true
-    player.chances = 0
-    remoteVerifiedSerialCode.value = ''
-    remoteSerialMessageType.value = 'info'
-    serialRedeemMessage.value = campaign.serialRedeemDescription || '請輸入主辦單位提供的序號，驗證成功後即可砸蛋。'
-
-    applyRemoteCampaignData(apiCampaign)
-
-    remoteLoadMessage.value = `已載入正式資料庫活動：${apiCampaign?.title || `ID ${campaignId}`}。`
-  } catch (error) {
-    console.error('讀取正式金蛋活動失敗：', error)
-    isOnlineMode.value = false
-    onlineCampaignId.value = null
-    remoteCampaignTitle.value = ''
-    remoteCampaignStatus.value = ''
-    remoteLoadMessage.value = '正式活動讀取失敗，已改用本機展示資料。'
-  } finally {
-    isLoadingRemoteCampaign.value = false
-  }
-}
-
-const handleGoldenEggAdminStorageSync = (event) => {
-  if (!event) return
-
-  if (event.key === GOLDEN_EGG_ADMIN_STATE_KEY || event.key === GOLDEN_EGG_ADMIN_SYNC_KEY) {
-    loadGoldenEggAdminState()
-  }
-}
-
-const eggCount = 9
-const eggs = ref(
-  Array.from({ length: eggCount }, (_, index) => ({
-    id: `egg-${index + 1}`,
-    number: index + 1,
-    status: 'idle',
-    prize: null
-  }))
-)
-
-const isCracking = ref(false)
-const activeEggId = ref('')
-const resultPrize = ref(null)
-const showResultModal = ref(false)
-const showWinEffects = ref(false)
-const showShareMessage = ref(false)
-const shareMessage = ref('')
-const serialCodeInput = ref('')
-const serialRedeemMessage = ref('')
-const isSerialRedeeming = ref(false)
-const serialRedeemErrorCount = ref(0)
-const serialRedeemLockedUntil = ref(0)
-const serialRedeemLockLeftSeconds = ref(0)
-const recentLogs = ref([])
-const isRecentLogsOpen = ref(false)
-const isRulesOpen = ref(false)
-const isPrizeInfoOpen = ref(false)
-const hammerAudio = ref(null)
-const winAudio = ref(null)
-
-const confettiColors = [
-  '#f97316',
-  '#ef4444',
-  '#facc15',
-  '#22c55e',
-  '#38bdf8',
-  '#a855f7',
-  '#ec4899'
-]
-
-const activePrizes = computed(() => {
-  return prizes.value.filter((prize) => prize.isEnabled !== false)
-})
-
-const availablePrizePool = computed(() => {
-  return activePrizes.value.filter((prize) => Number(prize.stock) > 0 && Number(prize.probability) > 0)
-})
-
-const canPlay = computed(() => {
-  return isActivityPlayable.value && player.chances > 0 && availablePrizePool.value.length > 0 && !isCracking.value
-})
-
-const statusText = computed(() => {
-  if (!isActivityPlayable.value) return activityStatusText.value
-  if (isCracking.value) return '金蛋敲擊中，請稍候結果揭曉。'
-  if (!availablePrizePool.value.length) return '目前獎品已抽完，請等待主辦單位更新。'
-  if (player.chances <= 0) return '目前沒有砸蛋機會，請輸入主辦單位提供的序號兌換。'
-  return `目前還有 ${player.chances} 次砸蛋機會，請選擇一顆金蛋。`
-})
-
-const resultLabel = computed(() => {
-  if (!resultPrize.value) return ''
-  return resultPrize.value.type === 'lose' ? '再接再厲' : '恭喜中獎'
-})
-
-const resultBadgeClass = computed(() => {
-  if (!resultPrize.value) return 'bg-slate-100 text-slate-500'
-  return resultPrize.value.type === 'lose'
-    ? 'bg-slate-100 text-slate-600'
-    : 'bg-yellow-100 text-yellow-700'
-})
-
-const safeWebsiteUrl = computed(() => {
-  const value = String(campaign.websiteUrl || '').trim()
-
-  if (!value) return ''
-
-  if (/^https?:\/\//i.test(value)) {
-    return value
-  }
-
-  return `https://${value}`
-})
-
-const websiteButtonText = computed(() => {
-  return String(campaign.websiteButtonText || '').trim() || '官網'
-})
-
-const headerTitleStyle = computed(() => {
-  const fontSize = Math.min(26, Math.max(12, Number(campaign.headerTitleTextSize || 16)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    color: campaign.headerTitleColor || '#ffffff'
-  }
-})
-
-const headerSubTitleStyle = computed(() => {
-  return {
-    color: campaign.headerSubTitleColor || '#fef3c7'
-  }
-})
-
-const normalizedHeaderBoxHeight = computed(() => {
-  return Math.min(72, Math.max(38, Number(campaign.headerBoxHeight || 48)))
-})
-
-const normalizedHeaderSideBoxWidth = computed(() => {
-  return Math.min(112, Math.max(56, Number(campaign.headerSideBoxWidth || 72)))
-})
-
-const normalizedHeaderBoxRadius = computed(() => {
-  return Math.min(28, Math.max(8, Number(campaign.headerBoxRadius || 16)))
-})
-
-const headerBarStyle = computed(() => {
-  const gap = Math.min(24, Math.max(6, Number(campaign.headerGap || 12)))
-  const paddingX = Math.min(28, Math.max(8, Number(campaign.headerPaddingX || 16)))
-  const paddingY = Math.min(22, Math.max(6, Number(campaign.headerPaddingY || 12)))
-
-  return {
-    gridTemplateColumns: `${normalizedHeaderSideBoxWidth.value}px minmax(0, 1fr) ${normalizedHeaderSideBoxWidth.value}px`,
-    gap: `${gap}px`,
-    padding: `${paddingY}px ${paddingX}px`
-  }
-})
-
-const headerLogoStyle = computed(() => {
-  const fontSize = Math.min(22, Math.max(10, Number(campaign.headerLogoTextSize || 12)))
-
-  return {
-    height: `${normalizedHeaderBoxHeight.value}px`,
-    borderRadius: `${normalizedHeaderBoxRadius.value}px`,
-    fontSize: `${fontSize}px`,
-    background: campaign.headerLogoBgColor || '#fde047',
-    color: campaign.headerLogoTextColor || '#991b1b'
-  }
-})
-
-const headerWebsiteButtonStyle = computed(() => {
-  const fontSize = Math.min(22, Math.max(10, Number(campaign.headerWebsiteTextSize || 12)))
-
-  return {
-    height: `${normalizedHeaderBoxHeight.value}px`,
-    borderRadius: `${normalizedHeaderBoxRadius.value}px`,
-    fontSize: `${fontSize}px`,
-    background: campaign.headerWebsiteBgColor || 'rgba(255, 255, 255, 0.15)',
-    color: campaign.headerWebsiteTextColor || '#ffffff'
-  }
-})
-
-const eggGridStyle = computed(() => {
-  const cardSize = Math.min(160, Math.max(96, Number(campaign.eggCardSize || 128)))
-  const gap = Math.min(24, Math.max(6, Number(campaign.eggGridGap || campaign.eggGap || 12)))
-
-  return {
-    width: '100%',
-    maxWidth: `calc(${cardSize}px * 3 + ${gap}px * 2)`,
-    margin: '0 auto',
-    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-    gap: `${gap}px`,
-    justifyContent: 'center'
-  }
-})
-
-const eggCardStyle = computed(() => {
-  const cardSize = Math.min(150, Math.max(104, Number(campaign.eggCardSize || 128)))
-
-  return {
-    width: '100%',
-    maxWidth: `${cardSize}px`,
-    minWidth: '0',
-    aspectRatio: '0.88 / 1',
-    minHeight: `${Math.round(cardSize * 1.08)}px`,
-    overflow: 'hidden',
-    background: `linear-gradient(180deg, ${campaign.eggCardBgFrom || 'rgba(239, 68, 68, 0.4)'}, ${campaign.eggCardBgTo || 'rgba(127, 29, 29, 0.45)'})`
-  }
-})
-
-
-const eggShellStyle = computed(() => {
-  const size = Math.min(120, Math.max(48, Number(campaign.eggSize || 74)))
-  const eggColorTop = campaign.eggColorTop || '#fff7ad'
-  const eggColorMiddle = campaign.eggColorMiddle || '#fde047'
-  const eggColorBottom = campaign.eggColorBottom || '#b45309'
-
-  return {
-    width: `min(${size}px, 72%)`,
-    height: 'auto',
-    aspectRatio: '1 / 1.24',
-    maxHeight: '78%',
-    '--egg-color-top': eggColorTop,
-    '--egg-color-middle': eggColorMiddle,
-    '--egg-color-bottom': eggColorBottom,
-    background: `
-      radial-gradient(circle at 34% 22%, rgba(255, 255, 255, 0.95), transparent 14%),
-      radial-gradient(circle at 64% 72%, rgba(161, 98, 7, 0.32), transparent 24%),
-      linear-gradient(135deg, ${eggColorTop} 0%, ${eggColorMiddle} 36%, ${eggColorBottom} 100%)
-    `
-  }
-})
-
-
-const eggNumberStyle = computed(() => {
-  return {
-    background: campaign.eggNumberBgColor || '#7f1d1d',
-    color: campaign.eggNumberTextColor || '#fef3c7'
-  }
-})
-
-const serialRedeemStyle = computed(() => {
-  const radius = Math.min(34, Math.max(12, Number(campaign.serialRedeemRadius || 24)))
-  const padding = Math.min(24, Math.max(8, Number(campaign.serialRedeemPadding || 12)))
-
-  return {
-    borderRadius: `${radius}px`,
-    padding: `${padding}px`,
-    background: campaign.serialRedeemBgColor || 'rgba(0, 0, 0, 0.16)',
-    borderColor: campaign.serialRedeemBorderColor || '#fde68a'
-  }
-})
-
-const serialRedeemTitleStyle = computed(() => {
-  const fontSize = Math.min(24, Math.max(12, Number(campaign.serialRedeemTitleTextSize || 14)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    color: campaign.serialRedeemTextColor || '#ffffff'
-  }
-})
-
-const serialRedeemHintStyle = computed(() => {
-  const fontSize = Math.min(18, Math.max(10, Number(campaign.serialRedeemHintTextSize || 11)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    color: campaign.serialRedeemHintColor || '#fef3c7'
-  }
-})
-
-const serialRedeemInputStyle = computed(() => {
-  const fontSize = Math.min(20, Math.max(12, Number(campaign.serialRedeemInputTextSize || 14)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    background: campaign.serialRedeemInputBgColor || '#ffffff',
-    color: campaign.serialRedeemInputTextColor || '#991b1b'
-  }
-})
-
-const serialRedeemButtonStyle = computed(() => {
-  const fontSize = Math.min(20, Math.max(12, Number(campaign.serialRedeemButtonTextSize || 14)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    background: campaign.serialRedeemButtonBgColor || '#fde047',
-    color: campaign.serialRedeemButtonTextColor || '#991b1b'
-  }
-})
-
-const shareButtonGridStyle = computed(() => {
-  const gap = Math.min(18, Math.max(4, Number(campaign.shareButtonGap || 8)))
-
-  return {
-    gap: `${gap}px`
-  }
-})
-
-const getShareButtonStyle = (type) => {
-  const radius = Math.min(28, Math.max(8, Number(campaign.shareButtonRadius || 16)))
-  const fontSize = Math.min(20, Math.max(10, Number(campaign.shareButtonTextSize || 12)))
-  const paddingY = Math.min(20, Math.max(8, Number(campaign.shareButtonPaddingY || 12)))
-
-  if (type === 'line') {
-    return {
-      borderRadius: `${radius}px`,
-      fontSize: `${fontSize}px`,
-      paddingTop: `${paddingY}px`,
-      paddingBottom: `${paddingY}px`,
-      background: campaign.lineShareButtonBgColor || '#22c55e',
-      color: campaign.lineShareButtonTextColor || '#ffffff'
-    }
-  }
-
-  if (type === 'telegram') {
-    return {
-      borderRadius: `${radius}px`,
-      fontSize: `${fontSize}px`,
-      paddingTop: `${paddingY}px`,
-      paddingBottom: `${paddingY}px`,
-      background: campaign.telegramShareButtonBgColor || '#0ea5e9',
-      color: campaign.telegramShareButtonTextColor || '#ffffff'
-    }
-  }
-
-  return {
-    borderRadius: `${radius}px`,
-    fontSize: `${fontSize}px`,
-    paddingTop: `${paddingY}px`,
-    paddingBottom: `${paddingY}px`,
-    background: campaign.systemShareButtonBgColor || 'rgba(255, 255, 255, 0.12)',
-    color: campaign.systemShareButtonTextColor || '#ffffff'
-  }
-}
-
-const bottomNavStyle = computed(() => {
-  const radius = Math.min(36, Math.max(12, Number(campaign.bottomNavRadius || 24)))
-  const bottom = Math.min(48, Math.max(0, Number(campaign.bottomNavBottom || 12)))
-  const padding = Math.min(18, Math.max(4, Number(campaign.bottomNavPadding || 8)))
-
-  return {
-    bottom: `${bottom}px`,
-    padding: `${padding}px`,
-    borderColor: campaign.bottomNavBorderColor || '#fde68a',
-    background: campaign.bottomNavBgColor || 'rgba(127, 29, 29, 0.72)',
-    borderRadius: `${radius}px`
-  }
-})
-
-const bottomNavGridStyle = computed(() => {
-  const gap = Math.min(18, Math.max(4, Number(campaign.bottomNavButtonGap || 8)))
-
-  return {
-    gap: `${gap}px`
-  }
-})
-
-const bottomNavButtonStyle = computed(() => {
-  const height = Math.min(82, Math.max(42, Number(campaign.bottomNavButtonHeight || 54)))
-  const radius = Math.min(30, Math.max(8, Number(campaign.bottomNavButtonRadius || 16)))
-  const textSize = Math.min(18, Math.max(9, Number(campaign.bottomNavTextSize || 11)))
-  const iconSize = Math.min(32, Math.max(14, Number(campaign.bottomNavIconSize || 18)))
-
-  return {
-    minHeight: `${height}px`,
-    borderRadius: `${radius}px`,
-    fontSize: `${textSize}px`,
-    background: campaign.bottomNavButtonBgColor || 'rgba(255, 255, 255, 0.12)',
-    color: campaign.bottomNavButtonTextColor || '#fef3c7',
-    '--bottom-nav-icon-size': `${iconSize}px`
-  }
-})
-
-const bottomWebsiteIcon = computed(() => {
-  return safeWebsiteUrl.value
-    ? (campaign.bottomNavWebsiteIcon || '🔗')
-    : (campaign.bottomNavWebsiteIcon || '↩️')
-})
-
-const bottomWebsiteText = computed(() => {
-  return String(campaign.bottomNavWebsiteText || websiteButtonText.value || '官網').trim()
-})
-
-const parseCampaignDateTime = (value) => {
-  if (!value) return null
-
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) return null
-
-  return date
-}
-
-const formatCampaignDateTime = (value) => {
-  const date = parseCampaignDateTime(value)
-
-  if (!date) return '未設定'
-
-  return date.toLocaleString('zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-const activityStartDate = computed(() => parseCampaignDateTime(campaign.activityStartAt))
-const activityEndDate = computed(() => parseCampaignDateTime(campaign.activityEndAt))
-
-const activityStatus = computed(() => {
-  const now = currentTimeTick.value
-  const start = activityStartDate.value?.getTime()
-  const end = activityEndDate.value?.getTime()
-
-  if (start && now < start) return 'not-started'
-  if (end && now > end) return 'ended'
-
-  return 'running'
-})
-
-const isActivityPlayable = computed(() => activityStatus.value === 'running')
-
-const activityStatusLabel = computed(() => {
-  if (activityStatus.value === 'not-started') return '尚未開始'
-  if (activityStatus.value === 'ended') return '已結束'
-
-  return '進行中'
-})
-
-const activityStatusText = computed(() => {
-  if (activityStatus.value === 'not-started') return campaign.activityNotStartedText || '活動尚未開始，請於指定時間再回來參加。'
-  if (activityStatus.value === 'ended') return campaign.activityEndedText || '活動已結束，感謝你的參與。'
-
-  return campaign.activityRunningText || '活動進行中，請選擇一顆金蛋。'
-})
-
-const activityStatusClass = computed(() => {
-  if (activityStatus.value === 'not-started') return 'bg-amber-100 text-amber-700'
-  if (activityStatus.value === 'ended') return 'bg-slate-100 text-slate-700'
-
-  return 'bg-emerald-100 text-emerald-700'
-})
-
-const activityTimeBoxStyle = computed(() => {
-  const radius = Math.min(30, Math.max(10, Number(campaign.activityTimeRadius || 16)))
-  const padding = Math.min(24, Math.max(8, Number(campaign.activityTimePadding || 12)))
-
-  return {
-    borderRadius: `${radius}px`,
-    padding: `${padding}px`,
-    background: campaign.activityTimeBgColor || 'rgba(255, 255, 255, 0.10)',
-    borderColor: campaign.activityTimeBorderColor || 'rgba(255, 255, 255, 0.15)'
-  }
-})
-
-const activityTimeTitleStyle = computed(() => {
-  const fontSize = Math.min(20, Math.max(10, Number(campaign.activityTimeTitleTextSize || 12)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    color: campaign.activityTimeTitleColor || '#fef3c7'
-  }
-})
-
-const activityTimeCardStyle = computed(() => {
-  const fontSize = Math.min(18, Math.max(10, Number(campaign.activityTimeTextSize || 11)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    background: campaign.activityTimeCardBgColor || 'rgba(0, 0, 0, 0.14)',
-    color: campaign.activityTimeTextColor || '#fef3c7'
-  }
-})
-
-const activityStatusBadgeStyle = computed(() => {
-  const fontSize = Math.min(18, Math.max(9, Number(campaign.activityStatusBadgeTextSize || 10)))
-
-  return {
-    fontSize: `${fontSize}px`
-  }
-})
-
-const activityCountdownTarget = computed(() => {
-  currentTimeTick.value
-
-  if (activityStatus.value === 'not-started') {
-    return activityStartDate.value
-  }
-
-  if (activityStatus.value === 'running') {
-    return activityEndDate.value
-  }
-
-  return null
-})
-
-const activityCountdownText = computed(() => {
-  currentTimeTick.value
-
-  const target = activityCountdownTarget.value
-
-  if (!target) {
-    return activityStatus.value === 'ended' ? '活動已結束' : '未設定倒數時間'
-  }
-
-  const diff = Math.max(0, target.getTime() - currentTimeTick.value)
-  const totalSeconds = Math.floor(diff / 1000)
-  const days = Math.floor(totalSeconds / 86400)
-  const hours = Math.floor((totalSeconds % 86400) / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
-
-  if (days > 0) {
-    const baseText = `${days} 天 ${String(hours).padStart(2, '0')} 小時 ${String(minutes).padStart(2, '0')} 分`
-
-    if (campaign.activityCountdownAlwaysShowSeconds) {
-      return `${baseText} ${String(seconds).padStart(2, '0')} 秒`
-    }
-
-    return baseText
-  }
-
-  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-})
-
-const activityCountdownLabel = computed(() => {
-  if (activityStatus.value === 'not-started') return '距離活動開始'
-  if (activityStatus.value === 'running') return '距離活動結束'
-
-  return '活動狀態'
-})
-
-const activityCountdownStyle = computed(() => {
-  return {
-    background: campaign.activityCountdownBgColor || 'rgba(0, 0, 0, 0.16)',
-    color: campaign.activityCountdownTextColor || '#fef3c7'
-  }
-})
-
-const activityCountdownTitleStyle = computed(() => {
-  const fontSize = Math.min(20, Math.max(10, Number(campaign.activityCountdownTitleTextSize || 12)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    color: campaign.activityCountdownTextColor || '#fef3c7'
-  }
-})
-
-const activityCountdownNumberStyle = computed(() => {
-  const fontSize = Math.min(34, Math.max(14, Number(campaign.activityCountdownNumberTextSize || 18)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    color: campaign.activityCountdownNumberColor || '#fde047'
-  }
-})
-
-const playerSummaryItems = computed(() => {
-  return [
-    {
-      label: '剩餘次數',
-      value: player.chances,
-      subText: '可砸蛋'
-    },
-    {
-      label: '已分享',
-      value: player.sharedCount,
-      subText: '分享次數'
-    },
-    {
-      label: '金蛋數',
-      value: eggCount,
-      subText: '九宮格'
-    }
-  ]
-})
-
-const prizePreviewItems = computed(() => {
-  return prizes.value
-    .filter((prize) => prize.isEnabled !== false)
-    .slice(0, 5)
-    .map((prize) => ({
-      id: prize.id,
-      icon: prize.icon || '🎁',
-      imageUrl: prize.imageUrl || '',
-      name: prize.shortName || prize.name || '獎品',
-      type: prize.type || 'win'
-    }))
-})
-
-const marqueeText = computed(() => {
-  const customText = String(campaign.marqueeCustomText || '').trim()
-
-  if (customText) return customText
-
-  if (!recentLogs.value.length) {
-    return '歡迎參加九宮格砸金蛋活動｜選一顆金蛋敲開你的今日驚喜｜獎項數量有限送完為止'
-  }
-
-  const latest = recentLogs.value[0]
-
-  return `最新紀錄：金蛋 ${latest.eggNumber} 開出 ${latest.prizeName}｜繼續砸蛋還有機會中大獎`
-})
-
-const marqueeStyle = computed(() => {
-  const speed = Math.min(28, Math.max(6, Number(campaign.marqueeSpeed || 12)))
-
-  return {
-    background: campaign.marqueeBgColor || '#fde047',
-    '--golden-marquee-text-color': campaign.marqueeTextColor || '#991b1b',
-    '--golden-marquee-speed': `${speed}s`
-  }
-})
-
-const prizeShelfStyle = computed(() => {
-  return {
-    background: campaign.prizeShelfBgColor || '#fde047',
-    color: campaign.prizeShelfTextColor || '#991b1b',
-    '--golden-prize-item-bg-top': campaign.prizeShelfItemBgTop || '#fff7ad',
-    '--golden-prize-item-bg-bottom': campaign.prizeShelfItemBgBottom || '#f59e0b'
-  }
-})
-
-const pageVisualStyle = computed(() => {
-  const dotOpacity = Math.min(100, Math.max(0, Number(campaign.pageDotOpacity || 70))) / 100
-  const glowOpacity = Math.min(100, Math.max(0, Number(campaign.pageGlowOpacity || 34))) / 100
-
-  return {
-    '--golden-page-dot-opacity': dotOpacity,
-    '--golden-page-glow-opacity': glowOpacity
-  }
-})
-
-const stageStyle = computed(() => {
-  const bgOpacity = Math.min(100, Math.max(0, Number(campaign.stageBgOpacity || 22))) / 100
-  const borderOpacity = Math.min(100, Math.max(0, Number(campaign.stageBorderOpacity || 25))) / 100
-  const innerBorderOpacity = Math.min(100, Math.max(0, Number(campaign.stageInnerBorderOpacity || 18))) / 100
-  const radius = Math.min(48, Math.max(16, Number(campaign.stageRadius || 32)))
-  const padding = Math.min(28, Math.max(10, Number(campaign.stagePadding || 16)))
-
-  return {
-    borderColor: `color-mix(in srgb, ${campaign.stageBorderColor || '#fde68a'} ${Math.round(borderOpacity * 100)}%, transparent)`,
-    borderRadius: `${radius}px`,
-    padding: `${padding}px`,
-    background: `
-      radial-gradient(circle at 50% 0%, rgba(250, 204, 21, ${Math.min(0.45, bgOpacity + 0.06)}), transparent 32%),
-      linear-gradient(180deg, rgba(127, 29, 29, ${bgOpacity + 0.14}), rgba(69, 10, 10, ${bgOpacity}))
-    `,
-    '--golden-stage-inner-border-opacity': innerBorderOpacity
-  }
-})
-
-const resultModalStyle = computed(() => {
-  return {
-    background: `linear-gradient(180deg, ${campaign.resultModalBgFrom || '#dc2626'}, ${campaign.resultModalBgTo || '#450a0a'})`,
-    borderColor: campaign.resultModalBorderColor || '#fde68a'
-  }
-})
-
-const resultIconStyle = computed(() => {
-  const iconSize = Math.min(150, Math.max(64, Number(campaign.resultIconSize || 96)))
-  const iconTextSize = Math.min(82, Math.max(28, Number(campaign.resultIconTextSize || 48)))
-
-  return {
-    width: `${iconSize}px`,
-    height: `${iconSize}px`,
-    fontSize: `${iconTextSize}px`,
-    background: campaign.resultIconBgColor || '#fde047',
-    color: campaign.resultIconTextColor || '#991b1b'
-  }
-})
-
-const resultImageUrl = computed(() => {
-  const prizeImageUrl = String(resultPrize.value?.imageUrl || '').trim()
-  const globalImageUrl = String(campaign.resultImageUrl || '').trim()
-
-  return prizeImageUrl || globalImageUrl
-})
-
-const resultBadgeStyle = computed(() => {
-  const fontSize = Math.min(20, Math.max(10, Number(campaign.resultBadgeTextSize || 12)))
-
-  return {
-    fontSize: `${fontSize}px`
-  }
-})
-
-const resultTitleStyle = computed(() => {
-  const fontSize = Math.min(40, Math.max(16, Number(campaign.resultTitleTextSize || 24)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    color: campaign.resultTitleColor || '#ffffff'
-  }
-})
-
-const resultDescriptionStyle = computed(() => {
-  const fontSize = Math.min(24, Math.max(12, Number(campaign.resultDescriptionTextSize || 14)))
-
-  return {
-    fontSize: `${fontSize}px`,
-    color: campaign.resultDescriptionColor || '#fef3c7'
-  }
-})
-
-const resultPrimaryButtonStyle = computed(() => {
-  const fontSize = Math.min(22, Math.max(12, Number(campaign.resultPrimaryButtonTextSize || 14)))
-
-  return {
-    fontSize: `${fontSize}px`
-  }
-})
-
-const resultCopyButtonStyle = computed(() => {
-  const fontSize = Math.min(22, Math.max(12, Number(campaign.resultCopyButtonTextSize || 14)))
-
-  return {
-    fontSize: `${fontSize}px`
-  }
-})
-
-const sectionToggleText = (isOpen) => {
-  return isOpen ? '收合' : '展開'
-}
-
-const recentLogsPreview = computed(() => {
-  return recentLogs.value.slice(0, isRecentLogsOpen.value ? 8 : 2)
-})
-
-const ruleLineCount = computed(() => {
-  return String(campaign.ruleContent || '')
-    .split('\n')
-    .filter((line) => line.trim())
-    .length
-})
-
-const prizeInfoLineCount = computed(() => {
-  return String(campaign.prizeInfoContent || '')
-    .split('\n')
-    .filter((line) => line.trim())
-    .length
-})
-
-const normalizedEffectDuration = computed(() => {
-  return Math.min(10, Math.max(2, Number(campaign.winEffectDuration || 5)))
-})
-
-const confettiPieces = computed(() => {
-  const count = Math.min(120, Math.max(0, Number(campaign.confettiCount || 0)))
-
-  return Array.from({ length: count }, (_, index) => ({
-    id: `confetti-${index}`,
-    style: {
-      left: `${(index * 17 + 8) % 100}%`,
-      backgroundColor: confettiColors[index % confettiColors.length],
-      animationDelay: `${(index % 12) * 0.06}s`,
-      animationDuration: `${Math.max(2, normalizedEffectDuration.value - 1) + (index % 5) * 0.1}s`,
-      width: `${7 + (index % 4)}px`,
-      height: `${12 + (index % 5)}px`
-    }
-  }))
-})
-
-const goldRainPieces = computed(() => {
-  const count = Math.min(140, Math.max(0, Number(campaign.goldRainCount || 0)))
-
-  return Array.from({ length: count }, (_, index) => ({
-    id: `gold-${index}`,
-    style: {
-      left: `${(index * 23 + 9) % 100}%`,
-      animationDelay: `${(index % 14) * 0.055}s`,
-      animationDuration: `${Math.max(2.4, normalizedEffectDuration.value - 0.5) + (index % 6) * 0.08}s`,
-      width: `${5 + (index % 4)}px`,
-      height: `${5 + (index % 4)}px`
-    }
-  }))
-})
-
-const updateChanceText = () => {
-  campaign.chanceText = `還有 ${player.chances} 次砸蛋機會`
-}
-
-const pickPrize = () => {
-  const pool = availablePrizePool.value
-  if (!pool.length) return null
-
-  const total = pool.reduce((sum, prize) => sum + Number(prize.probability || 0), 0)
-  const target = Math.random() * total
-  let current = 0
-
-  for (const prize of pool) {
-    current += Number(prize.probability || 0)
-    if (target <= current) return prize
-  }
-
-  return pool[pool.length - 1]
-}
-
-const playAudio = async (audioRef, enabled, volume) => {
-  if (!enabled || !audioRef.value) return
-
-  try {
-    audioRef.value.pause()
-    audioRef.value.currentTime = 0
-    audioRef.value.volume = Math.min(1, Math.max(0, Number(volume || 0) / 100))
-    await audioRef.value.play()
-  } catch (error) {
-    console.warn('Audio play failed:', error)
-  }
-}
-
-const loadHistory = () => {
-  recentLogs.value = safeJsonParse(localStorage.getItem(GOLDEN_EGG_HISTORY_KEY), []) || []
-}
-
-const saveHistory = (prize, eggNumber) => {
-  const item = {
-    id: `golden-egg-${Date.now()}`,
-    gameType: 'GOLDEN_EGG',
-    gameName: campaign.pageTitle,
-    prizeId: prize?.id || '',
-    prizeName: prize?.name || '未知結果',
-    prizeType: prize?.type || 'lose',
-    prizeRank: prize?.rank || 'none',
-    eggNumber,
-    createdAt: new Date().toLocaleString('zh-TW')
-  }
-
-  const nextLogs = [item, ...recentLogs.value].slice(0, 12)
-  recentLogs.value = nextLogs
-  localStorage.setItem(GOLDEN_EGG_HISTORY_KEY, JSON.stringify(nextLogs))
-}
-
-const triggerWinEffects = () => {
-  showWinEffects.value = true
-
-  window.setTimeout(() => {
-    showWinEffects.value = false
-  }, normalizedEffectDuration.value * 1000)
-}
-
-const crackEggWithRemoteApi = async (egg) => {
-  if (!onlineCampaignId.value) return
-  if (!remoteVerifiedSerialCode.value) {
-    remoteSerialMessageType.value = 'error'
-    serialRedeemMessage.value = '請先輸入並驗證抽獎序號。'
-    return
-  }
-
-  isCracking.value = true
-  activeEggId.value = egg.id
-  resultPrize.value = null
-  showResultModal.value = false
-  remoteDrawNotice.value = '金蛋敲擊中，請稍候 2～3 秒，正在由後端正式抽獎...'
-
-  eggs.value = eggs.value.map((item) => ({
-    ...item,
-    status: item.id === egg.id ? 'cracking' : item.status
-  }))
-
-  await playAudio(hammerAudio, campaign.enableHammerSound, campaign.hammerSoundVolume)
-
-  try {
-    const drawResult = await playGoldenEggDraw(onlineCampaignId.value, {
-      gameType: 'GOLDEN_EGG',
-      serialCode: remoteVerifiedSerialCode.value,
-      playerName: '',
-      playerPhone: '',
-      playerEmail: '',
-      resultPayload: {
-        eggNumber: egg.number
-      },
-      note: '前台金蛋正式 API 串接'
-    })
-
-    const prize = mapApiPrizeToLocalPrize(drawResult.prize || drawResult.result || {}, 0)
-
-    window.setTimeout(async () => {
-      const remainingSerialChances = Number(drawResult?.result?.remainingSerialChances ?? Math.max(0, player.chances - 1))
-      player.chances = remainingSerialChances
-      updateChanceText()
-
-      if (remainingSerialChances <= 0) {
-        remoteVerifiedSerialCode.value = ''
-      }
-
-      eggs.value = eggs.value.map((item) => {
-        if (item.id !== egg.id) return item
-
-        return {
-          ...item,
-          status: 'opened',
-          prize
-        }
-      })
-
-      resultPrize.value = prize
-      remoteDrawNotice.value = prize.type === 'win'
-        ? `恭喜中獎：${prize.name || prize.shortName || '獎項'}！`
-        : '這次沒有中獎，請輸入新的序號再試一次。'
-      saveHistory(prize, egg.number)
-
-      if (prize.type === 'win') {
-        await playAudio(winAudio, campaign.enableWinSound, campaign.winSoundVolume)
-        triggerWinEffects()
-      }
-
-      window.setTimeout(() => {
-        showResultModal.value = true
-      }, 360)
-      isCracking.value = false
-      activeEggId.value = ''
-      remoteSerialMessageType.value = 'info'
-      if (player.chances > 0) {
-        remoteDrawNotice.value = `抽獎完成，結果已顯示。此序號還剩 ${player.chances} 次機會，可繼續選金蛋。`
-        serialRedeemMessage.value = `此序號還剩 ${player.chances} 次機會，可繼續選金蛋。`
-      } else {
-        remoteDrawNotice.value = '抽獎完成，結果已顯示。本次序號已使用完畢，請輸入新的序號才能再次抽獎。'
-        serialRedeemMessage.value = '本次序號已使用完畢，請輸入新的序號。'
-      }
-    }, remoteCrackDuration.value * 1000)
-  } catch (error) {
-    console.error('正式金蛋抽獎失敗：', error)
-    eggs.value = eggs.value.map((item) => ({
-      ...item,
-      status: item.id === egg.id ? 'idle' : item.status
-    }))
-    remoteDrawNotice.value = ''
-    remoteSerialMessageType.value = 'error'
-    serialRedeemMessage.value = error.message || '正式抽獎失敗，請稍後再試。'
-    isCracking.value = false
-    activeEggId.value = ''
-  }
-}
-
-const crackEgg = async (egg) => {
-  if (!canPlay.value) return
-  if (!egg || egg.status === 'opened') return
-
-  if (isOnlineMode.value) {
-    await crackEggWithRemoteApi(egg)
-    return
-  }
-
-  const prize = pickPrize()
-  if (!prize) return
-
-  isCracking.value = true
-  activeEggId.value = egg.id
-  resultPrize.value = null
-  showResultModal.value = false
-
-  eggs.value = eggs.value.map((item) => ({
-    ...item,
-    status: item.id === egg.id ? 'cracking' : item.status
-  }))
-
-  await playAudio(hammerAudio, campaign.enableHammerSound, campaign.hammerSoundVolume)
-
-  window.setTimeout(async () => {
-    player.chances = Math.max(0, player.chances - 1)
-    updateChanceText()
-
-    if (Number(prize.stock) > 0 && Number(prize.stock) < 9999) {
-      prize.stock = Number(prize.stock) - 1
-    }
-
-    eggs.value = eggs.value.map((item) => {
-      if (item.id !== egg.id) return item
-
-      return {
-        ...item,
-        status: 'opened',
-        prize
-      }
-    })
-
-    resultPrize.value = prize
-    saveHistory(prize, egg.number)
-
-    if (prize.type !== 'lose') {
-      triggerWinEffects()
-      await playAudio(winAudio, campaign.enableWinSound, campaign.winSoundVolume)
-    }
-
-    window.setTimeout(() => {
-      showResultModal.value = true
-      isCracking.value = false
-      activeEggId.value = ''
-    }, 480)
-  }, 980)
-}
-
-const resetEggBoard = () => {
-  eggs.value = Array.from({ length: eggCount }, (_, index) => ({
-    id: `egg-${index + 1}-${Date.now()}`,
-    number: index + 1,
-    status: 'idle',
-    prize: null
-  }))
-
-  resultPrize.value = null
-  showResultModal.value = false
-  isCracking.value = false
-  activeEggId.value = ''
-}
-
-// 第 365 批：分享文字與網址不重複，並確實使用後台 systemShareText / lineShareText / telegramShareText。
-const getConfiguredShareLandingUrl = (options = {}) => {
-  const campaignId = getCurrentCampaignIdForShare()
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '')
-  const baseUrl = apiBase || 'https://marketing-game-api.onrender.com'
-  const params = new URLSearchParams({
-    campaignId: String(campaignId)
-  })
-
-  // 第 369 批：分享功能乾淨重整版
-// 分享規則：
-// 1. 系統分享：使用 navigator.share；不支援時複製「文字 + 前台網址」。
-// 2. LINE / Telegram：直接導向分享平台網址，避免只複製文字沒開啟。
-// 3. LINE / Telegram 的小卡片預覽使用後端 OG 落地頁。
-// 4. shareImageUrl 不直接顯示在前台，它會由後端 /share/golden-egg 輸出成 og:image。
-const getCurrentCampaignIdForShare = () => {
-  return onlineCampaignId.value || getRouteCampaignId() || 1
-}
-
-const getConfiguredShareUrl = () => {
+const getFrontendShareUrl = () => {
   const customUrl = String(campaign.shareUrl || '').trim()
 
   if (customUrl) return customUrl
 
   if (typeof window !== 'undefined') {
-    return window.location.href
+    const url = new URL(window.location.href)
+    url.searchParams.set('campaignId', String(getCurrentCampaignIdForShare()))
+    return url.toString()
   }
 
   return `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${getCurrentCampaignIdForShare()}`
 }
 
-const getConfiguredShareLandingUrl = () => {
-  const campaignId = getCurrentCampaignIdForShare()
-  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '')
-  const baseUrl = apiBase || 'https://marketing-game-api.onrender.com'
+const getOgShareLandingUrl = () => {
+  const apiBase = String(import.meta.env.VITE_API_BASE_URL || 'https://marketing-game-api.onrender.com/api')
+    .replace(/\/api\/?$/, '')
+
   const params = new URLSearchParams({
-    campaignId: String(campaignId),
-    // LINE 快取很重，加時間戳讓每次測試都抓新的 OG 頁。
+    campaignId: String(getCurrentCampaignIdForShare()),
     sv: String(Date.now())
   })
 
-  return `${baseUrl}/share/golden-egg?${params.toString()}`
+  return `${apiBase}/share/golden-egg?${params.toString()}`
 }
 
-const getConfiguredShareTitle = () => {
+const getShareTitle = () => {
   return String(campaign.shareTitle || campaign.pageTitle || campaign.mainTitle || '九宮格砸金蛋抽獎活動').trim()
 }
 
-const getConfiguredShareDescription = () => {
+const getShareDescription = () => {
   return String(campaign.shareDescription || campaign.heroTagline || campaign.noticeText || '輸入活動序號，立即砸金蛋抽好禮！').trim()
 }
 
-const getConfiguredShareText = (channel = 'system') => {
-  if (channel === 'line') {
-    return String(campaign.lineShareText || `${getConfiguredShareTitle()}｜${getConfiguredShareDescription()}`).trim()
-  }
-
-  if (channel === 'telegram') {
-    return String(campaign.telegramShareText || `${getConfiguredShareTitle()}｜${getConfiguredShareDescription()}`).trim()
-  }
-
-  return String(campaign.systemShareText || `${getConfiguredShareTitle()}
-${getConfiguredShareDescription()}`).trim()
+const getSystemShareText = () => {
+  return String(campaign.systemShareText || `${getShareTitle()}\n${getShareDescription()}`).trim()
 }
 
-const getShareTextWithFrontendUrl = (channel = 'system') => {
-  return [
-    getConfiguredShareText(channel),
-    getConfiguredShareUrl()
-  ]
-    .filter(Boolean)
-    .join('
-')
+const getLineShareText = () => {
+  return String(campaign.lineShareText || `${getShareTitle()}｜${getShareDescription()}`).trim()
 }
 
-const openShareUrl = (url) => {
-  if (!url) {
-    noticeText.value = '找不到分享網址。'
-    return
+const getTelegramShareText = () => {
+  return String(campaign.telegramShareText || `${getShareTitle()}｜${getShareDescription()}`).trim()
+}
+
+const copyTextSilently = (textValue) => {
+  try {
+    navigator.clipboard?.writeText(textValue).catch(() => {})
+  } catch (error) {
+    // ignore clipboard errors
   }
-
-  // 手機瀏覽器最穩定：同頁跳轉，避免 window.open 被阻擋。
-  window.location.assign(url)
 }
 
-const shareCampaign = async () => {
-  const shareTitle = getConfiguredShareTitle()
-  const shareDescription = getConfiguredShareDescription()
-  const shareText = getConfiguredShareText('system')
-  const shareTextWithUrl = getShareTextWithFrontendUrl('system')
-  const shareUrl = getConfiguredShareUrl()
+const handleSystemShare = async () => {
+  const frontUrl = getFrontendShareUrl()
+  const title = getShareTitle()
+  const text = getSystemShareText()
+  const fallbackText = `${text}\n${frontUrl}`
 
   try {
     if (navigator.share) {
       await navigator.share({
-        title: shareTitle,
-        text: shareText,
-        url: shareUrl
+        title,
+        text,
+        url: frontUrl
       })
+      noticeText.value = '系統分享已開啟。'
     } else {
-      await navigator.clipboard.writeText(shareTextWithUrl)
-      noticeText.value = '分享文字已複製，可貼到 LINE、Facebook 或其他社群。'
+      await navigator.clipboard.writeText(fallbackText)
+      noticeText.value = '系統分享文字已複製。'
     }
 
     player.sharedCount += 1
@@ -1601,48 +561,55 @@ const shareCampaign = async () => {
     if (error?.name === 'AbortError') return
 
     console.warn('系統分享失敗：', error)
-
-    try {
-      await navigator.clipboard.writeText(shareTextWithUrl)
-      noticeText.value = '系統分享失敗，已改為複製分享文字。'
-    } catch (copyError) {
-      noticeText.value = shareTextWithUrl
-    }
+    noticeText.value = '系統分享失敗，已複製分享文字。'
+    copyTextSilently(fallbackText)
   }
 }
 
-const shareToLine = () => {
-  const landingUrl = getConfiguredShareLandingUrl()
-  const shareText = getConfiguredShareText('line')
-  const url = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(landingUrl)}&text=${encodeURIComponent(shareText)}`
+const handleLineShare = () => {
+  const frontUrl = getFrontendShareUrl()
+  const ogUrl = getOgShareLandingUrl()
 
-  noticeText.value = '正在開啟 LINE 分享。'
-  openShareUrl(url)
+  // LINE 文字分享最穩：line.me/R/msg/text。
+  // 同時複製含前台網址的文字，避免 LINE App 只帶文字不帶預覽時也能貼上。
+  const shareText = `${getLineShareText()}\n${frontUrl}`
+  copyTextSilently(shareText)
+
+  const lineUrl = `https://line.me/R/msg/text/?${encodeURIComponent(shareText)}`
+
+  noticeText.value = '正在開啟 LINE 分享。若沒有自動帶出預覽，可直接貼上已複製文字。'
+  window.location.href = lineUrl
 }
 
-const shareToTelegram = () => {
-  const landingUrl = getConfiguredShareLandingUrl()
-  const shareText = getConfiguredShareText('telegram')
-  const url = `https://t.me/share/url?url=${encodeURIComponent(landingUrl)}&text=${encodeURIComponent(shareText)}`
+const handleTelegramShare = () => {
+  const ogUrl = getOgShareLandingUrl()
+  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(ogUrl)}&text=${encodeURIComponent(getTelegramShareText())}`
 
   noticeText.value = '正在開啟 Telegram 分享。'
-  openShareUrl(url)
+  window.location.href = telegramUrl
 }
+
+// 保留相容舊 template 的函式名稱，但全部導向新的乾淨函式。
+const shareCampaign = handleSystemShare
+const shareToLine = handleLineShare
+const shareToTelegram = handleTelegramShare
+const shareViaLine = handleLineShare
+const shareViaTelegram = handleTelegramShare
 
 const openDirectShare = (platform) => {
   if (platform === 'line') {
-    shareToLine()
+    handleLineShare()
     return
   }
 
   if (platform === 'telegram') {
-    shareToTelegram()
+    handleTelegramShare()
     return
   }
 
   if (platform === 'facebook') {
-    const landingUrl = getConfiguredShareLandingUrl()
-    openShareUrl(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(landingUrl)}`)
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(getOgShareLandingUrl())}`
+    window.location.href = facebookUrl
     return
   }
 
@@ -2212,7 +1179,7 @@ onUnmounted(() => {
               type="button"
               class="border border-white/20 px-3 font-black shadow-xl transition hover:brightness-110"
               :style="getShareButtonStyle('system')"
-              @click="shareCampaign"
+              @click="handleSystemShare"
             >
               {{ campaign.systemShareButtonText }}
             </button>
@@ -2222,7 +1189,7 @@ onUnmounted(() => {
               type="button"
               class="px-3 font-black shadow-xl transition hover:brightness-110"
               :style="getShareButtonStyle('line')"
-              @click="shareToLine"
+              @click="handleLineShare"
             >
               {{ campaign.lineShareButtonText }}
             </button>
@@ -2232,7 +1199,7 @@ onUnmounted(() => {
               type="button"
               class="px-3 font-black shadow-xl transition hover:brightness-110"
               :style="getShareButtonStyle('telegram')"
-              @click="shareToTelegram"
+              @click="handleTelegramShare"
             >
               {{ campaign.telegramShareButtonText }}
             </button>
@@ -2449,7 +1416,7 @@ onUnmounted(() => {
           type="button"
           class="golden-bottom-button"
           :style="bottomNavButtonStyle"
-          @click="shareCampaign"
+          @click="handleSystemShare"
         >
           <span class="bottom-nav-icon">{{ campaign.bottomNavShareIcon }}</span>
           <span>{{ campaign.bottomNavShareText }}</span>
@@ -2578,7 +1545,7 @@ onUnmounted(() => {
             v-if="player.chances <= 0 && campaign.showResultShareButton"
             type="button"
             class="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-red-700 shadow-lg transition hover:bg-yellow-50"
-            @click="shareCampaign"
+            @click="handleSystemShare"
           >
             分享活動
           </button>
