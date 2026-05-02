@@ -145,6 +145,7 @@ const campaign = reactive({
   shareTitle: '砸金蛋抽獎活動',
   shareDescription: '快來參加九宮格砸金蛋活動，敲開金蛋就有機會中大獎！',
   shareUrl: '',
+  systemShareText: '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！',
   shareHashtags: '砸金蛋,抽獎活動',
   serialRedeemTitle: '輸入抽獎序號',
   serialRedeemPlaceholder: '請輸入主辦單位提供的序號',
@@ -168,17 +169,9 @@ const campaign = reactive({
   serialRedeemButtonTextSize: 14,
   showShareButtonSection: true,
   showSystemShareButton: true,
-  showLineShareButton: false,
-  showTelegramShareButton: false,
   systemShareButtonText: '系統分享',
-  lineShareButtonText: '',
-  telegramShareButtonText: '',
   systemShareButtonBgColor: 'rgba(255, 255, 255, 0.12)',
   systemShareButtonTextColor: '#ffffff',
-  lineShareButtonBgColor: '#22c55e',
-  lineShareButtonTextColor: '#ffffff',
-  telegramShareButtonBgColor: '#0ea5e9',
-  telegramShareButtonTextColor: '#ffffff',
   maxSerialRedeemErrors: 5,
   serialRedeemLockSeconds: 60,
   shareButtonRadius: 16,
@@ -186,13 +179,6 @@ const campaign = reactive({
   shareButtonGap: 8,
   shareButtonPaddingY: 12,
   showBottomNav: true,
-  shareTitle: '九宮格砸金蛋抽獎活動',
-  shareDescription: '輸入活動序號，立即砸金蛋抽好禮！',
-  shareUrl: '',
-  shareImageUrl: '',
-  systemShareText: '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！',
-  lineShareText: '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
-  telegramShareText: '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
   bottomNavBgColor: 'rgba(127, 29, 29, 0.72)',
   bottomNavBorderColor: '#fde68a',
   bottomNavButtonBgColor: 'rgba(255, 255, 255, 0.12)',
@@ -774,32 +760,10 @@ const shareButtonGridStyle = computed(() => {
   }
 })
 
-const getShareButtonStyle = (type) => {
+const getShareButtonStyle = () => {
   const radius = Math.min(28, Math.max(8, Number(campaign.shareButtonRadius || 16)))
-  const fontSize = Math.min(20, Math.max(10, Number(campaign.shareButtonTextSize || 12)))
-  const paddingY = Math.min(20, Math.max(8, Number(campaign.shareButtonPaddingY || 12)))
-
-  if (type === 'line') {
-    return {
-      borderRadius: `${radius}px`,
-      fontSize: `${fontSize}px`,
-      paddingTop: `${paddingY}px`,
-      paddingBottom: `${paddingY}px`,
-      background: campaign.lineShareButtonBgColor || '#22c55e',
-      color: campaign.lineShareButtonTextColor || '#ffffff'
-    }
-  }
-
-  if (type === 'telegram') {
-    return {
-      borderRadius: `${radius}px`,
-      fontSize: `${fontSize}px`,
-      paddingTop: `${paddingY}px`,
-      paddingBottom: `${paddingY}px`,
-      background: campaign.telegramShareButtonBgColor || '#0ea5e9',
-      color: campaign.telegramShareButtonTextColor || '#ffffff'
-    }
-  }
+  const fontSize = Math.min(18, Math.max(10, Number(campaign.shareButtonTextSize || 12)))
+  const paddingY = Math.min(16, Math.max(6, Number(campaign.shareButtonPaddingY || 12)))
 
   return {
     borderRadius: `${radius}px`,
@@ -1484,14 +1448,7 @@ const resetEggBoard = () => {
   activeEggId.value = ''
 }
 
-// 第 375 批：分享按鈕區完全重建，只留系統分享。
-// 第 372 批：移除 第三方，全部整合到系統分享。
-// 只保留一個穩定入口：shareCampaign()
-// 使用者可在手機原生分享選單中自行選 第三方 / Facebook / 複製。
-const getCurrentCampaignIdForShare = () => {
-  return onlineCampaignId.value || getRouteCampaignId() || 1
-}
-
+// 第 376 批：分享區重置，只保留系統分享。
 const getSystemShareUrl = () => {
   const customUrl = String(campaign.shareUrl || '').trim()
 
@@ -1499,83 +1456,24 @@ const getSystemShareUrl = () => {
 
   if (typeof window !== 'undefined') {
     const url = new URL(window.location.href)
-    url.searchParams.set('campaignId', String(getCurrentCampaignIdForShare()))
+    url.searchParams.set('campaignId', String(onlineCampaignId.value || getRouteCampaignId() || 1))
     return url.toString()
   }
 
-  return `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${getCurrentCampaignIdForShare()}`
+  return `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${onlineCampaignId.value || getRouteCampaignId() || 1}`
 }
 
 const getSystemShareTitle = () => {
   return String(campaign.shareTitle || campaign.pageTitle || campaign.mainTitle || '九宮格砸金蛋抽獎活動').trim()
 }
 
-const getSystemShareDescription = () => {
-  return String(campaign.shareDescription || campaign.heroTagline || campaign.noticeText || '輸入活動序號，立即砸金蛋抽好禮！').trim()
-}
-
 const getSystemShareBody = () => {
-  return String(campaign.systemShareText || `${getSystemShareTitle()}\n${getSystemShareDescription()}`).trim()
+  return String(campaign.systemShareText || campaign.shareDescription || campaign.heroTagline || '輸入活動序號，立即砸金蛋抽好禮！').trim()
 }
 
 const getSystemShareFullText = () => {
-  return [
-    getSystemShareBody(),
-    getSystemShareUrl()
-  ]
-    .filter(Boolean)
-    .join('\n')
+  return [getSystemShareBody(), getSystemShareUrl()].filter(Boolean).join('\n')
 }
-
-const shareCampaign = async () => {
-  const title = getSystemShareTitle()
-  const text = getSystemShareBody()
-  const url = getSystemShareUrl()
-  const fallbackText = getSystemShareFullText()
-
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title,
-        text,
-        url
-      })
-
-      noticeText.value = '系統分享已開啟。'
-    } else {
-      await navigator.clipboard.writeText(fallbackText)
-      noticeText.value = '分享文字已複製，可貼到 第三方社群 或其他社群。'
-    }
-
-    player.sharedCount += 1
-    shareMessage.value = '分享內容已送出或複製。抽獎機會請使用主辦單位提供的序號兌換。'
-    showShareMessage.value = true
-
-    window.setTimeout(() => {
-      showShareMessage.value = false
-      shareMessage.value = ''
-    }, 2600)
-  } catch (error) {
-    if (error?.name === 'AbortError') return
-
-    console.warn('系統分享失敗：', error)
-
-    try {
-      await navigator.clipboard.writeText(fallbackText)
-      noticeText.value = '系統分享失敗，已改為複製分享文字。'
-    } catch (copyError) {
-      noticeText.value = fallbackText
-    }
-  }
-}
-
-// 相容舊 template 名稱，避免殘留事件造成錯誤。
-const openDirectShare = () => shareCampaign()
-const shareToLine = () => shareCampaign()
-const shareToTelegram = () => shareCampaign()
-const shareViaLine = () => shareCampaign()
-const shareViaTelegram = () => shareCampaign()
-
 
 const isSerialRedeemLocked = computed(() => {
   return serialRedeemLockedUntil.value > Date.now()
@@ -1686,6 +1584,46 @@ const redeemSerialCode = async () => {
 }
 
 
+const shareCampaign = async () => {
+  const title = getSystemShareTitle()
+  const text = getSystemShareBody()
+  const url = getSystemShareUrl()
+  const fallbackText = getSystemShareFullText()
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title,
+        text,
+        url
+      })
+      noticeText.value = '系統分享已開啟。'
+    } else {
+      await navigator.clipboard.writeText(fallbackText)
+      noticeText.value = '分享文字已複製，可貼到社群或訊息 App。'
+    }
+
+    player.sharedCount += 1
+    shareMessage.value = '分享內容已送出或複製。抽獎機會請使用主辦單位提供的序號兌換。'
+    showShareMessage.value = true
+
+    window.setTimeout(() => {
+      showShareMessage.value = false
+      shareMessage.value = ''
+    }, 2600)
+  } catch (error) {
+    if (error?.name === 'AbortError') return
+
+    console.warn('系統分享失敗：', error)
+
+    try {
+      await navigator.clipboard.writeText(fallbackText)
+      noticeText.value = '系統分享失敗，已改為複製分享文字。'
+    } catch (copyError) {
+      noticeText.value = fallbackText
+    }
+  }
+}
 
 const copyResultText = async () => {
   if (!resultPrize.value) return
@@ -1836,6 +1774,310 @@ onUnmounted(() => {
         >
           {{ websiteButtonText }}
         </a>
+
+        <button
+          v-else
+          type="button"
+          class="flex h-12 w-full items-center justify-center rounded-2xl px-2 font-black shadow-lg transition hover:brightness-110"
+          :style="headerWebsiteButtonStyle"
+          @click="goBack"
+        >
+          {{ websiteButtonText }}
+        </button>
+      </header>
+
+      <main class="relative z-10 flex flex-1 flex-col">
+        <section class="golden-egg-hero relative overflow-hidden rounded-[2rem] border border-yellow-200/30 px-5 pb-5 pt-6 text-center shadow-2xl">
+          <div class="pointer-events-none absolute inset-0 opacity-60">
+            <span class="golden-light golden-light-left" />
+            <span class="golden-light golden-light-right" />
+          </div>
+
+          <div class="relative z-10">
+            <p class="mx-auto mb-2 inline-flex rounded-full bg-yellow-300 px-4 py-1 text-xs font-black text-red-700 shadow-lg">
+              {{ campaign.subTitle }}
+            </p>
+
+            <div class="golden-title-board mx-auto max-w-[320px] rounded-[1.4rem] border border-yellow-200/50 bg-red-950/24 px-4 py-3 shadow-2xl">
+              <h2 class="golden-title text-4xl font-black leading-tight sm:text-5xl">
+                {{ campaign.mainTitle }}
+              </h2>
+              <p class="mt-1 text-xs font-black tracking-[0.22em] text-yellow-100">
+                LUCKY GOLDEN EGG
+              </p>
+            </div>
+
+            <p class="mt-3 text-sm font-bold text-yellow-50">
+              {{ campaign.heroTagline }}
+            </p>
+
+            <div class="mt-4 grid grid-cols-3 gap-2">
+              <div
+                v-for="item in playerSummaryItems"
+                :key="item.label"
+                class="rounded-2xl border border-white/15 bg-white/12 px-3 py-2 shadow-lg backdrop-blur"
+              >
+                <p class="text-[11px] font-bold text-yellow-100">
+                  {{ item.label }}
+                </p>
+                <p class="text-2xl font-black text-white">
+                  {{ item.value }}
+                </p>
+                <p class="text-[10px] font-bold text-yellow-50/80">
+                  {{ item.subText }}
+                </p>
+              </div>
+            </div>
+
+            <div
+              v-if="isOnlineMode || remoteLoadMessage"
+              class="mt-3 rounded-2xl border px-4 py-2 text-xs font-black"
+              :class="onlineModeStatusClass"
+            >
+              <span v-if="isLoadingRemoteCampaign">正在讀取正式資料庫活動...</span>
+              <span v-else-if="isOnlineMode">{{ onlineModeLabel }}</span>
+              <span v-else>{{ remoteLoadMessage }}</span>
+            </div>
+            <div
+              v-if="remoteDrawNotice"
+              class="mt-3 rounded-2xl border border-yellow-200/40 bg-yellow-300/15 px-4 py-2 text-center text-xs font-black text-yellow-50"
+            >
+              {{ remoteDrawNotice }}
+            </div>
+
+            <p class="mt-3 rounded-2xl bg-black/18 px-4 py-2 text-xs font-bold text-yellow-50">
+              {{ statusText }}
+            </p>
+
+            <div
+              v-if="campaign.showActivityTimeSection"
+              class="mt-3 border text-left"
+              :style="activityTimeBoxStyle"
+            >
+              <div class="mb-2 flex items-center justify-between gap-2">
+                <p
+                  class="font-black"
+                  :style="activityTimeTitleStyle"
+                >
+                  活動時間
+                </p>
+                <span
+                  class="rounded-full px-3 py-1 font-black"
+                  :class="activityStatusClass"
+                  :style="activityStatusBadgeStyle"
+                >
+                  {{ activityStatusLabel }}
+                </span>
+              </div>
+
+              <div class="grid grid-cols-1 gap-2 text-[11px] font-bold text-yellow-50/85 sm:grid-cols-2">
+                <div
+                  class="rounded-xl px-3 py-2"
+                  :style="activityTimeCardStyle"
+                >
+                  開始：{{ formatCampaignDateTime(campaign.activityStartAt) }}
+                </div>
+                <div
+                  class="rounded-xl px-3 py-2"
+                  :style="activityTimeCardStyle"
+                >
+                  結束：{{ formatCampaignDateTime(campaign.activityEndAt) }}
+                </div>
+              </div>
+
+              <div
+                v-if="campaign.showActivityCountdown"
+                class="mt-3 rounded-2xl px-3 py-3 text-center"
+                :style="activityCountdownStyle"
+              >
+                <p
+                  class="font-black"
+                  :style="activityCountdownTitleStyle"
+                >
+                  {{ campaign.activityCountdownTitle }}｜{{ activityCountdownLabel }}
+                </p>
+
+                <p
+                  class="mt-1 font-black tracking-wide"
+                  :style="activityCountdownNumberStyle"
+                >
+                  {{ activityCountdownText }}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section
+          v-if="campaign.showMarqueeSection"
+          class="golden-marquee mt-4 overflow-hidden rounded-[1.25rem] border border-yellow-200/35 px-3 py-2 shadow-xl"
+          :style="marqueeStyle"
+        >
+          <div class="golden-marquee-track text-xs font-black">
+            {{ marqueeText }}
+          </div>
+        </section>
+
+        <section
+          class="golden-egg-stage relative mt-4 flex-1 border shadow-2xl backdrop-blur"
+          :style="stageStyle"
+        >
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.2em] text-yellow-100">
+                Golden Egg Board
+              </p>
+              <h3 class="text-lg font-black text-white">
+                選一顆金蛋敲開
+              </h3>
+            </div>
+
+            <button
+              type="button"
+              class="rounded-2xl border border-yellow-200/30 bg-yellow-300 px-3 py-2 text-xs font-black text-red-700 shadow-lg transition hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50"
+              :disabled="isCracking"
+              @click="resetEggBoard"
+            >
+              重置金蛋
+            </button>
+          </div>
+
+          <div
+            class="golden-egg-grid grid grid-cols-3"
+            :style="eggGridStyle"
+          >
+            <button
+              v-for="egg in eggs"
+              :key="egg.id"
+              type="button"
+              class="golden-egg-card group relative flex aspect-[0.88] flex-col items-center justify-center rounded-[1.65rem] border border-yellow-200/35 bg-gradient-to-b from-red-500/40 to-red-900/45 shadow-xl transition disabled:cursor-not-allowed"
+              :class="[
+                egg.status === 'cracking' ? 'is-cracking' : '',
+                egg.status === 'opened' ? 'is-opened' : '',
+                activeEggId === egg.id ? 'is-active' : '',
+                isOnlineMode && activeEggId === egg.id && egg.status === 'cracking' ? 'golden-egg-remote-cracking' : ''
+              ]"
+              :disabled="!canPlay || egg.status === 'opened'"
+              :style="eggCardStyle"
+              @click="crackEgg(egg)"
+            >
+              <span
+                v-if="egg.status === 'cracking'"
+                class="golden-hammer"
+              >
+                🔨
+              </span>
+
+              <span
+                v-if="egg.status !== 'opened'"
+                class="golden-egg-shell"
+                :style="eggShellStyle"
+              >
+                <span class="egg-shine" />
+                <span class="egg-star egg-star-a">✦</span>
+                <span class="egg-star egg-star-b">✦</span>
+                <span
+                  v-if="campaign.showEggNumber"
+                  class="egg-number"
+                  :style="eggNumberStyle"
+                >
+                  {{ egg.number }}
+                </span>
+              </span>
+
+              <span
+                v-else
+                class="golden-egg-opened"
+              >
+                <span class="broken-shell broken-left" />
+                <span class="broken-shell broken-right" />
+                <span class="prize-pop">
+                  <img
+                    v-if="egg.prize?.imageUrl"
+                    :src="egg.prize.imageUrl"
+                    alt="獎品圖片"
+                    class="h-8 w-8 rounded-xl object-cover"
+                  />
+                  <span
+                    v-else
+                    class="text-2xl"
+                  >
+                    {{ egg.prize?.icon || '🎁' }}
+                  </span>
+                  <span class="mt-1 line-clamp-2 px-1 text-center text-[11px] font-black text-yellow-50">
+                    {{ egg.prize?.shortName || egg.prize?.name }}
+                  </span>
+                </span>
+              </span>
+
+              <span class="absolute bottom-2 rounded-full bg-black/20 px-2 py-1 text-[10px] font-black text-yellow-100">
+                GOLD {{ egg.number }}
+              </span>
+            </button>
+          </div>
+
+          <div
+            v-if="campaign.showSerialRedeemSection"
+            class="mt-4 border"
+            :style="serialRedeemStyle"
+          >
+            <div class="mb-3">
+              <p
+                class="font-black"
+                :style="serialRedeemTitleStyle"
+              >
+                {{ campaign.serialRedeemTitle }}
+              </p>
+              <p
+                class="mt-1 font-bold"
+                :style="serialRedeemHintStyle"
+              >
+                輸入主辦單位產生的序號，可兌換砸蛋機會。
+              </p>
+            </div>
+
+            <div class="flex flex-col gap-2 sm:flex-row">
+              <input
+                v-model="serialCodeInput"
+                type="text"
+                :placeholder="campaign.serialRedeemPlaceholder"
+                class="min-h-[48px] flex-1 rounded-2xl border border-white/15 px-4 font-black uppercase outline-none placeholder:text-slate-400"
+                :style="serialRedeemInputStyle"
+                @keyup.enter="redeemSerialCode"
+              />
+
+              <button
+                type="button"
+                class="rounded-2xl px-5 py-3 font-black shadow-xl transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                :style="serialRedeemButtonStyle"
+                :disabled="isCracking || isSerialRedeeming"
+                @click="redeemSerialCode"
+              >
+                {{ isSerialRedeemLocked ? `${serialRedeemLockLeftSeconds} 秒後再試` : campaign.serialRedeemButtonText }}
+              </button>
+            </div>
+
+            <p
+              v-if="serialRedeemMessage"
+              class="mt-2 rounded-2xl bg-white/12 px-3 py-2 text-xs font-black text-yellow-50"
+            >
+              {{ serialRedeemMessage }}
+            </p>
+          </div>
+
+          <div
+            v-if="campaign.showShareButtonSection && campaign.showSystemShareButton"
+            class="mt-3 grid grid-cols-1"
+            :style="shareButtonGridStyle"
+          >
+            <button
+              type="button"
+              class="border border-white/20 px-3 font-black shadow-xl transition hover:brightness-110"
+              :style="getShareButtonStyle()"
+              @click="shareCampaign"
+            >
+              {{ campaign.systemShareButtonText || '系統分享' }}
+            </button>
           </div>
 
           <div
@@ -2841,35 +3083,6 @@ onUnmounted(() => {
 @media (max-width: 360px) {
   .golden-egg-card {
     min-height: 104px;
-  }
-}
-
-
-/* 第 371 批保留：前台序號驗證按鈕跑版修正 */
-.serial-redeem-row {
-  align-items: stretch;
-}
-
-.serial-redeem-button {
-  display: inline-flex;
-  min-width: 136px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  white-space: nowrap;
-  text-align: center;
-  line-height: 1.2;
-}
-
-.serial-redeem-button-text {
-  display: inline-block;
-  min-width: 4em;
-}
-
-@media (max-width: 640px) {
-  .serial-redeem-button {
-    width: 100%;
-    min-width: 0;
   }
 }
 
