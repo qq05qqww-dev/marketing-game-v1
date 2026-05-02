@@ -4093,13 +4093,24 @@ if (typeof window !== 'undefined') {
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
-                  @click="openDatabaseSerialExport"
-                >
-                  匯出 CSV
-                </button>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-cyan-700 px-3 py-2 text-xs font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isDatabaseLoading"
+                    @click="refreshDatabaseSerialCodes"
+                  >
+                    重新讀取序號
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
+                    @click="openDatabaseSerialExport"
+                  >
+                    匯出 CSV
+                  </button>
+                </div>
               </div>
 
               <div class="mt-4 rounded-3xl bg-white/75 p-4">
@@ -4245,6 +4256,15 @@ if (typeof window !== 'undefined') {
 
               <div class="mt-4 rounded-3xl border border-cyan-100 bg-white/75 p-3">
                 <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-cyan-700 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="isDatabaseLoading"
+                    @click="refreshDatabaseSerialCodes"
+                  >
+                    重新讀取
+                  </button>
+
                   <button
                     type="button"
                     class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
