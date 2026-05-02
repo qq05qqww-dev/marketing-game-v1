@@ -3186,6 +3186,71 @@ if (typeof window !== 'undefined') {
     stopEggPlayLogAutoRefresh()
   })
 }
+
+const getDatabaseSerialUsedCount = (item) => {
+  return Number(item?.usedCount ?? item?.redeemedCount ?? item?.playCount ?? item?.currentUseCount ?? (item?.status === 'USED' ? item?.rewardChance || 1 : 0) ?? 0)
+}
+
+const getDatabaseSerialTotalCount = (item) => {
+  return Number(item?.rewardChance ?? item?.maxUseCount ?? item?.totalCount ?? 1)
+}
+
+const getDatabaseSerialRemainingCount = (item) => {
+  return Math.max(0, getDatabaseSerialTotalCount(item) - getDatabaseSerialUsedCount(item))
+}
+
+const getDatabaseSerialStatusInfo = (item) => {
+  const status = String(item?.status || '').toUpperCase()
+  const usedCount = getDatabaseSerialUsedCount(item)
+  const totalCount = getDatabaseSerialTotalCount(item)
+  const remainingCount = getDatabaseSerialRemainingCount(item)
+
+  if (status === 'DISABLED' || item?.isDisabled) {
+    return {
+      key: 'DISABLED',
+      label: '已停用',
+      badgeClass: 'bg-slate-700 text-white',
+      cardClass: 'border-slate-200 bg-slate-100/90 opacity-75',
+      textClass: 'text-slate-700'
+    }
+  }
+
+  if (status === 'USED' || remainingCount <= 0 || usedCount >= totalCount) {
+    return {
+      key: 'USED',
+      label: '已使用',
+      badgeClass: 'bg-rose-600 text-white',
+      cardClass: 'border-rose-200 bg-rose-50/95 ring-1 ring-rose-100',
+      textClass: 'text-rose-700'
+    }
+  }
+
+  return {
+    key: 'UNUSED',
+    label: '可使用',
+    badgeClass: 'bg-emerald-100 text-emerald-700',
+    cardClass: 'border-emerald-100 bg-white/90',
+    textClass: 'text-emerald-700'
+  }
+}
+
+const formatDatabaseSerialTime = (value) => {
+  if (!value) return '尚未使用'
+
+  try {
+    return new Date(value).toLocaleString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch (error) {
+    return String(value)
+  }
+}
+
+
 </script>
 
 <template>
@@ -4309,8 +4374,11 @@ if (typeof window !== 'undefined') {
                 <article
                   v-for="item in visibleDatabaseSerialCodes"
                   :key="item.id"
-                  class="rounded-2xl bg-white/80 p-3"
-                  :class="selectedDatabaseSerialIdSet.has(Number(item.id)) ? 'ring-2 ring-rose-300 bg-rose-50/80' : ''"
+                  class="rounded-3xl border p-3 transition"
+                  :class="[
+                    getDatabaseSerialStatusInfo(item).cardClass,
+                    selectedDatabaseSerialIdSet.has(Number(item.id)) ? 'ring-2 ring-violet-300' : ''
+                  ]"
                 >
                   <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div class="flex items-start gap-3">
@@ -4325,7 +4393,18 @@ if (typeof window !== 'undefined') {
                       </label>
 
                       <div>
-                        <p class="font-mono text-xs font-black text-slate-900">
+                        <div class="mb-2 flex flex-wrap items-center gap-2">
+                          <span class="rounded-full px-3 py-1 text-xs font-black" :class="getDatabaseSerialStatusInfo(item).badgeClass">
+                            {{ getDatabaseSerialStatusInfo(item).label }}
+                          </span>
+                          <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">
+                            批次 {{ item.batchCode || '未分類' }}
+                          </span>
+                          <span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-black text-cyan-700">
+                            已用 {{ getDatabaseSerialUsedCount(item) }} / {{ getDatabaseSerialTotalCount(item) }} 次
+                          </span>
+                        </div>
+                        <p class="break-all font-mono text-sm font-black text-slate-900">
                           {{ item.code }}
                         </p>
                       <p class="mt-1 text-xs font-bold text-slate-500">
