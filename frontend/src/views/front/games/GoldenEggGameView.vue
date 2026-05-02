@@ -458,6 +458,10 @@ const getRouteCampaignId = () => {
   return Number.isInteger(id) && id > 0 ? id : null
 }
 
+const getCurrentCampaignIdForShare = () => {
+  return onlineCampaignId.value || getRouteCampaignId() || 1
+}
+
 const loadGoldenEggRemoteState = async () => {
   const campaignId = getRouteCampaignId()
 
@@ -1483,7 +1487,7 @@ const resetEggBoard = () => {
 
 // 第 365 批：分享文字與網址不重複，並確實使用後台 systemShareText / lineShareText / telegramShareText。
 const getConfiguredShareLandingUrl = (options = {}) => {
-  const campaignId = resolvedCampaignId.value || 1
+  const campaignId = getCurrentCampaignIdForShare()
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '')
   const baseUrl = apiBase || 'https://marketing-game-api.onrender.com'
   const params = new URLSearchParams({
@@ -1537,39 +1541,44 @@ const getShareTextWithUrl = (channel = 'system') => {
     .join('\n')
 }
 
-// 第 367 批：手機分享按鈕防彈窗阻擋修正。
+// 第 368 批：分享按鈕變數錯誤修正版。
+// 修正第 367 批使用不存在的 resolvedCampaignId，造成點 LINE / Telegram 完全沒反應。
 const openDirectShare = (platform) => {
-  const rawTargetUrl = getConfiguredShareUrl()
-  const rawLandingUrl = getConfiguredShareLandingUrl({ cacheBust: true })
-  const landingUrl = encodeURIComponent(rawLandingUrl)
-  let url = ''
+  try {
+    const rawTargetUrl = getConfiguredShareUrl()
+    const rawLandingUrl = getConfiguredShareLandingUrl({ cacheBust: true })
+    const landingUrl = encodeURIComponent(rawLandingUrl)
+    let url = ''
 
-  if (platform === 'line') {
-    // LINE 小卡片分享用後端 OG 落地頁。
-    // 注意：不要在開啟 LINE 前 await clipboard，手機瀏覽器會擋 window.open。
-    const lineText = encodeURIComponent(getConfiguredShareText('line'))
-    url = `https://social-plugins.line.me/lineit/share?url=${landingUrl}&text=${lineText}`
+    if (platform === 'line') {
+      const lineText = encodeURIComponent(getConfiguredShareText('line'))
+      url = `https://social-plugins.line.me/lineit/share?url=${landingUrl}&text=${lineText}`
 
-    navigator.clipboard?.writeText(`${getConfiguredShareText('line')}
-${rawTargetUrl}`).catch(() => {})
-    noticeText.value = '正在開啟 LINE 分享。'
+      navigator.clipboard?.writeText(`${getConfiguredShareText('line')}\n${rawTargetUrl}`).catch(() => {})
+      noticeText.value = '正在開啟 LINE 分享。'
+    }
+
+    if (platform === 'telegram') {
+      const telegramText = encodeURIComponent(getConfiguredShareText('telegram'))
+      url = `https://t.me/share/url?url=${landingUrl}&text=${telegramText}`
+      noticeText.value = '正在開啟 Telegram 分享。'
+    }
+
+    if (platform === 'facebook') {
+      url = `https://www.facebook.com/sharer/sharer.php?u=${landingUrl}`
+      noticeText.value = '正在開啟分享視窗。'
+    }
+
+    if (!url) {
+      noticeText.value = '找不到可用的分享方式。'
+      return
+    }
+
+    window.location.href = url
+  } catch (error) {
+    console.error('開啟分享失敗：', error)
+    noticeText.value = '開啟分享失敗，請重新整理後再試。'
   }
-
-  if (platform === 'telegram') {
-    const telegramText = encodeURIComponent(getConfiguredShareText('telegram'))
-    url = `https://t.me/share/url?url=${landingUrl}&text=${telegramText}`
-    noticeText.value = '正在開啟 Telegram 分享。'
-  }
-
-  if (platform === 'facebook') {
-    url = `https://www.facebook.com/sharer/sharer.php?u=${landingUrl}`
-    noticeText.value = '正在開啟分享視窗。'
-  }
-
-  if (!url) return
-
-  // 手機瀏覽器最穩：直接切換目前頁面，不用 _blank，避免彈窗阻擋。
-  window.location.href = url
 }
 
 const isSerialRedeemLocked = computed(() => {
