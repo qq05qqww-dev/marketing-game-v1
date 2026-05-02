@@ -3512,7 +3512,7 @@ watch(
 
 // 第 396 批：還原資料庫區塊完整功能版，以第 381 批穩定版為基準。
 
-// 第 397 批：紀錄管理表格收合版。
+// 第 398 批：紀錄管理展開按鈕位置修正版。
 </script>
 
 <template>
@@ -3530,14 +3530,6 @@ watch(
             左邊修改文字、色彩、獎項與特效；右邊即時顯示前台畫面。
           </p>
         </div>
-              <button
-                type="button"
-                class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
-                @click="toggleDatabaseRecordTable('plays')"
-              >
-                {{ databaseRecordTableOpen.plays ? '收合' : '展開' }}
-              </button>
-
 
         <div class="flex flex-wrap gap-2">
           <button
@@ -5168,26 +5160,38 @@ watch(
 
             <div class="mt-4 space-y-4">
               <div class="rounded-3xl bg-white/80 p-4">
-                <div class="flex items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center justify-between gap-3">
                   <h4 class="text-sm font-black text-slate-900">
                     遊玩紀錄
                   </h4>
-                  <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
-                    {{ filteredDatabasePlayRecords.length }} 筆
-                  </span>
+
+                  <div class="flex items-center gap-2">
+                    <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
+                      {{ filteredDatabasePlayRecords.length }} 筆
+                    </span>
+
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
+                      @click="toggleDatabaseRecordTable('plays')"
+                    >
+                      {{ databaseRecordTableOpen.plays ? '收合' : '展開' }}
+                    </button>
+                  </div>
                 </div>
 
-                <div class="mt-3 overflow-x-auto rounded-2xl border border-slate-100 bg-white">
-                  
-              <div
-                v-if="!databaseRecordTableOpen.plays"
-                class="rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-500"
-              >
-                目前已收合「遊玩紀錄」。點右上方「展開」查看完整紀錄。
-              </div>
+                <div
+                  v-if="!databaseRecordTableOpen.plays"
+                  class="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold leading-6 text-slate-500"
+                >
+                  目前已收合「遊玩紀錄」。點右上方「展開」查看完整紀錄。
+                </div>
 
-              <div v-else class="overflow-x-auto">
-<table class="min-w-[980px] w-full text-left text-xs">
+                <div
+                  v-else
+                  class="mt-3 overflow-x-auto rounded-2xl border border-slate-100 bg-white"
+                >
+                  <table class="min-w-[980px] w-full text-left text-xs">
                     <thead class="bg-slate-50 text-slate-500">
                       <tr>
                         <th class="px-4 py-3 font-black">結果</th>
@@ -5232,7 +5236,6 @@ watch(
                       </tr>
                     </tbody>
                   </table>
-              </div>
 
                   <p
                     v-if="!filteredDatabasePlayRecords.length"
@@ -5244,34 +5247,38 @@ watch(
               </div>
 
               <div class="rounded-3xl bg-white/80 p-4">
-                <div class="flex items-center justify-between gap-3">
+                <div class="flex flex-wrap items-center justify-between gap-3">
                   <h4 class="text-sm font-black text-slate-900">
                     中獎 / 發獎紀錄
                   </h4>
-                  <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
-                    {{ filteredDatabaseRewardRecords.length }} 筆
-                  </span>
+
+                  <div class="flex items-center gap-2">
+                    <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
+                      {{ filteredDatabaseRewardRecords.length }} 筆
+                    </span>
+
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
+                      @click="toggleDatabaseRecordTable('rewards')"
+                    >
+                      {{ databaseRecordTableOpen.rewards ? '收合' : '展開' }}
+                    </button>
+                  </div>
                 </div>
-              <button
-                type="button"
-                class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
-                @click="toggleDatabaseRecordTable('rewards')"
-              >
-                {{ databaseRecordTableOpen.rewards ? '收合' : '展開' }}
-              </button>
 
+                <div
+                  v-if="!databaseRecordTableOpen.rewards"
+                  class="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold leading-6 text-slate-500"
+                >
+                  目前已收合「中獎 / 發獎紀錄」。點右上方「展開」查看完整紀錄。
+                </div>
 
-                <div class="mt-3 overflow-x-auto rounded-2xl border border-slate-100 bg-white">
-                  
-              <div
-                v-if="!databaseRecordTableOpen.rewards"
-                class="rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-500"
-              >
-                目前已收合「中獎 / 發獎紀錄」。點右上方「展開」查看完整紀錄。
-              </div>
-
-              <div v-else class="overflow-x-auto">
-<table class="min-w-[1040px] w-full text-left text-xs">
+                <div
+                  v-else
+                  class="mt-3 overflow-x-auto rounded-2xl border border-slate-100 bg-white"
+                >
+                  <table class="min-w-[1040px] w-full text-left text-xs">
                     <thead class="bg-slate-50 text-slate-500">
                       <tr>
                         <th class="px-4 py-3 font-black">狀態</th>
@@ -5334,7 +5341,6 @@ watch(
                       </tr>
                     </tbody>
                   </table>
-              </div>
 
                   <p
                     v-if="!filteredDatabaseRewardRecords.length"
