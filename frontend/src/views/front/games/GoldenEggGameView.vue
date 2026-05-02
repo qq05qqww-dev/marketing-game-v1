@@ -145,6 +145,10 @@ const campaign = reactive({
   shareTitle: '砸金蛋抽獎活動',
   shareDescription: '快來參加九宮格砸金蛋活動，敲開金蛋就有機會中大獎！',
   shareUrl: '',
+  shareImageUrl: '',
+  systemShareText: '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！',
+  lineShareText: '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
+  telegramShareText: '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
   shareHashtags: '砸金蛋,抽獎活動',
   serialRedeemTitle: '輸入抽獎序號',
   serialRedeemPlaceholder: '請輸入主辦單位提供的序號',
@@ -1477,6 +1481,7 @@ const resetEggBoard = () => {
   activeEggId.value = ''
 }
 
+// 第 365 批：分享文字與網址不重複，並確實使用後台 systemShareText / lineShareText / telegramShareText。
 const getConfiguredShareUrl = () => {
   const customUrl = String(campaign.shareUrl || '').trim()
 
@@ -1487,28 +1492,49 @@ const getConfiguredShareUrl = () => {
   return window.location.href
 }
 
-const getConfiguredShareText = () => {
+const getConfiguredShareTitle = () => {
+  return String(campaign.shareTitle || campaign.pageTitle || '九宮格砸金蛋抽獎活動').trim()
+}
+
+const getConfiguredShareDescription = () => {
+  return String(campaign.shareDescription || campaign.heroTagline || '輸入活動序號，立即砸金蛋抽好禮！').trim()
+}
+
+const getConfiguredShareText = (channel = 'system') => {
+  if (channel === 'line') {
+    return String(campaign.lineShareText || `${getConfiguredShareTitle()}｜${getConfiguredShareDescription()}`).trim()
+  }
+
+  if (channel === 'telegram') {
+    return String(campaign.telegramShareText || `${getConfiguredShareTitle()}｜${getConfiguredShareDescription()}`).trim()
+  }
+
+  return String(campaign.systemShareText || `${getConfiguredShareTitle()}\n${getConfiguredShareDescription()}`).trim()
+}
+
+const getShareTextWithUrl = (channel = 'system') => {
   return [
-    String(campaign.shareTitle || campaign.pageTitle || '砸金蛋抽獎活動').trim(),
-    String(campaign.shareDescription || campaign.heroTagline || '').trim(),
+    getConfiguredShareText(channel),
     getConfiguredShareUrl()
   ]
     .filter(Boolean)
     .join('\n')
 }
 
-const openDirectShare = (platform) => {
-  const shareUrl = encodeURIComponent(getConfiguredShareUrl())
-  const shareText = encodeURIComponent(getConfiguredShareText())
-
+const openDirectShare = async (platform) => {
+  const rawShareUrl = getConfiguredShareUrl()
+  const shareUrl = encodeURIComponent(rawShareUrl)
   let url = ''
 
   if (platform === 'line') {
-    url = `https://social-plugins.line.me/lineit/share?url=${shareUrl}&text=${shareText}`
+    // LINE 文字分享：文字與網址只放一次，避免出現重複網址。
+    const lineText = encodeURIComponent(getShareTextWithUrl('line'))
+    url = `https://line.me/R/msg/text/?${lineText}`
   }
 
   if (platform === 'telegram') {
-    url = `https://t.me/share/url?url=${shareUrl}&text=${shareText}`
+    const telegramText = encodeURIComponent(getConfiguredShareText('telegram'))
+    url = `https://t.me/share/url?url=${shareUrl}&text=${telegramText}`
   }
 
   if (platform === 'facebook') {
@@ -1516,6 +1542,15 @@ const openDirectShare = (platform) => {
   }
 
   if (!url) return
+
+  if (platform === 'line') {
+    try {
+      await navigator.clipboard?.writeText(getShareTextWithUrl('line'))
+      noticeText.value = 'LINE 分享文字已複製，正在開啟 LINE。'
+    } catch (error) {
+      noticeText.value = '正在開啟 LINE 分享。'
+    }
+  }
 
   window.open(url, '_blank', 'noopener,noreferrer')
 }
@@ -1630,18 +1665,21 @@ const redeemSerialCode = async () => {
 
 
 const shareCampaign = async () => {
-  const shareText = getConfiguredShareText()
+  const shareTitle = getConfiguredShareTitle()
+  const shareDescription = getConfiguredShareDescription()
+  const shareText = getConfiguredShareText('system')
+  const shareTextWithUrl = getShareTextWithUrl('system')
   const shareUrl = getConfiguredShareUrl()
 
   try {
     if (navigator.share) {
       await navigator.share({
-        title: campaign.shareTitle || campaign.pageTitle,
+        title: shareTitle,
         text: shareText,
         url: shareUrl
       })
     } else {
-      await navigator.clipboard.writeText(shareText)
+      await navigator.clipboard.writeText(shareTextWithUrl)
     }
 
     player.sharedCount += 1
