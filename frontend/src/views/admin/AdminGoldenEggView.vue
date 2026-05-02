@@ -3499,17 +3499,7 @@ watch(
 
 
 
-const actualSystemSharePreviewText = computed(() => {
-  const title = String(databaseGameConfigForm.shareTitle || '九宮格砸金蛋抽獎活動').trim()
-  const body = String(databaseGameConfigForm.systemShareText || databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！').trim()
-  const url = String(databaseGameConfigForm.shareUrl || '').trim()
-
-  return [title, body, url].filter(Boolean).join('\n')
-})
-
-
-
-// 第 394 批：Admin template 標籤完整修正版。
+// 第 396 批：還原資料庫區塊完整功能版，以第 381 批穩定版為基準。
 </script>
 
 <template>
@@ -3954,7 +3944,7 @@ const actualSystemSharePreviewText = computed(() => {
                   v-model="databaseCampaignForm.description"
                   rows="3"
                   placeholder="輸入活動說明"
-                ></textarea>
+                />
               </label>
             </div>
 
@@ -4057,7 +4047,7 @@ const actualSystemSharePreviewText = computed(() => {
                 <textarea
                   v-model="databaseGameConfigForm.noticeText"
                   rows="3"
-                ></textarea>
+                />
               </label>
 
               <label class="admin-field">
@@ -4075,7 +4065,7 @@ const actualSystemSharePreviewText = computed(() => {
                 <textarea
                   v-model="databaseGameConfigForm.serialRedeemDescription"
                   rows="3"
-                ></textarea>
+                />
               </label>
 
               <label class="admin-field">
@@ -4112,7 +4102,7 @@ const actualSystemSharePreviewText = computed(() => {
                   type="range"
                   min="48"
                   max="120"
-                 />
+                />
                 <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggSize }}px</span>
               </label>
 
@@ -4140,9 +4130,1175 @@ const actualSystemSharePreviewText = computed(() => {
             </div>
 
             
-            
+            <div class="mt-4 rounded-3xl border border-sky-100 bg-sky-50/70 p-4">
+              <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h4 class="text-sm font-black text-slate-950">
+                    分享設定
+                  </h4>
+                  <p class="mt-1 text-xs font-bold text-sky-700">
+                    控制前台「系統分享 / LINE 分享 / Telegram」按鈕要帶出的文字與網址。
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                  @click="databaseGameConfigForm.shareUrl = `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId || 1}`"
+                >
+                  套用正式活動網址
+                </button>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label class="admin-field">
+                  <span>分享標題 shareTitle</span>
+                  <input
+                    v-model="databaseGameConfigForm.shareTitle"
+                    type="text"
+                    placeholder="九宮格砸金蛋抽獎活動"
+                  />
+                </label>
+
+                <label class="admin-field">
+                  <span>分享網址 shareUrl</span>
+                  <input
+                    v-model="databaseGameConfigForm.shareUrl"
+                    type="url"
+                    placeholder="https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=1"
+                  />
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>分享描述 shareDescription</span>
+                  <input
+                    v-model="databaseGameConfigForm.shareDescription"
+                    type="text"
+                    placeholder="輸入活動序號，立即砸金蛋抽好禮！"
+                  />
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>分享圖片網址 shareImageUrl</span>
+                  <input
+                    v-model="databaseGameConfigForm.shareImageUrl"
+                    type="url"
+                    placeholder="https://example.com/share-golden-egg.jpg"
+                  />
+                  <small class="text-xs font-bold text-slate-400">
+                    LINE 預覽圖需要 Open Graph 支援；目前先作為分享資料欄位保存。
+                  </small>
+                </label>
+
+                
+                <label class="admin-field md:col-span-2">
+                  <span>系統分享按鈕文字 systemShareButtonText</span>
+                  <input
+                    v-model="databaseGameConfigForm.systemShareButtonText"
+                    type="text"
+                    placeholder="系統分享"
+                  />
+                </label>
+
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">文字大小</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }} px
+                      </p>
+                    </div>
+                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                      {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }}
+                    </span>
+                  </div>
+                  <input
+                    v-model.number="databaseGameConfigForm.systemShareButtonTextSize"
+                    class="mt-3 w-full accent-slate-950"
+                    type="range"
+                    min="10"
+                    max="28"
+                    step="1"
+                  />
+                </div>
+
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">背景顏色</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d' }}
+                      </p>
+                    </div>
+                    <input
+                      v-model="databaseGameConfigForm.systemShareButtonBgColor"
+                      class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
+                      type="color"
+                    />
+                  </div>
+                </div>
+
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">文字顏色</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ databaseGameConfigForm.systemShareButtonTextColor || '#ffffff' }}
+                      </p>
+                    </div>
+                    <input
+                      v-model="databaseGameConfigForm.systemShareButtonTextColor"
+                      class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
+                      type="color"
+                    />
+                  </div>
+                </div>
+
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">按鈕圓角</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ databaseGameConfigForm.systemShareButtonRadius || 16 }} px
+                      </p>
+                    </div>
+                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                      {{ databaseGameConfigForm.systemShareButtonRadius || 16 }}
+                    </span>
+                  </div>
+                  <input
+                    v-model.number="databaseGameConfigForm.systemShareButtonRadius"
+                    class="mt-3 w-full accent-slate-950"
+                    type="range"
+                    min="0"
+                    max="40"
+                    step="1"
+                  />
+                </div>
+
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">按鈕高度</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        上下內距 {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }} px
+                      </p>
+                    </div>
+                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                      {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }}
+                    </span>
+                  </div>
+                  <input
+                    v-model.number="databaseGameConfigForm.systemShareButtonPaddingY"
+                    class="mt-3 w-full accent-slate-950"
+                    type="range"
+                    min="6"
+                    max="28"
+                    step="1"
+                  />
+                </div>
+
+
+                <div class="md:col-span-2 rounded-3xl border border-amber-100 bg-amber-50/80 p-4">
+                  <p class="text-sm font-black text-slate-800">快速配色</p>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-[#7f1d1d] px-4 py-2 text-xs font-black text-white"
+                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#7f1d1d'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                    >
+                      深紅
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-[#facc15] px-4 py-2 text-xs font-black text-[#7f1d1d]"
+                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#facc15'; databaseGameConfigForm.systemShareButtonTextColor = '#7f1d1d'"
+                    >
+                      金色
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-[#22c55e] px-4 py-2 text-xs font-black text-white"
+                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#22c55e'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                    >
+                      綠色
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-[#111827] px-4 py-2 text-xs font-black text-white"
+                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#111827'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                    >
+                      深色
+                    </button>
+                  </div>
+                </div>
+
+<label class="admin-field md:col-span-2">
+                  <span>系統分享文字 systemShareText</span>
+                  <textarea
+                    v-model="databaseGameConfigForm.systemShareText"
+                    rows="3"
+                    placeholder="🎉 九宮格砸金蛋抽獎活動&#10;輸入活動序號，立即砸金蛋抽好禮！"
+                  ></textarea>
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>LINE 分享文字 lineShareText</span>
+                  <textarea
+                    v-model="databaseGameConfigForm.lineShareText"
+                    rows="3"
+                    placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
+                  ></textarea>
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>Telegram 分享文字 telegramShareText</span>
+                  <textarea
+                    v-model="databaseGameConfigForm.telegramShareText"
+                    rows="3"
+                    placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
+                  ></textarea>
+                </label>
+              </div>
+
+              
+              <div class="mt-3 rounded-2xl bg-white/80 p-3">
+                <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
+                <p class="mt-1 text-xs font-bold text-rose-500">右側預覽是 iframe；調整後會自動刷新右側預覽。若正式前台要同步，仍需按「儲存前台設定 / 立即同步前台」。</p>
+                <button
+                  type="button"
+                  class="w-full font-black shadow-lg"
+                  :style="{
+                    borderRadius: `${Number(databaseGameConfigForm.systemShareButtonRadius || 16)}px`,
+                    fontSize: `${Number(databaseGameConfigForm.systemShareButtonTextSize || 14)}px`,
+                    paddingTop: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
+                    paddingBottom: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
+                    background: databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d',
+                    color: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
+                  }"
+                >
+                  {{ databaseGameConfigForm.systemShareButtonText || '系統分享' }}
+                </button>
+              </div>
+
+<div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-bold text-slate-600">
+                分享預覽：
+                <span class="font-black text-slate-950">{{ databaseGameConfigForm.shareTitle }}</span>
+                <span class="mx-1">｜</span>
+                <span>{{ databaseGameConfigForm.shareDescription }}</span>
+              </div>
             </div>
-          </section>
+
+            <div class="mt-4 rounded-3xl border border-amber-100 bg-amber-50/70 p-4">
+              <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h4 class="text-sm font-black text-amber-950">
+                    資料庫金蛋顏色同步
+                  </h4>
+                  <p class="mt-1 text-xs font-bold text-amber-700">
+                    這三個顏色會寫入 PostgreSQL gameConfig.settings，手機 / 電腦前台都會以這裡為準。
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                  @click="databaseGameConfigForm.eggColorTop = campaign.eggColorTop || '#fff7ad'; databaseGameConfigForm.eggColorMiddle = campaign.eggColorMiddle || '#fde047'; databaseGameConfigForm.eggColorBottom = campaign.eggColorBottom || '#b45309'"
+                >
+                  套用右側預覽顏色
+                </button>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <label class="admin-field">
+                  <span>DB 金蛋亮色 eggColorTop</span>
+                  <input
+                    v-model="databaseGameConfigForm.eggColorTop"
+                    type="color"
+                  />
+                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorTop }}</code>
+                </label>
+
+                <label class="admin-field">
+                  <span>DB 金蛋主色 eggColorMiddle</span>
+                  <input
+                    v-model="databaseGameConfigForm.eggColorMiddle"
+                    type="color"
+                  />
+                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorMiddle }}</code>
+                </label>
+
+                <label class="admin-field">
+                  <span>DB 金蛋暗色 eggColorBottom</span>
+                  <input
+                    v-model="databaseGameConfigForm.eggColorBottom"
+                    type="color"
+                  />
+                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorBottom }}</code>
+                </label>
+              </div>
+
+              <div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-black text-slate-600">
+                目前準備寫入資料庫：
+                <span class="ml-2 text-slate-900">{{ databaseGameConfigForm.eggColorTop }}</span>
+                <span class="mx-1">/</span>
+                <span class="text-slate-900">{{ databaseGameConfigForm.eggColorMiddle }}</span>
+                <span class="mx-1">/</span>
+                <span class="text-slate-900">{{ databaseGameConfigForm.eggColorBottom }}</span>
+              </div>
+            </div>
+
+<div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+              <label class="admin-toggle">
+                <input v-model="databaseGameConfigForm.showActivityTimeSection" type="checkbox" />
+                <span>顯示活動時間</span>
+              </label>
+
+              <label class="admin-toggle">
+                <input v-model="databaseGameConfigForm.showActivityCountdown" type="checkbox" />
+                <span>顯示活動倒數</span>
+              </label>
+
+              <label class="admin-toggle">
+                <input v-model="databaseGameConfigForm.activityCountdownAlwaysShowSeconds" type="checkbox" />
+                <span>倒數顯示秒數</span>
+              </label>
+
+              <label class="admin-toggle">
+                <input v-model="databaseGameConfigForm.showBottomNav" type="checkbox" />
+                <span>顯示底部功能列</span>
+              </label>
+            </div>
+          </div>
+
+          <div
+            v-if="databaseCampaign && (databaseSectionOpen.prizes || databaseSectionOpen.serials)"
+            class="grid grid-cols-1 gap-4 xl:grid-cols-2"
+          >
+            <div
+              v-if="databaseSectionOpen.prizes"
+              class="rounded-3xl border border-yellow-100 bg-yellow-50 p-5 xl:col-span-2"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h3 class="text-base font-black text-yellow-900">
+                    資料庫獎項管理
+                  </h3>
+                  <p class="mt-1 text-xs font-bold text-yellow-700/80">
+                    可直接新增、修改、刪除 PostgreSQL 裡的 Prize 獎項。此區已改為寬版，避免欄位太擠。
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-yellow-700 ring-1 ring-yellow-100"
+                  @click="resetDatabasePrizeForm"
+                >
+                  清空表單
+                </button>
+              </div>
+
+              <div class="mt-4 rounded-3xl bg-white/75 p-4">
+                <h4 class="text-sm font-black text-slate-900">
+                  {{ databasePrizeForm.id ? '編輯資料庫獎項' : '新增資料庫獎項' }}
+                </h4>
+
+                <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                  <label class="admin-field">
+                    <span>獎項名稱</span>
+                    <input
+                      v-model="databasePrizeForm.title"
+                      type="text"
+                      placeholder="例如：金蛋大獎"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>獎項簡稱</span>
+                    <input
+                      v-model="databasePrizeForm.shortName"
+                      type="text"
+                      placeholder="例如：大獎"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>圖示</span>
+                    <input
+                      v-model="databasePrizeForm.icon"
+                      type="text"
+                      placeholder="例如：🎁"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>圖片網址</span>
+                    <input
+                      v-model="databasePrizeForm.imageUrl"
+                      type="text"
+                      placeholder="https://..."
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>類型</span>
+                    <select v-model="databasePrizeForm.type">
+                      <option value="WIN">中獎</option>
+                      <option value="LOSE">未中獎</option>
+                    </select>
+                  </label>
+
+                  <label class="admin-field">
+                    <span>狀態</span>
+                    <select v-model="databasePrizeForm.status">
+                      <option value="ACTIVE">啟用</option>
+                      <option value="DISABLED">停用</option>
+                    </select>
+                  </label>
+
+                  <label class="admin-field">
+                    <span>百分比機率</span>
+                    <input
+                      v-model.number="databasePrizeForm.probability"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>排序</span>
+                    <input
+                      v-model.number="databasePrizeForm.sortOrder"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>總庫存 stockTotal</span>
+                    <input
+                      v-model.number="databasePrizeForm.stockTotal"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>剩餘庫存 remainStock</span>
+                    <input
+                      v-model.number="databasePrizeForm.remainStock"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>已用庫存 stockUsed</span>
+                    <input
+                      v-model.number="databasePrizeForm.stockUsed"
+                      type="number"
+                      min="0"
+                    />
+                  </label>
+
+                  <label class="admin-field md:col-span-2 2xl:col-span-3">
+                    <span>獎項說明</span>
+                    <textarea
+                      v-model="databasePrizeForm.description"
+                      rows="3"
+                      placeholder="例如：恭喜獲得金蛋大獎，請洽主辦單位兌換。"
+                    />
+                  </label>
+                </div>
+
+                <button
+                  type="button"
+                  class="mt-3 w-full rounded-2xl bg-yellow-500 px-4 py-3 text-sm font-black text-yellow-950 shadow-sm transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isSavingDatabasePrize"
+                  @click="saveDatabasePrize"
+                >
+                  {{ isSavingDatabasePrize ? '儲存中...' : databasePrizeForm.id ? '更新資料庫獎項' : '新增資料庫獎項' }}
+                </button>
+              </div>
+
+              <div class="mt-4 max-h-[560px] space-y-3 overflow-y-auto pr-1">
+                <article
+                  v-for="item in databasePrizes"
+                  :key="item.id"
+                  class="rounded-2xl bg-white/80 p-3"
+                >
+                  <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p class="text-sm font-black text-slate-900">
+                        {{ item.icon || '🎁' }} {{ item.title }}
+                      </p>
+                      <p class="mt-1 text-xs font-bold text-slate-500">
+                        {{ item.type }}｜{{ item.status }}｜機率 {{ item.probability }}%｜剩餘 {{ item.remainStock }}｜總庫存 {{ item.stockTotal }}｜已用 {{ item.stockUsed }}
+                      </p>
+                      <p
+                        v-if="item.description"
+                        class="mt-1 text-xs font-bold text-slate-400"
+                      >
+                        {{ item.description }}
+                      </p>
+                    </div>
+
+                    <div class="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-xl bg-yellow-100 px-3 py-2 text-xs font-black text-yellow-700"
+                        @click="editDatabasePrize(item)"
+                      >
+                        編輯
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100"
+                        @click="removeDatabasePrize(item)"
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+
+            <div
+              v-if="databaseSectionOpen.serials"
+              class="rounded-3xl border border-cyan-100 bg-cyan-50 p-5 xl:col-span-2"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h3 class="text-base font-black text-cyan-900">
+                    資料庫序號管理
+                  </h3>
+                  <p class="mt-1 text-xs font-bold text-cyan-700/80">
+                    可直接新增、產生、停用、發放與刪除 PostgreSQL 裡的 SerialCode。此區已改為寬版，避免欄位太擠。
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
+                  @click="openDatabaseSerialExport"
+                >
+                  匯出 CSV
+                </button>
+              </div>
+
+              <div class="mt-4 rounded-3xl bg-white/75 p-4">
+                <h4 class="text-sm font-black text-slate-900">
+                  建立資料庫序號
+                </h4>
+
+                <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3">
+                  <label class="admin-field">
+                    <span>單組序號</span>
+                    <input
+                      v-model="databaseSerialForm.code"
+                      type="text"
+                      placeholder="例如：VIP-CODE-001"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>批次代碼</span>
+                    <input
+                      v-model="databaseSerialForm.batchCode"
+                      type="text"
+                      placeholder="例如：DEMO"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>增加次數 rewardChance</span>
+                    <input
+                      v-model.number="databaseSerialForm.rewardChance"
+                      type="number"
+                      min="1"
+                      max="99"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>有效期限</span>
+                    <input
+                      v-model="databaseSerialForm.expireAt"
+                      type="datetime-local"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>自動產生前綴</span>
+                    <input
+                      v-model="databaseSerialForm.prefix"
+                      type="text"
+                      placeholder="EGG"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>自動產生數量</span>
+                    <input
+                      v-model.number="databaseSerialForm.count"
+                      type="number"
+                      min="1"
+                      max="500"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>序號長度</span>
+                    <input
+                      v-model.number="databaseSerialForm.length"
+                      type="number"
+                      min="12"
+                      max="32"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>備註</span>
+                    <input
+                      v-model="databaseSerialForm.note"
+                      type="text"
+                      placeholder="例如：活動現場發放"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>發放對象</span>
+                    <input
+                      v-model="databaseSerialForm.distributedTo"
+                      type="text"
+                      placeholder="例如：VIP 客戶"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>發放管道</span>
+                    <select v-model="databaseSerialForm.distributedChannel">
+                      <option value="LINE">LINE</option>
+                      <option value="Facebook">Facebook</option>
+                      <option value="Instagram">Instagram</option>
+                      <option value="Telegram">Telegram</option>
+                      <option value="現場">現場</option>
+                      <option value="其他">其他</option>
+                    </select>
+                  </label>
+
+                  <label class="admin-field md:col-span-2 2xl:col-span-3">
+                    <span>批次貼上多組序號</span>
+                    <textarea
+                      v-model="databaseSerialForm.codesText"
+                      rows="5"
+                      placeholder="一行一組，或用逗號、空白分隔"
+                    />
+                  </label>
+                </div>
+
+                <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-cyan-600 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isSavingDatabaseSerial"
+                    @click="createDatabaseSerialCode"
+                  >
+                    新增單組
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-cyan-700 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isSavingDatabaseSerial"
+                    @click="bulkCreateDatabaseSerialCodes"
+                  >
+                    批次新增
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-cyan-950 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="isSavingDatabaseSerial"
+                    @click="generateDatabaseSerialCodes"
+                  >
+                    自動產生
+                  </button>
+                </div>
+              </div>
+
+              
+              <div class="mt-4 rounded-3xl border border-violet-100 bg-violet-50/70 p-4">
+                <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h4 class="text-sm font-black text-slate-950">
+                      序號查詢與營運篩選
+                    </h4>
+                    <p class="mt-1 text-xs font-bold text-slate-500">
+                      序號多時可用搜尋、批次、狀態快速篩選，避免一直往下滑。
+                    </p>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-violet-700 ring-1 ring-violet-100"
+                      @click="setDatabaseSerialQuickFilter('LIVE01')"
+                    >
+                      只看 LIVE01
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100"
+                      @click="setDatabaseSerialQuickFilter('USED')"
+                    >
+                      只看已使用
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                      @click="setDatabaseSerialQuickFilter('UNUSED')"
+                    >
+                      只看可使用
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-100"
+                      @click="setDatabaseSerialQuickFilter('TEST')"
+                    >
+                      找測試序號
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                      @click="setDatabaseSerialQuickFilter('CLEAR')"
+                    >
+                      清除篩選
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <label class="admin-field">
+                    <span>搜尋序號 / 批次</span>
+                    <input
+                      v-model="databaseSerialSearchKeyword"
+                      type="text"
+                      placeholder="輸入部分序號、LIVE01、TEST..."
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>批次篩選</span>
+                    <select v-model="databaseSerialBatchFilter">
+                      <option value="ALL">全部批次</option>
+                      <option
+                        v-for="batch in databaseSerialBatchOptions.filter((item) => item !== 'ALL')"
+                        :key="batch"
+                        :value="batch"
+                      >
+                        {{ batch }}
+                      </option>
+                    </select>
+                  </label>
+
+                  <label class="admin-field">
+                    <span>狀態篩選</span>
+                    <select v-model="databaseSerialStatusFilter">
+                      <option value="ALL">全部狀態</option>
+                      <option value="UNUSED">可使用</option>
+                      <option value="USED">已使用</option>
+                      <option value="DISABLED">已停用</option>
+                    </select>
+                  </label>
+
+                  <label class="admin-field">
+                    <span>發放篩選</span>
+                    <select v-model="databaseSerialIssueFilter">
+                      <option value="ALL">全部</option>
+                      <option value="ISSUED">已發放</option>
+                      <option value="UNISSUED">未發放</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">全部序號</p>
+                    <p class="text-lg font-black text-slate-950">{{ databaseSerialFilterSummary.total }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">篩選結果</p>
+                    <p class="text-lg font-black text-violet-700">{{ databaseSerialFilterSummary.filtered }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">可使用</p>
+                    <p class="text-lg font-black text-emerald-700">{{ databaseSerialFilterSummary.unused }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">已使用</p>
+                    <p class="text-lg font-black text-rose-700">{{ databaseSerialFilterSummary.used }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">已停用</p>
+                    <p class="text-lg font-black text-slate-700">{{ databaseSerialFilterSummary.disabled }}</p>
+                  </div>
+                </div>
+
+                <p class="mt-3 text-xs font-bold text-slate-500">
+                  目前列表最多顯示前 60 筆篩選結果；若正式資料超過上千筆，下一階段建議改成後端分頁查詢。
+                </p>
+              </div>
+
+
+<div class="mt-4 rounded-3xl border border-cyan-100 bg-white/75 p-3">
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-cyan-700 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="isDatabaseLoading"
+                    @click="refreshDatabaseSerialCodesWithFeedback"
+                  >
+                    重新讀取
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!visibleDatabaseSerialCodes.length"
+                    @click="isAllVisibleDatabaseSerialSelected ? clearSelectedDatabaseSerials() : selectAllVisibleDatabaseSerials()"
+                  >
+                    {{ isAllVisibleDatabaseSerialSelected ? '取消全選' : '全選目前顯示' }}
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!selectedDatabaseSerialCount"
+                    @click="clearSelectedDatabaseSerials"
+                  >
+                    清除選取
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-rose-600 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!selectedDatabaseSerialCount || isBatchDeletingDatabaseSerials"
+                    @click="batchDeleteSelectedDatabaseSerials"
+                  >
+                    {{ isBatchDeletingDatabaseSerials ? '批次刪除中...' : `批次刪除 ${selectedDatabaseSerialCount} 筆` }}
+                  </button>
+
+                  <span class="text-xs font-black text-slate-500">
+                    已選取 {{ selectedDatabaseSerialCount }} / 目前顯示 {{ visibleDatabaseSerialCodes.length }} 筆
+                  </span>
+                </div>
+
+                <p class="mt-2 text-xs font-bold text-cyan-700">
+                  建議只批次刪除 TEST01 / DEMO / 測試序號；正式 LIVE01 序號請不要任意刪除。
+                </p>
+              </div>
+
+              <div class="mt-4 max-h-[560px] space-y-3 overflow-y-auto pr-1">
+                <article
+                  v-for="item in visibleDatabaseSerialCodes"
+                  :key="item.id"
+                  class="rounded-3xl border p-3 transition"
+                  :class="[
+                    getDatabaseSerialStatusInfo(item).cardClass,
+                    selectedDatabaseSerialIdSet.has(Number(item.id)) ? 'ring-2 ring-violet-300' : ''
+                  ]"
+                >
+                  <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div class="flex items-start gap-3">
+                      <label class="mt-1 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-100">
+                        <input
+                          type="checkbox"
+                          class="h-4 w-4 rounded border-slate-300"
+                          :checked="selectedDatabaseSerialIdSet.has(Number(item.id))"
+                          @change.stop="toggleDatabaseSerialSelection(item)"
+                        />
+                        選取
+                      </label>
+
+                      <div>
+                        <div class="mb-2 flex flex-wrap items-center gap-2">
+                          <span class="rounded-full px-3 py-1 text-xs font-black" :class="getDatabaseSerialStatusInfo(item).badgeClass">
+                            {{ getDatabaseSerialStatusInfo(item).label }}
+                          </span>
+                          <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">
+                            批次 {{ item.batchCode || '未分類' }}
+                          </span>
+                          <span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-black text-cyan-700">
+                            已用 {{ getDatabaseSerialUsedCount(item) }} / {{ getDatabaseSerialTotalCount(item) }} 次
+                          </span>
+                        </div>
+                        <p class="break-all font-mono text-sm font-black text-slate-900">
+                          {{ item.code }}
+                        </p>
+                      <p class="mt-1 text-xs font-bold text-slate-500">
+                        {{ item.effectiveStatus || item.status }}｜批次 {{ item.batchCode || '無' }}｜增加 {{ item.rewardChance }} 次
+                      </p>
+                      <p class="mt-1 text-xs font-bold text-slate-400">
+                        發放：{{ item.distributedAt ? `${item.distributedChannel || '未填管道'}｜${item.distributedTo || '未填對象'}` : '未發放' }}
+                      </p>
+                      <p class="mt-1 text-xs font-bold text-slate-400">
+                        期限：{{ item.expireAt || '永不過期' }}
+                      </p>
+                      </div>
+                    </div>
+
+                    <div class="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
+                        @click="distributeDatabaseSerialCode(item)"
+                      >
+                        標記發放
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700"
+                        @click="toggleDatabaseSerialStatus(item)"
+                      >
+                        {{ item.status === 'DISABLED' ? '啟用' : '停用' }}
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100"
+                        @click="removeDatabaseSerialCode(item)"
+                      >
+                        刪除
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+          </div>
+          <div
+            v-if="databaseCampaign && databaseSectionOpen.records"
+            class="rounded-3xl border border-violet-100 bg-violet-50 p-5"
+          >
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h3 class="text-base font-black text-violet-900">
+                  資料庫遊玩紀錄 / 中獎紀錄
+                </h3>
+                <p class="mt-1 text-xs font-bold text-violet-700/80">
+                  讀取 PostgreSQL 正式遊玩紀錄與中獎紀錄，可核銷、取消發獎、匯出 CSV。
+                </p>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-violet-700 ring-1 ring-violet-100"
+                  @click="refreshDatabaseRecords"
+                >
+                  重新讀取紀錄
+                </button>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-violet-600 px-3 py-2 text-xs font-black text-white"
+                  @click="openDatabasePlayRecordExport"
+                >
+                  匯出遊玩 CSV
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <label class="admin-field">
+                <span>搜尋紀錄</span>
+                <input
+                  v-model="databaseRecordKeyword"
+                  type="text"
+                  placeholder="搜尋玩家、獎項、序號、核銷碼"
+                />
+              </label>
+
+              <label class="admin-field">
+                <span>遊玩紀錄篩選</span>
+                <select v-model="databaseRecordWinFilter">
+                  <option value="all">全部遊玩</option>
+                  <option value="win">只看中獎</option>
+                  <option value="lose">只看未中獎</option>
+                </select>
+              </label>
+
+              <label class="admin-field">
+                <span>中獎紀錄篩選</span>
+                <select v-model="databaseRewardStatusFilter">
+                  <option value="all">全部狀態</option>
+                  <option value="PENDING">待核銷</option>
+                  <option value="CLAIMED">已核銷</option>
+                  <option value="CANCELLED">已取消</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="mt-4 space-y-4">
+              <div class="rounded-3xl bg-white/80 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <h4 class="text-sm font-black text-slate-900">
+                    遊玩紀錄
+                  </h4>
+                  <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
+                    {{ filteredDatabasePlayRecords.length }} 筆
+                  </span>
+                </div>
+
+                <div class="mt-3 overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+                  <table class="min-w-[980px] w-full text-left text-xs">
+                    <thead class="bg-slate-50 text-slate-500">
+                      <tr>
+                        <th class="px-4 py-3 font-black">結果</th>
+                        <th class="px-4 py-3 font-black">獎項</th>
+                        <th class="px-4 py-3 font-black">玩家</th>
+                        <th class="px-4 py-3 font-black">序號</th>
+                        <th class="px-4 py-3 font-black">遊戲</th>
+                        <th class="px-4 py-3 font-black">時間</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      <tr
+                        v-for="item in filteredDatabasePlayRecords.slice(0, 120)"
+                        :key="item.id"
+                        class="align-top hover:bg-slate-50"
+                      >
+                        <td class="px-4 py-3">
+                          <span
+                            class="rounded-full px-3 py-1 text-xs font-black"
+                            :class="item.isWin ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'"
+                          >
+                            {{ item.isWin ? '中獎' : '未中獎' }}
+                          </span>
+                        </td>
+                        <td class="px-4 py-3 font-black text-slate-900">
+                          {{ item.prize?.title || '未記錄獎項' }}
+                        </td>
+                        <td class="px-4 py-3 text-slate-600">
+                          {{ item.playerName || item.playerPhone || item.playerEmail || '匿名玩家' }}
+                        </td>
+                        <td class="px-4 py-3">
+                          <code class="font-mono text-[11px] font-black text-violet-700">
+                            {{ item.serialCode?.code || '未綁定' }}
+                          </code>
+                        </td>
+                        <td class="px-4 py-3 font-bold text-slate-500">
+                          {{ item.gameType }}
+                        </td>
+                        <td class="px-4 py-3 font-bold text-slate-500">
+                          {{ formatDatabaseDateTime(item.playedAt) }}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <p
+                    v-if="!filteredDatabasePlayRecords.length"
+                    class="px-4 py-8 text-center text-sm font-bold text-slate-500"
+                  >
+                    目前沒有符合條件的遊玩紀錄。
+                  </p>
+                </div>
+              </div>
+
+              <div class="rounded-3xl bg-white/80 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <h4 class="text-sm font-black text-slate-900">
+                    中獎 / 發獎紀錄
+                  </h4>
+                  <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
+                    {{ filteredDatabaseRewardRecords.length }} 筆
+                  </span>
+                </div>
+
+                <div class="mt-3 overflow-x-auto rounded-2xl border border-slate-100 bg-white">
+                  <table class="min-w-[1040px] w-full text-left text-xs">
+                    <thead class="bg-slate-50 text-slate-500">
+                      <tr>
+                        <th class="px-4 py-3 font-black">狀態</th>
+                        <th class="px-4 py-3 font-black">獎項</th>
+                        <th class="px-4 py-3 font-black">得獎者</th>
+                        <th class="px-4 py-3 font-black">核銷碼</th>
+                        <th class="px-4 py-3 font-black">建立時間</th>
+                        <th class="px-4 py-3 font-black">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                      <tr
+                        v-for="item in filteredDatabaseRewardRecords.slice(0, 120)"
+                        :key="item.id"
+                        class="align-top hover:bg-slate-50"
+                      >
+                        <td class="px-4 py-3">
+                          <span
+                            class="rounded-full px-3 py-1 text-xs font-black"
+                            :class="item.status === 'CLAIMED' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' : item.status === 'CANCELLED' ? 'bg-rose-50 text-rose-700 ring-1 ring-rose-100' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-100'"
+                          >
+                            {{ item.status }}
+                          </span>
+                        </td>
+                        <td class="px-4 py-3 font-black text-slate-900">
+                          {{ item.prize?.title || '未記錄獎項' }}
+                        </td>
+                        <td class="px-4 py-3 text-slate-600">
+                          {{ item.winnerName || item.winnerPhone || item.winnerEmail || '匿名玩家' }}
+                        </td>
+                        <td class="px-4 py-3">
+                          <code class="font-mono text-[11px] font-black text-violet-700">
+                            {{ item.claimCode || '未建立' }}
+                          </code>
+                        </td>
+                        <td class="px-4 py-3 font-bold text-slate-500">
+                          {{ formatDatabaseDateTime(item.createdAt) }}
+                        </td>
+                        <td class="px-4 py-3">
+                          <div class="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              :disabled="item.status === 'CLAIMED'"
+                              @click="claimDatabaseRewardRecord(item)"
+                            >
+                              核銷
+                            </button>
+
+                            <button
+                              type="button"
+                              class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                              :disabled="item.status === 'CANCELLED'"
+                              @click="cancelDatabaseRewardRecord(item)"
+                            >
+                              取消
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  <p
+                    v-if="!filteredDatabaseRewardRecords.length"
+                    class="px-4 py-8 text-center text-sm font-bold text-slate-500"
+                  >
+                    目前沒有符合條件的中獎紀錄。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </section>
 
         <section
           v-if="activeSection === 'basic'"
@@ -4368,169 +5524,6 @@ const actualSystemSharePreviewText = computed(() => {
             </div>
           </div>
         </section>
-
-          <section
-            id="share-settings-panel"
-            class="rounded-[2rem] border border-fuchsia-100 bg-fuchsia-50/70 p-5 shadow-sm"
-          >
-            <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-              <div>
-                <p class="text-xs font-black uppercase tracking-[0.2em] text-fuchsia-600">
-                  Share Settings
-                </p>
-                <h3 class="mt-1 text-xl font-black text-slate-950">
-                  分享設定
-                </h3>
-                <p class="mt-1 text-sm font-bold leading-6 text-slate-500">
-                  這裡是唯一保留的分享設定區塊；舊版分享設定已整合移除，避免同一欄位重複出現。
-                </p>
-              </div>
-
-              <button
-                type="button"
-                class="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white"
-                @click="databaseGameConfigForm.shareUrl = `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId || 1}`"
-              >
-                套用正式活動網址
-              </button>
-            </div>
-
-            <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <label class="admin-field">
-                <span>分享標題 shareTitle</span>
-                <input
-                  v-model="databaseGameConfigForm.shareTitle"
-                  type="text"
-                  placeholder="九宮格砸金蛋抽獎活動"
-                />
-              </label>
-
-              <label class="admin-field">
-                <span>分享網址 shareUrl</span>
-                <input
-                  v-model="databaseGameConfigForm.shareUrl"
-                  type="url"
-                  placeholder="https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=1"
-                />
-              </label>
-
-              <label class="admin-field md:col-span-2">
-                <span>分享描述 shareDescription（連結預覽 / OG 描述）</span>
-                <input
-                  v-model="databaseGameConfigForm.shareDescription"
-                  type="text"
-                  placeholder="輸入活動序號，立即砸金蛋抽好禮！"
-                />
-              </label>
-
-              <label class="admin-field md:col-span-2">
-                <span>分享圖片網址 shareImageUrl</span>
-                <input
-                  v-model="databaseGameConfigForm.shareImageUrl"
-                  type="url"
-                  placeholder="https://example.com/share.jpg"
-                />
-              </label>
-
-              <label class="admin-field md:col-span-2">
-                <span>系統分享文字 systemShareText（手機實際分享文字）</span>
-                <textarea
-                  v-model="databaseGameConfigForm.systemShareText"
-                  rows="3"
-                  placeholder="🎉 九宮格砸金蛋抽獎活動&#10;輸入活動序號，立即砸金蛋抽好禮！"
-                ></textarea>
-              </label>
-
-              <label class="admin-field md:col-span-2">
-                <span>系統分享按鈕文字 systemShareButtonText</span>
-                <input
-                  v-model="databaseGameConfigForm.systemShareButtonText"
-                  type="text"
-                  placeholder="系統分享"
-                 />
-              </label>
-
-              <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
-                <p class="text-sm font-black text-slate-800">文字大小</p>
-                <p class="mt-1 text-xs font-bold text-slate-400">
-                  {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }} px
-                </p>
-                <input
-                  v-model.number="databaseGameConfigForm.systemShareButtonTextSize"
-                  class="mt-3 w-full accent-slate-950"
-                  type="range"
-                  min="10"
-                  max="28"
-                  step="1"
-                />
-              </div>
-
-              <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
-                <p class="text-sm font-black text-slate-800">按鈕高度</p>
-                <p class="mt-1 text-xs font-bold text-slate-400">
-                  上下內距 {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }} px
-                </p>
-                <input
-                  v-model.number="databaseGameConfigForm.systemShareButtonPaddingY"
-                  class="mt-3 w-full accent-slate-950"
-                  type="range"
-                  min="6"
-                  max="28"
-                  step="1"
-                />
-              </div>
-
-              <label class="admin-field">
-                <span>背景顏色 systemShareButtonBgColor</span>
-                <input
-                  v-model="databaseGameConfigForm.systemShareButtonBgColor"
-                  type="color"
-                />
-              </label>
-
-              <label class="admin-field">
-                <span>文字顏色 systemShareButtonTextColor</span>
-                <input
-                  v-model="databaseGameConfigForm.systemShareButtonTextColor"
-                  type="color"
-                />
-              </label>
-
-              <div class="md:col-span-2 rounded-3xl border border-amber-100 bg-amber-50/80 p-4">
-                <p class="text-sm font-black text-slate-800">快速配色</p>
-                <div class="mt-3 flex flex-wrap gap-2">
-                  <button type="button" class="rounded-2xl bg-[#7f1d1d] px-4 py-2 text-xs font-black text-white" @click="databaseGameConfigForm.systemShareButtonBgColor = '#7f1d1d'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'">深紅</button>
-                  <button type="button" class="rounded-2xl bg-[#facc15] px-4 py-2 text-xs font-black text-[#7f1d1d]" @click="databaseGameConfigForm.systemShareButtonBgColor = '#facc15'; databaseGameConfigForm.systemShareButtonTextColor = '#7f1d1d'">金色</button>
-                  <button type="button" class="rounded-2xl bg-[#22c55e] px-4 py-2 text-xs font-black text-white" @click="databaseGameConfigForm.systemShareButtonBgColor = '#22c55e'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'">綠色</button>
-                  <button type="button" class="rounded-2xl bg-[#111827] px-4 py-2 text-xs font-black text-white" @click="databaseGameConfigForm.systemShareButtonBgColor = '#111827'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'">深色</button>
-                </div>
-              </div>
-
-              <div class="md:col-span-2 rounded-3xl border border-white bg-white/85 p-4">
-                <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
-                <button
-                  type="button"
-                  class="w-full font-black shadow-lg"
-                  :style="{
-                    borderRadius: `${Number(databaseGameConfigForm.systemShareButtonRadius || 16)}px`,
-                    fontSize: `${Number(databaseGameConfigForm.systemShareButtonTextSize || 14)}px`,
-                    paddingTop: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
-                    paddingBottom: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
-                    background: databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d',
-                    color: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
-                  }"
-                >
-                  {{ databaseGameConfigForm.systemShareButtonText || '系統分享' }}
-                </button>
-              </div>
-
-              <div class="md:col-span-2 rounded-3xl border border-slate-100 bg-white/80 p-4 text-xs font-bold text-slate-600">
-                <p class="font-black text-slate-700">手機系統分享實際預覽</p>
-                <pre class="mt-3 whitespace-pre-wrap rounded-2xl bg-slate-950 p-3 text-xs font-bold leading-6 text-white">{{ actualSystemSharePreviewText }}</pre>
-              </div>
-            </div>
-          </section>
-
 
         <section
           v-if="activeSection === 'theme'"
@@ -5487,7 +6480,7 @@ const actualSystemSharePreviewText = computed(() => {
 
               <label class="admin-field">
                 <span>分享描述</span>
-                <textarea v-model="campaign.shareDescription" rows="4" ></textarea>
+                <textarea v-model="campaign.shareDescription" rows="4" />
               </label>
 
               <label class="admin-field">
@@ -5929,7 +6922,7 @@ const actualSystemSharePreviewText = computed(() => {
                 v-model="bulkSerialCodesText"
                 rows="6"
                 placeholder="一行一組，或用逗號、空白分隔&#10;VIP001&#10;VIP002&#10;VIP003"
-              ></textarea>
+              />
             </label>
 
             <button
@@ -5962,7 +6955,7 @@ const actualSystemSharePreviewText = computed(() => {
                     accept=".json,.csv,text/csv,application/json"
                     class="hidden"
                     @change="handleSerialImportFile"
-                   />
+                  />
                   選擇 JSON / CSV 檔匯入
                 </label>
 
@@ -7646,7 +8639,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
           <label class="admin-field">
             <span>規則內容</span>
-            <textarea v-model="campaign.ruleContent" rows="6" ></textarea>
+            <textarea v-model="campaign.ruleContent" rows="6" />
           </label>
 
           <label class="admin-field">
@@ -7656,7 +8649,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
           <label class="admin-field">
             <span>獎品說明內容</span>
-            <textarea v-model="campaign.prizeInfoContent" rows="6" ></textarea>
+            <textarea v-model="campaign.prizeInfoContent" rows="6" />
           </label>
         </section>
 
