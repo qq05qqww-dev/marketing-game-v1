@@ -3115,6 +3115,12 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.shareDescription = settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.shareUrl = settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
   databaseGameConfigForm.shareImageUrl = settings.shareImageUrl || campaign.shareImageUrl || ''
+    databaseGameConfigForm.systemShareButtonText = settings.systemShareButtonText || campaign.systemShareButtonText || '系統分享'
+  databaseGameConfigForm.systemShareButtonTextSize = Number(settings.systemShareButtonTextSize || campaign.systemShareButtonTextSize || 14)
+  databaseGameConfigForm.systemShareButtonBgColor = settings.systemShareButtonBgColor || campaign.systemShareButtonBgColor || 'rgba(255, 255, 255, 0.12)'
+  databaseGameConfigForm.systemShareButtonTextColor = settings.systemShareButtonTextColor || campaign.systemShareButtonTextColor || '#ffffff'
+  databaseGameConfigForm.systemShareButtonRadius = Number(settings.systemShareButtonRadius || campaign.systemShareButtonRadius || 16)
+  databaseGameConfigForm.systemShareButtonPaddingY = Number(settings.systemShareButtonPaddingY || campaign.systemShareButtonPaddingY || 12)
   databaseGameConfigForm.systemShareText = settings.systemShareText || campaign.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.lineShareText = settings.lineShareText || campaign.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
   databaseGameConfigForm.telegramShareText = settings.telegramShareText || campaign.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
@@ -3161,6 +3167,18 @@ const buildDatabaseGameConfigPayload = () => {
     shareDescription: databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！',
     shareUrl: databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`,
     shareImageUrl: databaseGameConfigForm.shareImageUrl || '',
+    systemShareButtonText: '系統分享',
+  systemShareButtonTextSize: 14,
+  systemShareButtonBgColor: 'rgba(255, 255, 255, 0.12)',
+  systemShareButtonTextColor: '#ffffff',
+  systemShareButtonRadius: 16,
+  systemShareButtonPaddingY: 12,
+  systemShareButtonText: databaseGameConfigForm.systemShareButtonText || '系統分享',
+    systemShareButtonTextSize: Number(databaseGameConfigForm.systemShareButtonTextSize || 14),
+    systemShareButtonBgColor: databaseGameConfigForm.systemShareButtonBgColor || 'rgba(255, 255, 255, 0.12)',
+    systemShareButtonTextColor: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff',
+    systemShareButtonRadius: Number(databaseGameConfigForm.systemShareButtonRadius || 16),
+    systemShareButtonPaddingY: Number(databaseGameConfigForm.systemShareButtonPaddingY || 12),
     systemShareText: databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！',
     lineShareText: databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
     telegramShareText: databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
@@ -4057,7 +4075,68 @@ const formatDatabaseSerialTime = (value) => {
                   </small>
                 </label>
 
-                <label class="admin-field md:col-span-2">
+                
+                <label class="admin-field">
+                  <span>系統分享按鈕文字 systemShareButtonText</span>
+                  <input
+                    v-model="databaseGameConfigForm.systemShareButtonText"
+                    type="text"
+                    placeholder="系統分享"
+                  />
+                </label>
+
+                <label class="admin-field">
+                  <span>系統分享文字大小 systemShareButtonTextSize</span>
+                  <input
+                    v-model.number="databaseGameConfigForm.systemShareButtonTextSize"
+                    type="number"
+                    min="10"
+                    max="28"
+                    step="1"
+                  />
+                </label>
+
+                <label class="admin-field">
+                  <span>系統分享背景顏色 systemShareButtonBgColor</span>
+                  <input
+                    v-model="databaseGameConfigForm.systemShareButtonBgColor"
+                    type="text"
+                    placeholder="rgba(255, 255, 255, 0.12) 或 #ef4444"
+                  />
+                </label>
+
+                <label class="admin-field">
+                  <span>系統分享文字顏色 systemShareButtonTextColor</span>
+                  <input
+                    v-model="databaseGameConfigForm.systemShareButtonTextColor"
+                    type="text"
+                    placeholder="#ffffff"
+                  />
+                </label>
+
+                <label class="admin-field">
+                  <span>系統分享按鈕圓角 systemShareButtonRadius</span>
+                  <input
+                    v-model.number="databaseGameConfigForm.systemShareButtonRadius"
+                    type="number"
+                    min="0"
+                    max="40"
+                    step="1"
+                  />
+                </label>
+
+                <label class="admin-field">
+                  <span>系統分享按鈕高度 systemShareButtonPaddingY</span>
+                  <input
+                    v-model.number="databaseGameConfigForm.systemShareButtonPaddingY"
+                    type="number"
+                    min="6"
+                    max="28"
+                    step="1"
+                  />
+                </label>
+
+<label class="admin-field md:col-span-2">
                   <span>系統分享文字 systemShareText</span>
                   <textarea
                     v-model="databaseGameConfigForm.systemShareText"
@@ -4085,7 +4164,26 @@ const formatDatabaseSerialTime = (value) => {
                 </label>
               </div>
 
-              <div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-bold text-slate-600">
+              
+              <div class="mt-3 rounded-2xl bg-white/80 p-3">
+                <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
+                <button
+                  type="button"
+                  class="w-full font-black shadow-lg"
+                  :style="{
+                    borderRadius: `${Number(databaseGameConfigForm.systemShareButtonRadius || 16)}px`,
+                    fontSize: `${Number(databaseGameConfigForm.systemShareButtonTextSize || 14)}px`,
+                    paddingTop: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
+                    paddingBottom: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
+                    background: databaseGameConfigForm.systemShareButtonBgColor || 'rgba(255, 255, 255, 0.12)',
+                    color: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
+                  }"
+                >
+                  {{ databaseGameConfigForm.systemShareButtonText || '系統分享' }}
+                </button>
+              </div>
+
+<div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-bold text-slate-600">
                 分享預覽：
                 <span class="font-black text-slate-950">{{ databaseGameConfigForm.shareTitle }}</span>
                 <span class="mx-1">｜</span>

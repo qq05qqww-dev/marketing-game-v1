@@ -169,6 +169,9 @@ const campaign = reactive({
   serialRedeemButtonTextSize: 14,
   showShareButtonSection: true,
   showSystemShareButton: true,
+  systemShareButtonPaddingY: 12,
+  systemShareButtonRadius: 16,
+  systemShareButtonTextSize: 14,
   systemShareButtonText: '系統分享',
   systemShareButtonBgColor: 'rgba(255, 255, 255, 0.12)',
   systemShareButtonTextColor: '#ffffff',
@@ -761,9 +764,9 @@ const shareButtonGridStyle = computed(() => {
 })
 
 const getShareButtonStyle = () => {
-  const radius = Math.min(28, Math.max(8, Number(campaign.shareButtonRadius || 16)))
-  const fontSize = Math.min(18, Math.max(10, Number(campaign.shareButtonTextSize || 12)))
-  const paddingY = Math.min(16, Math.max(6, Number(campaign.shareButtonPaddingY || 12)))
+  const radius = Math.min(40, Math.max(0, Number(campaign.systemShareButtonRadius ?? campaign.shareButtonRadius ?? 16)))
+  const fontSize = Math.min(28, Math.max(10, Number(campaign.systemShareButtonTextSize ?? campaign.shareButtonTextSize ?? 14)))
+  const paddingY = Math.min(28, Math.max(6, Number(campaign.systemShareButtonPaddingY ?? campaign.shareButtonPaddingY ?? 12)))
 
   return {
     borderRadius: `${radius}px`,
