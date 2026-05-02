@@ -181,6 +181,56 @@ const databaseRecordStats = computed(() => {
 })
 
 
+const applyDatabaseRecordQuickFilter = (type) => {
+  if (type === 'all') {
+    databaseRecordKeyword.value = ''
+    databaseRecordWinFilter.value = 'ALL'
+    databaseRewardStatusFilter.value = 'ALL'
+    return
+  }
+
+  if (type === 'win') {
+    databaseRecordKeyword.value = ''
+    databaseRecordWinFilter.value = 'WIN'
+    databaseRewardStatusFilter.value = 'ALL'
+    databaseRecordTableOpen.plays = true
+    return
+  }
+
+  if (type === 'lose') {
+    databaseRecordKeyword.value = ''
+    databaseRecordWinFilter.value = 'LOSE'
+    databaseRewardStatusFilter.value = 'ALL'
+    databaseRecordTableOpen.plays = true
+    return
+  }
+
+  if (type === 'pending') {
+    databaseRecordKeyword.value = ''
+    databaseRecordWinFilter.value = 'ALL'
+    databaseRewardStatusFilter.value = 'PENDING'
+    databaseRecordTableOpen.rewards = true
+    return
+  }
+
+  if (type === 'issued') {
+    databaseRecordKeyword.value = ''
+    databaseRecordWinFilter.value = 'ALL'
+    databaseRewardStatusFilter.value = 'ISSUED'
+    databaseRecordTableOpen.rewards = true
+    return
+  }
+
+  if (type === 'cancelled') {
+    databaseRecordKeyword.value = ''
+    databaseRecordWinFilter.value = 'ALL'
+    databaseRewardStatusFilter.value = 'CANCELLED'
+    databaseRecordTableOpen.rewards = true
+  }
+}
+
+
+
 
 
 const databasePreviewSyncMessage = ref('')
@@ -3585,6 +3635,8 @@ watch(
 // 第 400 批：紀錄管理顯示筆數真正生效版。
 
 // 第 401 批：紀錄管理快速篩選統計版。
+
+// 第 402 批：紀錄管理一鍵快速篩選版。
 </script>
 
 <template>
@@ -3876,6 +3928,71 @@ watch(
                     複製
                   </button>
                 </div>
+
+
+                <div class="rounded-3xl border border-violet-100 bg-white/80 p-4">
+                  <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p class="text-sm font-black text-slate-900">
+                        快速篩選
+                      </p>
+                      <p class="mt-1 text-xs font-bold leading-5 text-slate-400">
+                        點一下即可切換常用紀錄條件，不需要手動調整下拉選單。
+                      </p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white"
+                        @click="applyDatabaseRecordQuickFilter('all')"
+                      >
+                        全部
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-emerald-100 px-4 py-2 text-xs font-black text-emerald-700"
+                        @click="applyDatabaseRecordQuickFilter('win')"
+                      >
+                        只看中獎
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700"
+                        @click="applyDatabaseRecordQuickFilter('lose')"
+                      >
+                        只看未中獎
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-amber-100 px-4 py-2 text-xs font-black text-amber-700"
+                        @click="applyDatabaseRecordQuickFilter('pending')"
+                      >
+                        待發獎
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-sky-100 px-4 py-2 text-xs font-black text-sky-700"
+                        @click="applyDatabaseRecordQuickFilter('issued')"
+                      >
+                        已發獎
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-rose-100 px-4 py-2 text-xs font-black text-rose-700"
+                        @click="applyDatabaseRecordQuickFilter('cancelled')"
+                      >
+                        已取消
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
               </article>
             </div>
           </div>
