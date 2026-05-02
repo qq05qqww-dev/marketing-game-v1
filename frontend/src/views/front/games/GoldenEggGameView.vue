@@ -767,14 +767,16 @@ const getShareButtonStyle = () => {
   const radius = Math.min(40, Math.max(0, Number(campaign.systemShareButtonRadius ?? campaign.shareButtonRadius ?? 16)))
   const fontSize = Math.min(28, Math.max(10, Number(campaign.systemShareButtonTextSize ?? campaign.shareButtonTextSize ?? 14)))
   const paddingY = Math.min(28, Math.max(6, Number(campaign.systemShareButtonPaddingY ?? campaign.shareButtonPaddingY ?? 12)))
+  const bgColor = campaign.systemShareButtonBgColor || campaign.shareButtonBgColor || '#7f1d1d'
+  const textColor = campaign.systemShareButtonTextColor || campaign.shareButtonTextColor || '#ffffff'
 
   return {
     borderRadius: `${radius}px`,
     fontSize: `${fontSize}px`,
     paddingTop: `${paddingY}px`,
     paddingBottom: `${paddingY}px`,
-    background: campaign.systemShareButtonBgColor || 'rgba(255, 255, 255, 0.12)',
-    color: campaign.systemShareButtonTextColor || '#ffffff'
+    background: bgColor,
+    color: textColor
   }
 }
 

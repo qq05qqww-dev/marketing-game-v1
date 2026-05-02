@@ -3028,6 +3028,28 @@ const closeAllDatabaseSections = () => {
   databaseSectionOpen.links = true
 }
 
+
+const applySystemShareButtonSettingsToForm = (settings = {}) => {
+  databaseGameConfigForm.systemShareButtonText = settings.systemShareButtonText || databaseGameConfigForm.systemShareButtonText || '系統分享'
+  databaseGameConfigForm.systemShareButtonTextSize = Number(settings.systemShareButtonTextSize ?? databaseGameConfigForm.systemShareButtonTextSize ?? 14)
+  databaseGameConfigForm.systemShareButtonBgColor = settings.systemShareButtonBgColor || databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d'
+  databaseGameConfigForm.systemShareButtonTextColor = settings.systemShareButtonTextColor || databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
+  databaseGameConfigForm.systemShareButtonRadius = Number(settings.systemShareButtonRadius ?? databaseGameConfigForm.systemShareButtonRadius ?? 16)
+  databaseGameConfigForm.systemShareButtonPaddingY = Number(settings.systemShareButtonPaddingY ?? databaseGameConfigForm.systemShareButtonPaddingY ?? 12)
+}
+
+const getSystemShareButtonSettingsPayload = () => {
+  return {
+    systemShareButtonText: databaseGameConfigForm.systemShareButtonText || '系統分享',
+    systemShareButtonTextSize: Number(databaseGameConfigForm.systemShareButtonTextSize || 14),
+    systemShareButtonBgColor: databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d',
+    systemShareButtonTextColor: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff',
+    systemShareButtonRadius: Number(databaseGameConfigForm.systemShareButtonRadius || 16),
+    systemShareButtonPaddingY: Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)
+  }
+}
+
+
 const loadDatabaseCampaignFormFromCampaign = (campaignData = null) => {
   databaseCampaignForm.title = campaignData?.title || ''
   databaseCampaignForm.slug = campaignData?.slug || ''
@@ -3093,6 +3115,7 @@ const resetDatabaseCampaignForm = () => {
 
 const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   const settings = campaignData?.gameConfig?.settings || {}
+  applySystemShareButtonSettingsToForm(settings)
 
   databaseGameConfigForm.pageTitle = settings.pageTitle || campaignData?.title || ''
   databaseGameConfigForm.mainTitle = settings.mainTitle || campaignData?.title || ''
@@ -3393,6 +3416,17 @@ const normalizeColorInputValue = (value, fallback = '#7f1d1d') => {
   if (/^#[0-9a-fA-F]{3}$/.test(text)) return text
 
   return fallback
+}
+
+
+
+const syncSystemShareButtonSettingsToPreview = () => {
+  campaign.systemShareButtonText = databaseGameConfigForm.systemShareButtonText || '系統分享'
+  campaign.systemShareButtonTextSize = Number(databaseGameConfigForm.systemShareButtonTextSize || 14)
+  campaign.systemShareButtonBgColor = databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d'
+  campaign.systemShareButtonTextColor = databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
+  campaign.systemShareButtonRadius = Number(databaseGameConfigForm.systemShareButtonRadius || 16)
+  campaign.systemShareButtonPaddingY = Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)
 }
 
 
@@ -4260,6 +4294,7 @@ const normalizeColorInputValue = (value, fallback = '#7f1d1d') => {
               
               <div class="mt-3 rounded-2xl bg-white/80 p-3">
                 <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
+                <p class="mt-1 text-xs font-bold text-rose-500">調整後請按「儲存前台設定 / 立即同步前台」，前台才會更新。</p>
                 <button
                   type="button"
                   class="w-full font-black shadow-lg"
