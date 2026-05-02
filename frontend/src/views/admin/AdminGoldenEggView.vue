@@ -56,6 +56,11 @@ const databasePrizes = ref([])
 const databaseSerialCodes = ref([])
 const selectedDatabaseSerialIds = ref([])
 const isBatchDeletingDatabaseSerials = ref(false)
+const databaseSerialSearchKeyword = ref('')
+const databaseSerialBatchFilter = ref('ALL')
+const databaseSerialStatusFilter = ref('ALL')
+const databaseSerialIssueFilter = ref('ALL')
+const databaseSerialViewMode = ref('CARD')
 const databasePlayRecords = ref([])
 const databaseRewardRecords = ref([])
 const databaseDrawPool = ref(null)
@@ -2569,10 +2574,100 @@ const resetDatabaseSerialForm = () => {
 }
 
 
+
+const databaseSerialBatchOptions = computed(() => {
+  const batchSet = new Set()
+
+  databaseSerialCodes.value.forEach((item) => {
+    if (item?.batchCode) {
+      batchSet.add(String(item.batchCode))
+    }
+  })
+
+  return ['ALL', ...Array.from(batchSet).sort()]
+})
+
+const filteredDatabaseSerialCodes = computed(() => {
+  const keyword = databaseSerialSearchKeyword.value.trim().toLowerCase()
+  const batchFilter = databaseSerialBatchFilter.value
+  const statusFilter = databaseSerialStatusFilter.value
+  const issueFilter = databaseSerialIssueFilter.value
+
+  return databaseSerialCodes.value.filter((item) => {
+    const code = String(item?.code || '').toLowerCase()
+    const batchCode = String(item?.batchCode || '')
+    const statusInfo = getDatabaseSerialStatusInfo(item)
+    const isIssued = Boolean(item?.isIssued)
+
+    const keywordMatched = !keyword
+      || code.includes(keyword)
+      || batchCode.toLowerCase().includes(keyword)
+
+    const batchMatched = batchFilter === 'ALL'
+      || batchCode === batchFilter
+
+    const statusMatched = statusFilter === 'ALL'
+      || statusInfo.key === statusFilter
+
+    const issueMatched = issueFilter === 'ALL'
+      || (issueFilter === 'ISSUED' && isIssued)
+      || (issueFilter === 'UNISSUED' && !isIssued)
+
+    return keywordMatched && batchMatched && statusMatched && issueMatched
+  })
+})
+
+const databaseSerialFilterSummary = computed(() => {
+  const total = databaseSerialCodes.value.length
+  const filtered = filteredDatabaseSerialCodes.value.length
+  const used = filteredDatabaseSerialCodes.value.filter((item) => getDatabaseSerialStatusInfo(item).key === 'USED').length
+  const unused = filteredDatabaseSerialCodes.value.filter((item) => getDatabaseSerialStatusInfo(item).key === 'UNUSED').length
+  const disabled = filteredDatabaseSerialCodes.value.filter((item) => getDatabaseSerialStatusInfo(item).key === 'DISABLED').length
+
+  return {
+    total,
+    filtered,
+    used,
+    unused,
+    disabled
+  }
+})
+
+const setDatabaseSerialQuickFilter = (type) => {
+  if (type === 'LIVE01') {
+    databaseSerialBatchFilter.value = 'LIVE01'
+    databaseSerialStatusFilter.value = 'ALL'
+    databaseSerialIssueFilter.value = 'ALL'
+    return
+  }
+
+  if (type === 'USED') {
+    databaseSerialStatusFilter.value = 'USED'
+    return
+  }
+
+  if (type === 'UNUSED') {
+    databaseSerialStatusFilter.value = 'UNUSED'
+    return
+  }
+
+  if (type === 'TEST') {
+    databaseSerialSearchKeyword.value = ''
+    databaseSerialBatchFilter.value = 'ALL'
+    databaseSerialStatusFilter.value = 'ALL'
+    databaseSerialIssueFilter.value = 'ALL'
+    databaseSerialSearchKeyword.value = 'TEST'
+    return
+  }
+
+  databaseSerialSearchKeyword.value = ''
+  databaseSerialBatchFilter.value = 'ALL'
+  databaseSerialStatusFilter.value = 'ALL'
+  databaseSerialIssueFilter.value = 'ALL'
+}
+
 const visibleDatabaseSerialCodes = computed(() => {
-  return Array.isArray(databaseSerialCodes.value)
-    ? databaseSerialCodes.value.slice(0, 60)
-    : []
+  return filteredDatabaseSerialCodes.value.slice(0, 60)
 })
 
 const selectedDatabaseSerialIdSet = computed(() => {
@@ -4322,7 +4417,131 @@ const formatDatabaseSerialTime = (value) => {
                 </div>
               </div>
 
-              <div class="mt-4 rounded-3xl border border-cyan-100 bg-white/75 p-3">
+              
+              <div class="mt-4 rounded-3xl border border-violet-100 bg-violet-50/70 p-4">
+                <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h4 class="text-sm font-black text-slate-950">
+                      序號查詢與營運篩選
+                    </h4>
+                    <p class="mt-1 text-xs font-bold text-slate-500">
+                      序號多時可用搜尋、批次、狀態快速篩選，避免一直往下滑。
+                    </p>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-violet-700 ring-1 ring-violet-100"
+                      @click="setDatabaseSerialQuickFilter('LIVE01')"
+                    >
+                      只看 LIVE01
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100"
+                      @click="setDatabaseSerialQuickFilter('USED')"
+                    >
+                      只看已使用
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                      @click="setDatabaseSerialQuickFilter('UNUSED')"
+                    >
+                      只看可使用
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-100"
+                      @click="setDatabaseSerialQuickFilter('TEST')"
+                    >
+                      找測試序號
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                      @click="setDatabaseSerialQuickFilter('CLEAR')"
+                    >
+                      清除篩選
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <label class="admin-field">
+                    <span>搜尋序號 / 批次</span>
+                    <input
+                      v-model="databaseSerialSearchKeyword"
+                      type="text"
+                      placeholder="輸入部分序號、LIVE01、TEST..."
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>批次篩選</span>
+                    <select v-model="databaseSerialBatchFilter">
+                      <option value="ALL">全部批次</option>
+                      <option
+                        v-for="batch in databaseSerialBatchOptions.filter((item) => item !== 'ALL')"
+                        :key="batch"
+                        :value="batch"
+                      >
+                        {{ batch }}
+                      </option>
+                    </select>
+                  </label>
+
+                  <label class="admin-field">
+                    <span>狀態篩選</span>
+                    <select v-model="databaseSerialStatusFilter">
+                      <option value="ALL">全部狀態</option>
+                      <option value="UNUSED">可使用</option>
+                      <option value="USED">已使用</option>
+                      <option value="DISABLED">已停用</option>
+                    </select>
+                  </label>
+
+                  <label class="admin-field">
+                    <span>發放篩選</span>
+                    <select v-model="databaseSerialIssueFilter">
+                      <option value="ALL">全部</option>
+                      <option value="ISSUED">已發放</option>
+                      <option value="UNISSUED">未發放</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">全部序號</p>
+                    <p class="text-lg font-black text-slate-950">{{ databaseSerialFilterSummary.total }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">篩選結果</p>
+                    <p class="text-lg font-black text-violet-700">{{ databaseSerialFilterSummary.filtered }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">可使用</p>
+                    <p class="text-lg font-black text-emerald-700">{{ databaseSerialFilterSummary.unused }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">已使用</p>
+                    <p class="text-lg font-black text-rose-700">{{ databaseSerialFilterSummary.used }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white/80 p-3">
+                    <p class="text-[11px] font-black text-slate-400">已停用</p>
+                    <p class="text-lg font-black text-slate-700">{{ databaseSerialFilterSummary.disabled }}</p>
+                  </div>
+                </div>
+
+                <p class="mt-3 text-xs font-bold text-slate-500">
+                  目前列表最多顯示前 60 筆篩選結果；若正式資料超過上千筆，下一階段建議改成後端分頁查詢。
+                </p>
+              </div>
+
+
+<div class="mt-4 rounded-3xl border border-cyan-100 bg-white/75 p-3">
                 <div class="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
@@ -4339,7 +4558,7 @@ const formatDatabaseSerialTime = (value) => {
                     :disabled="!visibleDatabaseSerialCodes.length"
                     @click="isAllVisibleDatabaseSerialSelected ? clearSelectedDatabaseSerials() : selectAllVisibleDatabaseSerials()"
                   >
-                    {{ isAllVisibleDatabaseSerialSelected ? '取消全選' : '全選目前 60 筆' }}
+                    {{ isAllVisibleDatabaseSerialSelected ? '取消全選' : '全選目前顯示' }}
                   </button>
 
                   <button
@@ -4361,7 +4580,7 @@ const formatDatabaseSerialTime = (value) => {
                   </button>
 
                   <span class="text-xs font-black text-slate-500">
-                    已選取 {{ selectedDatabaseSerialCount }} / {{ visibleDatabaseSerialCodes.length }} 筆
+                    已選取 {{ selectedDatabaseSerialCount }} / 目前顯示 {{ visibleDatabaseSerialCodes.length }} 筆
                   </span>
                 </div>
 
