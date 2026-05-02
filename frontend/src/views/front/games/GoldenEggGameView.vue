@@ -1494,12 +1494,14 @@ const getConfiguredShareLandingUrl = (options = {}) => {
     campaignId: String(campaignId)
   })
 
-  // 第 367 批：加 sv 避免 LINE 一直吃舊的 OG 預覽快取。
-  if (options.cacheBust) {
-    params.set('sv', String(Date.now()))
-  }
-
-  return `${baseUrl}/share/golden-egg?${params.toString()}`
+  // 第 369 批：分享功能乾淨重整版
+// 分享規則：
+// 1. 系統分享：使用 navigator.share；不支援時複製「文字 + 前台網址」。
+// 2. LINE / Telegram：直接導向分享平台網址，避免只複製文字沒開啟。
+// 3. LINE / Telegram 的小卡片預覽使用後端 OG 落地頁。
+// 4. shareImageUrl 不直接顯示在前台，它會由後端 /share/golden-egg 輸出成 og:image。
+const getCurrentCampaignIdForShare = () => {
+  return onlineCampaignId.value || getRouteCampaignId() || 1
 }
 
 const getConfiguredShareUrl = () => {
@@ -1507,17 +1509,32 @@ const getConfiguredShareUrl = () => {
 
   if (customUrl) return customUrl
 
-  if (typeof window === 'undefined') return ''
+  if (typeof window !== 'undefined') {
+    return window.location.href
+  }
 
-  return window.location.href
+  return `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${getCurrentCampaignIdForShare()}`
+}
+
+const getConfiguredShareLandingUrl = () => {
+  const campaignId = getCurrentCampaignIdForShare()
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '')
+  const baseUrl = apiBase || 'https://marketing-game-api.onrender.com'
+  const params = new URLSearchParams({
+    campaignId: String(campaignId),
+    // LINE 快取很重，加時間戳讓每次測試都抓新的 OG 頁。
+    sv: String(Date.now())
+  })
+
+  return `${baseUrl}/share/golden-egg?${params.toString()}`
 }
 
 const getConfiguredShareTitle = () => {
-  return String(campaign.shareTitle || campaign.pageTitle || '九宮格砸金蛋抽獎活動').trim()
+  return String(campaign.shareTitle || campaign.pageTitle || campaign.mainTitle || '九宮格砸金蛋抽獎活動').trim()
 }
 
 const getConfiguredShareDescription = () => {
-  return String(campaign.shareDescription || campaign.heroTagline || '輸入活動序號，立即砸金蛋抽好禮！').trim()
+  return String(campaign.shareDescription || campaign.heroTagline || campaign.noticeText || '輸入活動序號，立即砸金蛋抽好禮！').trim()
 }
 
 const getConfiguredShareText = (channel = 'system') => {
@@ -1529,57 +1546,109 @@ const getConfiguredShareText = (channel = 'system') => {
     return String(campaign.telegramShareText || `${getConfiguredShareTitle()}｜${getConfiguredShareDescription()}`).trim()
   }
 
-  return String(campaign.systemShareText || `${getConfiguredShareTitle()}\n${getConfiguredShareDescription()}`).trim()
+  return String(campaign.systemShareText || `${getConfiguredShareTitle()}
+${getConfiguredShareDescription()}`).trim()
 }
 
-const getShareTextWithUrl = (channel = 'system') => {
+const getShareTextWithFrontendUrl = (channel = 'system') => {
   return [
     getConfiguredShareText(channel),
     getConfiguredShareUrl()
   ]
     .filter(Boolean)
-    .join('\n')
+    .join('
+')
 }
 
-// 第 368 批：分享按鈕變數錯誤修正版。
-// 修正第 367 批使用不存在的 resolvedCampaignId，造成點 LINE / Telegram 完全沒反應。
-const openDirectShare = (platform) => {
+const openShareUrl = (url) => {
+  if (!url) {
+    noticeText.value = '找不到分享網址。'
+    return
+  }
+
+  // 手機瀏覽器最穩定：同頁跳轉，避免 window.open 被阻擋。
+  window.location.assign(url)
+}
+
+const shareCampaign = async () => {
+  const shareTitle = getConfiguredShareTitle()
+  const shareDescription = getConfiguredShareDescription()
+  const shareText = getConfiguredShareText('system')
+  const shareTextWithUrl = getShareTextWithFrontendUrl('system')
+  const shareUrl = getConfiguredShareUrl()
+
   try {
-    const rawTargetUrl = getConfiguredShareUrl()
-    const rawLandingUrl = getConfiguredShareLandingUrl({ cacheBust: true })
-    const landingUrl = encodeURIComponent(rawLandingUrl)
-    let url = ''
-
-    if (platform === 'line') {
-      const lineText = encodeURIComponent(getConfiguredShareText('line'))
-      url = `https://social-plugins.line.me/lineit/share?url=${landingUrl}&text=${lineText}`
-
-      navigator.clipboard?.writeText(`${getConfiguredShareText('line')}\n${rawTargetUrl}`).catch(() => {})
-      noticeText.value = '正在開啟 LINE 分享。'
+    if (navigator.share) {
+      await navigator.share({
+        title: shareTitle,
+        text: shareText,
+        url: shareUrl
+      })
+    } else {
+      await navigator.clipboard.writeText(shareTextWithUrl)
+      noticeText.value = '分享文字已複製，可貼到 LINE、Facebook 或其他社群。'
     }
 
-    if (platform === 'telegram') {
-      const telegramText = encodeURIComponent(getConfiguredShareText('telegram'))
-      url = `https://t.me/share/url?url=${landingUrl}&text=${telegramText}`
-      noticeText.value = '正在開啟 Telegram 分享。'
-    }
+    player.sharedCount += 1
+    shareMessage.value = '分享內容已送出或複製。抽獎機會請使用主辦單位提供的序號兌換。'
+    showShareMessage.value = true
 
-    if (platform === 'facebook') {
-      url = `https://www.facebook.com/sharer/sharer.php?u=${landingUrl}`
-      noticeText.value = '正在開啟分享視窗。'
-    }
-
-    if (!url) {
-      noticeText.value = '找不到可用的分享方式。'
-      return
-    }
-
-    window.location.href = url
+    window.setTimeout(() => {
+      showShareMessage.value = false
+      shareMessage.value = ''
+    }, 2600)
   } catch (error) {
-    console.error('開啟分享失敗：', error)
-    noticeText.value = '開啟分享失敗，請重新整理後再試。'
+    if (error?.name === 'AbortError') return
+
+    console.warn('系統分享失敗：', error)
+
+    try {
+      await navigator.clipboard.writeText(shareTextWithUrl)
+      noticeText.value = '系統分享失敗，已改為複製分享文字。'
+    } catch (copyError) {
+      noticeText.value = shareTextWithUrl
+    }
   }
 }
+
+const shareToLine = () => {
+  const landingUrl = getConfiguredShareLandingUrl()
+  const shareText = getConfiguredShareText('line')
+  const url = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(landingUrl)}&text=${encodeURIComponent(shareText)}`
+
+  noticeText.value = '正在開啟 LINE 分享。'
+  openShareUrl(url)
+}
+
+const shareToTelegram = () => {
+  const landingUrl = getConfiguredShareLandingUrl()
+  const shareText = getConfiguredShareText('telegram')
+  const url = `https://t.me/share/url?url=${encodeURIComponent(landingUrl)}&text=${encodeURIComponent(shareText)}`
+
+  noticeText.value = '正在開啟 Telegram 分享。'
+  openShareUrl(url)
+}
+
+const openDirectShare = (platform) => {
+  if (platform === 'line') {
+    shareToLine()
+    return
+  }
+
+  if (platform === 'telegram') {
+    shareToTelegram()
+    return
+  }
+
+  if (platform === 'facebook') {
+    const landingUrl = getConfiguredShareLandingUrl()
+    openShareUrl(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(landingUrl)}`)
+    return
+  }
+
+  noticeText.value = '找不到可用的分享方式。'
+}
+
 
 const isSerialRedeemLocked = computed(() => {
   return serialRedeemLockedUntil.value > Date.now()
@@ -1690,36 +1759,6 @@ const redeemSerialCode = async () => {
 }
 
 
-const shareCampaign = async () => {
-  const shareTitle = getConfiguredShareTitle()
-  const shareDescription = getConfiguredShareDescription()
-  const shareText = getConfiguredShareText('system')
-  const shareTextWithUrl = getShareTextWithUrl('system')
-  const shareUrl = getConfiguredShareUrl()
-
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: shareTitle,
-        text: shareText,
-        url: shareUrl
-      })
-    } else {
-      await navigator.clipboard.writeText(shareTextWithUrl)
-    }
-
-    player.sharedCount += 1
-    shareMessage.value = '分享內容已送出或複製。抽獎機會請使用主辦單位提供的序號兌換。'
-    showShareMessage.value = true
-
-    window.setTimeout(() => {
-      showShareMessage.value = false
-      shareMessage.value = ''
-    }, 2600)
-  } catch (error) {
-    console.warn('Share canceled or failed:', error)
-  }
-}
 
 const copyResultText = async () => {
   if (!resultPrize.value) return
@@ -2183,7 +2222,7 @@ onUnmounted(() => {
               type="button"
               class="px-3 font-black shadow-xl transition hover:brightness-110"
               :style="getShareButtonStyle('line')"
-              @click="openDirectShare('line')"
+              @click="shareToLine"
             >
               {{ campaign.lineShareButtonText }}
             </button>
@@ -2193,7 +2232,7 @@ onUnmounted(() => {
               type="button"
               class="px-3 font-black shadow-xl transition hover:brightness-110"
               :style="getShareButtonStyle('telegram')"
-              @click="openDirectShare('telegram')"
+              @click="shareToTelegram"
             >
               {{ campaign.telegramShareButtonText }}
             </button>
