@@ -4599,7 +4599,311 @@ const actualSystemSharePreviewText = computed(() => {
 
         </section>
 
-        <section
+        
+          <section
+            id="share-settings-panel"
+            class="rounded-[2rem] border border-fuchsia-100 bg-fuchsia-50/70 p-5 shadow-sm"
+          >
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.2em] text-fuchsia-600">
+                  Share Settings
+                </p>
+                <h3 class="mt-1 text-xl font-black text-slate-950">
+                  分享設定
+                </h3>
+                <p class="mt-1 text-sm font-bold leading-6 text-slate-500">
+                  目前前台已整合為單一「系統分享」按鈕，可在這裡調整分享文字、按鈕樣式與 LINE 內建瀏覽器提示。
+                </p>
+              </div>
+
+              <button
+                type="button"
+                class="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white"
+                @click="databaseGameConfigForm.shareUrl = `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId || 1}`"
+              >
+                套用正式活動網址
+              </button>
+            </div>
+
+            <div class="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <label class="admin-field">
+                <span>分享標題 shareTitle</span>
+                <input
+                  v-model="databaseGameConfigForm.shareTitle"
+                  type="text"
+                  placeholder="九宮格砸金蛋抽獎活動"
+                />
+              </label>
+
+              <label class="admin-field">
+                <span>分享網址 shareUrl</span>
+                <input
+                  v-model="databaseGameConfigForm.shareUrl"
+                  type="url"
+                  placeholder="https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=1"
+                />
+              </label>
+
+              <label class="admin-field md:col-span-2">
+                <span>分享描述 shareDescription（連結預覽 / OG 描述）</span>
+                <input
+                  v-model="databaseGameConfigForm.shareDescription"
+                  type="text"
+                  placeholder="輸入活動序號，立即砸金蛋抽好禮！"
+                />
+              </label>
+
+              <label class="admin-field md:col-span-2">
+                <span>分享圖片網址 shareImageUrl</span>
+                <input
+                  v-model="databaseGameConfigForm.shareImageUrl"
+                  type="url"
+                  placeholder="https://example.com/share-golden-egg.jpg"
+                />
+              </label>
+
+              <label class="admin-field md:col-span-2">
+                <span>系統分享文字 systemShareText（手機實際分享文字）</span>
+                <textarea
+                  v-model="databaseGameConfigForm.systemShareText"
+                  rows="3"
+                  placeholder="🎉 九宮格砸金蛋抽獎活動&#10;輸入活動序號，立即砸金蛋抽好禮！"
+                ></textarea>
+              </label>
+
+              <label class="admin-field md:col-span-2">
+                <span>系統分享按鈕文字 systemShareButtonText</span>
+                <input
+                  v-model="databaseGameConfigForm.systemShareButtonText"
+                  type="text"
+                  placeholder="系統分享"
+                />
+              </label>
+
+              <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-slate-800">文字大小</p>
+                    <p class="text-xs font-bold text-slate-400">
+                      {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }} px
+                    </p>
+                  </div>
+                  <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                    {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }}
+                  </span>
+                </div>
+                <input
+                  v-model.number="databaseGameConfigForm.systemShareButtonTextSize"
+                  class="mt-3 w-full accent-slate-950"
+                  type="range"
+                  min="10"
+                  max="28"
+                  step="1"
+                />
+              </div>
+
+              <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-slate-800">背景顏色</p>
+                    <p class="text-xs font-bold text-slate-400">
+                      {{ databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d' }}
+                    </p>
+                  </div>
+                  <input
+                    v-model="databaseGameConfigForm.systemShareButtonBgColor"
+                    class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
+                    type="color"
+                  />
+                </div>
+              </div>
+
+              <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-slate-800">文字顏色</p>
+                    <p class="text-xs font-bold text-slate-400">
+                      {{ databaseGameConfigForm.systemShareButtonTextColor || '#ffffff' }}
+                    </p>
+                  </div>
+                  <input
+                    v-model="databaseGameConfigForm.systemShareButtonTextColor"
+                    class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
+                    type="color"
+                  />
+                </div>
+              </div>
+
+              <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-slate-800">按鈕圓角</p>
+                    <p class="text-xs font-bold text-slate-400">
+                      {{ databaseGameConfigForm.systemShareButtonRadius || 16 }} px
+                    </p>
+                  </div>
+                  <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                    {{ databaseGameConfigForm.systemShareButtonRadius || 16 }}
+                  </span>
+                </div>
+                <input
+                  v-model.number="databaseGameConfigForm.systemShareButtonRadius"
+                  class="mt-3 w-full accent-slate-950"
+                  type="range"
+                  min="0"
+                  max="40"
+                  step="1"
+                />
+              </div>
+
+              <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-slate-800">按鈕高度</p>
+                    <p class="text-xs font-bold text-slate-400">
+                      上下內距 {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }} px
+                    </p>
+                  </div>
+                  <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                    {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }}
+                  </span>
+                </div>
+                <input
+                  v-model.number="databaseGameConfigForm.systemShareButtonPaddingY"
+                  class="mt-3 w-full accent-slate-950"
+                  type="range"
+                  min="6"
+                  max="28"
+                  step="1"
+                />
+              </div>
+
+              <div class="md:col-span-2 rounded-3xl border border-amber-100 bg-amber-50/80 p-4">
+                <p class="text-sm font-black text-slate-800">快速配色</p>
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-[#7f1d1d] px-4 py-2 text-xs font-black text-white"
+                    @click="databaseGameConfigForm.systemShareButtonBgColor = '#7f1d1d'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                  >
+                    深紅
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-[#facc15] px-4 py-2 text-xs font-black text-[#7f1d1d]"
+                    @click="databaseGameConfigForm.systemShareButtonBgColor = '#facc15'; databaseGameConfigForm.systemShareButtonTextColor = '#7f1d1d'"
+                  >
+                    金色
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-[#22c55e] px-4 py-2 text-xs font-black text-white"
+                    @click="databaseGameConfigForm.systemShareButtonBgColor = '#22c55e'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                  >
+                    綠色
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-[#111827] px-4 py-2 text-xs font-black text-white"
+                    @click="databaseGameConfigForm.systemShareButtonBgColor = '#111827'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                  >
+                    深色
+                  </button>
+                </div>
+              </div>
+
+              <div class="md:col-span-2 rounded-3xl border border-white bg-white/85 p-4">
+                <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
+                <button
+                  type="button"
+                  class="w-full font-black shadow-lg"
+                  :style="{
+                    borderRadius: `${Number(databaseGameConfigForm.systemShareButtonRadius || 16)}px`,
+                    fontSize: `${Number(databaseGameConfigForm.systemShareButtonTextSize || 14)}px`,
+                    paddingTop: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
+                    paddingBottom: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
+                    background: databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d',
+                    color: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
+                  }"
+                >
+                  {{ databaseGameConfigForm.systemShareButtonText || '系統分享' }}
+                </button>
+              </div>
+
+              <div class="md:col-span-2 rounded-3xl border border-slate-100 bg-white/80 p-4 text-xs font-bold text-slate-600">
+                <div class="flex items-center justify-between gap-3">
+                  <p class="font-black text-slate-700">手機系統分享實際預覽</p>
+                  <span class="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700">
+                    以 systemShareText 為主
+                  </span>
+                </div>
+                <pre class="mt-3 whitespace-pre-wrap rounded-2xl bg-slate-950 p-3 text-xs font-bold leading-6 text-white">{{ actualSystemSharePreviewText }}</pre>
+              </div>
+
+              <div class="md:col-span-2 rounded-3xl border border-indigo-100 bg-indigo-50/80 p-4">
+                <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h4 class="text-sm font-black text-slate-950">
+                      LINE 內建瀏覽器提示
+                    </h4>
+                    <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">
+                      客人從 LINE 開啟活動時，提示他可用外部瀏覽器開啟，並提供複製活動連結。
+                    </p>
+                  </div>
+                  <label class="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-indigo-100">
+                    <input
+                      v-model="databaseGameConfigForm.showLineBrowserHint"
+                      type="checkbox"
+                      class="h-4 w-4"
+                    />
+                    顯示提示
+                  </label>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label class="admin-field">
+                    <span>提示標題 lineBrowserHintTitle</span>
+                    <input
+                      v-model="databaseGameConfigForm.lineBrowserHintTitle"
+                      type="text"
+                      placeholder="建議使用外部瀏覽器開啟"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>複製按鈕文字 lineBrowserHintCopyButtonText</span>
+                    <input
+                      v-model="databaseGameConfigForm.lineBrowserHintCopyButtonText"
+                      type="text"
+                      placeholder="複製活動連結"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>關閉按鈕文字 lineBrowserHintCloseButtonText</span>
+                    <input
+                      v-model="databaseGameConfigForm.lineBrowserHintCloseButtonText"
+                      type="text"
+                      placeholder="我知道了"
+                    />
+                  </label>
+
+                  <label class="admin-field md:col-span-2">
+                    <span>提示說明 lineBrowserHintText</span>
+                    <textarea
+                      v-model="databaseGameConfigForm.lineBrowserHintText"
+                      rows="3"
+                      placeholder="你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。"
+                    ></textarea>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+
+
+<section
           v-if="activeSection === 'basic'"
           class="space-y-4"
         >
