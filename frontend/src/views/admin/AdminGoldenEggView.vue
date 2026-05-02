@@ -3607,7 +3607,7 @@ const actualSystemSharePreviewText = computed(() => {
                   分享設定
                 </h3>
                 <p class="mt-1 text-sm font-bold leading-6 text-slate-500">
-                  目前前台已整合為單一「系統分享」按鈕。這裡先提供穩定版核心設定。
+                  目前只保留這一組分享設定；上方舊分享設定已移除，避免同一欄位重複出現。
                 </p>
               </div>
             </div>
