@@ -3498,6 +3498,16 @@ watch(
 
 
 
+
+const actualSystemSharePreviewText = computed(() => {
+  const title = String(databaseGameConfigForm.shareTitle || '九宮格砸金蛋抽獎活動').trim()
+  const body = String(databaseGameConfigForm.systemShareText || databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！').trim()
+  const url = String(databaseGameConfigForm.shareUrl || '').trim()
+
+  return [title, body, url].filter(Boolean).join('\n')
+})
+
+
 </script>
 
 <template>
@@ -4174,7 +4184,7 @@ watch(
                 </label>
 
                 <label class="admin-field md:col-span-2">
-                  <span>分享描述 shareDescription</span>
+                  <span>分享描述 shareDescription（連結預覽 / OG 描述）</span>
                   <input
                     v-model="databaseGameConfigForm.shareDescription"
                     type="text"
@@ -4338,12 +4348,15 @@ watch(
                 </div>
 
 <label class="admin-field md:col-span-2">
-                  <span>系統分享文字 systemShareText</span>
+                  <span>系統分享文字 systemShareText（手機實際分享文字）</span>
                   <textarea
                     v-model="databaseGameConfigForm.systemShareText"
                     rows="3"
                     placeholder="🎉 九宮格砸金蛋抽獎活動&#10;輸入活動序號，立即砸金蛋抽好禮！"
                   ></textarea>
+                  <small class="text-xs font-bold text-rose-500">
+                    這裡才是手機系統分享主要會帶出的文字；下方預覽會照這裡顯示。
+                  </small>
                 </label>
 </div>
 
@@ -4368,10 +4381,19 @@ watch(
               </div>
 
 <div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-bold text-slate-600">
-                分享預覽：
-                <span class="font-black text-slate-950">{{ databaseGameConfigForm.shareTitle }}</span>
-                <span class="mx-1">｜</span>
-                <span>{{ databaseGameConfigForm.shareDescription }}</span>
+                <div class="flex items-center justify-between gap-3">
+                  <p class="font-black text-slate-700">手機系統分享實際預覽</p>
+                  <span class="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700">
+                    以 systemShareText 為主
+                  </span>
+                </div>
+
+                <pre class="mt-3 whitespace-pre-wrap rounded-2xl bg-slate-950 p-3 text-xs font-bold leading-6 text-white">{{ actualSystemSharePreviewText }}</pre>
+
+                <p class="mt-2 text-[11px] font-bold leading-5 text-slate-400">
+                  手機分享時通常會顯示「分享標題 shareTitle」＋「系統分享文字 systemShareText」＋「分享網址 shareUrl」。
+                  「分享描述 shareDescription」主要保留給連結預覽 / OG 描述使用。
+                </p>
               </div>
             </div>
 
