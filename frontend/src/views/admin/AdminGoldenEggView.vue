@@ -3508,6 +3508,8 @@ const actualSystemSharePreviewText = computed(() => {
 })
 
 
+
+// 第 394 批：Admin template 標籤完整修正版。
 </script>
 
 <template>
@@ -4110,7 +4112,7 @@ const actualSystemSharePreviewText = computed(() => {
                   type="range"
                   min="48"
                   max="120"
-                ></textarea>
+                 />
                 <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggSize }}px</span>
               </label>
 
@@ -4443,7 +4445,7 @@ const actualSystemSharePreviewText = computed(() => {
                   v-model="databaseGameConfigForm.systemShareButtonText"
                   type="text"
                   placeholder="系統分享"
-                ></textarea>
+                 />
               </label>
 
               <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
@@ -5958,7 +5960,7 @@ const actualSystemSharePreviewText = computed(() => {
                     accept=".json,.csv,text/csv,application/json"
                     class="hidden"
                     @change="handleSerialImportFile"
-                  ></textarea>
+                   />
                   選擇 JSON / CSV 檔匯入
                 </label>
 
