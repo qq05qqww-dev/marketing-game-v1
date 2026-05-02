@@ -1482,6 +1482,17 @@ const resetEggBoard = () => {
 }
 
 // 第 365 批：分享文字與網址不重複，並確實使用後台 systemShareText / lineShareText / telegramShareText。
+const getConfiguredShareLandingUrl = () => {
+  const campaignId = resolvedCampaignId.value || 1
+  const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '')
+
+  if (apiBase) {
+    return `${apiBase}/share/golden-egg?campaignId=${encodeURIComponent(campaignId)}`
+  }
+
+  return `https://marketing-game-api.onrender.com/share/golden-egg?campaignId=${encodeURIComponent(campaignId)}`
+}
+
 const getConfiguredShareUrl = () => {
   const customUrl = String(campaign.shareUrl || '').trim()
 
@@ -1522,30 +1533,33 @@ const getShareTextWithUrl = (channel = 'system') => {
 }
 
 const openDirectShare = async (platform) => {
-  const rawShareUrl = getConfiguredShareUrl()
-  const shareUrl = encodeURIComponent(rawShareUrl)
+  const rawTargetUrl = getConfiguredShareUrl()
+  const rawLandingUrl = getConfiguredShareLandingUrl()
+  const targetUrl = encodeURIComponent(rawTargetUrl)
+  const landingUrl = encodeURIComponent(rawLandingUrl)
   let url = ''
 
   if (platform === 'line') {
-    // LINE 文字分享：文字與網址只放一次，避免出現重複網址。
-    const lineText = encodeURIComponent(getShareTextWithUrl('line'))
-    url = `https://line.me/R/msg/text/?${lineText}`
+    // LINE 小卡片需要抓後端 OG 落地頁，才會顯示後台設定的標題 / 描述 / 圖片。
+    const lineText = encodeURIComponent(getConfiguredShareText('line'))
+    url = `https://social-plugins.line.me/lineit/share?url=${landingUrl}&text=${lineText}`
   }
 
   if (platform === 'telegram') {
     const telegramText = encodeURIComponent(getConfiguredShareText('telegram'))
-    url = `https://t.me/share/url?url=${shareUrl}&text=${telegramText}`
+    url = `https://t.me/share/url?url=${landingUrl}&text=${telegramText}`
   }
 
   if (platform === 'facebook') {
-    url = `https://www.facebook.com/sharer/sharer.php?u=${shareUrl}`
+    url = `https://www.facebook.com/sharer/sharer.php?u=${landingUrl}`
   }
 
   if (!url) return
 
   if (platform === 'line') {
     try {
-      await navigator.clipboard?.writeText(getShareTextWithUrl('line'))
+      await navigator.clipboard?.writeText(`${getConfiguredShareText('line')}
+${rawTargetUrl}`)
       noticeText.value = 'LINE 分享文字已複製，正在開啟 LINE。'
     } catch (error) {
       noticeText.value = '正在開啟 LINE 分享。'

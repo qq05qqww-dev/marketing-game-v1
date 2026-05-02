@@ -18,6 +18,7 @@ import rewardRoutes from './routes/reward.routes.js'
 import shareRewardRoutes from './routes/shareReward.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import healthRoutes from './routes/health.routes.js'
+import shareRoutes from './routes/share.routes.js'
 import {
   securityHeaders,
   globalApiRateLimit,
@@ -64,10 +65,13 @@ app.get('/', (req, res) => {
     data: {
       service: 'multi-game-platform-backend',
       version: 'v2.2-stable',
-      batch: 338
+      batch: 366
     }
   })
 })
+
+// 分享落地頁給 LINE / Facebook / Telegram 抓 Open Graph，不走 /api。
+app.use('/share', shareRoutes)
 
 // 健康檢查放在 rate limit 前面，方便伺服器監控。
 // /api/db-health 等 healthRoutes 仍可正常使用。
