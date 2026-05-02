@@ -2068,7 +2068,7 @@ onUnmounted(() => {
               </p>
             </div>
 
-            <div class="flex flex-col gap-2 sm:flex-row">
+            <div class="serial-redeem-row flex flex-col gap-2 sm:flex-row">
               <input
                 v-model="serialCodeInput"
                 type="text"
@@ -2080,12 +2080,14 @@ onUnmounted(() => {
 
               <button
                 type="button"
-                class="rounded-2xl px-5 py-3 font-black shadow-xl transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+                class="serial-redeem-button rounded-2xl px-5 py-3 font-black shadow-xl transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 :style="serialRedeemButtonStyle"
                 :disabled="isCracking || isSerialRedeeming"
                 @click="redeemSerialCode"
               >
-                {{ isSerialRedeemLocked ? `${serialRedeemLockLeftSeconds} 秒後再試` : campaign.serialRedeemButtonText }}
+                <span class="serial-redeem-button-text">
+                  {{ isSerialRedeemLocked ? `${serialRedeemLockLeftSeconds} 秒後再試` : (campaign.serialRedeemButtonText || '驗證序號') }}
+                </span>
               </button>
             </div>
 
@@ -3136,6 +3138,35 @@ onUnmounted(() => {
 @media (max-width: 360px) {
   .golden-egg-card {
     min-height: 104px;
+  }
+}
+
+
+/* 第 360 批：前台序號驗證按鈕跑版修正 */
+.serial-redeem-row {
+  align-items: stretch;
+}
+
+.serial-redeem-button {
+  display: inline-flex;
+  min-width: 136px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.serial-redeem-button-text {
+  display: inline-block;
+  min-width: 4em;
+}
+
+@media (max-width: 640px) {
+  .serial-redeem-button {
+    width: 100%;
+    min-width: 0;
   }
 }
 

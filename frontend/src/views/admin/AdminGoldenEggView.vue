@@ -790,6 +790,13 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
   databaseGameConfigForm.eggColorTop = campaign.eggColorTop || databaseGameConfigForm.eggColorTop || '#fff7ad'
   databaseGameConfigForm.eggColorMiddle = campaign.eggColorMiddle || databaseGameConfigForm.eggColorMiddle || '#fde047'
   databaseGameConfigForm.eggColorBottom = campaign.eggColorBottom || databaseGameConfigForm.eggColorBottom || '#b45309'
+  databaseGameConfigForm.shareTitle = campaign.shareTitle || databaseGameConfigForm.shareTitle || '九宮格砸金蛋抽獎活動'
+  databaseGameConfigForm.shareDescription = campaign.shareDescription || databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
+  databaseGameConfigForm.shareUrl = campaign.shareUrl || databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
+  databaseGameConfigForm.shareImageUrl = campaign.shareImageUrl || databaseGameConfigForm.shareImageUrl || ''
+  databaseGameConfigForm.systemShareText = campaign.systemShareText || databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'
+  databaseGameConfigForm.lineShareText = campaign.lineShareText || databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
+  databaseGameConfigForm.telegramShareText = campaign.telegramShareText || databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
 }
 
 const syncToFrontNow = async () => {
@@ -3104,6 +3111,13 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.showActivityCountdown = settings.showActivityCountdown !== false
   databaseGameConfigForm.activityCountdownAlwaysShowSeconds = settings.activityCountdownAlwaysShowSeconds !== false
   databaseGameConfigForm.showBottomNav = settings.showBottomNav !== false
+  databaseGameConfigForm.shareTitle = settings.shareTitle || campaign.shareTitle || '九宮格砸金蛋抽獎活動'
+  databaseGameConfigForm.shareDescription = settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
+  databaseGameConfigForm.shareUrl = settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
+  databaseGameConfigForm.shareImageUrl = settings.shareImageUrl || campaign.shareImageUrl || ''
+  databaseGameConfigForm.systemShareText = settings.systemShareText || campaign.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'
+  databaseGameConfigForm.lineShareText = settings.lineShareText || campaign.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
+  databaseGameConfigForm.telegramShareText = settings.telegramShareText || campaign.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
 
   // 第 353 批：資料庫視覺設定只能從 PostgreSQL gameConfig.settings 載入。
   databaseGameConfigForm.eggSize = Number(settings.eggSize ?? 74)
@@ -3142,7 +3156,14 @@ const buildDatabaseGameConfigPayload = () => {
     // 第 353 批：三個金蛋顏色欄位必須明確寫進 PostgreSQL。
     eggColorTop: databaseGameConfigForm.eggColorTop || '#fff7ad',
     eggColorMiddle: databaseGameConfigForm.eggColorMiddle || '#fde047',
-    eggColorBottom: databaseGameConfigForm.eggColorBottom || '#b45309'
+    eggColorBottom: databaseGameConfigForm.eggColorBottom || '#b45309',
+    shareTitle: databaseGameConfigForm.shareTitle || '九宮格砸金蛋抽獎活動',
+    shareDescription: databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！',
+    shareUrl: databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`,
+    shareImageUrl: databaseGameConfigForm.shareImageUrl || '',
+    systemShareText: databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！',
+    lineShareText: databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
+    telegramShareText: databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
   }
 }
 
@@ -3975,7 +3996,104 @@ const formatDatabaseSerialTime = (value) => {
               </label>
             </div>
 
-                        <div class="mt-4 rounded-3xl border border-amber-100 bg-amber-50/70 p-4">
+            
+            <div class="mt-4 rounded-3xl border border-sky-100 bg-sky-50/70 p-4">
+              <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h4 class="text-sm font-black text-slate-950">
+                    分享設定
+                  </h4>
+                  <p class="mt-1 text-xs font-bold text-sky-700">
+                    控制前台「系統分享 / LINE 分享 / Telegram」按鈕要帶出的文字與網址。
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                  @click="databaseGameConfigForm.shareUrl = `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId || 1}`"
+                >
+                  套用正式活動網址
+                </button>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label class="admin-field">
+                  <span>分享標題 shareTitle</span>
+                  <input
+                    v-model="databaseGameConfigForm.shareTitle"
+                    type="text"
+                    placeholder="九宮格砸金蛋抽獎活動"
+                  />
+                </label>
+
+                <label class="admin-field">
+                  <span>分享網址 shareUrl</span>
+                  <input
+                    v-model="databaseGameConfigForm.shareUrl"
+                    type="url"
+                    placeholder="https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=1"
+                  />
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>分享描述 shareDescription</span>
+                  <input
+                    v-model="databaseGameConfigForm.shareDescription"
+                    type="text"
+                    placeholder="輸入活動序號，立即砸金蛋抽好禮！"
+                  />
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>分享圖片網址 shareImageUrl</span>
+                  <input
+                    v-model="databaseGameConfigForm.shareImageUrl"
+                    type="url"
+                    placeholder="https://example.com/share-golden-egg.jpg"
+                  />
+                  <small class="text-xs font-bold text-slate-400">
+                    LINE 預覽圖需要 Open Graph 支援；目前先作為分享資料欄位保存。
+                  </small>
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>系統分享文字 systemShareText</span>
+                  <textarea
+                    v-model="databaseGameConfigForm.systemShareText"
+                    rows="3"
+                    placeholder="🎉 九宮格砸金蛋抽獎活動&#10;輸入活動序號，立即砸金蛋抽好禮！"
+                  ></textarea>
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>LINE 分享文字 lineShareText</span>
+                  <textarea
+                    v-model="databaseGameConfigForm.lineShareText"
+                    rows="3"
+                    placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
+                  ></textarea>
+                </label>
+
+                <label class="admin-field md:col-span-2">
+                  <span>Telegram 分享文字 telegramShareText</span>
+                  <textarea
+                    v-model="databaseGameConfigForm.telegramShareText"
+                    rows="3"
+                    placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
+                  ></textarea>
+                </label>
+              </div>
+
+              <div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-bold text-slate-600">
+                分享預覽：
+                <span class="font-black text-slate-950">{{ databaseGameConfigForm.shareTitle }}</span>
+                <span class="mx-1">｜</span>
+                <span>{{ databaseGameConfigForm.shareDescription }}</span>
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-3xl border border-amber-100 bg-amber-50/70 p-4">
               <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                 <div>
                   <h4 class="text-sm font-black text-amber-950">
