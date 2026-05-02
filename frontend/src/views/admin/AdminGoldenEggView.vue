@@ -130,8 +130,15 @@ const databaseRecordLimitOptions = [
   { label: '全部', value: 0 }
 ]
 
+
+const getRecordSourceArray = (source) => {
+  if (Array.isArray(source)) return source
+  if (Array.isArray(source?.value)) return source.value
+  return []
+}
+
 const displayedDatabasePlayRecords = computed(() => {
-  const records = filteredDatabasePlayRecords.value || []
+  const records = getRecordSourceArray(filteredDatabasePlayRecords)
   const limit = Number(databaseRecordDisplayLimit.plays || 0)
 
   if (!limit) return records
@@ -140,13 +147,14 @@ const displayedDatabasePlayRecords = computed(() => {
 })
 
 const displayedDatabaseRewardRecords = computed(() => {
-  const records = filteredDatabaseRewardRecords.value || []
+  const records = getRecordSourceArray(filteredDatabaseRewardRecords)
   const limit = Number(databaseRecordDisplayLimit.rewards || 0)
 
   if (!limit) return records
 
   return records.slice(0, limit)
 })
+
 
 
 const databasePreviewSyncMessage = ref('')
@@ -3547,6 +3555,8 @@ watch(
 // 第 398 批：紀錄管理展開按鈕位置修正版。
 
 // 第 399 批：紀錄管理顯示筆數控制版。
+
+// 第 400 批：紀錄管理顯示筆數真正生效版。
 </script>
 
 <template>
@@ -5232,7 +5242,11 @@ watch(
                   class="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold leading-6 text-slate-500"
                 >
                   目前已收合「遊玩紀錄」。可先選擇顯示筆數，再點右上方「展開」查看。
-                </div>
+                
+                  <div class="mt-2 text-xs font-black text-violet-600">
+                    目前顯示：{{ displayedDatabasePlayRecords.length }} / {{ filteredDatabasePlayRecords.length }} 筆
+                  </div>
+</div>
 
                 <div
                   v-else
@@ -5251,7 +5265,7 @@ watch(
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                       <tr
-                        v-for="item in filteredDatabasePlayRecords.slice(0, 120)"
+                        v-for="item in displayedDatabasePlayRecords"
                         :key="item.id"
                         class="align-top hover:bg-slate-50"
                       >
@@ -5285,7 +5299,7 @@ watch(
                   </table>
 
                   <p
-                    v-if="!filteredDatabasePlayRecords.length"
+                    v-if="!displayedDatabasePlayRecords.length"
                     class="px-4 py-8 text-center text-sm font-bold text-slate-500"
                   >
                     目前沒有符合條件的遊玩紀錄。
@@ -5332,7 +5346,11 @@ watch(
                   class="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold leading-6 text-slate-500"
                 >
                   目前已收合「中獎 / 發獎紀錄」。可先選擇顯示筆數，再點右上方「展開」查看。
-                </div>
+                
+                  <div class="mt-2 text-xs font-black text-violet-600">
+                    目前顯示：{{ displayedDatabaseRewardRecords.length }} / {{ filteredDatabaseRewardRecords.length }} 筆
+                  </div>
+</div>
 
                 <div
                   v-else
@@ -5351,7 +5369,7 @@ watch(
                     </thead>
                     <tbody class="divide-y divide-slate-100">
                       <tr
-                        v-for="item in filteredDatabaseRewardRecords.slice(0, 120)"
+                        v-for="item in displayedDatabaseRewardRecords"
                         :key="item.id"
                         class="align-top hover:bg-slate-50"
                       >
@@ -5403,7 +5421,7 @@ watch(
                   </table>
 
                   <p
-                    v-if="!filteredDatabaseRewardRecords.length"
+                    v-if="!displayedDatabaseRewardRecords.length"
                     class="px-4 py-8 text-center text-sm font-bold text-slate-500"
                   >
                     目前沒有符合條件的中獎紀錄。
