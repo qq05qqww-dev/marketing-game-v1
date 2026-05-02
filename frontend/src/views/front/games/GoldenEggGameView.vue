@@ -184,8 +184,8 @@ const campaign = reactive({
   showBottomNav: true,
   lineBrowserHintCloseButtonText: '我知道了',
   lineBrowserHintCopyButtonText: '複製活動連結',
-  lineBrowserHintText: '{{ campaign.lineBrowserHintText || '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。' }}',
-  lineBrowserHintTitle: '{{ campaign.lineBrowserHintTitle || '建議使用外部瀏覽器開啟' }}',
+  lineBrowserHintText: '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。',
+  lineBrowserHintTitle: '建議使用外部瀏覽器開啟',
   showLineBrowserHint: true,
   bottomNavBgColor: 'rgba(127, 29, 29, 0.72)',
   bottomNavBorderColor: '#fde68a',
@@ -1856,7 +1856,7 @@ onUnmounted(() => {
 
           <div class="min-w-0 flex-1">
             <h3 class="text-base font-black">
-              建議使用外部瀏覽器開啟
+              {{ campaign.lineBrowserHintTitle || '建議使用外部瀏覽器開啟' }}
             </h3>
             <p class="mt-1 text-sm font-bold leading-6 text-amber-900/80">
               你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。
