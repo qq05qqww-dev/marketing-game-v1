@@ -156,6 +156,32 @@ const displayedDatabaseRewardRecords = computed(() => {
 })
 
 
+const databaseRecordStats = computed(() => {
+  const playRecords = getRecordSourceArray(filteredDatabasePlayRecords)
+  const rewardRecords = getRecordSourceArray(filteredDatabaseRewardRecords)
+
+  const wonPlayCount = playRecords.filter((item) => item.isWin || item.result === 'WIN' || item.prize).length
+  const losePlayCount = Math.max(0, playRecords.length - wonPlayCount)
+
+  const rewardStatusCounts = rewardRecords.reduce((summary, item) => {
+    const status = String(item.status || 'PENDING').toUpperCase()
+    summary[status] = (summary[status] || 0) + 1
+    return summary
+  }, {})
+
+  return {
+    playTotal: playRecords.length,
+    playWon: wonPlayCount,
+    playLose: losePlayCount,
+    rewardTotal: rewardRecords.length,
+    rewardPending: rewardStatusCounts.PENDING || 0,
+    rewardIssued: rewardStatusCounts.ISSUED || 0,
+    rewardCancelled: rewardStatusCounts.CANCELLED || 0
+  }
+})
+
+
+
 
 const databasePreviewSyncMessage = ref('')
 const isSavingDatabaseCampaign = ref(false)
@@ -3557,6 +3583,8 @@ watch(
 // 第 399 批：紀錄管理顯示筆數控制版。
 
 // 第 400 批：紀錄管理顯示筆數真正生效版。
+
+// 第 401 批：紀錄管理快速篩選統計版。
 </script>
 
 <template>
@@ -5203,7 +5231,69 @@ watch(
             </div>
 
             <div class="mt-4 space-y-4">
-              <div class="rounded-3xl bg-white/80 p-4">
+              
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <div class="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-violet-100">
+                    <p class="text-xs font-black text-slate-400">遊玩總數</p>
+                    <p class="mt-1 text-2xl font-black text-slate-950">
+                      {{ databaseRecordStats.playTotal }}
+                    </p>
+                  </div>
+
+                  <div class="rounded-3xl bg-emerald-50 p-4 shadow-sm ring-1 ring-emerald-100">
+                    <p class="text-xs font-black text-emerald-600">中獎</p>
+                    <p class="mt-1 text-2xl font-black text-emerald-700">
+                      {{ databaseRecordStats.playWon }}
+                    </p>
+                  </div>
+
+                  <div class="rounded-3xl bg-slate-50 p-4 shadow-sm ring-1 ring-slate-100">
+                    <p class="text-xs font-black text-slate-500">未中獎</p>
+                    <p class="mt-1 text-2xl font-black text-slate-700">
+                      {{ databaseRecordStats.playLose }}
+                    </p>
+                  </div>
+
+                  <div class="rounded-3xl bg-amber-50 p-4 shadow-sm ring-1 ring-amber-100">
+                    <p class="text-xs font-black text-amber-600">待發獎</p>
+                    <p class="mt-1 text-2xl font-black text-amber-700">
+                      {{ databaseRecordStats.rewardPending }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <div class="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-violet-100">
+                    <p class="text-xs font-black text-slate-400">發獎紀錄</p>
+                    <p class="mt-1 text-2xl font-black text-slate-950">
+                      {{ databaseRecordStats.rewardTotal }}
+                    </p>
+                  </div>
+
+                  <div class="rounded-3xl bg-sky-50 p-4 shadow-sm ring-1 ring-sky-100">
+                    <p class="text-xs font-black text-sky-600">已發獎</p>
+                    <p class="mt-1 text-2xl font-black text-sky-700">
+                      {{ databaseRecordStats.rewardIssued }}
+                    </p>
+                  </div>
+
+                  <div class="rounded-3xl bg-rose-50 p-4 shadow-sm ring-1 ring-rose-100">
+                    <p class="text-xs font-black text-rose-600">已取消</p>
+                    <p class="mt-1 text-2xl font-black text-rose-700">
+                      {{ databaseRecordStats.rewardCancelled }}
+                    </p>
+                  </div>
+
+                  <div class="rounded-3xl bg-violet-50 p-4 shadow-sm ring-1 ring-violet-100">
+                    <p class="text-xs font-black text-violet-600">目前篩選</p>
+                    <p class="mt-1 text-sm font-black leading-6 text-violet-700">
+                      遊玩 {{ displayedDatabasePlayRecords.length }} 筆<br />
+                      發獎 {{ displayedDatabaseRewardRecords.length }} 筆
+                    </p>
+                  </div>
+                </div>
+
+<div class="rounded-3xl bg-white/80 p-4">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                   <h4 class="text-sm font-black text-slate-900">
                     遊玩紀錄
