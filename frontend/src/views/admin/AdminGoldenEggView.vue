@@ -4135,7 +4135,7 @@ watch(
                     分享設定
                   </h4>
                   <p class="mt-1 text-xs font-bold text-sky-700">
-                    控制前台「系統分享 / LINE 分享 / Telegram」按鈕要帶出的文字與網址。
+                    控制前台「系統分享」按鈕的文字、網址與分享內容。
                   </p>
                 </div>
 
@@ -4149,6 +4149,12 @@ watch(
               </div>
 
               <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+
+              <div class="rounded-3xl border border-emerald-100 bg-emerald-50/80 p-4 text-xs font-bold leading-6 text-emerald-700">
+                目前前台已整合為單一「系統分享」按鈕。使用者點擊後可由手機原生分享選單自行選擇 LINE、Telegram、Facebook 或複製連結。
+              </div>
+
+
                 <label class="admin-field">
                   <span>分享標題 shareTitle</span>
                   <input
@@ -4339,25 +4345,7 @@ watch(
                     placeholder="🎉 九宮格砸金蛋抽獎活動&#10;輸入活動序號，立即砸金蛋抽好禮！"
                   ></textarea>
                 </label>
-
-                <label class="admin-field md:col-span-2">
-                  <span>LINE 分享文字 lineShareText</span>
-                  <textarea
-                    v-model="databaseGameConfigForm.lineShareText"
-                    rows="3"
-                    placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
-                  ></textarea>
-                </label>
-
-                <label class="admin-field md:col-span-2">
-                  <span>Telegram 分享文字 telegramShareText</span>
-                  <textarea
-                    v-model="databaseGameConfigForm.telegramShareText"
-                    rows="3"
-                    placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
-                  ></textarea>
-                </label>
-              </div>
+</div>
 
               
               <div class="mt-3 rounded-2xl bg-white/80 p-3">
@@ -6672,7 +6660,7 @@ watch(
               前台分享按鈕
             </h3>
             <p class="mt-1 text-xs font-bold leading-5 text-sky-700/80">
-              控制序號輸入區下方的系統分享、LINE 分享、Telegram 分享按鈕。
+              控制序號輸入區下方的系統分享按鈕。
             </p>
 
             <div class="mt-4 space-y-3">
