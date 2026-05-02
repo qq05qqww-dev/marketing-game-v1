@@ -3117,7 +3117,7 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.shareImageUrl = settings.shareImageUrl || campaign.shareImageUrl || ''
     databaseGameConfigForm.systemShareButtonText = settings.systemShareButtonText || campaign.systemShareButtonText || '系統分享'
   databaseGameConfigForm.systemShareButtonTextSize = Number(settings.systemShareButtonTextSize || campaign.systemShareButtonTextSize || 14)
-  databaseGameConfigForm.systemShareButtonBgColor = settings.systemShareButtonBgColor || campaign.systemShareButtonBgColor || 'rgba(255, 255, 255, 0.12)'
+  databaseGameConfigForm.systemShareButtonBgColor = settings.systemShareButtonBgColor || campaign.systemShareButtonBgColor || '#7f1d1d'
   databaseGameConfigForm.systemShareButtonTextColor = settings.systemShareButtonTextColor || campaign.systemShareButtonTextColor || '#ffffff'
   databaseGameConfigForm.systemShareButtonRadius = Number(settings.systemShareButtonRadius || campaign.systemShareButtonRadius || 16)
   databaseGameConfigForm.systemShareButtonPaddingY = Number(settings.systemShareButtonPaddingY || campaign.systemShareButtonPaddingY || 12)
@@ -3169,13 +3169,13 @@ const buildDatabaseGameConfigPayload = () => {
     shareImageUrl: databaseGameConfigForm.shareImageUrl || '',
     systemShareButtonText: '系統分享',
   systemShareButtonTextSize: 14,
-  systemShareButtonBgColor: 'rgba(255, 255, 255, 0.12)',
+  systemShareButtonBgColor: '#7f1d1d',
   systemShareButtonTextColor: '#ffffff',
   systemShareButtonRadius: 16,
   systemShareButtonPaddingY: 12,
   systemShareButtonText: databaseGameConfigForm.systemShareButtonText || '系統分享',
     systemShareButtonTextSize: Number(databaseGameConfigForm.systemShareButtonTextSize || 14),
-    systemShareButtonBgColor: databaseGameConfigForm.systemShareButtonBgColor || 'rgba(255, 255, 255, 0.12)',
+    systemShareButtonBgColor: databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d',
     systemShareButtonTextColor: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff',
     systemShareButtonRadius: Number(databaseGameConfigForm.systemShareButtonRadius || 16),
     systemShareButtonPaddingY: Number(databaseGameConfigForm.systemShareButtonPaddingY || 12),
@@ -3382,6 +3382,17 @@ const formatDatabaseSerialTime = (value) => {
   } catch (error) {
     return String(value)
   }
+}
+
+
+
+const normalizeColorInputValue = (value, fallback = '#7f1d1d') => {
+  const text = String(value || '').trim()
+
+  if (/^#[0-9a-fA-F]{6}$/.test(text)) return text
+  if (/^#[0-9a-fA-F]{3}$/.test(text)) return text
+
+  return fallback
 }
 
 
@@ -4076,7 +4087,7 @@ const formatDatabaseSerialTime = (value) => {
                 </label>
 
                 
-                <label class="admin-field">
+                <label class="admin-field md:col-span-2">
                   <span>系統分享按鈕文字 systemShareButtonText</span>
                   <input
                     v-model="databaseGameConfigForm.systemShareButtonText"
@@ -4085,56 +4096,138 @@ const formatDatabaseSerialTime = (value) => {
                   />
                 </label>
 
-                <label class="admin-field">
-                  <span>系統分享文字大小 systemShareButtonTextSize</span>
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">文字大小</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }} px
+                      </p>
+                    </div>
+                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                      {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }}
+                    </span>
+                  </div>
                   <input
                     v-model.number="databaseGameConfigForm.systemShareButtonTextSize"
-                    type="number"
+                    class="mt-3 w-full accent-slate-950"
+                    type="range"
                     min="10"
                     max="28"
                     step="1"
                   />
-                </label>
+                </div>
 
-                <label class="admin-field">
-                  <span>系統分享背景顏色 systemShareButtonBgColor</span>
-                  <input
-                    v-model="databaseGameConfigForm.systemShareButtonBgColor"
-                    type="text"
-                    placeholder="rgba(255, 255, 255, 0.12) 或 #ef4444"
-                  />
-                </label>
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">背景顏色</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d' }}
+                      </p>
+                    </div>
+                    <input
+                      v-model="databaseGameConfigForm.systemShareButtonBgColor"
+                      class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
+                      type="color"
+                    />
+                  </div>
+                </div>
 
-                <label class="admin-field">
-                  <span>系統分享文字顏色 systemShareButtonTextColor</span>
-                  <input
-                    v-model="databaseGameConfigForm.systemShareButtonTextColor"
-                    type="text"
-                    placeholder="#ffffff"
-                  />
-                </label>
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">文字顏色</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ databaseGameConfigForm.systemShareButtonTextColor || '#ffffff' }}
+                      </p>
+                    </div>
+                    <input
+                      v-model="databaseGameConfigForm.systemShareButtonTextColor"
+                      class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
+                      type="color"
+                    />
+                  </div>
+                </div>
 
-                <label class="admin-field">
-                  <span>系統分享按鈕圓角 systemShareButtonRadius</span>
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">按鈕圓角</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        {{ databaseGameConfigForm.systemShareButtonRadius || 16 }} px
+                      </p>
+                    </div>
+                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                      {{ databaseGameConfigForm.systemShareButtonRadius || 16 }}
+                    </span>
+                  </div>
                   <input
                     v-model.number="databaseGameConfigForm.systemShareButtonRadius"
-                    type="number"
+                    class="mt-3 w-full accent-slate-950"
+                    type="range"
                     min="0"
                     max="40"
                     step="1"
                   />
-                </label>
+                </div>
 
-                <label class="admin-field">
-                  <span>系統分享按鈕高度 systemShareButtonPaddingY</span>
+                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-800">按鈕高度</p>
+                      <p class="text-xs font-bold text-slate-400">
+                        上下內距 {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }} px
+                      </p>
+                    </div>
+                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
+                      {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }}
+                    </span>
+                  </div>
                   <input
                     v-model.number="databaseGameConfigForm.systemShareButtonPaddingY"
-                    type="number"
+                    class="mt-3 w-full accent-slate-950"
+                    type="range"
                     min="6"
                     max="28"
                     step="1"
                   />
-                </label>
+                </div>
+
+
+                <div class="md:col-span-2 rounded-3xl border border-amber-100 bg-amber-50/80 p-4">
+                  <p class="text-sm font-black text-slate-800">快速配色</p>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-[#7f1d1d] px-4 py-2 text-xs font-black text-white"
+                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#7f1d1d'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                    >
+                      深紅
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-[#facc15] px-4 py-2 text-xs font-black text-[#7f1d1d]"
+                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#facc15'; databaseGameConfigForm.systemShareButtonTextColor = '#7f1d1d'"
+                    >
+                      金色
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-[#22c55e] px-4 py-2 text-xs font-black text-white"
+                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#22c55e'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                    >
+                      綠色
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-[#111827] px-4 py-2 text-xs font-black text-white"
+                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#111827'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
+                    >
+                      深色
+                    </button>
+                  </div>
+                </div>
 
 <label class="admin-field md:col-span-2">
                   <span>系統分享文字 systemShareText</span>
@@ -4175,7 +4268,7 @@ const formatDatabaseSerialTime = (value) => {
                     fontSize: `${Number(databaseGameConfigForm.systemShareButtonTextSize || 14)}px`,
                     paddingTop: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
                     paddingBottom: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
-                    background: databaseGameConfigForm.systemShareButtonBgColor || 'rgba(255, 255, 255, 0.12)',
+                    background: databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d',
                     color: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
                   }"
                 >
