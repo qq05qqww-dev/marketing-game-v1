@@ -1482,15 +1482,20 @@ const resetEggBoard = () => {
 }
 
 // 第 365 批：分享文字與網址不重複，並確實使用後台 systemShareText / lineShareText / telegramShareText。
-const getConfiguredShareLandingUrl = () => {
+const getConfiguredShareLandingUrl = (options = {}) => {
   const campaignId = resolvedCampaignId.value || 1
   const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/api\/?$/, '')
+  const baseUrl = apiBase || 'https://marketing-game-api.onrender.com'
+  const params = new URLSearchParams({
+    campaignId: String(campaignId)
+  })
 
-  if (apiBase) {
-    return `${apiBase}/share/golden-egg?campaignId=${encodeURIComponent(campaignId)}`
+  // 第 367 批：加 sv 避免 LINE 一直吃舊的 OG 預覽快取。
+  if (options.cacheBust) {
+    params.set('sv', String(Date.now()))
   }
 
-  return `https://marketing-game-api.onrender.com/share/golden-egg?campaignId=${encodeURIComponent(campaignId)}`
+  return `${baseUrl}/share/golden-egg?${params.toString()}`
 }
 
 const getConfiguredShareUrl = () => {
@@ -1532,41 +1537,39 @@ const getShareTextWithUrl = (channel = 'system') => {
     .join('\n')
 }
 
-const openDirectShare = async (platform) => {
+// 第 367 批：手機分享按鈕防彈窗阻擋修正。
+const openDirectShare = (platform) => {
   const rawTargetUrl = getConfiguredShareUrl()
-  const rawLandingUrl = getConfiguredShareLandingUrl()
-  const targetUrl = encodeURIComponent(rawTargetUrl)
+  const rawLandingUrl = getConfiguredShareLandingUrl({ cacheBust: true })
   const landingUrl = encodeURIComponent(rawLandingUrl)
   let url = ''
 
   if (platform === 'line') {
-    // LINE 小卡片需要抓後端 OG 落地頁，才會顯示後台設定的標題 / 描述 / 圖片。
+    // LINE 小卡片分享用後端 OG 落地頁。
+    // 注意：不要在開啟 LINE 前 await clipboard，手機瀏覽器會擋 window.open。
     const lineText = encodeURIComponent(getConfiguredShareText('line'))
     url = `https://social-plugins.line.me/lineit/share?url=${landingUrl}&text=${lineText}`
+
+    navigator.clipboard?.writeText(`${getConfiguredShareText('line')}
+${rawTargetUrl}`).catch(() => {})
+    noticeText.value = '正在開啟 LINE 分享。'
   }
 
   if (platform === 'telegram') {
     const telegramText = encodeURIComponent(getConfiguredShareText('telegram'))
     url = `https://t.me/share/url?url=${landingUrl}&text=${telegramText}`
+    noticeText.value = '正在開啟 Telegram 分享。'
   }
 
   if (platform === 'facebook') {
     url = `https://www.facebook.com/sharer/sharer.php?u=${landingUrl}`
+    noticeText.value = '正在開啟分享視窗。'
   }
 
   if (!url) return
 
-  if (platform === 'line') {
-    try {
-      await navigator.clipboard?.writeText(`${getConfiguredShareText('line')}
-${rawTargetUrl}`)
-      noticeText.value = 'LINE 分享文字已複製，正在開啟 LINE。'
-    } catch (error) {
-      noticeText.value = '正在開啟 LINE 分享。'
-    }
-  }
-
-  window.open(url, '_blank', 'noopener,noreferrer')
+  // 手機瀏覽器最穩：直接切換目前頁面，不用 _blank，避免彈窗阻擋。
+  window.location.href = url
 }
 
 const isSerialRedeemLocked = computed(() => {
