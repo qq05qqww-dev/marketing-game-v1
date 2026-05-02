@@ -117,6 +117,38 @@ const toggleDatabaseRecordTable = (key) => {
   databaseRecordTableOpen[key] = !databaseRecordTableOpen[key]
 }
 
+
+const databaseRecordDisplayLimit = reactive({
+  plays: 20,
+  rewards: 20
+})
+
+const databaseRecordLimitOptions = [
+  { label: '最近 10 筆', value: 10 },
+  { label: '最近 20 筆', value: 20 },
+  { label: '最近 50 筆', value: 50 },
+  { label: '全部', value: 0 }
+]
+
+const displayedDatabasePlayRecords = computed(() => {
+  const records = filteredDatabasePlayRecords.value || []
+  const limit = Number(databaseRecordDisplayLimit.plays || 0)
+
+  if (!limit) return records
+
+  return records.slice(0, limit)
+})
+
+const displayedDatabaseRewardRecords = computed(() => {
+  const records = filteredDatabaseRewardRecords.value || []
+  const limit = Number(databaseRecordDisplayLimit.rewards || 0)
+
+  if (!limit) return records
+
+  return records.slice(0, limit)
+})
+
+
 const databasePreviewSyncMessage = ref('')
 const isSavingDatabaseCampaign = ref(false)
 const databaseCampaignForm = reactive({
@@ -3513,6 +3545,8 @@ watch(
 // 第 396 批：還原資料庫區塊完整功能版，以第 381 批穩定版為基準。
 
 // 第 398 批：紀錄管理展開按鈕位置修正版。
+
+// 第 399 批：紀錄管理顯示筆數控制版。
 </script>
 
 <template>
@@ -5170,6 +5204,19 @@ watch(
                       {{ filteredDatabasePlayRecords.length }} 筆
                     </span>
 
+                    <select
+                      v-model.number="databaseRecordDisplayLimit.plays"
+                      class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 outline-none transition focus:border-violet-400"
+                    >
+                      <option
+                        v-for="option in databaseRecordLimitOptions"
+                        :key="`plays-${option.value}`"
+                        :value="option.value"
+                      >
+                        {{ option.label }}
+                      </option>
+                    </select>
+
                     <button
                       type="button"
                       class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
@@ -5184,7 +5231,7 @@ watch(
                   v-if="!databaseRecordTableOpen.plays"
                   class="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold leading-6 text-slate-500"
                 >
-                  目前已收合「遊玩紀錄」。點右上方「展開」查看完整紀錄。
+                  目前已收合「遊玩紀錄」。可先選擇顯示筆數，再點右上方「展開」查看。
                 </div>
 
                 <div
@@ -5257,6 +5304,19 @@ watch(
                       {{ filteredDatabaseRewardRecords.length }} 筆
                     </span>
 
+                    <select
+                      v-model.number="databaseRecordDisplayLimit.rewards"
+                      class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 outline-none transition focus:border-violet-400"
+                    >
+                      <option
+                        v-for="option in databaseRecordLimitOptions"
+                        :key="`rewards-${option.value}`"
+                        :value="option.value"
+                      >
+                        {{ option.label }}
+                      </option>
+                    </select>
+
                     <button
                       type="button"
                       class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
@@ -5271,7 +5331,7 @@ watch(
                   v-if="!databaseRecordTableOpen.rewards"
                   class="mt-3 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold leading-6 text-slate-500"
                 >
-                  目前已收合「中獎 / 發獎紀錄」。點右上方「展開」查看完整紀錄。
+                  目前已收合「中獎 / 發獎紀錄」。可先選擇顯示筆數，再點右上方「展開」查看。
                 </div>
 
                 <div
