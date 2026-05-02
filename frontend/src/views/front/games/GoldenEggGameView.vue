@@ -1484,9 +1484,10 @@ const resetEggBoard = () => {
   activeEggId.value = ''
 }
 
-// 第 372 批：移除 LINE / Telegram，全部整合到系統分享。
+// 第 375 批：分享按鈕區完全重建，只留系統分享。
+// 第 372 批：移除 第三方，全部整合到系統分享。
 // 只保留一個穩定入口：shareCampaign()
-// 使用者可在手機原生分享選單中自行選 LINE / Telegram / Facebook / 複製。
+// 使用者可在手機原生分享選單中自行選 第三方 / Facebook / 複製。
 const getCurrentCampaignIdForShare = () => {
   return onlineCampaignId.value || getRouteCampaignId() || 1
 }
@@ -1543,7 +1544,7 @@ const shareCampaign = async () => {
       noticeText.value = '系統分享已開啟。'
     } else {
       await navigator.clipboard.writeText(fallbackText)
-      noticeText.value = '分享文字已複製，可貼到 LINE、Telegram 或其他社群。'
+      noticeText.value = '分享文字已複製，可貼到 第三方社群 或其他社群。'
     }
 
     player.sharedCount += 1
