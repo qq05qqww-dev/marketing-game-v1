@@ -3952,7 +3952,7 @@ const actualSystemSharePreviewText = computed(() => {
                   v-model="databaseCampaignForm.description"
                   rows="3"
                   placeholder="輸入活動說明"
-                />
+                ></textarea>
               </label>
             </div>
 
@@ -4055,7 +4055,7 @@ const actualSystemSharePreviewText = computed(() => {
                 <textarea
                   v-model="databaseGameConfigForm.noticeText"
                   rows="3"
-                />
+                ></textarea>
               </label>
 
               <label class="admin-field">
@@ -4073,7 +4073,7 @@ const actualSystemSharePreviewText = computed(() => {
                 <textarea
                   v-model="databaseGameConfigForm.serialRedeemDescription"
                   rows="3"
-                />
+                ></textarea>
               </label>
 
               <label class="admin-field">
@@ -4110,7 +4110,7 @@ const actualSystemSharePreviewText = computed(() => {
                   type="range"
                   min="48"
                   max="120"
-                />
+                ></textarea>
                 <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggSize }}px</span>
               </label>
 
@@ -4443,7 +4443,7 @@ const actualSystemSharePreviewText = computed(() => {
                   v-model="databaseGameConfigForm.systemShareButtonText"
                   type="text"
                   placeholder="系統分享"
-                />
+                ></textarea>
               </label>
 
               <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
@@ -5483,7 +5483,7 @@ const actualSystemSharePreviewText = computed(() => {
 
               <label class="admin-field">
                 <span>分享描述</span>
-                <textarea v-model="campaign.shareDescription" rows="4" />
+                <textarea v-model="campaign.shareDescription" rows="4" ></textarea>
               </label>
 
               <label class="admin-field">
@@ -5925,7 +5925,7 @@ const actualSystemSharePreviewText = computed(() => {
                 v-model="bulkSerialCodesText"
                 rows="6"
                 placeholder="一行一組，或用逗號、空白分隔&#10;VIP001&#10;VIP002&#10;VIP003"
-              />
+              ></textarea>
             </label>
 
             <button
@@ -5958,7 +5958,7 @@ const actualSystemSharePreviewText = computed(() => {
                     accept=".json,.csv,text/csv,application/json"
                     class="hidden"
                     @change="handleSerialImportFile"
-                  />
+                  ></textarea>
                   選擇 JSON / CSV 檔匯入
                 </label>
 
@@ -7642,7 +7642,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
           <label class="admin-field">
             <span>規則內容</span>
-            <textarea v-model="campaign.ruleContent" rows="6" />
+            <textarea v-model="campaign.ruleContent" rows="6" ></textarea>
           </label>
 
           <label class="admin-field">
@@ -7652,7 +7652,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
           <label class="admin-field">
             <span>獎品說明內容</span>
-            <textarea v-model="campaign.prizeInfoContent" rows="6" />
+            <textarea v-model="campaign.prizeInfoContent" rows="6" ></textarea>
           </label>
         </section>
 
