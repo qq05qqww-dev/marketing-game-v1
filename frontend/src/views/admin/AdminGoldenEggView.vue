@@ -803,6 +803,7 @@ const syncToFrontNow = async () => {
   // 第 353 批：
   // 這顆按鈕以前只存 localStorage，會造成電腦前台同步、手機不同步。
   // 現在若已載入正式 campaignId，就同步寫入 PostgreSQL gameConfig.settings。
+  syncSystemShareButtonSettingsToPreview()
   saveState('已同步到右側預覽。')
 
   if (!normalizedDatabaseCampaignId.value) {
@@ -815,6 +816,7 @@ const syncToFrontNow = async () => {
 }
 
 const refreshPreview = () => {
+  refreshRightPreviewFromSystemShareSettings()
   previewRefreshKey.value = Date.now()
   showSavedMessage('已重新整理右側預覽。')
 }
@@ -3452,6 +3454,49 @@ const syncSystemShareButtonSettingsToPreview = () => {
 }
 
 
+let systemSharePreviewTimer = null
+
+const refreshRightPreviewFromSystemShareSettings = () => {
+  syncSystemShareButtonSettingsToPreview()
+
+  // 右側 Live Preview 是 iframe。
+  // 必須把 campaign 寫進 localStorage，並更新 previewRefreshKey，iframe 才會重新讀到最新資料。
+  saveState('已同步系統分享按鈕到右側預覽。')
+}
+
+const scheduleSystemSharePreviewRefresh = () => {
+  if (systemSharePreviewTimer) {
+    window.clearTimeout(systemSharePreviewTimer)
+  }
+
+  systemSharePreviewTimer = window.setTimeout(() => {
+    systemSharePreviewTimer = null
+    refreshRightPreviewFromSystemShareSettings()
+  }, 120)
+}
+
+
+watch(
+  () => [
+    databaseGameConfigForm.systemShareButtonText,
+    databaseGameConfigForm.systemShareButtonTextSize,
+    databaseGameConfigForm.systemShareButtonBgColor,
+    databaseGameConfigForm.systemShareButtonTextColor,
+    databaseGameConfigForm.systemShareButtonRadius,
+    databaseGameConfigForm.systemShareButtonPaddingY,
+    databaseGameConfigForm.systemShareText,
+    databaseGameConfigForm.shareTitle,
+    databaseGameConfigForm.shareDescription,
+    databaseGameConfigForm.shareUrl
+  ],
+  () => {
+    scheduleSystemSharePreviewRefresh()
+  }
+)
+
+
+
+
 
 </script>
 
@@ -4317,7 +4362,7 @@ const syncSystemShareButtonSettingsToPreview = () => {
               
               <div class="mt-3 rounded-2xl bg-white/80 p-3">
                 <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
-                <p class="mt-1 text-xs font-bold text-rose-500">調整後請按「儲存前台設定 / 立即同步前台」，前台才會更新。 右側即時預覽會立即同步。</p>
+                <p class="mt-1 text-xs font-bold text-rose-500">右側預覽是 iframe；調整後會自動刷新右側預覽。若正式前台要同步，仍需按「儲存前台設定 / 立即同步前台」。</p>
                 <button
                   type="button"
                   class="w-full font-black shadow-lg"
@@ -8661,6 +8706,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
         </div>
 
         <div class="mx-auto h-[calc(100vh-13rem)] max-w-[430px] overflow-hidden rounded-[2rem] border-[10px] border-slate-800 bg-black shadow-2xl">
+          <!-- 第 381 批：右側預覽是 iframe，需靠 previewRefreshKey 重新掛載讀 localStorage。 -->
           <iframe
             :key="previewRefreshKey"
             :src="previewUrl"
