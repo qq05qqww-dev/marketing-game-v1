@@ -4141,6 +4141,8 @@ const actualSystemSharePreviewText = computed(() => {
 
             
             
+            </div>
+          </section>
 
         <section
           v-if="activeSection === 'basic'"
