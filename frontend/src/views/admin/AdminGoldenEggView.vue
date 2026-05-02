@@ -3420,6 +3420,24 @@ const normalizeColorInputValue = (value, fallback = '#7f1d1d') => {
 
 
 
+
+
+const livePreviewSystemShareButtonStyle = computed(() => {
+  const radius = Math.min(40, Math.max(0, Number(campaign.systemShareButtonRadius || 16)))
+  const fontSize = Math.min(28, Math.max(10, Number(campaign.systemShareButtonTextSize || 14)))
+  const paddingY = Math.min(28, Math.max(6, Number(campaign.systemShareButtonPaddingY || 12)))
+
+  return {
+    borderRadius: `${radius}px`,
+    fontSize: `${fontSize}px`,
+    paddingTop: `${paddingY}px`,
+    paddingBottom: `${paddingY}px`,
+    background: campaign.systemShareButtonBgColor || '#7f1d1d',
+    color: campaign.systemShareButtonTextColor || '#ffffff'
+  }
+})
+
+
 const syncSystemShareButtonSettingsToPreview = () => {
   campaign.systemShareButtonText = databaseGameConfigForm.systemShareButtonText || '系統分享'
   campaign.systemShareButtonTextSize = Number(databaseGameConfigForm.systemShareButtonTextSize || 14)
@@ -3427,7 +3445,12 @@ const syncSystemShareButtonSettingsToPreview = () => {
   campaign.systemShareButtonTextColor = databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
   campaign.systemShareButtonRadius = Number(databaseGameConfigForm.systemShareButtonRadius || 16)
   campaign.systemShareButtonPaddingY = Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)
+  campaign.systemShareText = databaseGameConfigForm.systemShareText || campaign.systemShareText || ''
+  campaign.shareTitle = databaseGameConfigForm.shareTitle || campaign.shareTitle || ''
+  campaign.shareDescription = databaseGameConfigForm.shareDescription || campaign.shareDescription || ''
+  campaign.shareUrl = databaseGameConfigForm.shareUrl || campaign.shareUrl || ''
 }
+
 
 
 </script>
@@ -4294,7 +4317,7 @@ const syncSystemShareButtonSettingsToPreview = () => {
               
               <div class="mt-3 rounded-2xl bg-white/80 p-3">
                 <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
-                <p class="mt-1 text-xs font-bold text-rose-500">調整後請按「儲存前台設定 / 立即同步前台」，前台才會更新。</p>
+                <p class="mt-1 text-xs font-bold text-rose-500">調整後請按「儲存前台設定 / 立即同步前台」，前台才會更新。 右側即時預覽會立即同步。</p>
                 <button
                   type="button"
                   class="w-full font-black shadow-lg"
