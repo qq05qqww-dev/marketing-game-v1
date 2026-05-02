@@ -2619,6 +2619,20 @@ const syncSelectedDatabaseSerialsAfterRefresh = () => {
   selectedDatabaseSerialIds.value = selectedDatabaseSerialIds.value.filter((id) => aliveIds.has(id))
 }
 
+
+const refreshDatabaseSerialCodesWithFeedback = async () => {
+  if (!normalizedDatabaseCampaignId.value) {
+    setDatabasePreviewSyncMessage('請先輸入 campaignId 並讀取資料庫活動，再重新讀取序號。')
+    return
+  }
+
+  setDatabasePreviewSyncMessage('正在重新讀取資料庫序號...')
+  await refreshDatabaseSerialCodes()
+  clearSelectedDatabaseSerials()
+  setDatabasePreviewSyncMessage(`資料庫序號已重新讀取，目前顯示 ${visibleDatabaseSerialCodes.value.length} 筆。`)
+}
+
+
 const batchDeleteSelectedDatabaseSerials = async () => {
   if (!selectedDatabaseSerialIds.value.length) {
     window.alert('請先勾選要刪除的序號。')
@@ -4093,24 +4107,13 @@ if (typeof window !== 'undefined') {
                   </p>
                 </div>
 
-                <div class="flex shrink-0 flex-wrap gap-2">
-                  <button
-                    type="button"
-                    class="rounded-2xl bg-cyan-700 px-3 py-2 text-xs font-black text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
-                    :disabled="isDatabaseLoading"
-                    @click="refreshDatabaseSerialCodes"
-                  >
-                    重新讀取序號
-                  </button>
-
-                  <button
-                    type="button"
-                    class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
-                    @click="openDatabaseSerialExport"
-                  >
-                    匯出 CSV
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
+                  @click="openDatabaseSerialExport"
+                >
+                  匯出 CSV
+                </button>
               </div>
 
               <div class="mt-4 rounded-3xl bg-white/75 p-4">
@@ -4260,7 +4263,7 @@ if (typeof window !== 'undefined') {
                     type="button"
                     class="rounded-2xl bg-cyan-700 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="isDatabaseLoading"
-                    @click="refreshDatabaseSerialCodes"
+                    @click="refreshDatabaseSerialCodesWithFeedback"
                   >
                     重新讀取
                   </button>
