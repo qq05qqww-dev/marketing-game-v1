@@ -1484,14 +1484,14 @@ const resetEggBoard = () => {
   activeEggId.value = ''
 }
 
-// 第 371 批：回穩版分享功能重建
-// 來源基準：第 356 批手機金蛋九宮格乾淨重整版。
-// 目的：移除第 364～370 批殘留的混亂分享函式，只保留最穩的三種分享。
+// 第 372 批：移除 LINE / Telegram，全部整合到系統分享。
+// 只保留一個穩定入口：shareCampaign()
+// 使用者可在手機原生分享選單中自行選 LINE / Telegram / Facebook / 複製。
 const getCurrentCampaignIdForShare = () => {
   return onlineCampaignId.value || getRouteCampaignId() || 1
 }
 
-const getFrontendShareUrl = () => {
+const getSystemShareUrl = () => {
   const customUrl = String(campaign.shareUrl || '').trim()
 
   if (customUrl) return customUrl
@@ -1505,91 +1505,75 @@ const getFrontendShareUrl = () => {
   return `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${getCurrentCampaignIdForShare()}`
 }
 
-const getOgShareLandingUrl = () => {
-  const apiBase = String(import.meta.env.VITE_API_BASE_URL || 'https://marketing-game-api.onrender.com/api')
-    .replace(/\/api\/?$/, '')
-
-  const params = new URLSearchParams({
-    campaignId: String(getCurrentCampaignIdForShare()),
-    sv: String(Date.now())
-  })
-
-  return `${apiBase}/share/golden-egg?${params.toString()}`
-}
-
-const getShareTitle = () => {
+const getSystemShareTitle = () => {
   return String(campaign.shareTitle || campaign.pageTitle || campaign.mainTitle || '九宮格砸金蛋抽獎活動').trim()
 }
 
-const getShareDescription = () => {
+const getSystemShareDescription = () => {
   return String(campaign.shareDescription || campaign.heroTagline || campaign.noticeText || '輸入活動序號，立即砸金蛋抽好禮！').trim()
 }
 
-const getSystemShareText = () => {
-  return String(campaign.systemShareText || `${getShareTitle()}
-${getShareDescription()}`).trim()
+const getSystemShareBody = () => {
+  return String(campaign.systemShareText || `${getSystemShareTitle()}\n${getSystemShareDescription()}`).trim()
 }
 
-const getLineShareText = () => {
-  return String(campaign.lineShareText || `${getShareTitle()}｜${getShareDescription()}`).trim()
+const getSystemShareFullText = () => {
+  return [
+    getSystemShareBody(),
+    getSystemShareUrl()
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
-const getTelegramShareText = () => {
-  return String(campaign.telegramShareText || `${getShareTitle()}｜${getShareDescription()}`).trim()
-}
+const shareCampaign = async () => {
+  const title = getSystemShareTitle()
+  const text = getSystemShareBody()
+  const url = getSystemShareUrl()
+  const fallbackText = getSystemShareFullText()
 
-const safeCopyShareText = (value) => {
   try {
-    navigator.clipboard?.writeText(value).catch(() => {})
+    if (navigator.share) {
+      await navigator.share({
+        title,
+        text,
+        url
+      })
+
+      noticeText.value = '系統分享已開啟。'
+    } else {
+      await navigator.clipboard.writeText(fallbackText)
+      noticeText.value = '分享文字已複製，可貼到 LINE、Telegram 或其他社群。'
+    }
+
+    player.sharedCount += 1
+    shareMessage.value = '分享內容已送出或複製。抽獎機會請使用主辦單位提供的序號兌換。'
+    showShareMessage.value = true
+
+    window.setTimeout(() => {
+      showShareMessage.value = false
+      shareMessage.value = ''
+    }, 2600)
   } catch (error) {
-    // 手機瀏覽器不支援 clipboard 時忽略即可
+    if (error?.name === 'AbortError') return
+
+    console.warn('系統分享失敗：', error)
+
+    try {
+      await navigator.clipboard.writeText(fallbackText)
+      noticeText.value = '系統分享失敗，已改為複製分享文字。'
+    } catch (copyError) {
+      noticeText.value = fallbackText
+    }
   }
 }
 
-const openShareByLocation = (url) => {
-  if (!url) {
-    noticeText.value = '找不到分享網址。'
-    return
-  }
-
-  window.location.href = url
-}
-
-const openDirectShare = (platform) => {
-  const frontUrl = getFrontendShareUrl()
-  const ogUrl = getOgShareLandingUrl()
-
-  if (platform === 'line') {
-    // LINE 最穩方式：文字 + 後端 OG 落地頁。
-    // OG 落地頁會讀取後台 shareTitle / shareDescription / shareImageUrl。
-    const lineText = `${getLineShareText()}
-${ogUrl}`
-    safeCopyShareText(`${getLineShareText()}
-${frontUrl}`)
-
-    noticeText.value = '正在開啟 LINE 分享。'
-    openShareByLocation(`https://line.me/R/msg/text/?${encodeURIComponent(lineText)}`)
-    return
-  }
-
-  if (platform === 'telegram') {
-    const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(ogUrl)}&text=${encodeURIComponent(getTelegramShareText())}`
-
-    noticeText.value = '正在開啟 Telegram 分享。'
-    openShareByLocation(telegramUrl)
-    return
-  }
-
-  if (platform === 'facebook') {
-    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(ogUrl)}`
-
-    noticeText.value = '正在開啟分享視窗。'
-    openShareByLocation(facebookUrl)
-    return
-  }
-
-  noticeText.value = '找不到可用的分享方式。'
-}
+// 相容舊 template 名稱，避免殘留事件造成錯誤。
+const openDirectShare = () => shareCampaign()
+const shareToLine = () => shareCampaign()
+const shareToTelegram = () => shareCampaign()
+const shareViaLine = () => shareCampaign()
+const shareViaTelegram = () => shareCampaign()
 
 
 const isSerialRedeemLocked = computed(() => {
@@ -1701,41 +1685,6 @@ const redeemSerialCode = async () => {
 }
 
 
-const shareCampaign = async () => {
-  const frontUrl = getFrontendShareUrl()
-  const title = getShareTitle()
-  const text = getSystemShareText()
-  const fallbackText = `${text}
-${frontUrl}`
-
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title,
-        text,
-        url: frontUrl
-      })
-    } else {
-      await navigator.clipboard.writeText(fallbackText)
-      noticeText.value = '系統分享文字已複製。'
-    }
-
-    player.sharedCount += 1
-    shareMessage.value = '分享內容已送出或複製。抽獎機會請使用主辦單位提供的序號兌換。'
-    showShareMessage.value = true
-
-    window.setTimeout(() => {
-      showShareMessage.value = false
-      shareMessage.value = ''
-    }, 2600)
-  } catch (error) {
-    if (error?.name === 'AbortError') return
-
-    console.warn('Share canceled or failed:', error)
-    safeCopyShareText(fallbackText)
-    noticeText.value = '系統分享失敗，已改為複製分享文字。'
-  }
-}
 
 const copyResultText = async () => {
   if (!resultPrize.value) return
@@ -1886,333 +1835,6 @@ onUnmounted(() => {
         >
           {{ websiteButtonText }}
         </a>
-
-        <button
-          v-else
-          type="button"
-          class="flex h-12 w-full items-center justify-center rounded-2xl px-2 font-black shadow-lg transition hover:brightness-110"
-          :style="headerWebsiteButtonStyle"
-          @click="goBack"
-        >
-          {{ websiteButtonText }}
-        </button>
-      </header>
-
-      <main class="relative z-10 flex flex-1 flex-col">
-        <section class="golden-egg-hero relative overflow-hidden rounded-[2rem] border border-yellow-200/30 px-5 pb-5 pt-6 text-center shadow-2xl">
-          <div class="pointer-events-none absolute inset-0 opacity-60">
-            <span class="golden-light golden-light-left" />
-            <span class="golden-light golden-light-right" />
-          </div>
-
-          <div class="relative z-10">
-            <p class="mx-auto mb-2 inline-flex rounded-full bg-yellow-300 px-4 py-1 text-xs font-black text-red-700 shadow-lg">
-              {{ campaign.subTitle }}
-            </p>
-
-            <div class="golden-title-board mx-auto max-w-[320px] rounded-[1.4rem] border border-yellow-200/50 bg-red-950/24 px-4 py-3 shadow-2xl">
-              <h2 class="golden-title text-4xl font-black leading-tight sm:text-5xl">
-                {{ campaign.mainTitle }}
-              </h2>
-              <p class="mt-1 text-xs font-black tracking-[0.22em] text-yellow-100">
-                LUCKY GOLDEN EGG
-              </p>
-            </div>
-
-            <p class="mt-3 text-sm font-bold text-yellow-50">
-              {{ campaign.heroTagline }}
-            </p>
-
-            <div class="mt-4 grid grid-cols-3 gap-2">
-              <div
-                v-for="item in playerSummaryItems"
-                :key="item.label"
-                class="rounded-2xl border border-white/15 bg-white/12 px-3 py-2 shadow-lg backdrop-blur"
-              >
-                <p class="text-[11px] font-bold text-yellow-100">
-                  {{ item.label }}
-                </p>
-                <p class="text-2xl font-black text-white">
-                  {{ item.value }}
-                </p>
-                <p class="text-[10px] font-bold text-yellow-50/80">
-                  {{ item.subText }}
-                </p>
-              </div>
-            </div>
-
-            <div
-              v-if="isOnlineMode || remoteLoadMessage"
-              class="mt-3 rounded-2xl border px-4 py-2 text-xs font-black"
-              :class="onlineModeStatusClass"
-            >
-              <span v-if="isLoadingRemoteCampaign">正在讀取正式資料庫活動...</span>
-              <span v-else-if="isOnlineMode">{{ onlineModeLabel }}</span>
-              <span v-else>{{ remoteLoadMessage }}</span>
-            </div>
-            <div
-              v-if="remoteDrawNotice"
-              class="mt-3 rounded-2xl border border-yellow-200/40 bg-yellow-300/15 px-4 py-2 text-center text-xs font-black text-yellow-50"
-            >
-              {{ remoteDrawNotice }}
-            </div>
-
-            <p class="mt-3 rounded-2xl bg-black/18 px-4 py-2 text-xs font-bold text-yellow-50">
-              {{ statusText }}
-            </p>
-
-            <div
-              v-if="campaign.showActivityTimeSection"
-              class="mt-3 border text-left"
-              :style="activityTimeBoxStyle"
-            >
-              <div class="mb-2 flex items-center justify-between gap-2">
-                <p
-                  class="font-black"
-                  :style="activityTimeTitleStyle"
-                >
-                  活動時間
-                </p>
-                <span
-                  class="rounded-full px-3 py-1 font-black"
-                  :class="activityStatusClass"
-                  :style="activityStatusBadgeStyle"
-                >
-                  {{ activityStatusLabel }}
-                </span>
-              </div>
-
-              <div class="grid grid-cols-1 gap-2 text-[11px] font-bold text-yellow-50/85 sm:grid-cols-2">
-                <div
-                  class="rounded-xl px-3 py-2"
-                  :style="activityTimeCardStyle"
-                >
-                  開始：{{ formatCampaignDateTime(campaign.activityStartAt) }}
-                </div>
-                <div
-                  class="rounded-xl px-3 py-2"
-                  :style="activityTimeCardStyle"
-                >
-                  結束：{{ formatCampaignDateTime(campaign.activityEndAt) }}
-                </div>
-              </div>
-
-              <div
-                v-if="campaign.showActivityCountdown"
-                class="mt-3 rounded-2xl px-3 py-3 text-center"
-                :style="activityCountdownStyle"
-              >
-                <p
-                  class="font-black"
-                  :style="activityCountdownTitleStyle"
-                >
-                  {{ campaign.activityCountdownTitle }}｜{{ activityCountdownLabel }}
-                </p>
-
-                <p
-                  class="mt-1 font-black tracking-wide"
-                  :style="activityCountdownNumberStyle"
-                >
-                  {{ activityCountdownText }}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section
-          v-if="campaign.showMarqueeSection"
-          class="golden-marquee mt-4 overflow-hidden rounded-[1.25rem] border border-yellow-200/35 px-3 py-2 shadow-xl"
-          :style="marqueeStyle"
-        >
-          <div class="golden-marquee-track text-xs font-black">
-            {{ marqueeText }}
-          </div>
-        </section>
-
-        <section
-          class="golden-egg-stage relative mt-4 flex-1 border shadow-2xl backdrop-blur"
-          :style="stageStyle"
-        >
-          <div class="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-black uppercase tracking-[0.2em] text-yellow-100">
-                Golden Egg Board
-              </p>
-              <h3 class="text-lg font-black text-white">
-                選一顆金蛋敲開
-              </h3>
-            </div>
-
-            <button
-              type="button"
-              class="rounded-2xl border border-yellow-200/30 bg-yellow-300 px-3 py-2 text-xs font-black text-red-700 shadow-lg transition hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50"
-              :disabled="isCracking"
-              @click="resetEggBoard"
-            >
-              重置金蛋
-            </button>
-          </div>
-
-          <div
-            class="golden-egg-grid grid grid-cols-3"
-            :style="eggGridStyle"
-          >
-            <button
-              v-for="egg in eggs"
-              :key="egg.id"
-              type="button"
-              class="golden-egg-card group relative flex aspect-[0.88] flex-col items-center justify-center rounded-[1.65rem] border border-yellow-200/35 bg-gradient-to-b from-red-500/40 to-red-900/45 shadow-xl transition disabled:cursor-not-allowed"
-              :class="[
-                egg.status === 'cracking' ? 'is-cracking' : '',
-                egg.status === 'opened' ? 'is-opened' : '',
-                activeEggId === egg.id ? 'is-active' : '',
-                isOnlineMode && activeEggId === egg.id && egg.status === 'cracking' ? 'golden-egg-remote-cracking' : ''
-              ]"
-              :disabled="!canPlay || egg.status === 'opened'"
-              :style="eggCardStyle"
-              @click="crackEgg(egg)"
-            >
-              <span
-                v-if="egg.status === 'cracking'"
-                class="golden-hammer"
-              >
-                🔨
-              </span>
-
-              <span
-                v-if="egg.status !== 'opened'"
-                class="golden-egg-shell"
-                :style="eggShellStyle"
-              >
-                <span class="egg-shine" />
-                <span class="egg-star egg-star-a">✦</span>
-                <span class="egg-star egg-star-b">✦</span>
-                <span
-                  v-if="campaign.showEggNumber"
-                  class="egg-number"
-                  :style="eggNumberStyle"
-                >
-                  {{ egg.number }}
-                </span>
-              </span>
-
-              <span
-                v-else
-                class="golden-egg-opened"
-              >
-                <span class="broken-shell broken-left" />
-                <span class="broken-shell broken-right" />
-                <span class="prize-pop">
-                  <img
-                    v-if="egg.prize?.imageUrl"
-                    :src="egg.prize.imageUrl"
-                    alt="獎品圖片"
-                    class="h-8 w-8 rounded-xl object-cover"
-                  />
-                  <span
-                    v-else
-                    class="text-2xl"
-                  >
-                    {{ egg.prize?.icon || '🎁' }}
-                  </span>
-                  <span class="mt-1 line-clamp-2 px-1 text-center text-[11px] font-black text-yellow-50">
-                    {{ egg.prize?.shortName || egg.prize?.name }}
-                  </span>
-                </span>
-              </span>
-
-              <span class="absolute bottom-2 rounded-full bg-black/20 px-2 py-1 text-[10px] font-black text-yellow-100">
-                GOLD {{ egg.number }}
-              </span>
-            </button>
-          </div>
-
-          <div
-            v-if="campaign.showSerialRedeemSection"
-            class="mt-4 border"
-            :style="serialRedeemStyle"
-          >
-            <div class="mb-3">
-              <p
-                class="font-black"
-                :style="serialRedeemTitleStyle"
-              >
-                {{ campaign.serialRedeemTitle }}
-              </p>
-              <p
-                class="mt-1 font-bold"
-                :style="serialRedeemHintStyle"
-              >
-                輸入主辦單位產生的序號，可兌換砸蛋機會。
-              </p>
-            </div>
-
-            <div class="serial-redeem-row flex flex-col gap-2 sm:flex-row">
-              <input
-                v-model="serialCodeInput"
-                type="text"
-                :placeholder="campaign.serialRedeemPlaceholder"
-                class="min-h-[48px] flex-1 rounded-2xl border border-white/15 px-4 font-black uppercase outline-none placeholder:text-slate-400"
-                :style="serialRedeemInputStyle"
-                @keyup.enter="redeemSerialCode"
-              />
-
-              <button
-                type="button"
-                class="serial-redeem-button rounded-2xl px-5 py-3 font-black shadow-xl transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
-                :style="serialRedeemButtonStyle"
-                :disabled="isCracking || isSerialRedeeming"
-                @click="redeemSerialCode"
-              >
-                <span class="serial-redeem-button-text">
-                  {{ isSerialRedeemLocked ? `${serialRedeemLockLeftSeconds} 秒後再試` : (campaign.serialRedeemButtonText || '驗證序號') }}
-                </span>
-              </button>
-            </div>
-
-            <p
-              v-if="serialRedeemMessage"
-              class="mt-2 rounded-2xl bg-white/12 px-3 py-2 text-xs font-black text-yellow-50"
-            >
-              {{ serialRedeemMessage }}
-            </p>
-          </div>
-
-          <div
-            v-if="campaign.showShareButtonSection"
-            class="mt-3 grid grid-cols-3"
-            :style="shareButtonGridStyle"
-          >
-            <button
-              v-if="campaign.showSystemShareButton"
-              type="button"
-              class="border border-white/20 px-3 font-black shadow-xl transition hover:brightness-110"
-              :style="getShareButtonStyle('system')"
-              @click="shareCampaign"
-            >
-              {{ campaign.systemShareButtonText }}
-            </button>
-
-            <button
-              v-if="campaign.showLineShareButton"
-              type="button"
-              class="px-3 font-black shadow-xl transition hover:brightness-110"
-              :style="getShareButtonStyle('line')"
-              @click="openDirectShare('line')"
-            >
-              {{ campaign.lineShareButtonText }}
-            </button>
-
-            <button
-              v-if="campaign.showTelegramShareButton"
-              type="button"
-              class="px-3 font-black shadow-xl transition hover:brightness-110"
-              :style="getShareButtonStyle('telegram')"
-              @click="openDirectShare('telegram')"
-            >
-              {{ campaign.telegramShareButtonText }}
-            </button>
           </div>
 
           <div
