@@ -793,6 +793,11 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
   databaseGameConfigForm.shareTitle = campaign.shareTitle || databaseGameConfigForm.shareTitle || '九宮格砸金蛋抽獎活動'
   databaseGameConfigForm.shareDescription = campaign.shareDescription || databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.shareUrl = campaign.shareUrl || databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
+  databaseGameConfigForm.showLineBrowserHint = settings.showLineBrowserHint !== false
+  databaseGameConfigForm.lineBrowserHintTitle = settings.lineBrowserHintTitle || campaign.lineBrowserHintTitle || '建議使用外部瀏覽器開啟'
+  databaseGameConfigForm.lineBrowserHintText = settings.lineBrowserHintText || campaign.lineBrowserHintText || '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。'
+  databaseGameConfigForm.lineBrowserHintCopyButtonText = settings.lineBrowserHintCopyButtonText || campaign.lineBrowserHintCopyButtonText || '複製活動連結'
+  databaseGameConfigForm.lineBrowserHintCloseButtonText = settings.lineBrowserHintCloseButtonText || campaign.lineBrowserHintCloseButtonText || '我知道了'
   databaseGameConfigForm.shareImageUrl = campaign.shareImageUrl || databaseGameConfigForm.shareImageUrl || ''
   databaseGameConfigForm.systemShareText = campaign.systemShareText || databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.lineShareText = campaign.lineShareText || databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
@@ -3204,6 +3209,16 @@ const buildDatabaseGameConfigPayload = () => {
     systemShareButtonTextColor: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff',
     systemShareButtonRadius: Number(databaseGameConfigForm.systemShareButtonRadius || 16),
     systemShareButtonPaddingY: Number(databaseGameConfigForm.systemShareButtonPaddingY || 12),
+      showLineBrowserHint: true,
+  lineBrowserHintTitle: '建議使用外部瀏覽器開啟',
+  lineBrowserHintText: '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。',
+  lineBrowserHintCopyButtonText: '複製活動連結',
+  lineBrowserHintCloseButtonText: '我知道了',
+  showLineBrowserHint: databaseGameConfigForm.showLineBrowserHint !== false,
+    lineBrowserHintTitle: databaseGameConfigForm.lineBrowserHintTitle || '建議使用外部瀏覽器開啟',
+    lineBrowserHintText: databaseGameConfigForm.lineBrowserHintText || '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。',
+    lineBrowserHintCopyButtonText: databaseGameConfigForm.lineBrowserHintCopyButtonText || '複製活動連結',
+    lineBrowserHintCloseButtonText: databaseGameConfigForm.lineBrowserHintCloseButtonText || '我知道了',
     systemShareText: databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！',
     lineShareText: databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
     telegramShareText: databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
@@ -3451,6 +3466,12 @@ const syncSystemShareButtonSettingsToPreview = () => {
   campaign.shareTitle = databaseGameConfigForm.shareTitle || campaign.shareTitle || ''
   campaign.shareDescription = databaseGameConfigForm.shareDescription || campaign.shareDescription || ''
   campaign.shareUrl = databaseGameConfigForm.shareUrl || campaign.shareUrl || ''
+  campaign.showLineBrowserHint = databaseGameConfigForm.showLineBrowserHint !== false
+  campaign.lineBrowserHintTitle = databaseGameConfigForm.lineBrowserHintTitle || '建議使用外部瀏覽器開啟'
+  campaign.lineBrowserHintText = databaseGameConfigForm.lineBrowserHintText || '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。'
+  campaign.lineBrowserHintCopyButtonText = databaseGameConfigForm.lineBrowserHintCopyButtonText || '複製活動連結'
+  campaign.lineBrowserHintCloseButtonText = databaseGameConfigForm.lineBrowserHintCloseButtonText || '我知道了'
+
 }
 
 
@@ -3487,7 +3508,12 @@ watch(
     databaseGameConfigForm.systemShareText,
     databaseGameConfigForm.shareTitle,
     databaseGameConfigForm.shareDescription,
-    databaseGameConfigForm.shareUrl
+    databaseGameConfigForm.shareUrl,
+    databaseGameConfigForm.showLineBrowserHint,
+    databaseGameConfigForm.lineBrowserHintTitle,
+    databaseGameConfigForm.lineBrowserHintText,
+    databaseGameConfigForm.lineBrowserHintCopyButtonText,
+    databaseGameConfigForm.lineBrowserHintCloseButtonText
   ],
   () => {
     scheduleSystemSharePreviewRefresh()
@@ -4387,6 +4413,88 @@ const actualSystemSharePreviewText = computed(() => {
                     以 systemShareText 為主
                   </span>
                 </div>
+
+              <div class="mt-4 rounded-3xl border border-indigo-100 bg-indigo-50/80 p-4">
+                <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h4 class="text-sm font-black text-slate-950">
+                      LINE 內建瀏覽器提示
+                    </h4>
+                    <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">
+                      客人從 LINE 開啟活動時，提示他可用外部瀏覽器開啟，並提供複製活動連結。
+                    </p>
+                  </div>
+
+                  <label class="inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-indigo-100">
+                    <input
+                      v-model="databaseGameConfigForm.showLineBrowserHint"
+                      type="checkbox"
+                      class="h-4 w-4"
+                    />
+                    顯示提示
+                  </label>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label class="admin-field">
+                    <span>提示標題 lineBrowserHintTitle</span>
+                    <input
+                      v-model="databaseGameConfigForm.lineBrowserHintTitle"
+                      type="text"
+                      placeholder="建議使用外部瀏覽器開啟"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>複製按鈕文字 lineBrowserHintCopyButtonText</span>
+                    <input
+                      v-model="databaseGameConfigForm.lineBrowserHintCopyButtonText"
+                      type="text"
+                      placeholder="複製活動連結"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>關閉按鈕文字 lineBrowserHintCloseButtonText</span>
+                    <input
+                      v-model="databaseGameConfigForm.lineBrowserHintCloseButtonText"
+                      type="text"
+                      placeholder="我知道了"
+                    />
+                  </label>
+
+                  <label class="admin-field md:col-span-2">
+                    <span>提示說明 lineBrowserHintText</span>
+                    <textarea
+                      v-model="databaseGameConfigForm.lineBrowserHintText"
+                      rows="3"
+                      placeholder="你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。"
+                    ></textarea>
+                  </label>
+                </div>
+
+                <div
+                  v-if="databaseGameConfigForm.showLineBrowserHint"
+                  class="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-amber-950"
+                >
+                  <p class="text-sm font-black">
+                    {{ databaseGameConfigForm.lineBrowserHintTitle || '建議使用外部瀏覽器開啟' }}
+                  </p>
+                  <p class="mt-1 text-xs font-bold leading-5">
+                    {{ databaseGameConfigForm.lineBrowserHintText || '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。' }}
+                  </p>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <span class="rounded-2xl bg-amber-500 px-3 py-2 text-xs font-black text-white">
+                      {{ databaseGameConfigForm.lineBrowserHintCopyButtonText || '複製活動連結' }}
+                    </span>
+                    <span class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-amber-800 ring-1 ring-amber-200">
+                      {{ databaseGameConfigForm.lineBrowserHintCloseButtonText || '我知道了' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+
 
                 <pre class="mt-3 whitespace-pre-wrap rounded-2xl bg-slate-950 p-3 text-xs font-bold leading-6 text-white">{{ actualSystemSharePreviewText }}</pre>
 

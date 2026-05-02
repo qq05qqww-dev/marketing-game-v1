@@ -182,6 +182,11 @@ const campaign = reactive({
   shareButtonGap: 8,
   shareButtonPaddingY: 12,
   showBottomNav: true,
+  lineBrowserHintCloseButtonText: '我知道了',
+  lineBrowserHintCopyButtonText: '複製活動連結',
+  lineBrowserHintText: '{{ campaign.lineBrowserHintText || '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。' }}',
+  lineBrowserHintTitle: '{{ campaign.lineBrowserHintTitle || '建議使用外部瀏覽器開啟' }}',
+  showLineBrowserHint: true,
   bottomNavBgColor: 'rgba(127, 29, 29, 0.72)',
   bottomNavBorderColor: '#fde68a',
   bottomNavButtonBgColor: 'rgba(255, 255, 255, 0.12)',
@@ -455,7 +460,9 @@ const currentActivityUrl = computed(() => {
 })
 
 const shouldShowLineBrowserHint = computed(() => {
-  return isLineInAppBrowser.value && !isLineBrowserHintClosed.value
+  return isLineInAppBrowser.value
+    && !isLineBrowserHintClosed.value
+    && campaign.showLineBrowserHint !== false
 })
 
 const detectLineInAppBrowser = () => {
