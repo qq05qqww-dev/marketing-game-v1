@@ -973,7 +973,8 @@ const getDatabaseGameConfigBackupFilename = () => {
   return `${titlePart}-game-config-${getExportDateStamp()}.json`
 }
 
-const exportDatabaseGameConfigBackupJson = () => {
+const exportDatabaseGameConfigBackupJson = (options = {}) => {
+  const safeOptions = options && typeof options === 'object' && !options.target ? options : {}
   if (!databaseCampaign.value) {
     showOperationError('目前沒有可匯出的資料庫活動，請先讀取活動資料。')
     return
@@ -982,7 +983,7 @@ const exportDatabaseGameConfigBackupJson = () => {
   const settings = buildDatabaseGameConfigPayload()
   const backupPayload = {
     type: 'golden-egg-game-config-backup',
-    version: 'v2.2-batch418',
+    version: 'v2.2-batch419',
     exportedAt: new Date().toISOString(),
     campaignId: normalizedDatabaseCampaignId.value,
     campaignTitle: databaseCampaign.value?.title || '',
@@ -1003,10 +1004,15 @@ const exportDatabaseGameConfigBackupJson = () => {
   link.click()
 
   URL.revokeObjectURL(url)
-  showOperationSuccess('已匯出目前前台設定 GameConfig JSON 備份。')
+  const backupFilename = getDatabaseGameConfigBackupFilename()
+
+  if (!safeOptions.silentSuccess) {
+    showOperationSuccess('已匯出目前前台設定 GameConfig JSON 備份。')
+  }
+
   addGameConfigOperationLog({
-    title: '匯出 GameConfig 備份',
-    description: `已匯出 ${getDatabaseGameConfigBackupFilename()}，可用於之後還原前台設定。`,
+    title: safeOptions.logTitle || '匯出 GameConfig 備份',
+    description: safeOptions.logDescription || `已匯出 ${backupFilename}，可用於之後還原前台設定。`,
     type: 'success'
   })
 }
@@ -1413,18 +1419,32 @@ const applyDatabaseGameConfigTemplatePreset = (template) => {
     .join('\n')
   const moreText = fieldCount > previewKeys.length ? `\n...另有 ${fieldCount - previewKeys.length} 個欄位未列出。` : ''
   const confirmed = window.confirm(
-    `即將套用「${template.name}」到 GameConfig 表單。\n\n這只會先改表單，不會直接寫入資料庫。確認內容後，仍需要按「儲存前台設定」。\n\n預計套用 ${fieldCount} 個欄位：\n${previewList}${moreText}\n\n是否繼續？`
+    `即將套用「${template.name}」模板。\n\n這會覆蓋目前表單中的前台文字、背景色、按鈕色、金蛋色與分享設定。\n\n安全機制：按「確定」後會先自動匯出目前 GameConfig JSON 備份，再套用模板到表單；仍不會直接寫入資料庫。確認內容後，還需要再按「儲存前台設定」。\n\n預計套用 ${fieldCount} 個欄位：\n${previewList}${moreText}\n\n是否先備份並繼續套用？`
   )
 
-  if (!confirmed) return
+  if (!confirmed) {
+    addGameConfigOperationLog({
+      title: `取消套用模板：${template.name}`,
+      description: '使用者取消套用模板，表單與資料庫未變更。',
+      type: 'info',
+      changedCount: databaseGameConfigChangedCount.value
+    })
+    return
+  }
+
+  exportDatabaseGameConfigBackupJson({
+    silentSuccess: true,
+    logTitle: `套用模板前備份：${template.name}`,
+    logDescription: `套用「${template.name}」前已先匯出目前 GameConfig JSON 備份。`
+  })
 
   const appliedCount = applyImportedDatabaseGameConfigSettingsToForm(template.fields)
   syncDatabaseGameConfigFormToLivePreview(`已套用「${template.name}」模板到右側預覽；手機正式前台需按「儲存前台設定」後才會同步。`)
 
-  showOperationSuccess(`已套用「${template.name}」模板到表單與右側預覽，請確認後再按「儲存前台設定」。`)
+  showOperationSuccess(`已先匯出備份，並套用「${template.name}」模板到表單與右側預覽；請確認後再按「儲存前台設定」。`)
   addGameConfigOperationLog({
     title: `套用模板：${template.name}`,
-    description: `已把 ${appliedCount} 個模板欄位套用到表單，尚未寫入資料庫。`,
+    description: `已先備份目前設定，並把 ${appliedCount} 個模板欄位套用到表單，尚未寫入資料庫。`,
     type: 'warning',
     changedCount: databaseGameConfigChangedCount.value
   })
@@ -6425,13 +6445,28 @@ watch(
                   <p class="text-xs font-black uppercase tracking-[0.22em] text-rose-500">Quick Presets</p>
                   <h4 class="mt-1 text-sm font-black text-slate-950">快速套用模板</h4>
                   <p class="mt-1 text-xs font-bold leading-6 text-slate-500">
-                    可一鍵套用常用活動文案、背景主題、按鈕色、金蛋色與分享文字。套用後只會先改表單，不會直接寫入資料庫。
+                    可一鍵套用常用活動文案、背景主題、按鈕色、金蛋色與分享文字。套用前會先匯出 JSON 備份；套用後只會先改表單，不會直接寫入資料庫。
                   </p>
                 </div>
 
-                <span class="inline-flex w-fit items-center rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700 ring-1 ring-rose-100">
-                  套用後仍需儲存
+                <span class="inline-flex w-fit items-center rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700 ring-1 ring-amber-100">
+                  套用前會先備份
                 </span>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div class="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-100">
+                  <p class="text-xs font-black text-amber-700">1. 先備份</p>
+                  <p class="mt-1 text-xs font-bold leading-5 text-amber-600">套用模板前自動下載目前 GameConfig JSON。</p>
+                </div>
+                <div class="rounded-2xl bg-rose-50 p-3 ring-1 ring-rose-100">
+                  <p class="text-xs font-black text-rose-700">2. 只改表單</p>
+                  <p class="mt-1 text-xs font-bold leading-5 text-rose-600">模板會同步右側預覽，但不會直接寫入資料庫。</p>
+                </div>
+                <div class="rounded-2xl bg-emerald-50 p-3 ring-1 ring-emerald-100">
+                  <p class="text-xs font-black text-emerald-700">3. 再儲存</p>
+                  <p class="mt-1 text-xs font-bold leading-5 text-emerald-600">確認效果後按「儲存前台設定」才會同步手機前台。</p>
+                </div>
               </div>
 
               <div class="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
@@ -6455,7 +6490,7 @@ watch(
                       class="shrink-0 rounded-2xl bg-rose-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-rose-500"
                       @click="applyDatabaseGameConfigTemplatePreset(template)"
                     >
-                      套用模板
+                      備份後套用
                     </button>
                   </div>
 
@@ -6478,7 +6513,7 @@ watch(
               </div>
 
               <div class="mt-3 rounded-2xl bg-amber-50 p-3 text-xs font-bold leading-6 text-amber-700 ring-1 ring-amber-100">
-                建議：套用模板前可先用「設定備份工具」匯出 JSON。套用後會觸發第 415 批差異提示，確認沒問題再按「儲存前台設定」。
+                安全機制：點「備份後套用」會先自動匯出目前 GameConfig JSON，再把模板套用到表單與右側預覽；資料庫不會立即改變，確認沒問題後再按「儲存前台設定」。
               </div>
             </div>
 
