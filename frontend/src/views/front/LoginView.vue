@@ -71,19 +71,36 @@ const clearLoginRedirect = () => {
   localStorage.removeItem('loginRedirect')
 }
 
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
+const MERCHANT_ROLES = ['MERCHANT_ADMIN', 'MERCHANT_STAFF']
+
+const isPlatformAdminRole = (role) => ADMIN_ROLES.includes(String(role || '').toUpperCase())
+const isMerchantRole = (role) => MERCHANT_ROLES.includes(String(role || '').toUpperCase())
+const isBackOfficeRole = (role) => isPlatformAdminRole(role) || isMerchantRole(role)
+
 const redirectAfterLogin = (user) => {
   const target = redirectPath.value
   const role = String(user?.role || '').toUpperCase()
 
   clearLoginRedirect()
 
-  if (target) {
+  if (target && !target.startsWith('/admin')) {
     router.push(target)
     return
   }
 
-  if (role === 'ADMIN') {
-    router.push('/admin/campaigns')
+  if (isMerchantRole(role)) {
+    router.push('/admin/golden-egg')
+    return
+  }
+
+  if (isPlatformAdminRole(role)) {
+    router.push(target && target.startsWith('/admin') ? target : '/admin/tenants')
+    return
+  }
+
+  if (target && !isBackOfficeRole(role)) {
+    router.push(target)
     return
   }
 
