@@ -1,5 +1,5 @@
-// Multi Game Platform V2.2 Stable
-// 第 310 批：PlayRecord / RewardRecord Service
+// Multi Game Platform V2.3 Tenant Edition
+// 第 6 批：PlayRecord / RewardRecord Service tenantId 隔離版
 //
 // 建議放置位置：
 // backend/src/services/playRecord.service.js
@@ -49,7 +49,33 @@ const createClaimCode = () => {
   return `CLAIM-${randomText}`
 }
 
-const buildPlayRecordWhere = (campaignId, query = {}) => {
+const getUserRole = (currentUser = {}) => {
+  return String(currentUser?.role || '').toUpperCase()
+}
+
+const getUserTenantId = (currentUser = {}) => {
+  const tenantId = Number(currentUser?.tenantId)
+
+  return Number.isInteger(tenantId) && tenantId > 0 ? tenantId : null
+}
+
+const canAccessAllTenants = (currentUser = {}) => {
+  const role = getUserRole(currentUser)
+
+  return Boolean(
+    currentUser?.isSuperAdmin ||
+    role === 'SUPER_ADMIN' ||
+    role === 'ADMIN'
+  )
+}
+
+const createForbiddenError = (message = '找不到活動，或此帳號沒有權限操作這個活動') => {
+  const error = new Error(message)
+  error.status = 404
+  return error
+}
+
+const assertCampaignAccess = async (campaignId, currentUser = null) => {
   const normalizedCampaignId = normalizeId(campaignId)
 
   if (!normalizedCampaignId) {
@@ -58,8 +84,92 @@ const buildPlayRecordWhere = (campaignId, query = {}) => {
     throw error
   }
 
+  const campaign = await prisma.campaign.findUnique({
+    where: {
+      id: normalizedCampaignId
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      title: true,
+      gameType: true,
+      status: true
+    }
+  })
+
+  if (!campaign) {
+    throw createForbiddenError()
+  }
+
+  // 免登入或系統內部建立紀錄時，維持舊流程可依 campaignId 使用。
+  if (!currentUser || canAccessAllTenants(currentUser)) {
+    return campaign
+  }
+
+  const userTenantId = getUserTenantId(currentUser)
+
+  if (!userTenantId || Number(campaign.tenantId) !== userTenantId) {
+    throw createForbiddenError()
+  }
+
+  return campaign
+}
+
+const assertRewardRecordAccess = async (id, currentUser = null) => {
+  const rewardRecordId = normalizeId(id)
+
+  if (!rewardRecordId) {
+    const error = new Error('發獎紀錄 ID 不正確')
+    error.status = 400
+    throw error
+  }
+
+  const rewardRecord = await prisma.rewardRecord.findUnique({
+    where: {
+      id: rewardRecordId
+    },
+    include: {
+      campaign: {
+        select: {
+          id: true,
+          tenantId: true,
+          title: true
+        }
+      }
+    }
+  })
+
+  if (!rewardRecord) {
+    const error = new Error('找不到中獎紀錄')
+    error.status = 404
+    throw error
+  }
+
+  if (!currentUser || canAccessAllTenants(currentUser)) {
+    return rewardRecord
+  }
+
+  const userTenantId = getUserTenantId(currentUser)
+  const recordTenantId = Number(rewardRecord.tenantId || rewardRecord.campaign?.tenantId)
+
+  if (!userTenantId || recordTenantId !== userTenantId) {
+    const error = new Error('找不到中獎紀錄，或此帳號沒有權限操作這筆紀錄')
+    error.status = 404
+    throw error
+  }
+
+  return rewardRecord
+}
+
+const buildPlayRecordWhere = async (campaignId, query = {}, currentUser = null) => {
+  const campaign = await assertCampaignAccess(campaignId, currentUser)
+
   const where = {
-    campaignId: normalizedCampaignId
+    campaignId: campaign.id
+  }
+
+  if (campaign.tenantId) {
+    where.tenantId = campaign.tenantId
   }
 
   if (query.gameType) {
@@ -107,20 +217,21 @@ const buildPlayRecordWhere = (campaignId, query = {}) => {
     ]
   }
 
-  return where
+  return {
+    where,
+    campaign
+  }
 }
 
-const buildRewardRecordWhere = (campaignId, query = {}) => {
-  const normalizedCampaignId = normalizeId(campaignId)
-
-  if (!normalizedCampaignId) {
-    const error = new Error('活動 ID 不正確')
-    error.status = 400
-    throw error
-  }
+const buildRewardRecordWhere = async (campaignId, query = {}, currentUser = null) => {
+  const campaign = await assertCampaignAccess(campaignId, currentUser)
 
   const where = {
-    campaignId: normalizedCampaignId
+    campaignId: campaign.id
+  }
+
+  if (campaign.tenantId) {
+    where.tenantId = campaign.tenantId
   }
 
   if (query.status) {
@@ -162,11 +273,14 @@ const buildRewardRecordWhere = (campaignId, query = {}) => {
     ]
   }
 
-  return where
+  return {
+    where,
+    campaign
+  }
 }
 
-export const getPlayRecordsByCampaignId = async (campaignId, query = {}) => {
-  const where = buildPlayRecordWhere(campaignId, query)
+export const getPlayRecordsByCampaignId = async (campaignId, query = {}, currentUser = null) => {
+  const { where } = await buildPlayRecordWhere(campaignId, query, currentUser)
 
   return prisma.playRecord.findMany({
     where,
@@ -174,6 +288,7 @@ export const getPlayRecordsByCampaignId = async (campaignId, query = {}) => {
       id: 'desc'
     },
     include: {
+      tenant: true,
       campaign: true,
       prize: true,
       serialCode: true,
@@ -184,15 +299,16 @@ export const getPlayRecordsByCampaignId = async (campaignId, query = {}) => {
           name: true,
           email: true,
           role: true,
-          memberLevel: true
+          memberLevel: true,
+          tenantId: true
         }
       }
     }
   })
 }
 
-export const getRewardRecordsByCampaignId = async (campaignId, query = {}) => {
-  const where = buildRewardRecordWhere(campaignId, query)
+export const getRewardRecordsByCampaignId = async (campaignId, query = {}, currentUser = null) => {
+  const { where } = await buildRewardRecordWhere(campaignId, query, currentUser)
 
   return prisma.rewardRecord.findMany({
     where,
@@ -200,6 +316,7 @@ export const getRewardRecordsByCampaignId = async (campaignId, query = {}) => {
       id: 'desc'
     },
     include: {
+      tenant: true,
       campaign: true,
       prize: true,
       playRecord: {
@@ -211,48 +328,47 @@ export const getRewardRecordsByCampaignId = async (campaignId, query = {}) => {
   })
 }
 
-export const getPlayStatsByCampaignId = async (campaignId) => {
-  const normalizedCampaignId = normalizeId(campaignId)
+export const getPlayStatsByCampaignId = async (campaignId, currentUser = null) => {
+  const campaign = await assertCampaignAccess(campaignId, currentUser)
 
-  if (!normalizedCampaignId) {
-    const error = new Error('活動 ID 不正確')
-    error.status = 400
-    throw error
+  const baseWhere = {
+    campaignId: campaign.id
+  }
+
+  if (campaign.tenantId) {
+    baseWhere.tenantId = campaign.tenantId
   }
 
   const [total, win, lose, rewards, claimed] = await Promise.all([
     prisma.playRecord.count({
-      where: {
-        campaignId: normalizedCampaignId
-      }
+      where: baseWhere
     }),
     prisma.playRecord.count({
       where: {
-        campaignId: normalizedCampaignId,
+        ...baseWhere,
         isWin: true
       }
     }),
     prisma.playRecord.count({
       where: {
-        campaignId: normalizedCampaignId,
+        ...baseWhere,
         isWin: false
       }
     }),
     prisma.rewardRecord.count({
-      where: {
-        campaignId: normalizedCampaignId
-      }
+      where: baseWhere
     }),
     prisma.rewardRecord.count({
       where: {
-        campaignId: normalizedCampaignId,
+        ...baseWhere,
         status: 'CLAIMED'
       }
     })
   ])
 
   return {
-    campaignId: normalizedCampaignId,
+    campaignId: campaign.id,
+    tenantId: campaign.tenantId || null,
     total,
     win,
     lose,
@@ -262,39 +378,46 @@ export const getPlayStatsByCampaignId = async (campaignId) => {
   }
 }
 
-export const createPlayRecord = async (campaignId, payload = {}) => {
-  const normalizedCampaignId = normalizeId(campaignId)
-
-  if (!normalizedCampaignId) {
-    const error = new Error('活動 ID 不正確')
-    error.status = 400
-    throw error
-  }
-
-  const campaign = await prisma.campaign.findUnique({
-    where: {
-      id: normalizedCampaignId
-    }
-  })
-
-  if (!campaign) {
-    const error = new Error('找不到活動')
-    error.status = 404
-    throw error
-  }
+export const createPlayRecord = async (campaignId, payload = {}, currentUser = null) => {
+  const campaign = await assertCampaignAccess(campaignId, currentUser)
+  const normalizedCampaignId = campaign.id
+  const tenantId = campaign.tenantId || null
 
   const prizeId = payload.prizeId ? normalizeId(payload.prizeId) : null
   let prize = null
 
   if (prizeId) {
-    prize = await prisma.prize.findUnique({
+    prize = await prisma.prize.findFirst({
       where: {
-        id: prizeId
+        id: prizeId,
+        campaignId: normalizedCampaignId,
+        ...(tenantId ? { tenantId } : {})
       }
     })
 
     if (!prize) {
-      const error = new Error('找不到獎項')
+      const error = new Error('找不到獎項，或此獎項不屬於此活動')
+      error.status = 404
+      throw error
+    }
+  }
+
+  const serialCodeId = payload.serialCodeId ? normalizeId(payload.serialCodeId) : null
+
+  if (serialCodeId) {
+    const serialCode = await prisma.serialCode.findFirst({
+      where: {
+        id: serialCodeId,
+        campaignId: normalizedCampaignId,
+        ...(tenantId ? { tenantId } : {})
+      },
+      select: {
+        id: true
+      }
+    })
+
+    if (!serialCode) {
+      const error = new Error('找不到序號，或此序號不屬於此活動')
       error.status = 404
       throw error
     }
@@ -309,11 +432,12 @@ export const createPlayRecord = async (campaignId, payload = {}) => {
       data: {
         userId: payload.userId ? normalizeId(payload.userId) : null,
         campaignId: normalizedCampaignId,
+        tenantId,
         prizeId,
         isWin,
         gameType: normalizeGameType(payload.gameType || campaign.gameType),
         status: normalizePlayStatus(payload.status),
-        serialCodeId: payload.serialCodeId ? normalizeId(payload.serialCodeId) : null,
+        serialCodeId,
         playerName: payload.playerName || null,
         playerPhone: payload.playerPhone || null,
         playerEmail: payload.playerEmail || null,
@@ -345,6 +469,7 @@ export const createPlayRecord = async (campaignId, payload = {}) => {
       const rewardRecord = await tx.rewardRecord.create({
         data: {
           campaignId: normalizedCampaignId,
+          tenantId,
           playRecordId: playRecord.id,
           prizeId,
           status: 'PENDING',
@@ -372,62 +497,54 @@ export const createPlayRecord = async (campaignId, payload = {}) => {
   })
 }
 
-export const claimRewardRecord = async (id, payload = {}) => {
-  const rewardRecordId = normalizeId(id)
-
-  if (!rewardRecordId) {
-    const error = new Error('發獎紀錄 ID 不正確')
-    error.status = 400
-    throw error
-  }
+export const claimRewardRecord = async (id, payload = {}, currentUser = null) => {
+  const rewardRecord = await assertRewardRecordAccess(id, currentUser)
 
   return prisma.rewardRecord.update({
     where: {
-      id: rewardRecordId
+      id: rewardRecord.id
     },
     data: {
       status: 'CLAIMED',
       claimedAt: new Date(),
-      claimedBy: payload.claimedBy || 'admin',
+      claimedBy: payload.claimedBy || currentUser?.email || currentUser?.name || 'admin',
       note: payload.note
     },
     include: {
+      tenant: true,
       prize: true,
       playRecord: true
     }
   })
 }
 
-export const cancelRewardRecord = async (id, payload = {}) => {
-  const rewardRecordId = normalizeId(id)
-
-  if (!rewardRecordId) {
-    const error = new Error('發獎紀錄 ID 不正確')
-    error.status = 400
-    throw error
-  }
+export const cancelRewardRecord = async (id, payload = {}, currentUser = null) => {
+  const rewardRecord = await assertRewardRecordAccess(id, currentUser)
 
   return prisma.rewardRecord.update({
     where: {
-      id: rewardRecordId
+      id: rewardRecord.id
     },
     data: {
       status: 'CANCELLED',
       note: payload.note || '已取消'
     },
     include: {
+      tenant: true,
       prize: true,
       playRecord: true
     }
   })
 }
 
-export const exportPlayRecordsCsv = async (campaignId, query = {}) => {
-  const records = await getPlayRecordsByCampaignId(campaignId, query)
+export const exportPlayRecordsCsv = async (campaignId, query = {}, currentUser = null) => {
+  const records = await getPlayRecordsByCampaignId(campaignId, query, currentUser)
 
   const rows = [
     [
       'id',
+      'tenantId',
+      'tenantName',
       'campaignId',
       'gameType',
       'isWin',
@@ -444,6 +561,8 @@ export const exportPlayRecordsCsv = async (campaignId, query = {}) => {
     ],
     ...records.map((record) => [
       record.id,
+      record.tenantId || '',
+      record.tenant?.name || '',
       record.campaignId,
       record.gameType,
       record.isWin ? 'WIN' : 'LOSE',

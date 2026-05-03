@@ -118,12 +118,14 @@ const buildPublicPrize = (prize) => {
 const buildPlayRecordData = ({
   userId,
   campaignId,
+  tenantId = null,
   prizeId = null,
   isWin = false
 }) => {
   return {
     userId: Number(userId),
     campaignId: Number(campaignId),
+    tenantId: tenantId ? Number(tenantId) : null,
     ...(prizeId ? { prizeId: Number(prizeId) } : {}),
     isWin: Boolean(isWin)
   }
@@ -212,6 +214,7 @@ const createLoseResult = async ({
     data: buildPlayRecordData({
       userId,
       campaignId: campaign.id,
+      tenantId: campaign.tenantId || null,
       prizeId: selectedPrize?.id || null,
       isWin: false
     })
@@ -271,6 +274,7 @@ const createWinResult = async ({
     data: {
       userId: Number(userId),
       campaignId: campaign.id,
+      tenantId: campaign.tenantId || null,
       prizeId: updatedPrize.id,
       code: rewardCode,
       status: 'UNUSED'
@@ -286,6 +290,7 @@ const createWinResult = async ({
     data: buildPlayRecordData({
       userId,
       campaignId: campaign.id,
+      tenantId: campaign.tenantId || null,
       prizeId: updatedPrize.id,
       isWin: true
     })

@@ -1,5 +1,5 @@
-// Multi Game Platform V2.2 Stable
-// 第 339 批：Draw Engine Service 正式安全補強版
+// Multi Game Platform V2.3 Tenant Edition
+// 第 6 批：Draw Engine Service tenantId 寫入版
 //
 // 建議放置位置：
 // backend/src/services/drawEngine.service.js
@@ -403,6 +403,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       data: {
         userId: payload.userId ? normalizeId(payload.userId) : null,
         campaignId: normalizedCampaignId,
+        tenantId: campaign.tenantId || null,
         prizeId: prize.id,
         isWin,
         gameType: normalizeGameType(payload.gameType || campaign.gameType),
@@ -434,6 +435,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       rewardRecord = await tx.rewardRecord.create({
         data: {
           campaignId: normalizedCampaignId,
+          tenantId: campaign.tenantId || null,
           playRecordId: playRecord.id,
           prizeId: prize.id,
           status: 'PENDING',
@@ -458,6 +460,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
     return {
       campaign: {
         id: campaign.id,
+        tenantId: campaign.tenantId || null,
         title: campaign.title,
         gameType: campaign.gameType
       },
@@ -515,6 +518,7 @@ export const previewDrawPool = async (campaignId) => {
   return {
     campaign: {
       id: campaign.id,
+      tenantId: campaign.tenantId || null,
       title: campaign.title,
       gameType: campaign.gameType,
       status: campaign.status,
