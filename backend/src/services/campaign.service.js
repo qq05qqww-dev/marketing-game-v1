@@ -126,6 +126,19 @@ const buildCampaignWhere = (query = {}, user = null) => {
     where.gameType = String(query.gameType).toUpperCase()
   }
 
+  // V2.3 第 14 批：前台商家專屬網址可用 tenantSlug 找活動。
+  // 例如 /play/a-shop/golden-egg 會轉成 /api/campaigns?tenantSlug=a-shop&gameType=GOLDEN_EGG。
+  // 這裡只用在讀取公開活動，不會讓商家帳號覆蓋自己的 tenantId 權限。
+  if (query.tenantSlug) {
+    const tenantSlug = String(query.tenantSlug).trim()
+
+    if (tenantSlug) {
+      where.tenant = {
+        slug: tenantSlug
+      }
+    }
+  }
+
   // 平台總管理員可用 ?tenantId= 指定查某商家。
   // 商家帳號不允許用 query 覆蓋自己的 tenantId。
   if (isPlatformAdmin(user) && query.tenantId) {

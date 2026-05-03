@@ -16,6 +16,26 @@ export const getCampaignDetailApi = (id) => {
   return http.get(`/campaigns/${id}`)
 }
 
+
+export const getTenantGoldenEggCampaignApi = (tenantSlug) => {
+  return http.get('/campaigns', {
+    params: {
+      tenantSlug,
+      gameType: 'GOLDEN_EGG',
+      status: 'ACTIVE'
+    }
+  })
+}
+
+export const getTenantCampaignsApi = (tenantSlug, params = {}) => {
+  return http.get('/campaigns', {
+    params: {
+      ...params,
+      tenantSlug
+    }
+  })
+}
+
 export const createCampaignApi = (data) => {
   return http.post('/admin/campaigns', data)
 }

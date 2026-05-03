@@ -241,6 +241,14 @@ const router = createRouter({
       }
     },
     {
+      path: '/play/:tenantSlug/golden-egg',
+      name: 'tenant-golden-egg-play',
+      component: GoldenEggGameView,
+      meta: {
+        title: '商家砸金蛋活動'
+      }
+    },
+    {
       path: '/play/:id',
       name: 'game-play',
       component: GamePlayView,

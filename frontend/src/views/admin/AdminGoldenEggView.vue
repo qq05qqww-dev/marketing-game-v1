@@ -3248,6 +3248,13 @@ const normalizedDatabaseCampaignId = computed(() => {
 const databaseFrontUrl = computed(() => {
   if (!normalizedDatabaseCampaignId.value) return ''
 
+  const user = getStoredAdminUser()
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || user?.tenantSlug || '').trim()
+
+  if (tenantSlug) {
+    return `${window.location.origin}/play/${tenantSlug}/golden-egg`
+  }
+
   return `${window.location.origin}/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value}`
 })
 
@@ -6023,7 +6030,7 @@ watch(
                   正式觀看網址
                 </h3>
                 <p class="mt-1 text-xs font-bold text-emerald-700/80">
-                  後台儲存資料庫設定後，請到前台正式頁刷新確認同步結果。
+                  後台儲存資料庫設定後，請到前台正式頁刷新確認同步結果；商家活動會優先產生 /play/商家Slug/golden-egg 專屬網址。
                 </p>
               </div>
 
@@ -6048,7 +6055,7 @@ watch(
 
             <div class="mt-3 rounded-2xl bg-white/80 p-3">
               <p class="text-xs font-bold text-emerald-600">
-                前台正式資料庫金蛋
+                前台正式資料庫金蛋 / 商家專屬網址
               </p>
               <div class="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
                 <code class="flex-1 overflow-x-auto rounded-xl bg-emerald-950 px-3 py-2 text-xs font-bold text-emerald-50">

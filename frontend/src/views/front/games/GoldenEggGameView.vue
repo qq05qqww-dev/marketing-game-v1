@@ -6,6 +6,9 @@ import {
   playGoldenEggDraw,
   verifyGoldenEggSerialCode
 } from '../../../api/goldenEggApi.js'
+import {
+  getTenantGoldenEggCampaignApi
+} from '../../../api/campaign.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -455,6 +458,13 @@ const currentActivityUrl = computed(() => {
   if (typeof window === 'undefined') return ''
 
   const url = new URL(window.location.href)
+
+  if (getRouteTenantSlug()) {
+    url.searchParams.delete('campaignId')
+    url.searchParams.delete('onlineCampaignId')
+    return url.toString()
+  }
+
   url.searchParams.set('campaignId', String(onlineCampaignId.value || getRouteCampaignId() || 1))
   return url.toString()
 })
@@ -492,6 +502,37 @@ onMounted(() => {
 })
 
 
+
+const getRouteTenantSlug = () => {
+  const value = route.params?.tenantSlug || route.query.tenantSlug || ''
+  return String(value || '').trim()
+}
+
+const unwrapApiPayload = (response) => {
+  return response?.data?.data ?? response?.data ?? response ?? null
+}
+
+const extractCampaignList = (payload) => {
+  const data = unwrapApiPayload(payload)
+
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.items)) return data.items
+  if (Array.isArray(data?.campaigns)) return data.campaigns
+  if (Array.isArray(data?.rows)) return data.rows
+  if (Array.isArray(data?.data)) return data.data
+
+  return []
+}
+
+const resolveTenantGoldenEggCampaign = async (tenantSlug) => {
+  if (!tenantSlug) return null
+
+  const response = await getTenantGoldenEggCampaignApi(tenantSlug)
+  const campaigns = extractCampaignList(response)
+
+  return campaigns.find((item) => String(item?.gameType || '').toUpperCase() === 'GOLDEN_EGG') || campaigns[0] || null
+}
+
 const getRouteCampaignId = () => {
   const value = route.query.campaignId || route.query.onlineCampaignId || route.params?.campaignId
 
@@ -503,19 +544,34 @@ const getRouteCampaignId = () => {
 }
 
 const loadGoldenEggRemoteState = async () => {
-  const campaignId = getRouteCampaignId()
+  let campaignId = getRouteCampaignId()
+  const tenantSlug = getRouteTenantSlug()
+  let apiCampaign = null
 
-  if (!campaignId) {
+  if (!campaignId && !tenantSlug) {
     isOnlineMode.value = false
     onlineCampaignId.value = null
     return
   }
 
   isLoadingRemoteCampaign.value = true
-  remoteLoadMessage.value = '正在讀取正式活動資料...'
+  remoteLoadMessage.value = tenantSlug
+    ? `正在讀取 ${tenantSlug} 的砸金蛋活動...`
+    : '正在讀取正式活動資料...'
 
   try {
-    const apiCampaign = await getGoldenEggCampaign(campaignId)
+    if (!campaignId && tenantSlug) {
+      apiCampaign = await resolveTenantGoldenEggCampaign(tenantSlug)
+      campaignId = Number(apiCampaign?.id || 0)
+
+      if (!campaignId) {
+        throw new Error(`找不到 ${tenantSlug} 的 GOLDEN_EGG 活動`)
+      }
+    }
+
+    if (!apiCampaign) {
+      apiCampaign = await getGoldenEggCampaign(campaignId)
+    }
 
     onlineCampaignId.value = campaignId
     isOnlineMode.value = true
@@ -526,14 +582,18 @@ const loadGoldenEggRemoteState = async () => {
 
     applyRemoteCampaignData(apiCampaign)
 
-    remoteLoadMessage.value = `已載入正式資料庫活動：${apiCampaign?.title || `ID ${campaignId}`}。`
+    remoteLoadMessage.value = tenantSlug
+      ? `已載入 ${apiCampaign?.tenant?.name || tenantSlug} 的砸金蛋活動：${apiCampaign?.title || `ID ${campaignId}`}。`
+      : `已載入正式資料庫活動：${apiCampaign?.title || `ID ${campaignId}`}。`
   } catch (error) {
     console.error('讀取正式金蛋活動失敗：', error)
     isOnlineMode.value = false
     onlineCampaignId.value = null
     remoteCampaignTitle.value = ''
     remoteCampaignStatus.value = ''
-    remoteLoadMessage.value = '正式活動讀取失敗，已改用本機展示資料。'
+    remoteLoadMessage.value = tenantSlug
+      ? `找不到 ${tenantSlug} 的砸金蛋活動，請確認商家網址是否正確。`
+      : '正式活動讀取失敗，已改用本機展示資料。'
   } finally {
     isLoadingRemoteCampaign.value = false
   }
@@ -1513,8 +1573,21 @@ const getSystemShareUrl = () => {
 
   if (typeof window !== 'undefined') {
     const url = new URL(window.location.href)
+
+    if (getRouteTenantSlug()) {
+      url.searchParams.delete('campaignId')
+      url.searchParams.delete('onlineCampaignId')
+      return url.toString()
+    }
+
     url.searchParams.set('campaignId', String(onlineCampaignId.value || getRouteCampaignId() || 1))
     return url.toString()
+  }
+
+  const tenantSlug = getRouteTenantSlug()
+
+  if (tenantSlug) {
+    return `https://marketing-game-v1-em29.vercel.app/play/${tenantSlug}/golden-egg`
   }
 
   return `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${onlineCampaignId.value || getRouteCampaignId() || 1}`
