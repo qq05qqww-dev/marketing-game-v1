@@ -8,6 +8,7 @@ const tenants = ref([])
 const summary = ref({
   total: 0,
   active: 0,
+  inactive: 0,
   disabled: 0,
   suspended: 0,
   draft: 0
@@ -27,11 +28,16 @@ const form = ref({
   status: 'ACTIVE',
   contactName: '',
   contactPhone: '',
-  contactEmail: ''
+  contactEmail: '',
+  createDefaultCampaign: true,
+  defaultCampaignTitle: '',
+  defaultCampaignStatus: 'ACTIVE',
+  defaultSerialCount: 10
 })
 
 const role = computed(() => String(authStore.user?.role || '').toUpperCase())
 const isPlatformAdmin = computed(() => ['ADMIN', 'SUPER_ADMIN'].includes(role.value))
+const isEditing = computed(() => !!editingTenantId.value)
 
 const authHeaders = computed(() => ({
   Authorization: `Bearer ${authStore.token || localStorage.getItem('token') || ''}`,
@@ -41,13 +47,13 @@ const authHeaders = computed(() => ({
 const statusOptions = [
   { label: '全部狀態', value: '' },
   { label: '啟用', value: 'ACTIVE' },
-  { label: '停用', value: 'DISABLED' },
-  { label: '暫停', value: 'SUSPENDED' },
-  { label: '草稿', value: 'DRAFT' }
+  { label: '停用', value: 'INACTIVE' },
+  { label: '暫停', value: 'SUSPENDED' }
 ]
 
 const statusTextMap = {
   ACTIVE: '啟用',
+  INACTIVE: '停用',
   DISABLED: '停用',
   SUSPENDED: '暫停',
   DRAFT: '草稿'
@@ -55,9 +61,41 @@ const statusTextMap = {
 
 const statusClassMap = {
   ACTIVE: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  INACTIVE: 'border-slate-200 bg-slate-100 text-slate-600',
   DISABLED: 'border-slate-200 bg-slate-100 text-slate-600',
   SUSPENDED: 'border-amber-200 bg-amber-50 text-amber-700',
   DRAFT: 'border-sky-200 bg-sky-50 text-sky-700'
+}
+
+
+const getApiBaseUrl = () => {
+  const envBase = String(
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    ''
+  ).trim()
+
+  if (envBase) {
+    return envBase.replace(/\/$/, '')
+  }
+
+  const isViteDevServer = window.location.hostname === 'localhost' && window.location.port === '5173'
+
+  if (isViteDevServer) {
+    return 'http://localhost:3000'
+  }
+
+  return ''
+}
+
+const API_BASE_URL = getApiBaseUrl()
+const apiUrl = (path) => `${API_BASE_URL}${path}`
+
+const campaignStatusTextMap = {
+  ACTIVE: '啟用',
+  DRAFT: '草稿',
+  INACTIVE: '停用',
+  ENDED: '已結束'
 }
 
 const resetForm = () => {
@@ -67,10 +105,23 @@ const resetForm = () => {
     status: 'ACTIVE',
     contactName: '',
     contactPhone: '',
-    contactEmail: ''
+    contactEmail: '',
+    createDefaultCampaign: true,
+    defaultCampaignTitle: '',
+    defaultCampaignStatus: 'ACTIVE',
+    defaultSerialCount: 10
   }
   editingTenantId.value = null
   showCreateForm.value = false
+}
+
+const normalizeSlugText = (value) => {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 const buildQuery = () => {
@@ -100,8 +151,9 @@ const readApiData = async (response) => {
 }
 
 const loadSummary = async () => {
-  const response = await fetch('/api/tenants/summary', {
-    headers: authHeaders.value
+  const response = await fetch(apiUrl('/api/tenants/summary'), {
+    headers: authHeaders.value,
+    cache: 'no-store'
   })
 
   summary.value = await readApiData(response)
@@ -114,8 +166,9 @@ const loadTenants = async () => {
   try {
     await loadSummary()
 
-    const response = await fetch(`/api/tenants${buildQuery()}`, {
-      headers: authHeaders.value
+    const response = await fetch(apiUrl(`/api/tenants${buildQuery()}`), {
+      headers: authHeaders.value,
+      cache: 'no-store'
     })
 
     tenants.value = await readApiData(response)
@@ -138,11 +191,35 @@ const startEdit = (tenant) => {
   form.value = {
     name: tenant.name || '',
     slug: tenant.slug || '',
-    status: tenant.status || 'ACTIVE',
+    status: tenant.status === 'DISABLED' ? 'INACTIVE' : tenant.status || 'ACTIVE',
     contactName: tenant.contactName || '',
     contactPhone: tenant.contactPhone || '',
-    contactEmail: tenant.contactEmail || ''
+    contactEmail: tenant.contactEmail || '',
+    createDefaultCampaign: false,
+    defaultCampaignTitle: '',
+    defaultCampaignStatus: 'ACTIVE',
+    defaultSerialCount: 10
   }
+}
+
+const buildSavePayload = () => {
+  const payload = {
+    name: form.value.name,
+    slug: form.value.slug,
+    status: form.value.status,
+    contactName: form.value.contactName,
+    contactPhone: form.value.contactPhone,
+    contactEmail: form.value.contactEmail
+  }
+
+  if (!isEditing.value) {
+    payload.createDefaultCampaign = Boolean(form.value.createDefaultCampaign)
+    payload.defaultCampaignTitle = form.value.defaultCampaignTitle
+    payload.defaultCampaignStatus = form.value.defaultCampaignStatus
+    payload.defaultSerialCount = Number(form.value.defaultSerialCount || 0)
+  }
+
+  return payload
 }
 
 const saveTenant = async () => {
@@ -156,24 +233,45 @@ const saveTenant = async () => {
     return
   }
 
+  if (!isEditing.value && form.value.createDefaultCampaign) {
+    const ok = window.confirm(
+      `建立「${form.value.name}」後，系統會同步建立預設砸金蛋活動、GameConfig、獎項與 ${Number(form.value.defaultSerialCount || 0)} 組測試序號。是否繼續？`
+    )
+
+    if (!ok) return
+  }
+
   saving.value = true
   errorMessage.value = ''
   successMessage.value = ''
 
   try {
     const isEdit = !!editingTenantId.value
-    const url = isEdit ? `/api/tenants/${editingTenantId.value}` : '/api/tenants'
+    const url = isEdit ? apiUrl(`/api/tenants/${editingTenantId.value}`) : apiUrl('/api/tenants')
     const method = isEdit ? 'PATCH' : 'POST'
 
     const response = await fetch(url, {
       method,
       headers: authHeaders.value,
-      body: JSON.stringify(form.value)
+      body: JSON.stringify(buildSavePayload())
     })
 
-    await readApiData(response)
+    const data = await readApiData(response)
 
-    successMessage.value = isEdit ? '商家已更新' : '商家已建立'
+    const createdTenantName = data?.tenant?.name || form.value.name
+    const createdCampaignTitle = data?.defaultCampaign?.campaign?.title || ''
+
+    if (!isEdit) {
+      keyword.value = ''
+      statusFilter.value = ''
+    }
+
+    if (!isEdit && createdCampaignTitle) {
+      successMessage.value = `商家「${createdTenantName}」已建立，並已自動建立「${createdCampaignTitle}」。列表已切回全部商家並重新整理。`
+    } else {
+      successMessage.value = isEdit ? '商家已更新' : `商家「${createdTenantName}」已建立，列表已切回全部商家並重新整理。`
+    }
+
     resetForm()
     await loadTenants()
   } catch (error) {
@@ -185,7 +283,8 @@ const saveTenant = async () => {
 }
 
 const toggleTenantStatus = async (tenant) => {
-  const nextStatus = tenant.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'
+  const currentStatus = tenant.status === 'DISABLED' ? 'INACTIVE' : tenant.status
+  const nextStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
   const confirmText = nextStatus === 'ACTIVE'
     ? `確定要啟用「${tenant.name}」？`
     : `確定要停用「${tenant.name}」？`
@@ -197,7 +296,7 @@ const toggleTenantStatus = async (tenant) => {
   successMessage.value = ''
 
   try {
-    const response = await fetch(`/api/tenants/${tenant.id}`, {
+    const response = await fetch(apiUrl(`/api/tenants/${tenant.id}`), {
       method: 'PATCH',
       headers: authHeaders.value,
       body: JSON.stringify({
@@ -227,7 +326,7 @@ const deleteTenant = async (tenant) => {
   successMessage.value = ''
 
   try {
-    const response = await fetch(`/api/tenants/${tenant.id}`, {
+    const response = await fetch(apiUrl(`/api/tenants/${tenant.id}`), {
       method: 'DELETE',
       headers: authHeaders.value
     })
@@ -262,23 +361,25 @@ const formatDateTime = (value) => {
 }
 
 const normalizeSlugInput = () => {
-  form.value.slug = String(form.value.slug || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-|-$/g, '')
+  form.value.slug = normalizeSlugText(form.value.slug)
 }
 
 const autoFillSlug = () => {
   if (form.value.slug.trim()) return
 
-  form.value.slug = String(form.value.name || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]/g, '-')
-    .replace(/-{2,}/g, '-')
-    .replace(/^-|-$/g, '')
+  form.value.slug = normalizeSlugText(form.value.name)
+}
+
+const autoFillDefaultCampaignTitle = () => {
+  if (form.value.defaultCampaignTitle.trim()) return
+
+  form.value.defaultCampaignTitle = `${form.value.name || '新商家'} 砸金蛋活動`
+}
+
+const clearFilters = async () => {
+  keyword.value = ''
+  statusFilter.value = ''
+  await loadTenants()
 }
 
 onMounted(() => {
@@ -301,7 +402,7 @@ onMounted(() => {
               商家管理
             </h1>
             <p class="mt-2 text-sm text-slate-500">
-              只有平台總管理員可以查看與維護商家資料。A / B 商家管理員不會看到此頁。
+              平台總管理員可以建立商家，並可選擇同步建立預設砸金蛋活動、GameConfig、獎項與測試序號。
             </p>
           </div>
 
@@ -334,7 +435,7 @@ onMounted(() => {
       </div>
 
       <template v-else>
-        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div class="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
             <p class="text-xs font-bold text-slate-400">全部商家</p>
             <p class="mt-2 text-3xl font-black text-slate-950">{{ summary.total || 0 }}</p>
@@ -345,15 +446,11 @@ onMounted(() => {
           </div>
           <div class="rounded-3xl border border-slate-200 bg-slate-100 p-4 shadow-sm">
             <p class="text-xs font-bold text-slate-500">停用</p>
-            <p class="mt-2 text-3xl font-black text-slate-700">{{ summary.disabled || 0 }}</p>
+            <p class="mt-2 text-3xl font-black text-slate-700">{{ summary.inactive || summary.disabled || 0 }}</p>
           </div>
           <div class="rounded-3xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
             <p class="text-xs font-bold text-amber-600">暫停</p>
             <p class="mt-2 text-3xl font-black text-amber-700">{{ summary.suspended || 0 }}</p>
-          </div>
-          <div class="rounded-3xl border border-sky-200 bg-sky-50 p-4 shadow-sm">
-            <p class="text-xs font-bold text-sky-600">草稿</p>
-            <p class="mt-2 text-3xl font-black text-sky-700">{{ summary.draft || 0 }}</p>
           </div>
         </div>
 
@@ -401,7 +498,7 @@ onMounted(() => {
                 type="text"
                 class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
                 placeholder="例如：A 商家"
-                @blur="autoFillSlug"
+                @blur="autoFillSlug(); autoFillDefaultCampaignTitle()"
               />
             </label>
 
@@ -423,9 +520,8 @@ onMounted(() => {
                 class="mt-2 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-slate-500"
               >
                 <option value="ACTIVE">啟用</option>
-                <option value="DISABLED">停用</option>
+                <option value="INACTIVE">停用</option>
                 <option value="SUSPENDED">暫停</option>
-                <option value="DRAFT">草稿</option>
               </select>
             </label>
 
@@ -460,6 +556,71 @@ onMounted(() => {
             </label>
           </div>
 
+          <div
+            v-if="!isEditing"
+            class="mt-5 rounded-3xl border border-amber-200 bg-amber-50 p-4"
+          >
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.2em] text-amber-600">
+                  DEFAULT CAMPAIGN
+                </p>
+                <h3 class="mt-1 text-base font-black text-amber-900">
+                  商家建立後自動建立預設砸金蛋活動
+                </h3>
+                <p class="mt-1 text-sm font-medium text-amber-800">
+                  勾選後會同步建立 Campaign、GameConfig、4 個預設獎項與測試序號。商家登入後可以直接進砸金蛋後台調整。
+                </p>
+              </div>
+              <label class="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm font-black text-amber-800 shadow-sm">
+                <input
+                  v-model="form.createDefaultCampaign"
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-amber-300"
+                />
+                建立預設活動
+              </label>
+            </div>
+
+            <div
+              v-if="form.createDefaultCampaign"
+              class="mt-4 grid gap-4 lg:grid-cols-3"
+            >
+              <label class="block lg:col-span-1">
+                <span class="text-sm font-bold text-amber-900">預設活動名稱</span>
+                <input
+                  v-model="form.defaultCampaignTitle"
+                  type="text"
+                  class="mt-2 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-amber-500"
+                  placeholder="例如：A 商家砸金蛋活動"
+                />
+              </label>
+
+              <label class="block">
+                <span class="text-sm font-bold text-amber-900">活動初始狀態</span>
+                <select
+                  v-model="form.defaultCampaignStatus"
+                  class="mt-2 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-amber-500"
+                >
+                  <option value="ACTIVE">啟用</option>
+                  <option value="DRAFT">草稿</option>
+                  <option value="INACTIVE">停用</option>
+                </select>
+              </label>
+
+              <label class="block">
+                <span class="text-sm font-bold text-amber-900">測試序號數量</span>
+                <input
+                  v-model.number="form.defaultSerialCount"
+                  type="number"
+                  min="0"
+                  max="100"
+                  class="mt-2 w-full rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-amber-500"
+                />
+              </label>
+            </div>
+          </div>
+
           <div class="mt-5 flex flex-wrap justify-end gap-2">
             <button
               type="button"
@@ -474,7 +635,7 @@ onMounted(() => {
               :disabled="saving"
               @click="saveTenant"
             >
-              {{ saving ? '儲存中...' : editingTenantId ? '儲存修改' : '建立商家' }}
+              {{ saving ? '儲存中...' : editingTenantId ? '儲存修改' : form.createDefaultCampaign ? '建立商家與預設活動' : '建立商家' }}
             </button>
           </div>
         </div>
@@ -521,7 +682,7 @@ onMounted(() => {
               <button
                 type="button"
                 class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50"
-                @click="keyword = ''; statusFilter = ''; loadTenants()"
+                @click="clearFilters"
               >
                 清除
               </button>
@@ -562,11 +723,12 @@ onMounted(() => {
             v-else
             class="overflow-x-auto"
           >
-            <table class="min-w-[1100px] w-full text-left text-sm">
+            <table class="min-w-[1180px] w-full text-left text-sm">
               <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th class="px-5 py-3">商家</th>
                   <th class="px-5 py-3">狀態</th>
+                  <th class="px-5 py-3">預設活動 / 最近活動</th>
                   <th class="px-5 py-3">聯絡資料</th>
                   <th class="px-5 py-3">活動</th>
                   <th class="px-5 py-3">帳號</th>
@@ -589,10 +751,25 @@ onMounted(() => {
                   <td class="px-5 py-4">
                     <span
                       class="inline-flex rounded-full border px-3 py-1 text-xs font-black"
-                      :class="statusClassMap[tenant.status] || statusClassMap.DRAFT"
+                      :class="statusClassMap[tenant.status] || statusClassMap.INACTIVE"
                     >
                       {{ statusTextMap[tenant.status] || tenant.status }}
                     </span>
+                  </td>
+                  <td class="px-5 py-4">
+                    <div v-if="tenant.recentCampaigns?.length" class="space-y-1">
+                      <div
+                        v-for="campaign in tenant.recentCampaigns"
+                        :key="campaign.id"
+                        class="rounded-2xl bg-slate-50 px-3 py-2"
+                      >
+                        <div class="font-black text-slate-700">{{ campaign.title }}</div>
+                        <div class="mt-1 text-xs font-bold text-slate-400">
+                          #{{ campaign.id }}・{{ campaign.gameType }}・{{ campaignStatusTextMap[campaign.status] || campaign.status }}
+                        </div>
+                      </div>
+                    </div>
+                    <span v-else class="text-xs font-bold text-slate-400">尚未建立活動</span>
                   </td>
                   <td class="px-5 py-4">
                     <div class="font-bold text-slate-700">{{ tenant.contactName || '-' }}</div>
