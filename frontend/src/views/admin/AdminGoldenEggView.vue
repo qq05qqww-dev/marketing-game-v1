@@ -3630,6 +3630,8 @@ const databaseActivityOverview = computed(() => {
     statusLabel: statusMeta.label,
     statusTone: statusMeta.tone,
     statusDescription: statusMeta.description,
+    activityStartText: formatDatabaseOverviewDate(campaign.startAt || databaseCampaignForm.startAt),
+    activityEndText: formatDatabaseOverviewDate(campaign.endAt || databaseCampaignForm.endAt),
     activityTimeText: `${formatDatabaseOverviewDate(campaign.startAt || databaseCampaignForm.startAt)} ～ ${formatDatabaseOverviewDate(campaign.endAt || databaseCampaignForm.endAt)}`,
     prizeCount: databasePrizes.value.length,
     totalPrizeStock,
@@ -4048,7 +4050,7 @@ watch(
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4 xl:grid-cols-7">
+            <div class="mt-4 grid grid-cols-2 gap-2 2xl:grid-cols-4 xl:grid-cols-7">
               <button
                 v-for="item in databaseQuickSections"
                 :key="item.key"
@@ -4163,7 +4165,7 @@ watch(
                   {{ databaseActivityOverview.title }}
                 </h3>
                 <p class="mt-1 text-xs font-bold text-slate-500">
-                  Slug：{{ databaseActivityOverview.slug }} ｜ 原始狀態：{{ databaseActivityOverview.rawStatus }}
+                  Slug：{{ databaseActivityOverview.slug }}<span class="mx-1 text-slate-300">｜</span>原始狀態：{{ databaseActivityOverview.rawStatus }}
                 </p>
               </div>
 
@@ -4177,12 +4179,19 @@ watch(
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-4">
               <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
                 <p class="text-xs font-black text-slate-400">活動期間</p>
-                <p class="mt-2 text-sm font-black leading-6 text-slate-800">
-                  {{ databaseActivityOverview.activityTimeText }}
-                </p>
+                <div class="mt-3 space-y-2 text-sm font-black text-slate-800">
+                  <div class="rounded-2xl bg-yellow-50/70 px-3 py-2">
+                    <p class="text-[11px] font-black text-yellow-600">開始</p>
+                    <p class="mt-0.5 whitespace-nowrap text-sm leading-5">{{ databaseActivityOverview.activityStartText }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-orange-50/70 px-3 py-2">
+                    <p class="text-[11px] font-black text-orange-600">結束</p>
+                    <p class="mt-0.5 whitespace-nowrap text-sm leading-5">{{ databaseActivityOverview.activityEndText }}</p>
+                  </div>
+                </div>
               </article>
 
               <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
@@ -4215,8 +4224,8 @@ watch(
                 </p>
               </article>
 
-              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100 sm:col-span-2 xl:col-span-4">
-                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100 lg:col-span-2 2xl:col-span-4">
+                <div class="grid grid-cols-2 gap-3 2xl:grid-cols-4">
                   <div class="rounded-2xl bg-slate-50 p-3 text-center">
                     <p class="text-xs font-black text-slate-400">遊玩次數</p>
                     <p class="mt-1 text-xl font-black text-slate-900">{{ databaseActivityOverview.playTotal }}</p>
