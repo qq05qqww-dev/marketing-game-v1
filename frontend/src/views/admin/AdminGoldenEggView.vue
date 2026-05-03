@@ -1065,6 +1065,61 @@ const applyImportedDatabaseGameConfigSettingsToForm = (settings = {}) => {
   return appliedCount
 }
 
+
+const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig 表單到右側預覽。') => {
+  Object.assign(campaign, {
+    pageTitle: databaseGameConfigForm.pageTitle || campaign.pageTitle,
+    mainTitle: databaseGameConfigForm.mainTitle || campaign.mainTitle,
+    subTitle: databaseGameConfigForm.subTitle || campaign.subTitle,
+    heroTagline: databaseGameConfigForm.heroTagline || campaign.heroTagline,
+    noticeText: databaseGameConfigForm.noticeText || campaign.noticeText,
+    serialRedeemTitle: databaseGameConfigForm.serialRedeemTitle || campaign.serialRedeemTitle,
+    serialRedeemDescription: databaseGameConfigForm.serialRedeemDescription || campaign.serialRedeemDescription,
+    serialRedeemButtonText: databaseGameConfigForm.serialRedeemButtonText || campaign.serialRedeemButtonText,
+    serialRedeemSuccessText: databaseGameConfigForm.serialRedeemSuccessText || campaign.serialRedeemSuccessText,
+    serialRedeemErrorText: databaseGameConfigForm.serialRedeemErrorText || campaign.serialRedeemErrorText,
+    activityRunningText: databaseGameConfigForm.activityRunningText || campaign.activityRunningText,
+    activityNotStartedText: databaseGameConfigForm.activityNotStartedText || campaign.activityNotStartedText,
+    activityEndedText: databaseGameConfigForm.activityEndedText || campaign.activityEndedText,
+    showActivityTimeSection: databaseGameConfigForm.showActivityTimeSection !== false,
+    showActivityCountdown: databaseGameConfigForm.showActivityCountdown !== false,
+    activityCountdownAlwaysShowSeconds: databaseGameConfigForm.activityCountdownAlwaysShowSeconds !== false,
+    showBottomNav: databaseGameConfigForm.showBottomNav !== false,
+    eggSize: Number(databaseGameConfigForm.eggSize || campaign.eggSize || 74),
+    eggCardSize: Number(databaseGameConfigForm.eggCardSize || campaign.eggCardSize || 128),
+    eggGridGap: Number(databaseGameConfigForm.eggGridGap || campaign.eggGridGap || 12),
+    eggColorTop: databaseGameConfigForm.eggColorTop || campaign.eggColorTop,
+    eggColorMiddle: databaseGameConfigForm.eggColorMiddle || campaign.eggColorMiddle,
+    eggColorBottom: databaseGameConfigForm.eggColorBottom || campaign.eggColorBottom,
+    themeBgFrom: databaseGameConfigForm.themeBgFrom || campaign.themeBgFrom,
+    themeBgMiddle: databaseGameConfigForm.themeBgMiddle || campaign.themeBgMiddle,
+    themeBgTo: databaseGameConfigForm.themeBgTo || campaign.themeBgTo,
+    themePanelColor: databaseGameConfigForm.themePanelColor || campaign.themePanelColor,
+    themeAccentColor: databaseGameConfigForm.themeAccentColor || campaign.themeAccentColor,
+    themeButtonColor: databaseGameConfigForm.themeButtonColor || campaign.themeButtonColor,
+    themeButtonDarkColor: databaseGameConfigForm.themeButtonDarkColor || campaign.themeButtonDarkColor,
+    eggCardBgFrom: databaseGameConfigForm.eggCardBgFrom || campaign.eggCardBgFrom,
+    eggCardBgTo: databaseGameConfigForm.eggCardBgTo || campaign.eggCardBgTo,
+    eggNumberBgColor: databaseGameConfigForm.eggNumberBgColor || campaign.eggNumberBgColor,
+    eggNumberTextColor: databaseGameConfigForm.eggNumberTextColor || campaign.eggNumberTextColor,
+    shareTitle: databaseGameConfigForm.shareTitle || campaign.shareTitle,
+    shareDescription: databaseGameConfigForm.shareDescription || campaign.shareDescription,
+    shareUrl: databaseGameConfigForm.shareUrl || campaign.shareUrl,
+    shareImageUrl: databaseGameConfigForm.shareImageUrl || campaign.shareImageUrl || '',
+    systemShareButtonText: databaseGameConfigForm.systemShareButtonText || campaign.systemShareButtonText || '系統分享',
+    systemShareButtonTextSize: Number(databaseGameConfigForm.systemShareButtonTextSize || campaign.systemShareButtonTextSize || 14),
+    systemShareButtonBgColor: databaseGameConfigForm.systemShareButtonBgColor || campaign.systemShareButtonBgColor || '#7f1d1d',
+    systemShareButtonTextColor: databaseGameConfigForm.systemShareButtonTextColor || campaign.systemShareButtonTextColor || '#ffffff',
+    systemShareText: databaseGameConfigForm.systemShareText || campaign.systemShareText || '',
+    lineShareText: databaseGameConfigForm.lineShareText || campaign.lineShareText || '',
+    telegramShareText: databaseGameConfigForm.telegramShareText || campaign.telegramShareText || ''
+  })
+
+  setDatabasePreviewSyncMessage(message)
+  saveState(message)
+  previewRefreshKey.value = Date.now()
+}
+
 const importDatabaseGameConfigBackupJson = async (event) => {
   const file = event?.target?.files?.[0]
   if (!file) return
@@ -1096,8 +1151,9 @@ const importDatabaseGameConfigBackupJson = async (event) => {
     if (!confirmed) return
 
     const appliedCount = applyImportedDatabaseGameConfigSettingsToForm(settings)
+    syncDatabaseGameConfigFormToLivePreview('已匯入 GameConfig 備份到右側預覽；手機正式前台需按「儲存前台設定」後才會同步。')
 
-    showOperationSuccess(`已匯入 ${appliedCount} 個 GameConfig 欄位到表單，請確認後再按「儲存前台設定」。`)
+    showOperationSuccess(`已匯入 ${appliedCount} 個 GameConfig 欄位到表單與右側預覽，請確認後再按「儲存前台設定」。`)
     addGameConfigOperationLog({
       title: '匯入 GameConfig 備份',
       description: `已從「${file.name}」套用 ${appliedCount} 個欄位到表單，尚未寫入資料庫。`,
@@ -1361,8 +1417,9 @@ const applyDatabaseGameConfigTemplatePreset = (template) => {
   if (!confirmed) return
 
   const appliedCount = applyImportedDatabaseGameConfigSettingsToForm(template.fields)
+  syncDatabaseGameConfigFormToLivePreview(`已套用「${template.name}」模板到右側預覽；手機正式前台需按「儲存前台設定」後才會同步。`)
 
-  showOperationSuccess(`已套用「${template.name}」模板到表單，請確認後再按「儲存前台設定」。`)
+  showOperationSuccess(`已套用「${template.name}」模板到表單與右側預覽，請確認後再按「儲存前台設定」。`)
   addGameConfigOperationLog({
     title: `套用模板：${template.name}`,
     description: `已把 ${appliedCount} 個模板欄位套用到表單，尚未寫入資料庫。`,
