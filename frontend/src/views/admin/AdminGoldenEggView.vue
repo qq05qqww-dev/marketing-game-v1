@@ -47,6 +47,9 @@ const safeJsonParse = (value, fallback = null) => {
 
 const previewRefreshKey = ref(Date.now())
 const savedMessage = ref('')
+const savedMessageType = ref('success')
+const operationMessage = ref('')
+const operationMessageType = ref('info')
 const activeSection = ref('databaseMode')
 const databaseCampaignId = ref(localStorage.getItem('golden_egg_admin_database_campaign_id') || '')
 const isLoadingDatabaseCampaign = ref(false)
@@ -788,13 +791,84 @@ const payload = computed(() => {
   }
 })
 
-const showSavedMessage = (message) => {
-  savedMessage.value = message
+let savedMessageTimer = null
+let operationMessageTimer = null
 
-  window.setTimeout(() => {
-    savedMessage.value = ''
-  }, 2200)
+const clearSavedMessageTimer = () => {
+  if (savedMessageTimer) {
+    window.clearTimeout(savedMessageTimer)
+    savedMessageTimer = null
+  }
 }
+
+const clearOperationMessageTimer = () => {
+  if (operationMessageTimer) {
+    window.clearTimeout(operationMessageTimer)
+    operationMessageTimer = null
+  }
+}
+
+const showSavedMessage = (message, type = 'success') => {
+  clearSavedMessageTimer()
+  savedMessage.value = message
+  savedMessageType.value = type
+
+  savedMessageTimer = window.setTimeout(() => {
+    savedMessage.value = ''
+    savedMessageTimer = null
+  }, type === 'error' ? 3600 : 2400)
+}
+
+const showOperationMessage = (message, type = 'info', autoClear = true) => {
+  clearOperationMessageTimer()
+  operationMessage.value = message
+  operationMessageType.value = type
+
+  if (autoClear) {
+    operationMessageTimer = window.setTimeout(() => {
+      operationMessage.value = ''
+      operationMessageTimer = null
+    }, type === 'error' ? 4200 : 2600)
+  }
+}
+
+const showOperationSuccess = (message) => {
+  showSavedMessage(message, 'success')
+  showOperationMessage(message, 'success')
+}
+
+const showOperationError = (message) => {
+  showSavedMessage(message, 'error')
+  showOperationMessage(message, 'error')
+}
+
+const showOperationInfo = (message, autoClear = true) => {
+  showOperationMessage(message, 'info', autoClear)
+}
+
+const adminToastClass = computed(() => {
+  if (savedMessageType.value === 'error') {
+    return 'bg-rose-600 text-white'
+  }
+
+  if (savedMessageType.value === 'info') {
+    return 'bg-blue-700 text-white'
+  }
+
+  return 'bg-slate-900 text-white'
+})
+
+const operationMessageClass = computed(() => {
+  if (operationMessageType.value === 'error') {
+    return 'border-rose-200 bg-rose-50 text-rose-700'
+  }
+
+  if (operationMessageType.value === 'success') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  }
+
+  return 'border-blue-200 bg-blue-50 text-blue-700'
+})
 
 const saveState = (message = '') => {
   localStorage.setItem(GOLDEN_EGG_ADMIN_STATE_KEY, JSON.stringify(payload.value))
@@ -882,6 +956,7 @@ const syncToFrontNow = async () => {
   // 現在若已載入正式 campaignId，就同步寫入 PostgreSQL gameConfig.settings。
   syncSystemShareButtonSettingsToPreview()
   saveState('已同步到右側預覽。')
+  showOperationSuccess('已同步到右側預覽。')
 
   if (!normalizedDatabaseCampaignId.value) {
     setDatabasePreviewSyncMessage('尚未載入正式 campaignId；目前只同步本機預覽。若要同步手機前台，請先在資料庫模式讀取活動。')
@@ -895,7 +970,7 @@ const syncToFrontNow = async () => {
 const refreshPreview = () => {
   refreshRightPreviewFromSystemShareSettings()
   previewRefreshKey.value = Date.now()
-  showSavedMessage('已重新整理右側預覽。')
+  showOperationSuccess('已重新整理右側預覽。')
 }
 
 const resetAllSettings = () => {
@@ -906,6 +981,7 @@ const resetAllSettings = () => {
   Object.assign(campaign, cloneByJson(defaultCampaignSnapshot))
   prizes.value = cloneByJson(defaultPrizesSnapshot)
   saveState('已還原砸金蛋預設設定。')
+  showOperationSuccess('已還原砸金蛋預設設定。')
 }
 
 const addPrize = () => {
@@ -1040,7 +1116,7 @@ const handleResultImageUpload = async (event) => {
     saveState('已上傳全域結果圖片。')
   } catch (error) {
     console.error('上傳全域結果圖片失敗：', error)
-    window.alert(error.message || '上傳圖片失敗')
+    showOperationError(error.message || '上傳圖片失敗')
   } finally {
     if (event.target) {
       event.target.value = ''
@@ -1063,7 +1139,7 @@ const handlePrizeImageUpload = async (event, prize) => {
     saveState(`已上傳「${prize.name || '獎項'}」圖片。`)
   } catch (error) {
     console.error('上傳獎項圖片失敗：', error)
-    window.alert(error.message || '上傳圖片失敗')
+    showOperationError(error.message || '上傳圖片失敗')
   } finally {
     if (event.target) {
       event.target.value = ''
@@ -2333,7 +2409,7 @@ const exportSettings = () => {
   link.click()
 
   URL.revokeObjectURL(url)
-  showSavedMessage('已匯出砸金蛋設定 JSON。')
+  showOperationSuccess('已匯出砸金蛋設定 JSON。')
 }
 
 const goFront = () => {
@@ -2475,7 +2551,7 @@ const reloadDatabaseAndOpenFrontPreview = async () => {
 
 const copyDatabaseFrontPreviewUrl = async () => {
   if (!databaseFrontUrl.value) {
-    window.alert('請先輸入正式活動 campaignId。')
+    showOperationError('請先輸入正式活動 campaignId。')
     return
   }
 
@@ -2484,7 +2560,7 @@ const copyDatabaseFrontPreviewUrl = async () => {
 
 const openDatabaseFrontPreview = () => {
   if (!databaseFrontUrl.value) {
-    window.alert('請先輸入正式活動 campaignId。')
+    showOperationError('請先輸入正式活動 campaignId。')
     return
   }
 
@@ -2571,7 +2647,7 @@ const editDatabasePrize = (item) => {
   databasePrizeForm.stockUsed = Number(item.stockUsed || 0)
   databasePrizeForm.sortOrder = Number(item.sortOrder || 0)
 
-  showSavedMessage('已載入資料庫獎項到編輯表單。')
+  showOperationSuccess('已載入資料庫獎項到編輯表單。')
 }
 
 const buildDatabasePrizePayload = () => {
@@ -2593,27 +2669,28 @@ const buildDatabasePrizePayload = () => {
 
 const saveDatabasePrize = async () => {
   if (!normalizedDatabaseCampaignId.value) {
-    window.alert('請先輸入並讀取正式活動 campaignId。')
+    showOperationError('請先輸入並讀取正式活動 campaignId。')
     return
   }
 
   if (!String(databasePrizeForm.title || '').trim()) {
-    window.alert('獎項名稱不能空白。')
+    showOperationError('獎項名稱不能空白。')
     return
   }
 
   isSavingDatabasePrize.value = true
+  showOperationInfo(databasePrizeForm.id ? '正在更新資料庫獎項，請稍候...' : '正在新增資料庫獎項，請稍候...', false)
 
   try {
     const payload = buildDatabasePrizePayload()
 
     if (databasePrizeForm.id) {
       await updateAdminGoldenEggPrize(databasePrizeForm.id, payload)
-      showSavedMessage('已更新資料庫獎項。')
+      showOperationSuccess('已更新資料庫獎項。')
       setDatabasePreviewSyncMessage()
     } else {
       await createAdminGoldenEggPrize(normalizedDatabaseCampaignId.value, payload)
-      showSavedMessage('已新增資料庫獎項。')
+      showOperationSuccess('已新增資料庫獎項。')
       setDatabasePreviewSyncMessage()
     }
 
@@ -2621,7 +2698,7 @@ const saveDatabasePrize = async () => {
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('儲存資料庫獎項失敗：', error)
-    window.alert(error.message || '儲存資料庫獎項失敗。')
+    showOperationError(error.message || '儲存資料庫獎項失敗。')
   } finally {
     isSavingDatabasePrize.value = false
   }
@@ -2634,14 +2711,16 @@ const removeDatabasePrize = async (item) => {
 
   if (!confirmed) return
 
+  showOperationInfo('正在刪除資料庫獎項，請稍候...', false)
+
   try {
     await deleteAdminGoldenEggPrize(item.id)
-    showSavedMessage('已刪除資料庫獎項。')
+    showOperationSuccess('已刪除資料庫獎項。')
     setDatabasePreviewSyncMessage()
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('刪除資料庫獎項失敗：', error)
-    window.alert(error.message || '刪除資料庫獎項失敗。')
+    showOperationError(error.message || '刪除資料庫獎項失敗。')
   }
 }
 
@@ -2816,7 +2895,7 @@ const refreshDatabaseSerialCodesWithFeedback = async () => {
 
 const batchDeleteSelectedDatabaseSerials = async () => {
   if (!selectedDatabaseSerialIds.value.length) {
-    window.alert('請先勾選要刪除的序號。')
+    showOperationError('請先勾選要刪除的序號。')
     return
   }
 
@@ -2838,6 +2917,7 @@ const batchDeleteSelectedDatabaseSerials = async () => {
   if (!confirmed) return
 
   isBatchDeletingDatabaseSerials.value = true
+  showOperationInfo(`正在批次刪除 ${selectedDatabaseSerialIds.value.length} 組序號，請稍候...`, false)
 
   try {
     const ids = [...selectedDatabaseSerialIds.value]
@@ -2847,12 +2927,12 @@ const batchDeleteSelectedDatabaseSerials = async () => {
     )
 
     selectedDatabaseSerialIds.value = []
-    showSavedMessage(`已批次刪除 ${ids.length} 組資料庫序號。`)
+    showOperationSuccess(`已批次刪除 ${ids.length} 組資料庫序號。`)
     setDatabasePreviewSyncMessage(`已批次刪除 ${ids.length} 組資料庫序號，序號列表已重新讀取。`)
     await refreshDatabaseSerialCodes()
   } catch (error) {
     console.error('批次刪除資料庫序號失敗：', error)
-    window.alert(error.message || '批次刪除資料庫序號失敗。')
+    showOperationError(error.message || '批次刪除資料庫序號失敗。')
   } finally {
     isBatchDeletingDatabaseSerials.value = false
   }
@@ -2867,11 +2947,12 @@ const refreshDatabaseSerialCodes = async () => {
 
 const generateDatabaseSerialCodes = async () => {
   if (!normalizedDatabaseCampaignId.value) {
-    window.alert('請先輸入並讀取正式活動 campaignId。')
+    showOperationError('請先輸入並讀取正式活動 campaignId。')
     return
   }
 
   isSavingDatabaseSerial.value = true
+  showOperationInfo('正在自動產生資料庫序號，請稍候...', false)
 
   try {
     await generateAdminGoldenEggSerialCodes(normalizedDatabaseCampaignId.value, {
@@ -2884,12 +2965,12 @@ const generateDatabaseSerialCodes = async () => {
       note: databaseSerialForm.note
     })
 
-    showSavedMessage('已自動產生資料庫序號。')
+    showOperationSuccess('已自動產生資料庫序號。')
     setDatabasePreviewSyncMessage('已更新序號資料，前台輸入序號時會使用最新資料庫狀態。')
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('自動產生資料庫序號失敗：', error)
-    window.alert(error.message || '自動產生資料庫序號失敗。')
+    showOperationError(error.message || '自動產生資料庫序號失敗。')
   } finally {
     isSavingDatabaseSerial.value = false
   }
@@ -2897,16 +2978,17 @@ const generateDatabaseSerialCodes = async () => {
 
 const createDatabaseSerialCode = async () => {
   if (!normalizedDatabaseCampaignId.value) {
-    window.alert('請先輸入並讀取正式活動 campaignId。')
+    showOperationError('請先輸入並讀取正式活動 campaignId。')
     return
   }
 
   if (!String(databaseSerialForm.code || '').trim()) {
-    window.alert('請先輸入單組序號。')
+    showOperationError('請先輸入單組序號。')
     return
   }
 
   isSavingDatabaseSerial.value = true
+  showOperationInfo('正在新增單組資料庫序號，請稍候...', false)
 
   try {
     await createAdminGoldenEggSerialCode(normalizedDatabaseCampaignId.value, {
@@ -2918,12 +3000,12 @@ const createDatabaseSerialCode = async () => {
     })
 
     databaseSerialForm.code = ''
-    showSavedMessage('已新增單組資料庫序號。')
+    showOperationSuccess('已新增單組資料庫序號。')
     setDatabasePreviewSyncMessage('已更新序號資料，前台輸入序號時會使用最新資料庫狀態。')
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('新增單組資料庫序號失敗：', error)
-    window.alert(error.message || '新增單組資料庫序號失敗。')
+    showOperationError(error.message || '新增單組資料庫序號失敗。')
   } finally {
     isSavingDatabaseSerial.value = false
   }
@@ -2931,16 +3013,17 @@ const createDatabaseSerialCode = async () => {
 
 const bulkCreateDatabaseSerialCodes = async () => {
   if (!normalizedDatabaseCampaignId.value) {
-    window.alert('請先輸入並讀取正式活動 campaignId。')
+    showOperationError('請先輸入並讀取正式活動 campaignId。')
     return
   }
 
   if (!String(databaseSerialForm.codesText || '').trim()) {
-    window.alert('請先貼上多組序號。')
+    showOperationError('請先貼上多組序號。')
     return
   }
 
   isSavingDatabaseSerial.value = true
+  showOperationInfo('正在批次新增資料庫序號，請稍候...', false)
 
   try {
     await bulkCreateAdminGoldenEggSerialCodes(normalizedDatabaseCampaignId.value, {
@@ -2952,12 +3035,12 @@ const bulkCreateDatabaseSerialCodes = async () => {
     })
 
     databaseSerialForm.codesText = ''
-    showSavedMessage('已批次新增資料庫序號。')
+    showOperationSuccess('已批次新增資料庫序號。')
     setDatabasePreviewSyncMessage('已更新序號資料，前台輸入序號時會使用最新資料庫狀態。')
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('批次新增資料庫序號失敗：', error)
-    window.alert(error.message || '批次新增資料庫序號失敗。')
+    showOperationError(error.message || '批次新增資料庫序號失敗。')
   } finally {
     isSavingDatabaseSerial.value = false
   }
@@ -2968,22 +3051,26 @@ const toggleDatabaseSerialStatus = async (item) => {
 
   const nextStatus = item.status === 'DISABLED' ? 'UNUSED' : 'DISABLED'
 
+  showOperationInfo(nextStatus === 'DISABLED' ? '正在停用資料庫序號，請稍候...' : '正在啟用資料庫序號，請稍候...', false)
+
   try {
     await updateAdminGoldenEggSerialCode(item.id, {
       status: nextStatus
     })
 
-    showSavedMessage(nextStatus === 'DISABLED' ? '已停用資料庫序號。' : '已啟用資料庫序號。')
+    showOperationSuccess(nextStatus === 'DISABLED' ? '已停用資料庫序號。' : '已啟用資料庫序號。')
     setDatabasePreviewSyncMessage('已更新序號狀態，前台會依最新資料庫狀態判斷是否可抽。')
     await refreshDatabaseSerialCodes()
   } catch (error) {
     console.error('更新資料庫序號狀態失敗：', error)
-    window.alert(error.message || '更新資料庫序號狀態失敗。')
+    showOperationError(error.message || '更新資料庫序號狀態失敗。')
   }
 }
 
 const distributeDatabaseSerialCode = async (item) => {
   if (!item?.id) return
+
+  showOperationInfo('正在標記資料庫序號發放狀態，請稍候...', false)
 
   try {
     await markAdminGoldenEggSerialDistributed(item.id, {
@@ -2992,12 +3079,12 @@ const distributeDatabaseSerialCode = async (item) => {
       note: item.note || databaseSerialForm.note
     })
 
-    showSavedMessage('已標記資料庫序號為已發放。')
+    showOperationSuccess('已標記資料庫序號為已發放。')
     setDatabasePreviewSyncMessage('已更新序號發放資料。')
     await refreshDatabaseSerialCodes()
   } catch (error) {
     console.error('標記資料庫序號發放失敗：', error)
-    window.alert(error.message || '標記資料庫序號發放失敗。')
+    showOperationError(error.message || '標記資料庫序號發放失敗。')
   }
 }
 
@@ -3008,19 +3095,21 @@ const removeDatabaseSerialCode = async (item) => {
 
   if (!confirmed) return
 
+  showOperationInfo('正在刪除資料庫序號，請稍候...', false)
+
   try {
     await deleteAdminGoldenEggSerialCode(item.id)
-    showSavedMessage('已刪除資料庫序號。')
+    showOperationSuccess('已刪除資料庫序號。')
     await refreshDatabaseSerialCodes()
   } catch (error) {
     console.error('刪除資料庫序號失敗：', error)
-    window.alert(error.message || '刪除資料庫序號失敗。')
+    showOperationError(error.message || '刪除資料庫序號失敗。')
   }
 }
 
 const openDatabaseSerialExport = () => {
   if (!normalizedDatabaseCampaignId.value) {
-    window.alert('請先輸入正式活動 campaignId。')
+    showOperationError('請先輸入正式活動 campaignId。')
     return
   }
 
@@ -3159,16 +3248,17 @@ const buildDatabaseCampaignPayload = () => {
 
 const saveDatabaseCampaign = async () => {
   if (!normalizedDatabaseCampaignId.value) {
-    window.alert('請先輸入並讀取正式活動 campaignId。')
+    showOperationError('請先輸入並讀取正式活動 campaignId。')
     return
   }
 
   if (!String(databaseCampaignForm.title || '').trim()) {
-    window.alert('活動名稱不能空白。')
+    showOperationError('活動名稱不能空白。')
     return
   }
 
   isSavingDatabaseCampaign.value = true
+  showOperationInfo('正在儲存資料庫活動基本資料，請稍候...', false)
 
   try {
     await updateAdminGoldenEggCampaign(
@@ -3176,12 +3266,12 @@ const saveDatabaseCampaign = async () => {
       buildDatabaseCampaignPayload()
     )
 
-    showSavedMessage('已儲存資料庫活動基本資料。')
+    showOperationSuccess('已儲存資料庫活動基本資料。')
     setDatabasePreviewSyncMessage('活動基本資料已更新，請刷新前台正式頁查看最新活動狀態與時間。')
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('儲存資料庫 Campaign 失敗：', error)
-    window.alert(error.message || '儲存資料庫活動基本資料失敗。')
+    showOperationError(error.message || '儲存資料庫活動基本資料失敗。')
   } finally {
     isSavingDatabaseCampaign.value = false
   }
@@ -3289,11 +3379,12 @@ const buildDatabaseGameConfigPayload = () => {
 
 const saveDatabaseGameConfig = async () => {
   if (!normalizedDatabaseCampaignId.value) {
-    window.alert('請先輸入並讀取正式活動 campaignId。')
+    showOperationError('請先輸入並讀取正式活動 campaignId。')
     return
   }
 
   isSavingDatabaseGameConfig.value = true
+  showOperationInfo('正在儲存資料庫前台設定，請稍候...', false)
 
   try {
     await updateAdminGoldenEggGameConfig(
@@ -3301,12 +3392,12 @@ const saveDatabaseGameConfig = async () => {
       buildDatabaseGameConfigPayload()
     )
 
-    showSavedMessage('已儲存資料庫前台設定，並寫入 PostgreSQL gameConfig.settings。')
+    showOperationSuccess('已儲存資料庫前台設定，並寫入 PostgreSQL gameConfig.settings。')
     setDatabasePreviewSyncMessage(`資料庫前台設定已更新：金蛋顏色 ${databaseGameConfigForm.eggColorTop} / ${databaseGameConfigForm.eggColorMiddle} / ${databaseGameConfigForm.eggColorBottom}`)
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('儲存資料庫 GameConfig 失敗：', error)
-    window.alert(error.message || '儲存資料庫前台設定失敗。')
+    showOperationError(error.message || '儲存資料庫前台設定失敗。')
   } finally {
     isSavingDatabaseGameConfig.value = false
   }
@@ -3328,10 +3419,10 @@ const refreshDatabaseRecords = async () => {
 
     databasePlayRecords.value = Array.isArray(playRecordsResult) ? playRecordsResult : []
     databaseRewardRecords.value = Array.isArray(rewardRecordsResult) ? rewardRecordsResult : []
-    showSavedMessage('已重新讀取資料庫紀錄。')
+    showOperationSuccess('已重新讀取資料庫紀錄。')
   } catch (error) {
     console.error('重新讀取資料庫紀錄失敗：', error)
-    window.alert(error.message || '重新讀取資料庫紀錄失敗。')
+    showOperationError(error.message || '重新讀取資料庫紀錄失敗。')
   }
 }
 
@@ -3342,17 +3433,19 @@ const claimDatabaseRewardRecord = async (item) => {
 
   if (!confirmed) return
 
+  showOperationInfo('正在核銷領獎紀錄，請稍候...', false)
+
   try {
     await claimAdminGoldenEggRewardRecord(item.id, {
       claimedBy: 'admin',
       note: '後台資料庫模式核銷'
     })
 
-    showSavedMessage('已核銷領獎。')
+    showOperationSuccess('已核銷領獎。')
     await refreshDatabaseRecords()
   } catch (error) {
     console.error('核銷領獎失敗：', error)
-    window.alert(error.message || '核銷領獎失敗。')
+    showOperationError(error.message || '核銷領獎失敗。')
   }
 }
 
@@ -3363,22 +3456,24 @@ const cancelDatabaseRewardRecord = async (item) => {
 
   if (!confirmed) return
 
+  showOperationInfo('正在取消發獎紀錄，請稍候...', false)
+
   try {
     await cancelAdminGoldenEggRewardRecord(item.id, {
       note: '後台資料庫模式取消發獎'
     })
 
-    showSavedMessage('已取消發獎。')
+    showOperationSuccess('已取消發獎。')
     await refreshDatabaseRecords()
   } catch (error) {
     console.error('取消發獎失敗：', error)
-    window.alert(error.message || '取消發獎失敗。')
+    showOperationError(error.message || '取消發獎失敗。')
   }
 }
 
 const openDatabasePlayRecordExport = () => {
   if (!normalizedDatabaseCampaignId.value) {
-    window.alert('請先輸入正式活動 campaignId。')
+    showOperationError('請先輸入正式活動 campaignId。')
     return
   }
 
@@ -3642,9 +3737,25 @@ watch(
     <transition name="admin-toast">
       <div
         v-if="savedMessage"
-        class="fixed left-1/2 top-24 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl bg-slate-900 px-4 py-3 text-center text-sm font-black text-white shadow-2xl"
+        :class="['fixed left-1/2 top-24 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl px-4 py-3 text-center text-sm font-black shadow-2xl', adminToastClass]"
       >
         {{ savedMessage }}
+      </div>
+    </transition>
+
+    <transition name="admin-toast">
+      <div
+        v-if="operationMessage"
+        :class="['mx-auto mt-4 flex max-w-[1600px] items-center justify-between gap-3 rounded-3xl border px-4 py-3 text-sm font-black shadow-sm', operationMessageClass]"
+      >
+        <span>{{ operationMessage }}</span>
+        <button
+          type="button"
+          class="shrink-0 rounded-full bg-white/70 px-3 py-1 text-xs font-black text-slate-600 ring-1 ring-black/5"
+          @click="operationMessage = ''"
+        >
+          關閉
+        </button>
       </div>
     </transition>
 
@@ -4893,7 +5004,7 @@ watch(
                     :disabled="isSavingDatabaseSerial"
                     @click="createDatabaseSerialCode"
                   >
-                    新增單組
+                    {{ isSavingDatabaseSerial ? '處理中...' : '新增單組' }}
                   </button>
 
                   <button
@@ -4902,7 +5013,7 @@ watch(
                     :disabled="isSavingDatabaseSerial"
                     @click="bulkCreateDatabaseSerialCodes"
                   >
-                    批次新增
+                    {{ isSavingDatabaseSerial ? '處理中...' : '批次新增' }}
                   </button>
 
                   <button
@@ -4911,7 +5022,7 @@ watch(
                     :disabled="isSavingDatabaseSerial"
                     @click="generateDatabaseSerialCodes"
                   >
-                    自動產生
+                    {{ isSavingDatabaseSerial ? '處理中...' : '自動產生' }}
                   </button>
                 </div>
               </div>
