@@ -3542,13 +3542,13 @@ const formatDatabaseOverviewDate = (value) => {
 
   if (Number.isNaN(date.getTime())) return String(value)
 
-  return date.toLocaleString('zh-TW', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+
+  return `${year}/${month}/${day} ${hour}:${minute}`
 }
 
 const getDatabaseCampaignStatusMeta = (campaign = {}) => {
@@ -4179,17 +4179,20 @@ watch(
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-4">
-              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
-                <p class="text-xs font-black text-slate-400">活動期間</p>
-                <div class="mt-3 space-y-2 text-sm font-black text-slate-800">
-                  <div class="rounded-2xl bg-yellow-50/70 px-3 py-2">
+            <div class="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
+              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100 xl:col-span-2">
+                <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <p class="text-xs font-black text-slate-400">活動期間</p>
+                  <p class="text-[11px] font-bold text-slate-400">24 小時制顯示，避免窄版重疊</p>
+                </div>
+                <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div class="rounded-2xl bg-yellow-50/70 px-4 py-3">
                     <p class="text-[11px] font-black text-yellow-600">開始</p>
-                    <p class="mt-0.5 whitespace-nowrap text-sm leading-5">{{ databaseActivityOverview.activityStartText }}</p>
+                    <p class="mt-1 break-words text-base font-black leading-6 text-slate-900">{{ databaseActivityOverview.activityStartText }}</p>
                   </div>
-                  <div class="rounded-2xl bg-orange-50/70 px-3 py-2">
+                  <div class="rounded-2xl bg-orange-50/70 px-4 py-3">
                     <p class="text-[11px] font-black text-orange-600">結束</p>
-                    <p class="mt-0.5 whitespace-nowrap text-sm leading-5">{{ databaseActivityOverview.activityEndText }}</p>
+                    <p class="mt-1 break-words text-base font-black leading-6 text-slate-900">{{ databaseActivityOverview.activityEndText }}</p>
                   </div>
                 </div>
               </article>
