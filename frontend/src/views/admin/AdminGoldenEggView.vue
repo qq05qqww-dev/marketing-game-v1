@@ -4244,6 +4244,98 @@ const databaseGameConfigFormHasUnsavedChanges = computed(() => {
   return JSON.stringify(databaseGameConfigFormComparable.value) !== JSON.stringify(databaseGameConfigSavedComparable.value)
 })
 
+
+const databaseGameConfigDiffLabelMap = {
+  pageTitle: '頁面名稱 pageTitle',
+  mainTitle: '主標題 mainTitle',
+  subTitle: '副標題 subTitle',
+  heroTagline: '標語 heroTagline',
+  noticeText: '公告文字 noticeText',
+  serialRedeemTitle: '序號區塊標題',
+  serialRedeemDescription: '序號說明文字',
+  serialRedeemButtonText: '序號按鈕文字',
+  serialRedeemSuccessText: '序號成功文字',
+  serialRedeemErrorText: '序號錯誤文字',
+  activityRunningText: '活動進行中文字',
+  activityNotStartedText: '活動尚未開始文字',
+  activityEndedText: '活動已結束文字',
+  showActivityTimeSection: '顯示活動時間區塊',
+  showActivityCountdown: '顯示倒數時間',
+  activityCountdownAlwaysShowSeconds: '倒數顯示秒數',
+  showBottomNav: '顯示底部功能列',
+  eggSize: '金蛋大小 eggSize',
+  eggCardSize: '金蛋格子大小 eggCardSize',
+  eggGridGap: '金蛋間距 eggGridGap',
+  eggColorTop: '金蛋亮色 eggColorTop',
+  eggColorMiddle: '金蛋主色 eggColorMiddle',
+  eggColorBottom: '金蛋暗色 eggColorBottom',
+  themeBgFrom: '背景上方 themeBgFrom',
+  themeBgMiddle: '背景中間 themeBgMiddle',
+  themeBgTo: '背景下方 themeBgTo',
+  themePanelColor: '面板顏色 themePanelColor',
+  themeAccentColor: '金色強調 themeAccentColor',
+  themeButtonColor: '按鈕色 themeButtonColor',
+  themeButtonDarkColor: '按鈕深色 themeButtonDarkColor',
+  eggCardBgFrom: '底板上方色 eggCardBgFrom',
+  eggCardBgTo: '底板下方色 eggCardBgTo',
+  eggNumberBgColor: '編號背景色 eggNumberBgColor',
+  eggNumberTextColor: '編號文字色 eggNumberTextColor',
+  shareTitle: '分享標題 shareTitle',
+  shareDescription: '分享描述 shareDescription',
+  shareUrl: '分享網址 shareUrl',
+  shareImageUrl: '分享圖片網址 shareImageUrl',
+  systemShareButtonText: '系統分享按鈕文字',
+  systemShareButtonTextSize: '系統分享文字大小',
+  systemShareButtonBgColor: '系統分享按鈕背景色',
+  systemShareButtonTextColor: '系統分享按鈕文字色',
+  systemShareButtonRadius: '系統分享按鈕圓角',
+  systemShareButtonPaddingY: '系統分享按鈕上下距',
+  systemShareText: '系統分享文字',
+  lineShareText: 'LINE 分享文字',
+  telegramShareText: 'Telegram 分享文字'
+}
+
+const normalizeDatabaseGameConfigDiffValue = (value) => {
+  if (typeof value === 'boolean') return value ? '開啟' : '關閉'
+  if (value === null || value === undefined || value === '') return '空白'
+  return String(value)
+}
+
+const databaseGameConfigChangedItems = computed(() => {
+  if (!databaseCampaign.value) return []
+
+  const formData = databaseGameConfigFormComparable.value
+  const savedData = databaseGameConfigSavedComparable.value
+
+  return Object.keys(formData)
+    .filter((key) => JSON.stringify(formData[key]) !== JSON.stringify(savedData[key]))
+    .map((key) => ({
+      key,
+      label: databaseGameConfigDiffLabelMap[key] || key,
+      before: normalizeDatabaseGameConfigDiffValue(savedData[key]),
+      after: normalizeDatabaseGameConfigDiffValue(formData[key])
+    }))
+})
+
+const databaseGameConfigChangedCount = computed(() => databaseGameConfigChangedItems.value.length)
+
+const databaseGameConfigChangedPreviewItems = computed(() => databaseGameConfigChangedItems.value.slice(0, 8))
+
+const databaseGameConfigChangedMoreCount = computed(() => Math.max(databaseGameConfigChangedCount.value - databaseGameConfigChangedPreviewItems.value.length, 0))
+
+const confirmDatabaseGameConfigSave = () => {
+  if (!databaseGameConfigChangedCount.value) return true
+
+  const previewLines = databaseGameConfigChangedPreviewItems.value
+    .map((item, index) => `${index + 1}. ${item.label}：${item.before} → ${item.after}`)
+    .join('\n')
+  const moreText = databaseGameConfigChangedMoreCount.value > 0
+    ? `\n...另有 ${databaseGameConfigChangedMoreCount.value} 個變更未列出。`
+    : ''
+
+  return window.confirm(`即將同步 ${databaseGameConfigChangedCount.value} 個前台設定到資料庫，是否確認？\n\n${previewLines}${moreText}`)
+}
+
 const databaseGameConfigSummaryItems = computed(() => [
   {
     label: '基本文案',
@@ -4296,8 +4388,18 @@ const saveDatabaseGameConfig = async () => {
     return
   }
 
+  if (!confirmDatabaseGameConfigSave()) {
+    showOperationInfo('已取消儲存前台設定，資料庫未變更。')
+    return
+  }
+
   isSavingDatabaseGameConfig.value = true
-  showOperationInfo('正在儲存資料庫前台設定，請稍候...', false)
+  showOperationInfo(
+    databaseGameConfigChangedCount.value
+      ? `正在同步 ${databaseGameConfigChangedCount.value} 個前台設定到資料庫，請稍候...`
+      : '目前沒有偵測到差異，正在重新確認資料庫前台設定...',
+    false
+  )
 
   try {
     await updateAdminGoldenEggGameConfig(
@@ -4305,8 +4407,12 @@ const saveDatabaseGameConfig = async () => {
       buildDatabaseGameConfigPayload()
     )
 
-    showOperationSuccess('已儲存資料庫前台設定，並寫入 PostgreSQL gameConfig.settings。')
-    setDatabasePreviewSyncMessage(`資料庫前台設定已更新：金蛋顏色 ${databaseGameConfigForm.eggColorTop} / ${databaseGameConfigForm.eggColorMiddle} / ${databaseGameConfigForm.eggColorBottom}`)
+    showOperationSuccess(
+      databaseGameConfigChangedCount.value
+        ? `已同步 ${databaseGameConfigChangedCount.value} 個前台設定到 PostgreSQL gameConfig.settings。`
+        : '已確認資料庫前台設定，沒有偵測到新的差異。'
+    )
+    setDatabasePreviewSyncMessage(`資料庫前台設定已更新：背景 ${databaseGameConfigForm.themeBgFrom} / ${databaseGameConfigForm.themeBgMiddle} / ${databaseGameConfigForm.themeBgTo}，金蛋 ${databaseGameConfigForm.eggColorTop} / ${databaseGameConfigForm.eggColorMiddle} / ${databaseGameConfigForm.eggColorBottom}`)
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('儲存資料庫 GameConfig 失敗：', error)
@@ -5613,6 +5719,51 @@ watch(
               </div>
             </div>
 
+            <div
+              class="mt-4 rounded-3xl border p-4 shadow-sm"
+              :class="databaseGameConfigFormHasUnsavedChanges ? 'border-amber-200 bg-amber-50/90' : 'border-emerald-100 bg-emerald-50/80'"
+            >
+              <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p
+                    class="text-sm font-black"
+                    :class="databaseGameConfigFormHasUnsavedChanges ? 'text-amber-900' : 'text-emerald-900'"
+                  >
+                    {{ databaseGameConfigFormHasUnsavedChanges ? `目前有 ${databaseGameConfigChangedCount} 個尚未儲存變更` : '目前沒有尚未儲存變更' }}
+                  </p>
+                  <p class="mt-1 text-xs font-bold leading-6 text-slate-600">
+                    儲存前會先跳出確認視窗，讓你檢查要同步到 PostgreSQL GameConfig.settings 的欄位。
+                  </p>
+                </div>
+
+                <span
+                  class="inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-black"
+                  :class="databaseGameConfigFormHasUnsavedChanges ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'"
+                >
+                  {{ databaseGameConfigFormHasUnsavedChanges ? '等待儲存' : '已同步' }}
+                </span>
+              </div>
+
+              <div v-if="databaseGameConfigFormHasUnsavedChanges" class="mt-3 space-y-2">
+                <div
+                  v-for="item in databaseGameConfigChangedPreviewItems"
+                  :key="`game-config-diff-${item.key}`"
+                  class="rounded-2xl bg-white/90 p-3 ring-1 ring-amber-100"
+                >
+                  <p class="text-xs font-black text-slate-900">{{ item.label }}</p>
+                  <div class="mt-2 grid gap-2 text-xs font-bold text-slate-600 md:grid-cols-[1fr_auto_1fr] md:items-center">
+                    <p class="rounded-xl bg-slate-50 px-3 py-2 break-all">原本：{{ item.before }}</p>
+                    <p class="hidden text-amber-500 md:block">→</p>
+                    <p class="rounded-xl bg-amber-50 px-3 py-2 text-amber-800 break-all">修改後：{{ item.after }}</p>
+                  </div>
+                </div>
+
+                <p v-if="databaseGameConfigChangedMoreCount > 0" class="px-1 text-xs font-black text-amber-700">
+                  另外還有 {{ databaseGameConfigChangedMoreCount }} 個變更，儲存確認視窗會一起提醒。
+                </p>
+              </div>
+            </div>
+
             <div class="mt-4 rounded-3xl border border-blue-100 bg-white/90 p-4 text-xs font-bold leading-6 text-slate-600 shadow-sm">
               <p class="font-black text-blue-950">還原邏輯說明</p>
               <p class="mt-1">
@@ -6063,7 +6214,7 @@ watch(
                   {{ databaseGameConfigFormHasUnsavedChanges ? '目前有尚未儲存的前台設定' : '目前前台設定已與資料庫同步' }}
                 </p>
                 <p class="mt-1 text-xs font-bold text-slate-500">
-                  儲存後會寫入 GameConfig.settings，並把目前表單內容視為新的已儲存版本。
+                  儲存後會寫入 GameConfig.settings，並把目前表單內容視為新的已儲存版本。{{ databaseGameConfigChangedCount ? `本次預計同步 ${databaseGameConfigChangedCount} 個變更。` : '' }}
                 </p>
               </div>
 
