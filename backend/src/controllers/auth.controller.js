@@ -30,14 +30,51 @@ const FACEBOOK_CALLBACK_URL =
   process.env.FACEBOOK_CALLBACK_URL ||
   'http://localhost:3000/api/auth/facebook/callback'
 
-const signToken = (user) => {
+const buildTenantPayload = (tenant) => {
+  if (!tenant) return null
+
+  return {
+    id: tenant.id,
+    name: tenant.name,
+    slug: tenant.slug,
+    status: tenant.status
+  }
+}
+
+const buildSafeUser = (user) => {
+  const tenant = buildTenantPayload(user.tenant)
+
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    memberLevel: user.memberLevel,
+    tenantId: user.tenantId || null,
+    tenantName: tenant?.name || null,
+    tenantSlug: tenant?.slug || null,
+    tenantStatus: tenant?.status || null,
+    tenant,
+    authProvider: user.authProvider || 'EMAIL',
+    socialId: user.socialId || null,
+    avatarUrl: user.avatarUrl || null,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt
+  }
+}
+
+const signToken = (safeUser) => {
   return jwt.sign(
     {
-      id: user.id,
-      email: user.email,
-      role: user.role,
-      memberLevel: user.memberLevel,
-      authProvider: user.authProvider || 'EMAIL'
+      id: safeUser.id,
+      email: safeUser.email,
+      role: safeUser.role,
+      memberLevel: safeUser.memberLevel,
+      tenantId: safeUser.tenantId,
+      tenantName: safeUser.tenantName,
+      tenantSlug: safeUser.tenantSlug,
+      tenantStatus: safeUser.tenantStatus,
+      authProvider: safeUser.authProvider || 'EMAIL'
     },
     JWT_SECRET,
     {
@@ -47,23 +84,30 @@ const signToken = (user) => {
 }
 
 const buildLoginPayload = (user) => {
-  const safeUser = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-    memberLevel: user.memberLevel,
-    authProvider: user.authProvider || 'EMAIL',
-    socialId: user.socialId || null,
-    avatarUrl: user.avatarUrl || null,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt
-  }
+  const safeUser = buildSafeUser(user)
 
   return {
     token: signToken(safeUser),
     user: safeUser
   }
+}
+
+const getUserWithTenant = async (userId) => {
+  return prisma.user.findUnique({
+    where: {
+      id: userId
+    },
+    include: {
+      tenant: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          status: true
+        }
+      }
+    }
+  })
 }
 
 const redirectOAuthError = (message) => {
@@ -109,13 +153,14 @@ const createOrFindSocialUser = async ({
         password: null,
         role: 'USER',
         memberLevel: 'NORMAL',
+        tenantId: null,
         authProvider: safeProvider,
         socialId: safeProviderId || null,
         avatarUrl: safeAvatarUrl || null
       }
     })
 
-    return user
+    return getUserWithTenant(user.id)
   }
 
   user = await prisma.user.update({
@@ -130,7 +175,7 @@ const createOrFindSocialUser = async ({
     }
   })
 
-  return user
+  return getUserWithTenant(user.id)
 }
 
 export const register = async (req, res) => {
@@ -513,6 +558,15 @@ export const getMe = async (req, res) => {
         email: true,
         role: true,
         memberLevel: true,
+        tenantId: true,
+        tenant: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            status: true
+          }
+        },
         authProvider: true,
         socialId: true,
         avatarUrl: true,
@@ -537,7 +591,12 @@ export const getMe = async (req, res) => {
     return res.json({
       success: true,
       message: '取得會員資料成功',
-      data: user
+      data: {
+        ...user,
+        tenantName: user.tenant?.name || null,
+        tenantSlug: user.tenant?.slug || null,
+        tenantStatus: user.tenant?.status || null
+      }
     })
   } catch (error) {
     console.error('取得目前會員資料失敗:', error)
