@@ -21,87 +21,149 @@ const currentUser = computed(() => {
   }
 })
 
+const currentRole = computed(() => String(currentUser.value?.role || 'ADMIN').toUpperCase())
+
+const roleLabel = computed(() => {
+  const map = {
+    ADMIN: '平台總管理員',
+    SUPER_ADMIN: '平台總管理員',
+    MERCHANT_ADMIN: '商家管理員',
+    MERCHANT_STAFF: '商家員工',
+    USER: '一般會員'
+  }
+
+  return map[currentRole.value] || currentRole.value
+})
+
+const tenantLabel = computed(() => {
+  if (['ADMIN', 'SUPER_ADMIN'].includes(currentRole.value)) {
+    return '全部商家 / 平台層級'
+  }
+
+  return currentUser.value?.tenantName || currentUser.value?.tenant?.name || '未綁定商家'
+})
+
+const tenantSlugLabel = computed(() => {
+  if (['ADMIN', 'SUPER_ADMIN'].includes(currentRole.value)) {
+    return 'all-tenants'
+  }
+
+  return currentUser.value?.tenantSlug || currentUser.value?.tenant?.slug || 'no-tenant'
+})
+
+const PLATFORM_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
+const MERCHANT_ADMIN_ROLES = ['MERCHANT_ADMIN']
+const MERCHANT_STAFF_ROLES = ['MERCHANT_STAFF']
+const BACKEND_ADMIN_ROLES = [
+  ...PLATFORM_ADMIN_ROLES,
+  ...MERCHANT_ADMIN_ROLES,
+  ...MERCHANT_STAFF_ROLES
+]
+
+const canAccessRoles = (roles = BACKEND_ADMIN_ROLES) => {
+  return roles.includes(currentRole.value)
+}
+
 const adminNavGroups = [
   {
-    title: '營運管理',
+    title: '平台管理',
     items: [
       {
         label: '活動管理',
         path: '/admin/campaigns',
         icon: '📋',
-        desc: '建立與管理活動'
+        desc: '建立與管理全部活動',
+        roles: PLATFORM_ADMIN_ROLES
       },
       {
         label: '獎項管理',
         path: '/admin/prizes',
         icon: '🎁',
-        desc: '管理平台獎品'
-      },
-      {
-        label: '發獎核銷',
-        path: '/admin/rewards',
-        icon: '✅',
-        desc: '核銷中獎紀錄'
-      }
-    ]
-  },
-  {
-    title: '遊戲設定',
-    items: [
-      {
-        label: '遊戲設定管理',
-        path: '/admin/game-settings',
-        icon: '🎮',
-        desc: '管理遊戲模板'
-      },
-      {
-        label: '砸金蛋後台',
-        path: '/admin/golden-egg',
-        icon: '🥚',
-        desc: '左側設定 / 右側預覽',
-        badge: 'NEW'
-      },
-      {
-        label: '活動樣式編輯器',
-        path: '/admin/campaign-style',
-        icon: '🎨',
-        desc: '調整活動視覺'
-      },
-      {
-        label: '遊戲預覽中心',
-        path: '/admin/game-preview',
-        icon: '📱',
-        desc: '查看前台效果'
-      }
-    ]
-  },
-  {
-    title: '數據與系統',
-    items: [
-      {
-        label: '報表中心',
-        path: '/admin/reports',
-        icon: '📊',
-        desc: '查看活動數據'
+        desc: '管理平台獎品',
+        roles: PLATFORM_ADMIN_ROLES
       },
       {
         label: '會員管理',
         path: '/admin/users',
         icon: '👥',
-        desc: '管理會員資料'
+        desc: '管理會員資料',
+        roles: PLATFORM_ADMIN_ROLES
+      }
+    ]
+  },
+  {
+    title: '商家營運',
+    items: [
+      {
+        label: '砸金蛋後台',
+        path: '/admin/golden-egg',
+        icon: '🥚',
+        desc: '活動設定 / 序號 / 紀錄',
+        badge: 'V2.3',
+        roles: BACKEND_ADMIN_ROLES
+      },
+      {
+        label: '報表中心',
+        path: '/admin/reports',
+        icon: '📊',
+        desc: '查看活動數據',
+        roles: [...PLATFORM_ADMIN_ROLES, ...MERCHANT_ADMIN_ROLES]
+      },
+      {
+        label: '發獎核銷',
+        path: '/admin/rewards',
+        icon: '✅',
+        desc: '核銷中獎紀錄',
+        roles: BACKEND_ADMIN_ROLES
+      }
+    ]
+  },
+  {
+    title: '進階工具',
+    items: [
+      {
+        label: '遊戲設定管理',
+        path: '/admin/game-settings',
+        icon: '🎮',
+        desc: '管理遊戲模板',
+        roles: PLATFORM_ADMIN_ROLES
+      },
+      {
+        label: '活動樣式編輯器',
+        path: '/admin/campaign-style',
+        icon: '🎨',
+        desc: '調整活動視覺',
+        roles: PLATFORM_ADMIN_ROLES
+      },
+      {
+        label: '遊戲預覽中心',
+        path: '/admin/game-preview',
+        icon: '📱',
+        desc: '查看前台效果',
+        roles: PLATFORM_ADMIN_ROLES
       },
       {
         label: '系統狀態',
         path: '/admin/system-status',
         icon: '🧩',
-        desc: '版本與環境資訊'
+        desc: '版本與環境資訊',
+        roles: PLATFORM_ADMIN_ROLES
       }
     ]
   }
 ]
 
+const visibleAdminNavGroups = computed(() => {
+  return adminNavGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canAccessRoles(item.roles))
+    }))
+    .filter((group) => group.items.length > 0)
+})
+
 const flatNavItems = computed(() => {
-  return adminNavGroups.flatMap((group) => group.items)
+  return visibleAdminNavGroups.value.flatMap((group) => group.items)
 })
 
 const currentNavItem = computed(() => {
@@ -197,6 +259,9 @@ const logout = () => {
               <h2 class="text-xl font-black text-slate-900">
                 後台管理中心
               </h2>
+              <p class="mt-1 text-xs font-bold text-slate-500">
+                {{ roleLabel }}｜{{ tenantLabel }}
+              </p>
             </div>
 
             <button
@@ -210,7 +275,7 @@ const logout = () => {
 
           <div class="space-y-5">
             <section
-              v-for="group in adminNavGroups"
+              v-for="group in visibleAdminNavGroups"
               :key="group.title"
             >
               <p class="mb-2 px-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
@@ -263,7 +328,7 @@ const logout = () => {
 
             <div>
               <p class="text-xs font-black uppercase tracking-[0.22em] text-yellow-600">
-                V2.2 Stable
+                V2.3 Tenant
               </p>
               <h1 class="text-lg font-black text-slate-900">
                 後台管理中心
@@ -274,7 +339,7 @@ const logout = () => {
 
         <nav class="flex-1 space-y-5 overflow-y-auto px-4 py-5">
           <section
-            v-for="group in adminNavGroups"
+            v-for="group in visibleAdminNavGroups"
             :key="group.title"
           >
             <p class="mb-2 px-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
@@ -322,8 +387,19 @@ const logout = () => {
               {{ currentUser.name || currentUser.email || 'Admin' }}
             </p>
             <p class="mt-0.5 line-clamp-1 text-xs font-bold text-slate-500">
-              {{ currentUser.role || 'ADMIN' }}
+              {{ roleLabel }}
             </p>
+            <div class="mt-3 rounded-2xl border border-yellow-100 bg-white px-3 py-2">
+              <p class="text-[11px] font-black uppercase tracking-[0.16em] text-yellow-600">
+                Tenant
+              </p>
+              <p class="mt-1 line-clamp-1 text-xs font-black text-slate-800">
+                {{ tenantLabel }}
+              </p>
+              <p class="mt-0.5 line-clamp-1 text-[11px] font-bold text-slate-400">
+                {{ tenantSlugLabel }}
+              </p>
+            </div>
           </div>
 
           <div class="grid grid-cols-2 gap-2">
@@ -373,6 +449,14 @@ const logout = () => {
               <h2 class="text-2xl font-black text-slate-900">
                 {{ currentTitle }}
               </h2>
+              <div class="mt-2 flex flex-wrap items-center gap-2">
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                  {{ roleLabel }}
+                </span>
+                <span class="rounded-full bg-yellow-50 px-3 py-1 text-xs font-black text-yellow-700 ring-1 ring-yellow-100">
+                  {{ tenantLabel }}
+                </span>
+              </div>
             </div>
 
             <div class="flex flex-wrap gap-2">

@@ -73,8 +73,44 @@ const getStoredAuth = () => {
   }
 }
 
+const PLATFORM_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
+const MERCHANT_ADMIN_ROLES = ['MERCHANT_ADMIN']
+const MERCHANT_STAFF_ROLES = ['MERCHANT_STAFF']
+const ADMIN_ROLES = [
+  ...PLATFORM_ADMIN_ROLES,
+  ...MERCHANT_ADMIN_ROLES,
+  ...MERCHANT_STAFF_ROLES
+]
+const MERCHANT_OPERATE_ROLES = [
+  ...PLATFORM_ADMIN_ROLES,
+  ...MERCHANT_ADMIN_ROLES,
+  ...MERCHANT_STAFF_ROLES
+]
+const MERCHANT_REPORT_ROLES = [
+  ...PLATFORM_ADMIN_ROLES,
+  ...MERCHANT_ADMIN_ROLES
+]
+
+const getUserRole = (user) => String(user?.role || '').toUpperCase()
+
 const isAdminUser = (user) => {
-  return String(user?.role || '').toUpperCase() === 'ADMIN'
+  return ADMIN_ROLES.includes(getUserRole(user))
+}
+
+const hasAllowedRole = (user, allowedRoles = []) => {
+  if (!allowedRoles.length) return true
+
+  return allowedRoles.includes(getUserRole(user))
+}
+
+const getDefaultAdminPath = (user) => {
+  const role = getUserRole(user)
+
+  if (PLATFORM_ADMIN_ROLES.includes(role)) {
+    return '/admin/campaigns'
+  }
+
+  return '/admin/golden-egg'
 }
 
 const router = createRouter({
@@ -265,12 +301,13 @@ const router = createRouter({
       component: AdminLayout,
       meta: {
         requiresAuth: true,
-        requiresAdmin: true
+        requiresAdmin: true,
+        allowedRoles: ADMIN_ROLES
       },
       children: [
         {
           path: '',
-          redirect: '/admin/campaigns'
+          redirect: '/admin/golden-egg'
         },
         {
           path: 'campaigns',
@@ -279,7 +316,8 @@ const router = createRouter({
           meta: {
             title: '活動管理',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -289,7 +327,8 @@ const router = createRouter({
           meta: {
             title: '遊戲設定管理',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -299,7 +338,8 @@ const router = createRouter({
           meta: {
             title: '獎項設定',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -309,7 +349,8 @@ const router = createRouter({
           meta: {
             title: '機率設定',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -319,7 +360,8 @@ const router = createRouter({
           meta: {
             title: '編輯遊戲設定',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -329,7 +371,8 @@ const router = createRouter({
           meta: {
             title: '獎項管理',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -339,7 +382,8 @@ const router = createRouter({
           meta: {
             title: '報表中心',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: MERCHANT_REPORT_ROLES
           }
         },
         {
@@ -349,7 +393,8 @@ const router = createRouter({
           meta: {
             title: '會員管理',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -359,7 +404,8 @@ const router = createRouter({
           meta: {
             title: '發獎核銷',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: MERCHANT_OPERATE_ROLES
           }
         },
         {
@@ -369,7 +415,8 @@ const router = createRouter({
           meta: {
             title: '活動樣式編輯器',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -379,7 +426,8 @@ const router = createRouter({
           meta: {
             title: '遊戲預覽中心',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         },
         {
@@ -389,7 +437,8 @@ const router = createRouter({
           meta: {
             title: '砸金蛋後台管理',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: MERCHANT_OPERATE_ROLES
           }
         },
         {
@@ -399,7 +448,8 @@ const router = createRouter({
           meta: {
             title: '系統狀態 / 版本資訊',
             requiresAuth: true,
-            requiresAdmin: true
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
           }
         }
       ]
@@ -452,6 +502,20 @@ router.beforeEach((to, from) => {
   }
 
   if (to.meta.requiresAdmin && !isAdminUser(user)) {
+    return {
+      path: '/'
+    }
+  }
+
+  if (to.meta.requiresAdmin && !hasAllowedRole(user, to.meta.allowedRoles || [])) {
+    const fallbackPath = getDefaultAdminPath(user)
+
+    if (to.path !== fallbackPath) {
+      return {
+        path: fallbackPath
+      }
+    }
+
     return {
       path: '/'
     }
