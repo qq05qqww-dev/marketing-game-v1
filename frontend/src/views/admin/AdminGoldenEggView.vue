@@ -208,6 +208,13 @@ const databaseCampaignForm = reactive({
 })
 
 const isSavingDatabaseGameConfig = ref(false)
+const appliedGameConfigTemplateStatus = reactive({
+  name: '',
+  status: '',
+  appliedAtText: '',
+  savedAtText: '',
+  changedCount: 0
+})
 const databaseGameConfigForm = reactive({
   pageTitle: '',
   mainTitle: '',
@@ -1401,6 +1408,40 @@ const databaseGameConfigTemplatePresets = [
   }
 ]
 
+const setAppliedGameConfigTemplateStatus = ({ name = '', status = '', changedCount = 0 } = {}) => {
+  appliedGameConfigTemplateStatus.name = name
+  appliedGameConfigTemplateStatus.status = status
+  appliedGameConfigTemplateStatus.changedCount = Number(changedCount || 0)
+  if (status === 'pending') {
+    appliedGameConfigTemplateStatus.appliedAtText = formatGameConfigOperationTime(new Date())
+    appliedGameConfigTemplateStatus.savedAtText = ''
+  }
+  if (status === 'saved') {
+    appliedGameConfigTemplateStatus.savedAtText = formatGameConfigOperationTime(new Date())
+  }
+  if (!status) {
+    appliedGameConfigTemplateStatus.appliedAtText = ''
+    appliedGameConfigTemplateStatus.savedAtText = ''
+  }
+}
+
+const clearAppliedGameConfigTemplateStatus = () => {
+  setAppliedGameConfigTemplateStatus({ name: '', status: '', changedCount: 0 })
+}
+
+const appliedGameConfigTemplateStatusLabel = computed(() => {
+  if (!appliedGameConfigTemplateStatus.name) return '未套用模板'
+  if (appliedGameConfigTemplateStatus.status === 'saved') return '已同步到資料庫'
+  if (appliedGameConfigTemplateStatus.status === 'pending') return '尚未儲存到資料庫'
+  return '待確認'
+})
+
+const appliedGameConfigTemplateStatusClass = computed(() => {
+  if (appliedGameConfigTemplateStatus.status === 'saved') return 'border-emerald-200 bg-emerald-50 text-emerald-900'
+  if (appliedGameConfigTemplateStatus.status === 'pending') return 'border-amber-200 bg-amber-50 text-amber-900'
+  return 'border-slate-200 bg-white text-slate-700'
+})
+
 const getDatabaseGameConfigTemplateFieldCount = (template) => {
   if (!template?.fields) return 0
   return Object.keys(template.fields).filter((key) => Object.prototype.hasOwnProperty.call(databaseGameConfigFormComparable.value, key)).length
@@ -1439,9 +1480,10 @@ const applyDatabaseGameConfigTemplatePreset = (template) => {
   })
 
   const appliedCount = applyImportedDatabaseGameConfigSettingsToForm(template.fields)
+  setAppliedGameConfigTemplateStatus({ name: template.name, status: 'pending', changedCount: appliedCount })
   syncDatabaseGameConfigFormToLivePreview(`已套用「${template.name}」模板到右側預覽；手機正式前台需按「儲存前台設定」後才會同步。`)
 
-  showOperationSuccess(`已先匯出備份，並套用「${template.name}」模板到表單與右側預覽；請確認後再按「儲存前台設定」。`)
+  showOperationSuccess(`已先匯出備份，並套用「${template.name}」模板到表單與右側預覽；目前只是表單與右側預覽狀態，請確認後再按「儲存前台設定」。`)
   addGameConfigOperationLog({
     title: `套用模板：${template.name}`,
     description: `已先備份目前設定，並把 ${appliedCount} 個模板欄位套用到表單，尚未寫入資料庫。`,
@@ -5003,6 +5045,14 @@ const saveDatabaseGameConfig = async () => {
       type: 'success',
       changedCount: changedCountBeforeSave
     })
+    if (appliedGameConfigTemplateStatus.name && appliedGameConfigTemplateStatus.status === 'pending') {
+      setAppliedGameConfigTemplateStatus({
+        name: appliedGameConfigTemplateStatus.name,
+        status: 'saved',
+        changedCount: changedCountBeforeSave || appliedGameConfigTemplateStatus.changedCount
+      })
+      setDatabasePreviewSyncMessage(`模板「${appliedGameConfigTemplateStatus.name}」已同步到資料庫；手機正式前台重新整理後會套用最新設定。`)
+    }
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('儲存資料庫 GameConfig 失敗：', error)
@@ -5021,6 +5071,7 @@ const saveDatabaseGameConfig = async () => {
 const resetDatabaseGameConfigForm = () => {
   const changedCountBeforeReset = databaseGameConfigChangedCount.value
   loadDatabaseGameConfigFormFromCampaign(databaseCampaign.value)
+  clearAppliedGameConfigTemplateStatus()
   showSavedMessage('已還原到目前已儲存的前台設定。')
   addGameConfigOperationLog({
     title: '還原到已儲存資料',
@@ -5042,6 +5093,7 @@ const reloadDatabaseGameConfigFromServer = async () => {
 
   try {
     await loadDatabaseGoldenEggCampaign()
+    clearAppliedGameConfigTemplateStatus()
     showOperationSuccess('已重新讀取資料庫前台設定。')
     showSavedMessage('已重新載入資料庫目前儲存的前台設定。')
     addGameConfigOperationLog({
@@ -6332,6 +6384,34 @@ watch(
                 <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
                 <p class="mt-2 truncate text-lg font-black text-slate-950">{{ item.value }}</p>
                 <p class="mt-1 line-clamp-2 text-xs font-bold leading-5 text-slate-500">{{ item.description }}</p>
+              </div>
+            </div>
+
+            <div
+              v-if="appliedGameConfigTemplateStatus.name"
+              class="mt-4 rounded-3xl border p-4 shadow-sm"
+              :class="appliedGameConfigTemplateStatusClass"
+            >
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                  <p class="text-xs font-black uppercase tracking-[0.22em] opacity-70">Template Apply Status</p>
+                  <h4 class="mt-1 text-base font-black">模板套用狀態提示</h4>
+                  <p class="mt-2 text-sm font-black">
+                    目前已套用：<span class="rounded-full bg-white/70 px-3 py-1">{{ appliedGameConfigTemplateStatus.name }}</span>
+                  </p>
+                  <p class="mt-2 text-xs font-bold leading-6 opacity-80">
+                    {{ appliedGameConfigTemplateStatus.status === 'saved'
+                      ? '此模板已同步到 PostgreSQL GameConfig.settings。手機正式前台若尚未變更，請重新整理手機瀏覽器。'
+                      : '目前只套用到左側表單與右側預覽，尚未寫入資料庫；手機正式前台要更新，請按「儲存前台設定」。' }}
+                  </p>
+                </div>
+                <div class="flex shrink-0 flex-col gap-2 rounded-3xl bg-white/70 px-4 py-3 text-xs font-black ring-1 ring-white/70">
+                  <span>狀態：{{ appliedGameConfigTemplateStatusLabel }}</span>
+                  <span v-if="appliedGameConfigTemplateStatus.appliedAtText" class="opacity-70">套用：{{ appliedGameConfigTemplateStatus.appliedAtText }}</span>
+                  <span v-if="appliedGameConfigTemplateStatus.savedAtText" class="opacity-70">儲存：{{ appliedGameConfigTemplateStatus.savedAtText }}</span>
+                  <span v-if="appliedGameConfigTemplateStatus.status === 'pending'" class="rounded-2xl bg-amber-100 px-3 py-2 text-center text-amber-800">手機前台尚未同步</span>
+                  <span v-else class="rounded-2xl bg-emerald-100 px-3 py-2 text-center text-emerald-800">手機前台可重新整理查看</span>
+                </div>
               </div>
             </div>
 
