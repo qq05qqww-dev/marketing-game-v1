@@ -1005,6 +1005,64 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
   databaseGameConfigForm.telegramShareText = campaign.telegramShareText || databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
 }
 
+const applyPreviewVisualSettingsToDatabaseForm = () => {
+  syncPreviewVisualSettingsToDatabaseForm()
+  setDatabasePreviewSyncMessage(
+    `已套用目前預覽視覺設定：金蛋 ${databaseGameConfigForm.eggSize}px / 卡牌 ${databaseGameConfigForm.eggCardSize}px / 間距 ${databaseGameConfigForm.eggGridGap}px`
+  )
+  showOperationSuccess('已套用目前預覽視覺設定到資料庫前台設定表單，請記得按「儲存前台設定」。')
+}
+
+const savePreviewVisualSettingsToDatabase = async () => {
+  if (!normalizedDatabaseCampaignId.value) {
+    showOperationError('請先讀取正式活動 campaignId，再同步視覺設定到資料庫。')
+    return
+  }
+
+  applyPreviewVisualSettingsToDatabaseForm()
+  await saveDatabaseGameConfig()
+}
+
+const applyClassicRedGoldVisualPreset = () => {
+  Object.assign(campaign, {
+    themeBgFrom: '#991b1b',
+    themeBgMiddle: '#dc2626',
+    themeBgTo: '#450a0a',
+    themeAccentColor: '#facc15',
+    themeButtonColor: '#ef4444',
+    themeButtonDarkColor: '#991b1b',
+    eggColorTop: '#fff7ad',
+    eggColorMiddle: '#fde047',
+    eggColorBottom: '#b45309',
+    eggCardBgFrom: '#ef4444',
+    eggCardBgTo: '#7f1d1d',
+    eggNumberBgColor: '#7f1d1d',
+    eggNumberTextColor: '#fef3c7'
+  })
+  saveState('已套用經典紅金視覺預設。')
+  showOperationSuccess('已套用經典紅金視覺預設。')
+}
+
+const applyVipBlackGoldVisualPreset = () => {
+  Object.assign(campaign, {
+    themeBgFrom: '#111827',
+    themeBgMiddle: '#7c2d12',
+    themeBgTo: '#020617',
+    themeAccentColor: '#facc15',
+    themeButtonColor: '#f59e0b',
+    themeButtonDarkColor: '#78350f',
+    eggColorTop: '#fef9c3',
+    eggColorMiddle: '#facc15',
+    eggColorBottom: '#92400e',
+    eggCardBgFrom: '#111827',
+    eggCardBgTo: '#020617',
+    eggNumberBgColor: '#020617',
+    eggNumberTextColor: '#fde68a'
+  })
+  saveState('已套用 VIP 黑金視覺預設。')
+  showOperationSuccess('已套用 VIP 黑金視覺預設。')
+}
+
 const syncToFrontNow = async () => {
   // 第 353 批：
   // 這顆按鈕以前只存 localStorage，會造成電腦前台同步、手機不同步。
@@ -4142,6 +4200,29 @@ const databaseGameConfigSummaryItems = computed(() => [
   }
 ])
 
+const visualSettingSummaryItems = computed(() => [
+  {
+    label: '金蛋尺寸',
+    value: `${Number(campaign.eggSize || 74)}px`,
+    description: `卡牌 ${Number(campaign.eggCardSize || 128)}px，間距 ${Number(campaign.eggGridGap || 12)}px`
+  },
+  {
+    label: '金蛋色彩',
+    value: `${campaign.eggColorTop || '#fff7ad'} / ${campaign.eggColorMiddle || '#fde047'}`,
+    description: `暗色 ${campaign.eggColorBottom || '#b45309'}`
+  },
+  {
+    label: '背景主題',
+    value: campaign.themeAccentColor || '#facc15',
+    description: `${campaign.themeBgFrom || '#991b1b'} → ${campaign.themeBgTo || '#450a0a'}`
+  },
+  {
+    label: '資料庫同步',
+    value: databaseGameConfigFormHasUnsavedChanges.value ? '尚未儲存' : '已同步',
+    description: 'GameConfig 會寫入 PostgreSQL settings'
+  }
+])
+
 const saveDatabaseGameConfig = async () => {
   if (!normalizedDatabaseCampaignId.value) {
     showOperationError('請先輸入並讀取正式活動 campaignId。')
@@ -5600,6 +5681,18 @@ watch(
                   <p class="text-xs font-bold text-slate-500">控制正式前台金蛋大小、格子大小、間距與資料庫金蛋顏色。</p>
                 </div>
 
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                  <div
+                    v-for="item in visualSettingSummaryItems"
+                    :key="`game-config-${item.label}`"
+                    class="rounded-3xl border border-blue-100 bg-blue-50/70 p-3"
+                  >
+                    <p class="text-xs font-black text-blue-500">{{ item.label }}</p>
+                    <p class="mt-1 truncate text-sm font-black text-slate-950">{{ item.value }}</p>
+                    <p class="mt-1 line-clamp-2 text-[11px] font-bold leading-5 text-slate-500">{{ item.description }}</p>
+                  </div>
+                </div>
+
                 <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
                   <label class="admin-field">
                     <span>正式前台金蛋大小 eggSize</span>
@@ -5645,9 +5738,9 @@ watch(
                     <button
                       type="button"
                       class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
-                      @click="databaseGameConfigForm.eggColorTop = campaign.eggColorTop || '#fff7ad'; databaseGameConfigForm.eggColorMiddle = campaign.eggColorMiddle || '#fde047'; databaseGameConfigForm.eggColorBottom = campaign.eggColorBottom || '#b45309'"
+                      @click="applyPreviewVisualSettingsToDatabaseForm"
                     >
-                      套用右側預覽顏色
+                      套用目前預覽視覺
                     </button>
                   </div>
 
@@ -7538,62 +7631,57 @@ watch(
           class="space-y-4"
         >
           <div class="rounded-3xl bg-slate-50 p-4">
-            <h2 class="text-lg font-black text-slate-900">
-              主題色彩設定
-            </h2>
-            <p class="mt-1 text-sm text-slate-500">
-              可以直接修改前台紅金活動頁的背景、按鈕與強調色。
-            </p>
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.28em] text-amber-500">Visual Theme Center</p>
+                <h2 class="mt-1 text-lg font-black text-slate-900">主題色彩設定</h2>
+                <p class="mt-1 text-sm leading-6 text-slate-500">整合前台背景、按鈕與金色強調色。調整後可先看右側預覽，再同步到資料庫 GameConfig。</p>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white shadow-sm" @click="applyClassicRedGoldVisualPreset">經典紅金</button>
+                <button type="button" class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white shadow-sm" @click="applyVipBlackGoldVisualPreset">VIP 黑金</button>
+              </div>
+            </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <label class="admin-color-field">
-              <span>背景上方</span>
-              <input v-model="campaign.themeBgFrom" type="color" />
-            </label>
-
-            <label class="admin-color-field">
-              <span>背景中間</span>
-              <input v-model="campaign.themeBgMiddle" type="color" />
-            </label>
-
-            <label class="admin-color-field">
-              <span>背景下方</span>
-              <input v-model="campaign.themeBgTo" type="color" />
-            </label>
-
-            <label class="admin-color-field">
-              <span>金色強調</span>
-              <input v-model="campaign.themeAccentColor" type="color" />
-            </label>
-
-            <label class="admin-color-field">
-              <span>按鈕色</span>
-              <input v-model="campaign.themeButtonColor" type="color" />
-            </label>
-
-            <label class="admin-color-field">
-              <span>按鈕深色</span>
-              <input v-model="campaign.themeButtonDarkColor" type="color" />
-            </label>
+          <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div v-for="item in visualSettingSummaryItems" :key="`theme-${item.label}`" class="rounded-3xl border border-amber-100 bg-amber-50/70 p-4">
+              <p class="text-xs font-black text-amber-600">{{ item.label }}</p>
+              <p class="mt-1 truncate text-sm font-black text-slate-950">{{ item.value }}</p>
+              <p class="mt-1 line-clamp-2 text-xs font-bold leading-5 text-slate-500">{{ item.description }}</p>
+            </div>
           </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              class="rounded-2xl bg-red-600 px-4 py-3 text-sm font-black text-white"
-              @click="Object.assign(campaign, { themeBgFrom: '#991b1b', themeBgMiddle: '#dc2626', themeBgTo: '#450a0a', themeAccentColor: '#facc15', themeButtonColor: '#ef4444', themeButtonDarkColor: '#991b1b' })"
-            >
-              經典紅金
-            </button>
+          <div class="rounded-3xl border border-yellow-100 bg-yellow-50 p-4">
+            <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h3 class="text-base font-black text-yellow-900">背景與按鈕色</h3>
+                <p class="mt-1 text-xs font-bold leading-5 text-yellow-700">保留英文 key，中文名稱改得更清楚，方便之後接 API 或寫入資料庫。</p>
+              </div>
+              <button type="button" class="rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black text-white" @click="savePreviewVisualSettingsToDatabase">同步視覺到資料庫</button>
+            </div>
 
-            <button
-              type="button"
-              class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white"
-              @click="Object.assign(campaign, { themeBgFrom: '#111827', themeBgMiddle: '#7c2d12', themeBgTo: '#020617', themeAccentColor: '#facc15', themeButtonColor: '#f59e0b', themeButtonDarkColor: '#78350f' })"
-            >
-              VIP 黑金
-            </button>
+            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <label class="admin-color-field"><span>背景上方 themeBgFrom</span><input v-model="campaign.themeBgFrom" type="color" /><code class="text-xs font-black text-slate-700">{{ campaign.themeBgFrom }}</code></label>
+              <label class="admin-color-field"><span>背景中間 themeBgMiddle</span><input v-model="campaign.themeBgMiddle" type="color" /><code class="text-xs font-black text-slate-700">{{ campaign.themeBgMiddle }}</code></label>
+              <label class="admin-color-field"><span>背景下方 themeBgTo</span><input v-model="campaign.themeBgTo" type="color" /><code class="text-xs font-black text-slate-700">{{ campaign.themeBgTo }}</code></label>
+              <label class="admin-color-field"><span>金色強調 themeAccentColor</span><input v-model="campaign.themeAccentColor" type="color" /><code class="text-xs font-black text-slate-700">{{ campaign.themeAccentColor }}</code></label>
+              <label class="admin-color-field"><span>按鈕色 themeButtonColor</span><input v-model="campaign.themeButtonColor" type="color" /><code class="text-xs font-black text-slate-700">{{ campaign.themeButtonColor }}</code></label>
+              <label class="admin-color-field"><span>按鈕深色 themeButtonDarkColor</span><input v-model="campaign.themeButtonDarkColor" type="color" /><code class="text-xs font-black text-slate-700">{{ campaign.themeButtonDarkColor }}</code></label>
+            </div>
+          </div>
+
+          <div class="rounded-3xl border border-slate-200 bg-white p-4">
+            <h3 class="text-base font-black text-slate-900">主題預覽</h3>
+            <p class="mt-1 text-xs font-bold text-slate-500">這裡只顯示色票與按鈕效果；完整畫面請看右側 Live Preview Center。</p>
+            <div class="mt-4 overflow-hidden rounded-3xl p-4 shadow-inner" :style="{ background: `linear-gradient(135deg, ${campaign.themeBgFrom}, ${campaign.themeBgMiddle}, ${campaign.themeBgTo})` }">
+              <div class="rounded-3xl bg-white/90 p-4">
+                <p class="text-xs font-black" :style="{ color: campaign.themeButtonDarkColor }">金色強調</p>
+                <p class="mt-1 text-2xl font-black" :style="{ color: campaign.themeAccentColor }">正式砸金蛋活動</p>
+                <button type="button" class="mt-4 w-full rounded-2xl px-4 py-3 text-sm font-black text-white shadow-lg" :style="{ background: `linear-gradient(135deg, ${campaign.themeButtonColor}, ${campaign.themeButtonDarkColor})` }">前台按鈕預覽</button>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -7985,6 +8073,26 @@ watch(
             <p class="mt-1 text-sm leading-6 text-slate-500">
               調整前台九宮格金蛋大小、間距、顏色與編號顯示，方便做成更像活動海報的版型。
             </p>
+          </div>
+
+          <div class="rounded-3xl border border-amber-100 bg-amber-50/80 p-4">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <h3 class="text-base font-black text-amber-950">視覺設定同步工具</h3>
+                <p class="mt-1 text-xs font-bold leading-5 text-amber-700">這裡整理金蛋尺寸、顏色與主題色。可先調整右側預覽，再一鍵同步到資料庫前台設定。</p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button type="button" class="rounded-2xl bg-white px-4 py-3 text-xs font-black text-amber-700 ring-1 ring-amber-100" @click="applyPreviewVisualSettingsToDatabaseForm">套用到 GameConfig 表單</button>
+                <button type="button" class="rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black text-white" @click="savePreviewVisualSettingsToDatabase">儲存到資料庫</button>
+              </div>
+            </div>
+            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div v-for="item in visualSettingSummaryItems" :key="`egg-style-${item.label}`" class="rounded-3xl bg-white/80 p-3 ring-1 ring-amber-100">
+                <p class="text-xs font-black text-amber-600">{{ item.label }}</p>
+                <p class="mt-1 truncate text-sm font-black text-slate-950">{{ item.value }}</p>
+                <p class="mt-1 line-clamp-2 text-[11px] font-bold leading-5 text-slate-500">{{ item.description }}</p>
+              </div>
+            </div>
           </div>
 
           <div class="rounded-3xl border border-yellow-100 bg-yellow-50 p-4">
