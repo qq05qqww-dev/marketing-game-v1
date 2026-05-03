@@ -160,7 +160,7 @@ const databaseRecordStats = computed(() => {
   const playRecords = getRecordSourceArray(filteredDatabasePlayRecords)
   const rewardRecords = getRecordSourceArray(filteredDatabaseRewardRecords)
 
-  const wonPlayCount = playRecords.filter((item) => item.isWin || item.result === 'WIN' || item.prize).length
+  const wonPlayCount = playRecords.filter((item) => isRecordWin(item)).length
   const losePlayCount = Math.max(0, playRecords.length - wonPlayCount)
 
   const rewardStatusCounts = rewardRecords.reduce((summary, item) => {
@@ -181,53 +181,58 @@ const databaseRecordStats = computed(() => {
 })
 
 
+
 const applyDatabaseRecordQuickFilter = (type) => {
+  databaseRecordKeyword.value = ''
+
   if (type === 'all') {
-    databaseRecordKeyword.value = ''
     databaseRecordWinFilter.value = 'ALL'
     databaseRewardStatusFilter.value = 'ALL'
+    databaseRecordTableOpen.plays = true
+    databaseRecordTableOpen.rewards = true
     return
   }
 
   if (type === 'win') {
-    databaseRecordKeyword.value = ''
     databaseRecordWinFilter.value = 'WIN'
     databaseRewardStatusFilter.value = 'ALL'
     databaseRecordTableOpen.plays = true
+    databaseRecordTableOpen.rewards = false
     return
   }
 
   if (type === 'lose') {
-    databaseRecordKeyword.value = ''
     databaseRecordWinFilter.value = 'LOSE'
     databaseRewardStatusFilter.value = 'ALL'
     databaseRecordTableOpen.plays = true
+    databaseRecordTableOpen.rewards = false
     return
   }
 
   if (type === 'pending') {
-    databaseRecordKeyword.value = ''
     databaseRecordWinFilter.value = 'ALL'
     databaseRewardStatusFilter.value = 'PENDING'
+    databaseRecordTableOpen.plays = false
     databaseRecordTableOpen.rewards = true
     return
   }
 
   if (type === 'issued') {
-    databaseRecordKeyword.value = ''
     databaseRecordWinFilter.value = 'ALL'
     databaseRewardStatusFilter.value = 'ISSUED'
+    databaseRecordTableOpen.plays = false
     databaseRecordTableOpen.rewards = true
     return
   }
 
   if (type === 'cancelled') {
-    databaseRecordKeyword.value = ''
     databaseRecordWinFilter.value = 'ALL'
     databaseRewardStatusFilter.value = 'CANCELLED'
+    databaseRecordTableOpen.plays = false
     databaseRecordTableOpen.rewards = true
   }
 }
+
 
 
 
@@ -2479,23 +2484,37 @@ const databaseStats = computed(() => {
 })
 
 
+
+const isRecordWin = (item) => {
+  return Boolean(
+    item?.isWin
+    || item?.isWinning
+    || item?.result === 'WIN'
+    || item?.result === 'WON'
+    || item?.status === 'WIN'
+    || item?.prize
+    || item?.prizeId
+  )
+}
+
 const filteredDatabasePlayRecords = computed(() => {
   const keyword = String(databaseRecordKeyword.value || '').trim().toUpperCase()
   const winFilter = databaseRecordWinFilter.value
 
   return databasePlayRecords.value.filter((item) => {
-    if (winFilter === 'win' && !item.isWin) return false
-    if (winFilter === 'lose' && item.isWin) return false
+    const recordIsWin = isRecordWin(item)
+
+    if (winFilter === 'WIN' && !recordIsWin) return false
+    if (winFilter === 'LOSE' && recordIsWin) return false
 
     if (!keyword) return true
 
-    return String(item.playerName || '').toUpperCase().includes(keyword)
-      || String(item.playerPhone || '').toUpperCase().includes(keyword)
-      || String(item.playerEmail || '').toUpperCase().includes(keyword)
-      || String(item.prize?.title || '').toUpperCase().includes(keyword)
-      || String(item.serialCode?.code || '').toUpperCase().includes(keyword)
+    return String(item.playerName || item.name || '').toUpperCase().includes(keyword)
+      || String(item.prizeTitle || item.prize?.title || '').toUpperCase().includes(keyword)
+      || String(item.serialCode || item.serialCode?.code || item.code || '').toUpperCase().includes(keyword)
   })
 })
+
 
 const filteredDatabaseRewardRecords = computed(() => {
   const keyword = String(databaseRecordKeyword.value || '').trim().toUpperCase()
@@ -3637,6 +3656,8 @@ watch(
 // 第 401 批：紀錄管理快速篩選統計版。
 
 // 第 402 批：紀錄管理一鍵快速篩選版。
+
+// 第 403 批：紀錄管理快速篩選位置與邏輯修正版。
 </script>
 
 <template>
@@ -3930,77 +3951,8 @@ watch(
                 </div>
 
 
-                <div class="rounded-3xl border border-violet-100 bg-white/80 p-4">
-                  <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p class="text-sm font-black text-slate-900">
-                        快速篩選
-                      </p>
-                      <p class="mt-1 text-xs font-bold leading-5 text-slate-400">
-                        點一下即可切換常用紀錄條件，不需要手動調整下拉選單。
-                      </p>
-                    </div>
+                
 
-                    <div class="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white"
-                        @click="applyDatabaseRecordQuickFilter('all')"
-                      >
-                        全部
-                      </button>
-
-                      <button
-                        type="button"
-                        class="rounded-2xl bg-emerald-100 px-4 py-2 text-xs font-black text-emerald-700"
-                        @click="applyDatabaseRecordQuickFilter('win')"
-                      >
-                        只看中獎
-                      </button>
-
-                      <button
-                        type="button"
-                        class="rounded-2xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700"
-                        @click="applyDatabaseRecordQuickFilter('lose')"
-                      >
-                        只看未中獎
-                      </button>
-
-                      <button
-                        type="button"
-                        class="rounded-2xl bg-amber-100 px-4 py-2 text-xs font-black text-amber-700"
-                        @click="applyDatabaseRecordQuickFilter('pending')"
-                      >
-                        待發獎
-                      </button>
-
-                      <button
-                        type="button"
-                        class="rounded-2xl bg-sky-100 px-4 py-2 text-xs font-black text-sky-700"
-                        @click="applyDatabaseRecordQuickFilter('issued')"
-                      >
-                        已發獎
-                      </button>
-
-                      <button
-                        type="button"
-                        class="rounded-2xl bg-rose-100 px-4 py-2 text-xs font-black text-rose-700"
-                        @click="applyDatabaseRecordQuickFilter('cancelled')"
-                      >
-                        已取消
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-              </article>
-            </div>
-          </div>
-
-          <div
-            v-if="databaseCampaign && databaseSectionOpen.summary"
-            class="grid grid-cols-2 gap-3 xl:grid-cols-6"
-          >
             <div class="rounded-3xl bg-white p-4 text-center shadow-sm ring-1 ring-slate-200">
               <p class="text-xs font-bold text-slate-400">獎項</p>
               <p class="mt-1 text-3xl font-black text-slate-900">{{ databaseStats.prizeCount }}</p>
@@ -5407,6 +5359,70 @@ watch(
                       遊玩 {{ displayedDatabasePlayRecords.length }} 筆<br />
                       發獎 {{ displayedDatabaseRewardRecords.length }} 筆
                     </p>
+                  </div>
+                </div>
+
+
+                <div class="rounded-3xl border border-violet-100 bg-white/80 p-4">
+                  <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p class="text-sm font-black text-slate-900">
+                        快速篩選
+                      </p>
+                      <p class="mt-1 text-xs font-bold leading-5 text-slate-400">
+                        只控制下方「遊玩紀錄」與「中獎 / 發獎紀錄」，不會影響 API 路徑區塊。
+                      </p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white"
+                        @click="applyDatabaseRecordQuickFilter('all')"
+                      >
+                        全部
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-emerald-100 px-4 py-2 text-xs font-black text-emerald-700"
+                        @click="applyDatabaseRecordQuickFilter('win')"
+                      >
+                        只看中獎
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-700"
+                        @click="applyDatabaseRecordQuickFilter('lose')"
+                      >
+                        只看未中獎
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-amber-100 px-4 py-2 text-xs font-black text-amber-700"
+                        @click="applyDatabaseRecordQuickFilter('pending')"
+                      >
+                        待發獎
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-sky-100 px-4 py-2 text-xs font-black text-sky-700"
+                        @click="applyDatabaseRecordQuickFilter('issued')"
+                      >
+                        已發獎
+                      </button>
+
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-rose-100 px-4 py-2 text-xs font-black text-rose-700"
+                        @click="applyDatabaseRecordQuickFilter('cancelled')"
+                      >
+                        已取消
+                      </button>
+                    </div>
                   </div>
                 </div>
 
