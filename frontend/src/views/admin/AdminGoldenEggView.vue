@@ -3841,6 +3841,8 @@ watch(
 // 第 402 批：操作狀態提示強化與序號處理中顯示補強版。
 
 // 第 403 批：砸金蛋後台活動總覽卡版。
+
+// 第 403 批修正版：活動總覽卡橫向條列排版版。
 </script>
 
 <template>
@@ -4179,56 +4181,60 @@ watch(
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
-              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100 xl:col-span-2">
+            <div class="mt-4 space-y-3">
+              <article class="rounded-3xl bg-white/85 p-4 ring-1 ring-yellow-100">
                 <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                   <p class="text-xs font-black text-slate-400">活動期間</p>
-                  <p class="text-[11px] font-bold text-slate-400">24 小時制顯示，避免窄版重疊</p>
+                  <p class="text-[11px] font-bold text-slate-400">橫向顯示，避免時間被擠成直排</p>
                 </div>
-                <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div class="rounded-2xl bg-yellow-50/70 px-4 py-3">
-                    <p class="text-[11px] font-black text-yellow-600">開始</p>
-                    <p class="mt-1 break-words text-base font-black leading-6 text-slate-900">{{ databaseActivityOverview.activityStartText }}</p>
+
+                <div class="mt-3 space-y-2">
+                  <div class="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-yellow-50/80 px-4 py-3">
+                    <p class="shrink-0 text-xs font-black text-yellow-600">開始</p>
+                    <p class="min-w-0 truncate text-right text-sm font-black text-slate-900 sm:text-base">{{ databaseActivityOverview.activityStartText }}</p>
                   </div>
-                  <div class="rounded-2xl bg-orange-50/70 px-4 py-3">
-                    <p class="text-[11px] font-black text-orange-600">結束</p>
-                    <p class="mt-1 break-words text-base font-black leading-6 text-slate-900">{{ databaseActivityOverview.activityEndText }}</p>
+
+                  <div class="flex min-w-0 items-center justify-between gap-3 rounded-2xl bg-orange-50/80 px-4 py-3">
+                    <p class="shrink-0 text-xs font-black text-orange-600">結束</p>
+                    <p class="min-w-0 truncate text-right text-sm font-black text-slate-900 sm:text-base">{{ databaseActivityOverview.activityEndText }}</p>
                   </div>
                 </div>
               </article>
 
-              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
-                <p class="text-xs font-black text-slate-400">獎項庫存</p>
-                <p class="mt-2 text-2xl font-black text-slate-900">
+              <article class="flex min-w-0 items-center justify-between gap-3 rounded-3xl bg-white/85 p-4 ring-1 ring-yellow-100">
+                <div class="min-w-0">
+                  <p class="text-xs font-black text-slate-400">獎項庫存</p>
+                  <p class="mt-1 text-xs font-bold text-slate-500">共 {{ databaseActivityOverview.prizeCount }} 個獎項</p>
+                </div>
+                <p class="shrink-0 text-right text-2xl font-black text-slate-900">
                   {{ databaseActivityOverview.remainingPrizeStock }} / {{ databaseActivityOverview.totalPrizeStock }}
                 </p>
-                <p class="mt-1 text-xs font-bold text-slate-500">
-                  共 {{ databaseActivityOverview.prizeCount }} 個獎項
-                </p>
               </article>
 
-              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
-                <p class="text-xs font-black text-slate-400">序號使用</p>
-                <p class="mt-2 text-2xl font-black text-slate-900">
+              <article class="flex min-w-0 items-center justify-between gap-3 rounded-3xl bg-white/85 p-4 ring-1 ring-yellow-100">
+                <div class="min-w-0">
+                  <p class="text-xs font-black text-slate-400">序號使用</p>
+                  <p class="mt-1 text-xs font-bold text-slate-500">未使用 {{ databaseActivityOverview.serialUnused }} 組</p>
+                </div>
+                <p class="shrink-0 text-right text-2xl font-black text-slate-900">
                   {{ databaseActivityOverview.serialUsed }} / {{ databaseActivityOverview.serialTotal }}
                 </p>
-                <p class="mt-1 text-xs font-bold text-slate-500">
-                  未使用 {{ databaseActivityOverview.serialUnused }} 組
-                </p>
               </article>
 
-              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
-                <p class="text-xs font-black text-slate-400">中獎率概覽</p>
-                <p class="mt-2 text-2xl font-black text-slate-900">
+              <article class="flex min-w-0 items-center justify-between gap-3 rounded-3xl bg-white/85 p-4 ring-1 ring-yellow-100">
+                <div class="min-w-0">
+                  <p class="text-xs font-black text-slate-400">中獎率概覽</p>
+                  <p class="mt-1 text-xs font-bold text-slate-500">
+                    {{ databaseActivityOverview.rewardTotal }} 次中獎 / {{ databaseActivityOverview.playTotal }} 次遊玩
+                  </p>
+                </div>
+                <p class="shrink-0 text-right text-2xl font-black text-slate-900">
                   {{ databaseActivityOverview.winRate }}%
                 </p>
-                <p class="mt-1 text-xs font-bold text-slate-500">
-                  {{ databaseActivityOverview.rewardTotal }} 次中獎 / {{ databaseActivityOverview.playTotal }} 次遊玩
-                </p>
               </article>
 
-              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100 lg:col-span-2 2xl:col-span-4">
-                <div class="grid grid-cols-2 gap-3 2xl:grid-cols-4">
+              <article class="rounded-3xl bg-white/85 p-4 ring-1 ring-yellow-100">
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <div class="rounded-2xl bg-slate-50 p-3 text-center">
                     <p class="text-xs font-black text-slate-400">遊玩次數</p>
                     <p class="mt-1 text-xl font-black text-slate-900">{{ databaseActivityOverview.playTotal }}</p>
