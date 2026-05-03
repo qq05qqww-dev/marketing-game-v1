@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
   getAdminGoldenEggCampaign,
   updateAdminGoldenEggCampaign,
@@ -84,6 +84,7 @@ const databasePrizeForm = reactive({
   sortOrder: 1
 })
 const isSavingDatabaseSerial = ref(false)
+const databaseSerialAction = ref('')
 const databaseSerialForm = reactive({
   code: '',
   codesText: '',
@@ -247,6 +248,7 @@ const bulkDistributeTo = ref('')
 const bulkDistributeChannel = ref('LINE')
 const manualSerialCode = ref('')
 const bulkSerialCodesText = ref('')
+const localSerialAction = ref('')
 const manualSerialRewardChance = ref(1)
 const manualSerialBatchCode = ref('')
 const manualSerialExpireMode = ref('none')
@@ -844,6 +846,12 @@ const showOperationError = (message) => {
 
 const showOperationInfo = (message, autoClear = true) => {
   showOperationMessage(message, 'info', autoClear)
+}
+
+
+const waitOperationFeedbackFrame = async (minimumMs = 450) => {
+  await nextTick()
+  await new Promise((resolve) => window.setTimeout(resolve, minimumMs))
 }
 
 const adminToastClass = computed(() => {
@@ -1556,41 +1564,50 @@ const createManualSerialItem = (code) => {
   }
 }
 
-const addManualSerialCode = () => {
+const addManualSerialCode = async () => {
   const code = normalizeManualSerialCode(manualSerialCode.value)
 
   if (!code) {
-    window.alert('請先輸入序號。')
+    showOperationError('請先輸入序號。')
     return
   }
 
   if (code.length < 6) {
-    window.alert('序號太短，至少需要 6 個字元。')
+    showOperationError('序號太短，至少需要 6 個字元。')
     return
   }
 
   const exists = serialCodes.value.some((item) => String(item.code || '').toUpperCase() === code)
 
   if (exists) {
-    window.alert('這組序號已經存在，不能重複新增。')
+    showOperationError('這組序號已經存在，不能重複新增。')
     return
   }
 
-  serialCodes.value = [
-    createManualSerialItem(code),
-    ...serialCodes.value
-  ]
+  localSerialAction.value = 'manual-create'
+  showOperationInfo('正在新增單組序號，請稍候...', false)
 
-  manualSerialCode.value = ''
-  saveSerialCodes()
-  showSavedMessage('已手動新增 1 組序號。')
+  try {
+    await waitOperationFeedbackFrame()
+
+    serialCodes.value = [
+      createManualSerialItem(code),
+      ...serialCodes.value
+    ]
+
+    manualSerialCode.value = ''
+    saveSerialCodes()
+    showOperationSuccess('已手動新增 1 組序號。')
+  } finally {
+    localSerialAction.value = ''
+  }
 }
 
-const addBulkManualSerialCodes = () => {
+const addBulkManualSerialCodes = async () => {
   const rawText = String(bulkSerialCodesText.value || '').trim()
 
   if (!rawText) {
-    window.alert('請先貼上要新增的序號。')
+    showOperationError('請先貼上要新增的序號。')
     return
   }
 
@@ -1600,7 +1617,7 @@ const addBulkManualSerialCodes = () => {
     .filter((code) => code && code.length >= 6)
 
   if (!candidates.length) {
-    window.alert('沒有找到可用的序號，請確認格式。')
+    showOperationError('沒有找到可用的序號，請確認格式。')
     return
   }
 
@@ -1615,20 +1632,29 @@ const addBulkManualSerialCodes = () => {
   })
 
   if (!uniqueCodes.length) {
-    window.alert('貼上的序號都已經存在，沒有新增。')
+    showOperationError('貼上的序號都已經存在，沒有新增。')
     return
   }
 
-  const newItems = uniqueCodes.map((code) => createManualSerialItem(code))
+  localSerialAction.value = 'manual-bulk'
+  showOperationInfo(`正在批次新增 ${uniqueCodes.length} 組序號，請稍候...`, false)
 
-  serialCodes.value = [
-    ...newItems,
-    ...serialCodes.value
-  ]
+  try {
+    await waitOperationFeedbackFrame()
 
-  bulkSerialCodesText.value = ''
-  saveSerialCodes()
-  showSavedMessage(`已批次新增 ${newItems.length} 組序號，略過 ${candidates.length - uniqueCodes.length} 組重複序號。`)
+    const newItems = uniqueCodes.map((code) => createManualSerialItem(code))
+
+    serialCodes.value = [
+      ...newItems,
+      ...serialCodes.value
+    ]
+
+    bulkSerialCodesText.value = ''
+    saveSerialCodes()
+    showOperationSuccess(`已批次新增 ${newItems.length} 組序號，略過 ${candidates.length - uniqueCodes.length} 組重複序號。`)
+  } finally {
+    localSerialAction.value = ''
+  }
 }
 
 const parseCsvLine = (line) => {
@@ -2126,7 +2152,7 @@ const createRandomSerialCode = () => {
   return [prefix, batch, randomText].filter(Boolean).join('-')
 }
 
-const generateSerialCodes = () => {
+const generateSerialCodes = async () => {
   const count = Math.min(100, Math.max(1, Number(serialGenerateCount.value || 1)))
   const rewardChance = Math.min(99, Math.max(1, Number(serialRewardChance.value || 1)))
   const batch = String(serialBatchCode.value || '')
@@ -2137,41 +2163,50 @@ const generateSerialCodes = () => {
   const existingCodes = new Set(serialCodes.value.map((item) => String(item.code || '').toUpperCase()))
   const nextCodes = []
 
-  while (nextCodes.length < count) {
-    const code = createRandomSerialCode()
+  localSerialAction.value = 'generate'
+  showOperationInfo(`正在自動產生 ${count} 組序號，請稍候...`, false)
 
-    if (existingCodes.has(code)) continue
+  try {
+    await waitOperationFeedbackFrame()
 
-    existingCodes.add(code)
-    nextCodes.push({
-      id: `serial-${Date.now()}-${nextCodes.length}`,
-      code,
-      rewardChance,
-      batchCode: batch,
-      codeLength: Number(serialCodeLength.value || 18),
-      isEnabled: true,
-      createdAt: new Date().toISOString(),
-      createdAtText: new Date().toLocaleString('zh-TW'),
-      expireAt: getSerialExpireAt(),
-      expireAtText: formatSerialExpireText(getSerialExpireAt()),
-      usedAt: '',
-      usedAtText: '',
-      usedBy: '',
-      distributedAt: '',
-      distributedAtText: '',
-      distributedTo: '',
-      distributedChannel: '',
-      note: ''
-    })
+    while (nextCodes.length < count) {
+      const code = createRandomSerialCode()
+
+      if (existingCodes.has(code)) continue
+
+      existingCodes.add(code)
+      nextCodes.push({
+        id: `serial-${Date.now()}-${nextCodes.length}`,
+        code,
+        rewardChance,
+        batchCode: batch,
+        codeLength: Number(serialCodeLength.value || 18),
+        isEnabled: true,
+        createdAt: new Date().toISOString(),
+        createdAtText: new Date().toLocaleString('zh-TW'),
+        expireAt: getSerialExpireAt(),
+        expireAtText: formatSerialExpireText(getSerialExpireAt()),
+        usedAt: '',
+        usedAtText: '',
+        usedBy: '',
+        distributedAt: '',
+        distributedAtText: '',
+        distributedTo: '',
+        distributedChannel: '',
+        note: ''
+      })
+    }
+
+    serialCodes.value = [
+      ...nextCodes,
+      ...serialCodes.value
+    ]
+
+    saveSerialCodes()
+    showOperationSuccess(`已產生 ${nextCodes.length} 組抽獎序號。`)
+  } finally {
+    localSerialAction.value = ''
   }
-
-  serialCodes.value = [
-    ...nextCodes,
-    ...serialCodes.value
-  ]
-
-  saveSerialCodes()
-  showSavedMessage(`已產生 ${nextCodes.length} 組抽獎序號。`)
 }
 
 const copySerialCode = async (code) => {
@@ -2952,9 +2987,11 @@ const generateDatabaseSerialCodes = async () => {
   }
 
   isSavingDatabaseSerial.value = true
+  databaseSerialAction.value = 'generate'
   showOperationInfo('正在自動產生資料庫序號，請稍候...', false)
 
   try {
+    await waitOperationFeedbackFrame()
     await generateAdminGoldenEggSerialCodes(normalizedDatabaseCampaignId.value, {
       prefix: databaseSerialForm.prefix,
       batchCode: databaseSerialForm.batchCode,
@@ -2973,6 +3010,7 @@ const generateDatabaseSerialCodes = async () => {
     showOperationError(error.message || '自動產生資料庫序號失敗。')
   } finally {
     isSavingDatabaseSerial.value = false
+    databaseSerialAction.value = ''
   }
 }
 
@@ -2988,9 +3026,11 @@ const createDatabaseSerialCode = async () => {
   }
 
   isSavingDatabaseSerial.value = true
+  databaseSerialAction.value = 'create'
   showOperationInfo('正在新增單組資料庫序號，請稍候...', false)
 
   try {
+    await waitOperationFeedbackFrame()
     await createAdminGoldenEggSerialCode(normalizedDatabaseCampaignId.value, {
       code: databaseSerialForm.code,
       rewardChance: databaseSerialForm.rewardChance,
@@ -3008,6 +3048,7 @@ const createDatabaseSerialCode = async () => {
     showOperationError(error.message || '新增單組資料庫序號失敗。')
   } finally {
     isSavingDatabaseSerial.value = false
+    databaseSerialAction.value = ''
   }
 }
 
@@ -3023,9 +3064,11 @@ const bulkCreateDatabaseSerialCodes = async () => {
   }
 
   isSavingDatabaseSerial.value = true
+  databaseSerialAction.value = 'bulk'
   showOperationInfo('正在批次新增資料庫序號，請稍候...', false)
 
   try {
+    await waitOperationFeedbackFrame()
     await bulkCreateAdminGoldenEggSerialCodes(normalizedDatabaseCampaignId.value, {
       codesText: databaseSerialForm.codesText,
       rewardChance: databaseSerialForm.rewardChance,
@@ -3043,6 +3086,7 @@ const bulkCreateDatabaseSerialCodes = async () => {
     showOperationError(error.message || '批次新增資料庫序號失敗。')
   } finally {
     isSavingDatabaseSerial.value = false
+    databaseSerialAction.value = ''
   }
 }
 
@@ -5004,7 +5048,7 @@ watch(
                     :disabled="isSavingDatabaseSerial"
                     @click="createDatabaseSerialCode"
                   >
-                    {{ isSavingDatabaseSerial ? '處理中...' : '新增單組' }}
+                    {{ databaseSerialAction === 'create' ? '新增處理中...' : '新增單組' }}
                   </button>
 
                   <button
@@ -5013,7 +5057,7 @@ watch(
                     :disabled="isSavingDatabaseSerial"
                     @click="bulkCreateDatabaseSerialCodes"
                   >
-                    {{ isSavingDatabaseSerial ? '處理中...' : '批次新增' }}
+                    {{ databaseSerialAction === 'bulk' ? '批次處理中...' : '批次新增' }}
                   </button>
 
                   <button
@@ -5022,7 +5066,7 @@ watch(
                     :disabled="isSavingDatabaseSerial"
                     @click="generateDatabaseSerialCodes"
                   >
-                    {{ isSavingDatabaseSerial ? '處理中...' : '自動產生' }}
+                    {{ databaseSerialAction === 'generate' ? '產生處理中...' : '自動產生' }}
                   </button>
                 </div>
               </div>
@@ -7244,10 +7288,11 @@ watch(
 
             <button
               type="button"
-              class="mt-3 w-full rounded-2xl bg-purple-600 px-4 py-3 text-sm font-black text-white"
+              class="mt-3 w-full rounded-2xl bg-purple-600 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!!localSerialAction"
               @click="addManualSerialCode"
             >
-              新增單組序號
+              {{ localSerialAction === 'manual-create' ? '新增處理中...' : '新增單組序號' }}
             </button>
 
             <label class="admin-field mt-4">
@@ -7261,10 +7306,11 @@ watch(
 
             <button
               type="button"
-              class="mt-3 w-full rounded-2xl bg-purple-900 px-4 py-3 text-sm font-black text-white"
+              class="mt-3 w-full rounded-2xl bg-purple-900 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+              :disabled="!!localSerialAction"
               @click="addBulkManualSerialCodes"
             >
-              批次新增貼上的序號
+              {{ localSerialAction === 'manual-bulk' ? '批次處理中...' : '批次新增貼上的序號' }}
             </button>
           </div>
 
@@ -7607,10 +7653,11 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
             <div class="mt-4 grid grid-cols-2 gap-2 xl:grid-cols-5">
               <button
                 type="button"
-                class="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white"
+                class="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                :disabled="!!localSerialAction"
                 @click="generateSerialCodes"
               >
-                自動產生序號
+                {{ localSerialAction === 'generate' ? '產生處理中...' : '自動產生序號' }}
               </button>
 
               <button
