@@ -2822,6 +2822,131 @@ const editDatabasePrize = (item) => {
   showOperationSuccess('已載入資料庫獎項到編輯表單。')
 }
 
+
+const getDatabasePrizeRemainingStock = (item = {}) => {
+  const remainStock = item.remainStock ?? item.stockRemaining ?? null
+  const stockTotal = Number(item.stockTotal || 0)
+  const stockUsed = Number(item.stockUsed || 0)
+
+  return Number((remainStock ?? Math.max(0, stockTotal - stockUsed)) || 0)
+}
+
+const getDatabasePrizeStockPercent = (item = {}) => {
+  const stockTotal = Number(item.stockTotal || 0)
+
+  if (!stockTotal) return 0
+
+  return Math.max(0, Math.min(100, Math.round((getDatabasePrizeRemainingStock(item) / stockTotal) * 100)))
+}
+
+const getDatabasePrizeTypeLabel = (type = '') => {
+  const value = String(type || '').toUpperCase()
+
+  if (value === 'WIN') return '中獎'
+  if (value === 'LOSE') return '未中獎'
+
+  return value || '未設定'
+}
+
+const getDatabasePrizeStatusLabel = (status = '') => {
+  const value = String(status || '').toUpperCase()
+
+  if (value === 'ACTIVE') return '啟用'
+  if (value === 'DISABLED') return '停用'
+  if (value === 'INACTIVE') return '停用'
+
+  return value || '未設定'
+}
+
+const getDatabasePrizeStockTone = (item = {}) => {
+  const status = String(item.status || '').toUpperCase()
+  const remainStock = getDatabasePrizeRemainingStock(item)
+  const stockTotal = Number(item.stockTotal || 0)
+  const percent = getDatabasePrizeStockPercent(item)
+
+  if (status !== 'ACTIVE') {
+    return 'bg-slate-50 text-slate-500 ring-slate-100'
+  }
+
+  if (stockTotal > 0 && remainStock <= 0) {
+    return 'bg-rose-50 text-rose-700 ring-rose-100'
+  }
+
+  if (stockTotal > 0 && percent <= 20) {
+    return 'bg-amber-50 text-amber-700 ring-amber-100'
+  }
+
+  return 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+}
+
+const databasePrizeOverview = computed(() => {
+  const total = databasePrizes.value.length
+  const activeCount = databasePrizes.value.filter((item) => String(item.status || '').toUpperCase() === 'ACTIVE').length
+  const disabledCount = databasePrizes.value.filter((item) => String(item.status || '').toUpperCase() !== 'ACTIVE').length
+  const winCount = databasePrizes.value.filter((item) => String(item.type || '').toUpperCase() === 'WIN').length
+  const totalStock = databasePrizes.value.reduce((sum, item) => sum + Number(item.stockTotal || 0), 0)
+  const remainingStock = databasePrizes.value.reduce((sum, item) => sum + getDatabasePrizeRemainingStock(item), 0)
+  const usedStock = databasePrizes.value.reduce((sum, item) => sum + Number(item.stockUsed || 0), 0)
+  const lowStockCount = databasePrizes.value.filter((item) => {
+    const stockTotal = Number(item.stockTotal || 0)
+    const percent = getDatabasePrizeStockPercent(item)
+
+    return String(item.status || '').toUpperCase() === 'ACTIVE' && stockTotal > 0 && percent <= 20
+  }).length
+
+  return {
+    total,
+    activeCount,
+    disabledCount,
+    winCount,
+    totalStock,
+    remainingStock,
+    usedStock,
+    lowStockCount,
+    remainingPercent: totalStock ? Math.round((remainingStock / totalStock) * 100) : 0
+  }
+})
+
+const toggleDatabasePrizeStatus = async (item) => {
+  if (!item?.id || isSavingDatabasePrize.value) return
+
+  const currentStatus = String(item.status || '').toUpperCase()
+  const nextStatus = currentStatus === 'ACTIVE' ? 'DISABLED' : 'ACTIVE'
+  const nextLabel = nextStatus === 'ACTIVE' ? '啟用' : '停用'
+  const confirmed = window.confirm(`確定要${nextLabel}資料庫獎項「${item.title}」嗎？`)
+
+  if (!confirmed) return
+
+  isSavingDatabasePrize.value = true
+  showOperationInfo(`正在${nextLabel}資料庫獎項，請稍候...`, false)
+
+  try {
+    await updateAdminGoldenEggPrize(item.id, {
+      title: item.title || '',
+      shortName: item.shortName || '',
+      description: item.description || '',
+      icon: item.icon || '🎁',
+      imageUrl: item.imageUrl || '',
+      type: item.type || 'WIN',
+      status: nextStatus,
+      probability: Number(item.probability || 0),
+      stockTotal: Number(item.stockTotal || 0),
+      remainStock: getDatabasePrizeRemainingStock(item),
+      stockUsed: Number(item.stockUsed || 0),
+      sortOrder: Number(item.sortOrder || 0)
+    })
+
+    showOperationSuccess(`已${nextLabel}資料庫獎項。`)
+    setDatabasePreviewSyncMessage()
+    await loadDatabaseGoldenEggCampaign()
+  } catch (error) {
+    console.error('切換資料庫獎項狀態失敗：', error)
+    showOperationError(error.message || '切換資料庫獎項狀態失敗。')
+  } finally {
+    isSavingDatabasePrize.value = false
+  }
+}
+
 const buildDatabasePrizePayload = () => {
   return {
     title: databasePrizeForm.title,
@@ -5562,47 +5687,202 @@ watch(
                 </button>
               </div>
 
-              <div class="mt-4 max-h-[560px] space-y-3 overflow-y-auto pr-1">
-                <article
-                  v-for="item in databasePrizes"
-                  :key="item.id"
-                  class="rounded-2xl bg-white/80 p-3"
-                >
-                  <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <p class="text-sm font-black text-slate-900">
-                        {{ item.icon || '🎁' }} {{ item.title }}
-                      </p>
-                      <p class="mt-1 text-xs font-bold text-slate-500">
-                        {{ item.type }}｜{{ item.status }}｜機率 {{ item.probability }}%｜剩餘 {{ item.remainStock }}｜總庫存 {{ item.stockTotal }}｜已用 {{ item.stockUsed }}
-                      </p>
-                      <p
-                        v-if="item.description"
-                        class="mt-1 text-xs font-bold text-slate-400"
-                      >
-                        {{ item.description }}
-                      </p>
-                    </div>
-
-                    <div class="flex shrink-0 flex-wrap gap-2">
-                      <button
-                        type="button"
-                        class="rounded-xl bg-yellow-100 px-3 py-2 text-xs font-black text-yellow-700"
-                        @click="editDatabasePrize(item)"
-                      >
-                        編輯
-                      </button>
-
-                      <button
-                        type="button"
-                        class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100"
-                        @click="removeDatabasePrize(item)"
-                      >
-                        刪除
-                      </button>
-                    </div>
+              <div class="mt-4 rounded-3xl bg-white/70 p-4 ring-1 ring-yellow-100">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h4 class="text-sm font-black text-slate-900">
+                      資料庫獎項總覽
+                    </h4>
+                    <p class="mt-1 text-xs font-bold text-slate-500">
+                      以正式資料庫獎項即時計算庫存、狀態與中獎品項數。
+                    </p>
                   </div>
-                </article>
+
+                  <div class="rounded-2xl bg-yellow-50 px-4 py-3 text-right ring-1 ring-yellow-100">
+                    <p class="text-[11px] font-black text-yellow-700">
+                      剩餘庫存比例
+                    </p>
+                    <p class="mt-1 text-2xl font-black text-yellow-950">
+                      {{ databasePrizeOverview.remainingPercent }}%
+                    </p>
+                  </div>
+                </div>
+
+                <div class="mt-4 grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7">
+                  <div class="rounded-2xl bg-white px-3 py-3 text-center ring-1 ring-yellow-100">
+                    <p class="text-[11px] font-black text-slate-400">全部獎項</p>
+                    <p class="mt-1 text-2xl font-black text-slate-950">{{ databasePrizeOverview.total }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-emerald-50 px-3 py-3 text-center ring-1 ring-emerald-100">
+                    <p class="text-[11px] font-black text-emerald-600">啟用</p>
+                    <p class="mt-1 text-2xl font-black text-emerald-700">{{ databasePrizeOverview.activeCount }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-slate-50 px-3 py-3 text-center ring-1 ring-slate-100">
+                    <p class="text-[11px] font-black text-slate-500">停用</p>
+                    <p class="mt-1 text-2xl font-black text-slate-700">{{ databasePrizeOverview.disabledCount }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-rose-50 px-3 py-3 text-center ring-1 ring-rose-100">
+                    <p class="text-[11px] font-black text-rose-600">中獎品項</p>
+                    <p class="mt-1 text-2xl font-black text-rose-700">{{ databasePrizeOverview.winCount }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-white px-3 py-3 text-center ring-1 ring-yellow-100">
+                    <p class="text-[11px] font-black text-slate-400">總庫存</p>
+                    <p class="mt-1 text-2xl font-black text-slate-950">{{ databasePrizeOverview.totalStock }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-green-50 px-3 py-3 text-center ring-1 ring-green-100">
+                    <p class="text-[11px] font-black text-green-600">剩餘</p>
+                    <p class="mt-1 text-2xl font-black text-green-700">{{ databasePrizeOverview.remainingStock }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-amber-50 px-3 py-3 text-center ring-1 ring-amber-100">
+                    <p class="text-[11px] font-black text-amber-600">低庫存</p>
+                    <p class="mt-1 text-2xl font-black text-amber-700">{{ databasePrizeOverview.lowStockCount }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-4 rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
+                <div class="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h4 class="text-sm font-black text-slate-900">
+                      資料庫獎項列表
+                    </h4>
+                    <p class="mt-1 text-xs font-bold text-slate-500">
+                      橫向表格顯示，窄版可左右滑動；低庫存與停用狀態會自動標示。
+                    </p>
+                  </div>
+                  <span class="self-start rounded-full bg-yellow-50 px-3 py-1 text-xs font-black text-yellow-700 ring-1 ring-yellow-100 md:self-auto">
+                    {{ databasePrizes.length }} 筆
+                  </span>
+                </div>
+
+                <div class="mt-4 overflow-x-auto rounded-3xl border border-yellow-100 bg-white">
+                  <table class="min-w-[980px] w-full text-left text-xs">
+                    <thead class="bg-yellow-50 text-[11px] font-black uppercase tracking-[0.14em] text-yellow-800">
+                      <tr>
+                        <th class="px-4 py-3">獎項</th>
+                        <th class="px-4 py-3">類型</th>
+                        <th class="px-4 py-3">狀態</th>
+                        <th class="px-4 py-3 text-right">機率</th>
+                        <th class="px-4 py-3 text-right">庫存</th>
+                        <th class="px-4 py-3">庫存狀態</th>
+                        <th class="px-4 py-3 text-right">排序</th>
+                        <th class="px-4 py-3 text-right">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-yellow-50">
+                      <tr
+                        v-for="item in databasePrizes"
+                        :key="item.id"
+                        :class="String(item.status || '').toUpperCase() === 'ACTIVE' ? 'bg-white' : 'bg-slate-50/80'"
+                      >
+                        <td class="px-4 py-4 align-top">
+                          <div class="flex items-start gap-3">
+                            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-yellow-50 text-lg ring-1 ring-yellow-100">
+                              {{ item.icon || '🎁' }}
+                            </span>
+                            <div class="min-w-0">
+                              <p class="font-black text-slate-950">
+                                {{ item.title || '未命名獎項' }}
+                              </p>
+                              <p class="mt-1 text-[11px] font-bold text-slate-400">
+                                ID：{{ item.id }}
+                                <span v-if="item.shortName">｜{{ item.shortName }}</span>
+                              </p>
+                              <p
+                                v-if="item.description"
+                                class="mt-1 max-w-[260px] truncate text-[11px] font-bold text-slate-500"
+                              >
+                                {{ item.description }}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td class="px-4 py-4 align-top">
+                          <span
+                            :class="String(item.type || '').toUpperCase() === 'WIN' ? 'bg-rose-50 text-rose-700 ring-rose-100' : 'bg-slate-50 text-slate-600 ring-slate-100'"
+                            class="inline-flex rounded-full px-3 py-1 text-xs font-black ring-1"
+                          >
+                            {{ getDatabasePrizeTypeLabel(item.type) }}
+                          </span>
+                        </td>
+                        <td class="px-4 py-4 align-top">
+                          <span
+                            :class="String(item.status || '').toUpperCase() === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700 ring-emerald-100' : 'bg-slate-100 text-slate-600 ring-slate-200'"
+                            class="inline-flex rounded-full px-3 py-1 text-xs font-black ring-1"
+                          >
+                            {{ getDatabasePrizeStatusLabel(item.status) }}
+                          </span>
+                        </td>
+                        <td class="px-4 py-4 text-right align-top">
+                          <p class="text-sm font-black text-slate-950">
+                            {{ Number(item.probability || 0) }}%
+                          </p>
+                        </td>
+                        <td class="px-4 py-4 text-right align-top">
+                          <p class="text-sm font-black text-slate-950">
+                            {{ getDatabasePrizeRemainingStock(item) }} / {{ Number(item.stockTotal || 0) }}
+                          </p>
+                          <p class="mt-1 text-[11px] font-bold text-slate-400">
+                            已用 {{ Number(item.stockUsed || 0) }}
+                          </p>
+                        </td>
+                        <td class="px-4 py-4 align-top">
+                          <div class="min-w-[150px]">
+                            <div class="h-2 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                class="h-full rounded-full bg-yellow-400"
+                                :style="{ width: `${getDatabasePrizeStockPercent(item)}%` }"
+                              />
+                            </div>
+                            <span
+                              :class="getDatabasePrizeStockTone(item)"
+                              class="mt-2 inline-flex rounded-full px-3 py-1 text-[11px] font-black ring-1"
+                            >
+                              剩餘 {{ getDatabasePrizeStockPercent(item) }}%
+                            </span>
+                          </div>
+                        </td>
+                        <td class="px-4 py-4 text-right align-top">
+                          <span class="font-black text-slate-600">
+                            {{ Number(item.sortOrder || 0) }}
+                          </span>
+                        </td>
+                        <td class="px-4 py-4 align-top">
+                          <div class="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              class="rounded-xl bg-yellow-100 px-3 py-2 text-xs font-black text-yellow-700 transition hover:bg-yellow-200"
+                              @click="editDatabasePrize(item)"
+                            >
+                              編輯
+                            </button>
+                            <button
+                              type="button"
+                              class="rounded-xl bg-slate-900 px-3 py-2 text-xs font-black text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                              :disabled="isSavingDatabasePrize"
+                              @click="toggleDatabasePrizeStatus(item)"
+                            >
+                              {{ String(item.status || '').toUpperCase() === 'ACTIVE' ? '停用' : '啟用' }}
+                            </button>
+                            <button
+                              type="button"
+                              class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100 transition hover:bg-rose-100"
+                              @click="removeDatabasePrize(item)"
+                            >
+                              刪除
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      <tr v-if="!databasePrizes.length">
+                        <td colspan="8" class="px-4 py-10 text-center text-sm font-black text-slate-400">
+                          目前沒有資料庫獎項。
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
 
