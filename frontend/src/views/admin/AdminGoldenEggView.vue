@@ -32,6 +32,7 @@ const GOLDEN_EGG_ADMIN_SYNC_KEY = 'multi_game_platform_golden_egg_admin_sync_pin
 const GOLDEN_EGG_SERIAL_CODES_KEY = 'multi_game_platform_golden_egg_serial_codes_v1'
 const GOLDEN_EGG_SERIAL_REDEEM_LOG_KEY = 'multi_game_platform_golden_egg_serial_redeem_log_v1'
 const GOLDEN_EGG_HISTORY_KEY = 'multi_game_platform_golden_egg_history_v1'
+const GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY = 'multi_game_platform_golden_egg_game_config_operation_log_v1'
 
 
 const cloneByJson = (value) => JSON.parse(JSON.stringify(value))
@@ -191,6 +192,7 @@ const databaseRecordStats = computed(() => {
 
 
 const databasePreviewSyncMessage = ref('')
+const gameConfigOperationLogs = ref([])
 const isSavingDatabaseCampaign = ref(false)
 const databaseCampaignForm = reactive({
   title: '',
@@ -906,6 +908,60 @@ const showOperationInfo = (message, autoClear = true) => {
   showOperationMessage(message, 'info', autoClear)
 }
 
+const formatGameConfigOperationTime = (date = new Date()) => {
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+const persistGameConfigOperationLogs = () => {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(
+    GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY,
+    JSON.stringify(gameConfigOperationLogs.value.slice(0, 12))
+  )
+}
+
+const loadGameConfigOperationLogs = () => {
+  if (typeof window === 'undefined') return
+
+  const savedLogs = safeJsonParse(localStorage.getItem(GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY), [])
+  gameConfigOperationLogs.value = Array.isArray(savedLogs) ? savedLogs.slice(0, 12) : []
+}
+
+const addGameConfigOperationLog = ({ title, description = '', type = 'info', changedCount = 0 } = {}) => {
+  if (!title) return
+
+  const now = new Date()
+  const logItem = {
+    id: `game-config-log-${now.getTime()}-${Math.random().toString(36).slice(2, 8)}`,
+    title,
+    description,
+    type,
+    changedCount: Number(changedCount || 0),
+    createdAt: now.toISOString(),
+    createdAtText: formatGameConfigOperationTime(now)
+  }
+
+  gameConfigOperationLogs.value = [logItem, ...gameConfigOperationLogs.value].slice(0, 12)
+  persistGameConfigOperationLogs()
+}
+
+const clearGameConfigOperationLogs = () => {
+  const confirmed = window.confirm('確定要清除前台設定最近操作紀錄嗎？這只會清除本機後台顯示，不會影響資料庫。')
+  if (!confirmed) return
+
+  gameConfigOperationLogs.value = []
+  persistGameConfigOperationLogs()
+  showOperationSuccess('已清除前台設定最近操作紀錄。')
+}
+
+const gameConfigOperationLogTypeClass = (type) => {
+  if (type === 'success') return 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+  if (type === 'warning') return 'bg-amber-50 text-amber-700 ring-amber-100'
+  if (type === 'error') return 'bg-rose-50 text-rose-700 ring-rose-100'
+  return 'bg-blue-50 text-blue-700 ring-blue-100'
+}
+
 
 const waitOperationFeedbackFrame = async (minimumMs = 450) => {
   await nextTick()
@@ -1033,11 +1089,22 @@ const applyPreviewVisualSettingsToDatabaseForm = () => {
     `已套用目前預覽視覺設定：背景 ${databaseGameConfigForm.themeBgFrom} / ${databaseGameConfigForm.themeBgMiddle} / ${databaseGameConfigForm.themeBgTo}，金蛋 ${databaseGameConfigForm.eggSize}px`
   )
   showOperationSuccess('已套用目前預覽視覺設定到資料庫前台設定表單，請記得按「儲存前台設定」。')
+  addGameConfigOperationLog({
+    title: '套用目前預覽視覺',
+    description: '已把右側預覽的背景、金蛋與按鈕色套用到 GameConfig 表單，尚未儲存前不會寫入資料庫。',
+    type: 'warning',
+    changedCount: databaseGameConfigChangedCount.value
+  })
 }
 
 const savePreviewVisualSettingsToDatabase = async () => {
   if (!normalizedDatabaseCampaignId.value) {
     showOperationError('請先讀取正式活動 campaignId，再同步視覺設定到資料庫。')
+    addGameConfigOperationLog({
+      title: '同步視覺到資料庫失敗',
+      description: '尚未載入正式活動 campaignId。',
+      type: 'error'
+    })
     return
   }
 
@@ -1063,6 +1130,11 @@ const applyClassicRedGoldVisualPreset = () => {
   })
   saveState('已套用經典紅金視覺預設。')
   showOperationSuccess('已套用經典紅金視覺預設。')
+  addGameConfigOperationLog({
+    title: '套用經典紅金主題',
+    description: '已套用到右側預覽設定；如要手機正式前台同步，請再同步到資料庫。',
+    type: 'warning'
+  })
 }
 
 const applyVipBlackGoldVisualPreset = () => {
@@ -1083,6 +1155,11 @@ const applyVipBlackGoldVisualPreset = () => {
   })
   saveState('已套用 VIP 黑金視覺預設。')
   showOperationSuccess('已套用 VIP 黑金視覺預設。')
+  addGameConfigOperationLog({
+    title: '套用 VIP 黑金主題',
+    description: '已套用到右側預覽設定；如要手機正式前台同步，請再同步到資料庫。',
+    type: 'warning'
+  })
 }
 
 const syncToFrontNow = async () => {
@@ -1092,6 +1169,11 @@ const syncToFrontNow = async () => {
   syncSystemShareButtonSettingsToPreview()
   saveState('已同步到右側預覽。')
   showOperationSuccess('已同步到右側預覽。')
+  addGameConfigOperationLog({
+    title: '同步到右側預覽',
+    description: '已更新本機預覽設定。若已載入正式 campaignId，接著會同步寫入資料庫。',
+    type: 'info'
+  })
 
   if (!normalizedDatabaseCampaignId.value) {
     setDatabasePreviewSyncMessage('尚未載入正式 campaignId；目前只同步本機預覽。若要同步手機前台，請先在資料庫模式讀取活動。')
@@ -1106,11 +1188,21 @@ const refreshPreview = () => {
   refreshRightPreviewFromSystemShareSettings()
   previewRefreshKey.value = Date.now()
   showOperationSuccess('已重新整理右側預覽。')
+  addGameConfigOperationLog({
+    title: '重新整理右側預覽',
+    description: `目前預覽尺寸：${currentPreviewDevice.value.label}` ,
+    type: 'info'
+  })
 }
 
 const openPreviewInNewTab = () => {
   const url = `${window.location.origin}/games/golden-egg?preview=${Date.now()}`
   window.open(url, '_blank', 'noopener,noreferrer')
+  addGameConfigOperationLog({
+    title: '開新分頁查看前台',
+    description: '已開啟目前前台預覽網址。',
+    type: 'info'
+  })
 }
 
 const resetAllSettings = () => {
@@ -4393,6 +4485,9 @@ const saveDatabaseGameConfig = async () => {
     return
   }
 
+  const changedCountBeforeSave = databaseGameConfigChangedCount.value
+  const changedLabelsBeforeSave = databaseGameConfigChangedPreviewItems.value.map((item) => item.label).join('、')
+
   isSavingDatabaseGameConfig.value = true
   showOperationInfo(
     databaseGameConfigChangedCount.value
@@ -4413,18 +4508,41 @@ const saveDatabaseGameConfig = async () => {
         : '已確認資料庫前台設定，沒有偵測到新的差異。'
     )
     setDatabasePreviewSyncMessage(`資料庫前台設定已更新：背景 ${databaseGameConfigForm.themeBgFrom} / ${databaseGameConfigForm.themeBgMiddle} / ${databaseGameConfigForm.themeBgTo}，金蛋 ${databaseGameConfigForm.eggColorTop} / ${databaseGameConfigForm.eggColorMiddle} / ${databaseGameConfigForm.eggColorBottom}`)
+    addGameConfigOperationLog({
+      title: '儲存前台設定',
+      description: changedCountBeforeSave
+        ? `已同步 ${changedCountBeforeSave} 個欄位到 PostgreSQL GameConfig.settings。${changedLabelsBeforeSave ? `主要欄位：${changedLabelsBeforeSave}` : ''}`
+        : '已重新確認資料庫前台設定，沒有偵測到新的差異。',
+      type: 'success',
+      changedCount: changedCountBeforeSave
+    })
     await loadDatabaseGoldenEggCampaign()
   } catch (error) {
     console.error('儲存資料庫 GameConfig 失敗：', error)
     showOperationError(error.message || '儲存資料庫前台設定失敗。')
+    addGameConfigOperationLog({
+      title: '儲存前台設定失敗',
+      description: error.message || '儲存資料庫前台設定失敗。',
+      type: 'error',
+      changedCount: changedCountBeforeSave
+    })
   } finally {
     isSavingDatabaseGameConfig.value = false
   }
 }
 
 const resetDatabaseGameConfigForm = () => {
+  const changedCountBeforeReset = databaseGameConfigChangedCount.value
   loadDatabaseGameConfigFormFromCampaign(databaseCampaign.value)
   showSavedMessage('已還原到目前已儲存的前台設定。')
+  addGameConfigOperationLog({
+    title: '還原到已儲存資料',
+    description: changedCountBeforeReset
+      ? `已還原表單，取消 ${changedCountBeforeReset} 個尚未儲存變更。`
+      : '表單原本就與資料庫同步，沒有需要還原的變更。',
+    type: changedCountBeforeReset ? 'warning' : 'info',
+    changedCount: changedCountBeforeReset
+  })
 }
 
 const reloadDatabaseGameConfigFromServer = async () => {
@@ -4439,9 +4557,19 @@ const reloadDatabaseGameConfigFromServer = async () => {
     await loadDatabaseGoldenEggCampaign()
     showOperationSuccess('已重新讀取資料庫前台設定。')
     showSavedMessage('已重新載入資料庫目前儲存的前台設定。')
+    addGameConfigOperationLog({
+      title: '重新讀取資料庫',
+      description: '已重新抓取伺服器目前儲存的 GameConfig.settings。',
+      type: 'success'
+    })
   } catch (error) {
     console.error('重新讀取資料庫 GameConfig 失敗：', error)
     showOperationError(error.message || '重新讀取資料庫前台設定失敗。')
+    addGameConfigOperationLog({
+      title: '重新讀取資料庫失敗',
+      description: error.message || '重新讀取資料庫前台設定失敗。',
+      type: 'error'
+    })
   }
 }
 
@@ -4765,6 +4893,7 @@ onMounted(() => {
   loadSerialCodes()
   loadSerialRedeemLogs()
   loadEggPlayLogs()
+  loadGameConfigOperationLogs()
   startRedeemLogAutoRefresh()
   startEggPlayLogAutoRefresh()
 })
@@ -5770,6 +5899,58 @@ watch(
                 「還原到已儲存資料」會回到目前已載入的資料庫版本；按下「儲存前台設定」後，目前表單內容會成為新的已儲存版本。
                 若要重新抓伺服器上的最新資料，請按「重新讀取資料庫」。
               </p>
+            </div>
+
+            <div class="mt-4 rounded-3xl border border-indigo-100 bg-white/95 p-4 shadow-sm">
+              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[0.22em] text-indigo-500">Recent Sync Log</p>
+                  <h4 class="mt-1 text-sm font-black text-slate-950">最近操作紀錄</h4>
+                  <p class="mt-1 text-xs font-bold leading-6 text-slate-500">
+                    紀錄前台設定的儲存、還原、重新讀取、套用主題與預覽操作，方便確認剛剛做過什麼。
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  class="w-fit rounded-2xl bg-slate-100 px-4 py-2 text-xs font-black text-slate-600 ring-1 ring-slate-200 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  :disabled="!gameConfigOperationLogs.length"
+                  @click="clearGameConfigOperationLogs"
+                >
+                  清除紀錄
+                </button>
+              </div>
+
+              <div v-if="gameConfigOperationLogs.length" class="mt-3 space-y-2">
+                <div
+                  v-for="log in gameConfigOperationLogs.slice(0, 6)"
+                  :key="log.id"
+                  class="rounded-2xl border border-slate-100 bg-slate-50/80 p-3"
+                >
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0">
+                      <p class="text-sm font-black text-slate-900">{{ log.title }}</p>
+                      <p class="mt-1 break-words text-xs font-bold leading-5 text-slate-500">{{ log.description || '已完成操作。' }}</p>
+                    </div>
+
+                    <div class="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                      <span class="rounded-full px-3 py-1 text-xs font-black ring-1" :class="gameConfigOperationLogTypeClass(log.type)">
+                        {{ log.type === 'success' ? '成功' : log.type === 'warning' ? '待確認' : log.type === 'error' ? '錯誤' : '資訊' }}
+                      </span>
+                      <span v-if="log.changedCount" class="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700 ring-1 ring-amber-100">
+                        {{ log.changedCount }} 個變更
+                      </span>
+                      <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500 ring-1 ring-slate-200">
+                        {{ log.createdAtText }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs font-bold text-slate-500">
+                目前還沒有前台設定操作紀錄。之後按儲存、還原、重新讀取、套用主題或重新整理預覽，會顯示在這裡。
+              </div>
             </div>
 
             <div class="mt-4 grid grid-cols-1 gap-4">
