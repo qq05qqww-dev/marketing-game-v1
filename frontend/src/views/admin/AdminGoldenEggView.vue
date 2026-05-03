@@ -3781,6 +3781,69 @@ const buildDatabaseCampaignPayload = () => {
   }
 }
 
+const databaseCampaignFormStatusMeta = computed(() => {
+  return getDatabaseCampaignStatusMeta({
+    status: databaseCampaignForm.status,
+    startAt: databaseCampaignForm.startAt,
+    endAt: databaseCampaignForm.endAt
+  })
+})
+
+const databaseCampaignFormTimeSummary = computed(() => {
+  return {
+    startText: formatDatabaseOverviewDate(databaseCampaignForm.startAt),
+    endText: formatDatabaseOverviewDate(databaseCampaignForm.endAt),
+    hasStart: Boolean(databaseCampaignForm.startAt),
+    hasEnd: Boolean(databaseCampaignForm.endAt)
+  }
+})
+
+const databaseCampaignFormHasUnsavedChanges = computed(() => {
+  const campaignData = databaseCampaign.value
+
+  if (!campaignData) return false
+
+  return (
+    String(databaseCampaignForm.title || '') !== String(campaignData.title || '') ||
+    String(databaseCampaignForm.slug || '') !== String(campaignData.slug || '') ||
+    String(databaseCampaignForm.description || '') !== String(campaignData.description || '') ||
+    String(databaseCampaignForm.gameType || 'GOLDEN_EGG') !== String(campaignData.gameType || 'GOLDEN_EGG') ||
+    String(databaseCampaignForm.status || 'ACTIVE') !== String(campaignData.status || 'ACTIVE') ||
+    String(databaseCampaignForm.startAt || '') !== String(toDatetimeLocalValue(campaignData.startAt) || '') ||
+    String(databaseCampaignForm.endAt || '') !== String(toDatetimeLocalValue(campaignData.endAt) || '') ||
+    Number(databaseCampaignForm.dailyLimit || 0) !== Number(campaignData.dailyLimit || 0) ||
+    Number(databaseCampaignForm.totalLimit || 0) !== Number(campaignData.totalLimit || 0) ||
+    Boolean(databaseCampaignForm.requireLogin) !== Boolean(campaignData.requireLogin)
+  )
+})
+
+const databaseCampaignFormSummaryItems = computed(() => [
+  {
+    label: '活動狀態',
+    value: databaseCampaignFormStatusMeta.value.label,
+    description: databaseCampaignFormStatusMeta.value.description,
+    tone: databaseCampaignFormStatusMeta.value.tone
+  },
+  {
+    label: '活動類型',
+    value: databaseCampaignForm.gameType || 'GOLDEN_EGG',
+    description: '目前設定的遊戲模組',
+    tone: 'bg-indigo-50 text-indigo-700 ring-indigo-100'
+  },
+  {
+    label: '每日限制',
+    value: Number(databaseCampaignForm.dailyLimit || 0) ? `${Number(databaseCampaignForm.dailyLimit || 0)} 次` : '不限制',
+    description: '同一玩家每日可玩次數',
+    tone: 'bg-sky-50 text-sky-700 ring-sky-100'
+  },
+  {
+    label: '總限制',
+    value: Number(databaseCampaignForm.totalLimit || 0) ? `${Number(databaseCampaignForm.totalLimit || 0)} 次` : '不限制',
+    description: '整個活動總參加上限',
+    tone: 'bg-violet-50 text-violet-700 ring-violet-100'
+  }
+])
+
 const saveDatabaseCampaign = async () => {
   if (!normalizedDatabaseCampaignId.value) {
     showOperationError('請先輸入並讀取正式活動 campaignId。')
@@ -4896,126 +4959,227 @@ watch(
 
           <div
             v-if="databaseCampaign && databaseSectionOpen.campaign"
-            class="rounded-3xl border border-orange-100 bg-orange-50 p-4"
+            class="overflow-hidden rounded-[2rem] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-50 shadow-sm"
           >
-            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h3 class="text-base font-black text-orange-900">
-                  資料庫活動基本資料 Campaign
-                </h3>
-                <p class="mt-1 text-xs font-bold text-orange-700/80">
-                  儲存後會直接更新 Campaign 主表，前台正式網址與 API 都會讀到新資料。
-                </p>
-              </div>
+            <div class="border-b border-orange-100/80 bg-white/75 p-4 sm:p-5">
+              <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                <div class="min-w-0">
+                  <p class="text-xs font-black uppercase tracking-[0.28em] text-orange-500">
+                    Campaign Settings
+                  </p>
+                  <h3 class="mt-2 text-lg font-black text-slate-950">
+                    活動資料設定
+                  </h3>
+                  <p class="mt-1 max-w-2xl text-xs font-bold leading-relaxed text-orange-800/80">
+                    管理正式 Campaign 主表資料，儲存後前台正式網址與 API 會讀取最新活動名稱、狀態與時間。
+                  </p>
+                </div>
 
-              <div class="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-orange-700 ring-1 ring-orange-100"
-                  @click="resetDatabaseCampaignForm"
-                >
-                  還原表單
-                </button>
-
-                <button
-                  type="button"
-                  class="rounded-2xl bg-orange-600 px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
-                  :disabled="isSavingDatabaseCampaign"
-                  @click="saveDatabaseCampaign"
-                >
-                  {{ isSavingDatabaseCampaign ? '儲存中...' : '儲存活動資料' }}
-                </button>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span
+                    :class="['inline-flex rounded-2xl px-4 py-2 text-xs font-black ring-1', databaseCampaignFormStatusMeta.tone]"
+                  >
+                    {{ databaseCampaignFormStatusMeta.label }}
+                  </span>
+                  <span
+                    v-if="databaseCampaignFormHasUnsavedChanges"
+                    class="inline-flex rounded-2xl bg-amber-100 px-4 py-2 text-xs font-black text-amber-700 ring-1 ring-amber-200"
+                  >
+                    尚未儲存變更
+                  </span>
+                  <span
+                    v-else
+                    class="inline-flex rounded-2xl bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                  >
+                    已同步目前資料
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label class="admin-field">
-                <span>活動名稱 title</span>
-                <input
-                  v-model="databaseCampaignForm.title"
-                  type="text"
-                  placeholder="例如：正式砸金蛋測試活動"
-                />
-              </label>
+            <div class="space-y-4 p-4 sm:p-5">
+              <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div
+                  v-for="item in databaseCampaignFormSummaryItems"
+                  :key="item.label"
+                  class="rounded-3xl bg-white/85 p-4 shadow-sm ring-1 ring-orange-100"
+                >
+                  <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
+                  <p class="mt-2 text-xl font-black text-slate-950">{{ item.value }}</p>
+                  <p class="mt-1 text-xs font-bold text-slate-500">{{ item.description }}</p>
+                </div>
+              </div>
 
-              <label class="admin-field">
-                <span>活動網址代碼 slug</span>
-                <input
-                  v-model="databaseCampaignForm.slug"
-                  type="text"
-                  placeholder="例如：golden-egg-demo-v22"
-                />
-              </label>
+              <div class="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-orange-100">
+                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p class="text-xs font-black text-slate-400">活動期間</p>
+                    <p class="mt-1 text-xs font-bold text-slate-500">
+                      使用 24 小時制顯示，避免後台窄版時間被擠成直排。
+                    </p>
+                  </div>
+                </div>
 
-              <label class="admin-field">
-                <span>活動類型 gameType</span>
-                <select v-model="databaseCampaignForm.gameType">
-                  <option value="GOLDEN_EGG">GOLDEN_EGG 砸金蛋</option>
-                  <option value="WHEEL">WHEEL 輪盤</option>
-                  <option value="GRID">GRID 九宮格</option>
-                  <option value="FLIP">FLIP 翻牌</option>
-                  <option value="SCRATCH">SCRATCH 刮刮卡</option>
-                </select>
-              </label>
+                <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div class="rounded-2xl bg-orange-50 px-4 py-3 ring-1 ring-orange-100">
+                    <p class="text-xs font-black text-orange-600">開始</p>
+                    <p class="mt-1 text-base font-black text-slate-950">{{ databaseCampaignFormTimeSummary.startText }}</p>
+                  </div>
+                  <div class="rounded-2xl bg-amber-50 px-4 py-3 ring-1 ring-amber-100">
+                    <p class="text-xs font-black text-amber-700">結束</p>
+                    <p class="mt-1 text-base font-black text-slate-950">{{ databaseCampaignFormTimeSummary.endText }}</p>
+                  </div>
+                </div>
+              </div>
 
-              <label class="admin-field">
-                <span>活動狀態 status</span>
-                <select v-model="databaseCampaignForm.status">
-                  <option value="ACTIVE">ACTIVE 啟用</option>
-                  <option value="DRAFT">DRAFT 草稿</option>
-                  <option value="INACTIVE">INACTIVE 停用</option>
-                  <option value="ENDED">ENDED 已結束</option>
-                </select>
-              </label>
+              <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                <div class="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-orange-100">
+                  <div class="mb-4 flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-900">基本資料</p>
+                      <p class="mt-1 text-xs font-bold text-slate-500">名稱、網址代碼、類型與狀態。</p>
+                    </div>
+                  </div>
 
-              <label class="admin-field">
-                <span>開始時間 startAt</span>
-                <input
-                  v-model="databaseCampaignForm.startAt"
-                  type="datetime-local"
-                />
-              </label>
+                  <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label class="admin-field md:col-span-2">
+                      <span>活動名稱 title</span>
+                      <input
+                        v-model="databaseCampaignForm.title"
+                        type="text"
+                        placeholder="例如：正式砸金蛋測試活動"
+                      />
+                    </label>
 
-              <label class="admin-field">
-                <span>結束時間 endAt</span>
-                <input
-                  v-model="databaseCampaignForm.endAt"
-                  type="datetime-local"
-                />
-              </label>
+                    <label class="admin-field">
+                      <span>活動網址代碼 slug</span>
+                      <input
+                        v-model="databaseCampaignForm.slug"
+                        type="text"
+                        placeholder="例如：golden-egg-demo-v22"
+                      />
+                    </label>
 
-              <label class="admin-field">
-                <span>每日限制 dailyLimit</span>
-                <input
-                  v-model.number="databaseCampaignForm.dailyLimit"
-                  type="number"
-                  min="0"
-                />
-              </label>
+                    <label class="admin-field">
+                      <span>活動類型 gameType</span>
+                      <select v-model="databaseCampaignForm.gameType">
+                        <option value="GOLDEN_EGG">GOLDEN_EGG 砸金蛋</option>
+                        <option value="WHEEL">WHEEL 輪盤</option>
+                        <option value="GRID">GRID 九宮格</option>
+                        <option value="FLIP">FLIP 翻牌</option>
+                        <option value="SCRATCH">SCRATCH 刮刮卡</option>
+                      </select>
+                    </label>
 
-              <label class="admin-field">
-                <span>總限制 totalLimit</span>
-                <input
-                  v-model.number="databaseCampaignForm.totalLimit"
-                  type="number"
-                  min="0"
-                />
-              </label>
+                    <label class="admin-field md:col-span-2">
+                      <span>活動狀態 status</span>
+                      <select v-model="databaseCampaignForm.status">
+                        <option value="ACTIVE">ACTIVE 啟用</option>
+                        <option value="DRAFT">DRAFT 草稿</option>
+                        <option value="INACTIVE">INACTIVE 停用</option>
+                        <option value="ENDED">ENDED 已結束</option>
+                      </select>
+                    </label>
+                  </div>
+                </div>
 
-              <label class="admin-field md:col-span-2">
-                <span>活動描述 description</span>
-                <textarea
-                  v-model="databaseCampaignForm.description"
-                  rows="3"
-                  placeholder="輸入活動說明"
-                />
-              </label>
+                <div class="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-orange-100">
+                  <div class="mb-4">
+                    <p class="text-sm font-black text-slate-900">時間與限制</p>
+                    <p class="mt-1 text-xs font-bold text-slate-500">控制活動開放時間、參加次數與登入要求。</p>
+                  </div>
+
+                  <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-1">
+                    <label class="admin-field">
+                      <span>開始時間 startAt</span>
+                      <input
+                        v-model="databaseCampaignForm.startAt"
+                        type="datetime-local"
+                      />
+                    </label>
+
+                    <label class="admin-field">
+                      <span>結束時間 endAt</span>
+                      <input
+                        v-model="databaseCampaignForm.endAt"
+                        type="datetime-local"
+                      />
+                    </label>
+
+                    <label class="admin-field">
+                      <span>每日限制 dailyLimit</span>
+                      <input
+                        v-model.number="databaseCampaignForm.dailyLimit"
+                        type="number"
+                        min="0"
+                      />
+                    </label>
+
+                    <label class="admin-field">
+                      <span>總限制 totalLimit</span>
+                      <input
+                        v-model.number="databaseCampaignForm.totalLimit"
+                        type="number"
+                        min="0"
+                      />
+                    </label>
+                  </div>
+
+                  <label class="admin-toggle mt-3">
+                    <input v-model="databaseCampaignForm.requireLogin" type="checkbox" />
+                    <span>需要登入才能參加 requireLogin</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-orange-100">
+                <div class="mb-4">
+                  <p class="text-sm font-black text-slate-900">活動描述</p>
+                  <p class="mt-1 text-xs font-bold text-slate-500">可放活動規則、獎品說明或前台活動簡介。</p>
+                </div>
+
+                <label class="admin-field">
+                  <span>活動描述 description</span>
+                  <textarea
+                    v-model="databaseCampaignForm.description"
+                    rows="5"
+                    placeholder="輸入活動說明、規則或獎品資訊"
+                  />
+                </label>
+              </div>
+
+              <div class="sticky bottom-3 z-10 rounded-3xl border border-orange-100 bg-white/95 p-3 shadow-xl backdrop-blur">
+                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p class="text-sm font-black text-slate-900">
+                      {{ databaseCampaignFormHasUnsavedChanges ? '目前有尚未儲存的活動資料' : '目前表單已同步資料庫活動資料' }}
+                    </p>
+                    <p class="mt-1 text-xs font-bold text-slate-500">
+                      儲存後會重新讀取資料庫，並保留第 402 批操作提示效果。
+                    </p>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-slate-100 px-4 py-3 text-xs font-black text-slate-700 ring-1 ring-slate-200"
+                      @click="resetDatabaseCampaignForm"
+                    >
+                      還原表單
+                    </button>
+
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-orange-600 px-4 py-3 text-xs font-black text-white shadow-lg shadow-orange-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      :disabled="isSavingDatabaseCampaign"
+                      @click="saveDatabaseCampaign"
+                    >
+                      {{ isSavingDatabaseCampaign ? '儲存中...' : '儲存活動資料' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-
-            <label class="admin-toggle mt-4">
-              <input v-model="databaseCampaignForm.requireLogin" type="checkbox" />
-              <span>需要登入才能參加 requireLogin</span>
-            </label>
           </div>
 
           <div
@@ -10500,3 +10664,5 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
   transform: translate(-50%, -12px);
 }
 </style>
+
+// 第 409 批：活動資料設定精緻版。
