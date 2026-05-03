@@ -3326,6 +3326,83 @@ const openDatabaseSerialExport = () => {
   showOperationSuccess(`已匯出 ${records.length} 組資料庫序號 CSV。`)
 }
 
+
+const copyTextToClipboardWithFallback = async (text, fallbackTitle = '請手動複製內容：') => {
+  const content = String(text || '')
+
+  if (!content.trim()) {
+    showOperationError('目前沒有可複製的內容。')
+    return false
+  }
+
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(content)
+      return true
+    }
+  } catch (error) {
+    console.warn('剪貼簿複製失敗，改用手動複製：', error)
+  }
+
+  window.prompt(fallbackTitle, content)
+  return true
+}
+
+const getDatabaseSerialCodeText = (items = []) => {
+  return items
+    .map((item) => String(item?.code || '').trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
+const availableDatabaseSerialCodesForCopy = computed(() => {
+  return databaseSerialCodes.value.filter((item) => {
+    const statusInfo = getDatabaseSerialStatusInfo(item)
+    return statusInfo.key === 'UNUSED'
+  })
+})
+
+const filteredDatabaseSerialCodesForCopy = computed(() => {
+  return filteredDatabaseSerialCodes.value.filter((item) => String(item?.code || '').trim())
+})
+
+const selectedDatabaseSerialCodesForCopy = computed(() => {
+  const selectedIds = selectedDatabaseSerialIdSet.value
+  return databaseSerialCodes.value.filter((item) => selectedIds.has(Number(item?.id)) && String(item?.code || '').trim())
+})
+
+const copyDatabaseSerialItems = async (items = [], successPrefix = '已複製') => {
+  const codeText = getDatabaseSerialCodeText(items)
+  const count = codeText ? codeText.split('\n').filter(Boolean).length : 0
+
+  if (!count) {
+    showOperationError('目前沒有可複製序號。')
+    return
+  }
+
+  const copied = await copyTextToClipboardWithFallback(codeText, '請手動複製資料庫序號：')
+
+  if (copied) {
+    showOperationSuccess(`${successPrefix} ${count} 組序號。`)
+  }
+}
+
+const copyDatabaseSerialCode = async (item) => {
+  await copyDatabaseSerialItems([item], '已複製')
+}
+
+const copyAllAvailableDatabaseSerialCodes = async () => {
+  await copyDatabaseSerialItems(availableDatabaseSerialCodesForCopy.value, '已複製全部可用')
+}
+
+const copyFilteredDatabaseSerialCodes = async () => {
+  await copyDatabaseSerialItems(filteredDatabaseSerialCodesForCopy.value, '已複製目前篩選結果')
+}
+
+const copySelectedDatabaseSerialCodes = async () => {
+  await copyDatabaseSerialItems(selectedDatabaseSerialCodesForCopy.value, '已複製已選取')
+}
+
 const toDatetimeLocalValue = (value) => {
   if (!value) return ''
 
@@ -5707,6 +5784,33 @@ watch(
 
                   <button
                     type="button"
+                    class="rounded-2xl bg-emerald-600 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!availableDatabaseSerialCodesForCopy.length"
+                    @click="copyAllAvailableDatabaseSerialCodes"
+                  >
+                    複製全部可用 {{ availableDatabaseSerialCodesForCopy.length }} 組
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-violet-600 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!filteredDatabaseSerialCodesForCopy.length"
+                    @click="copyFilteredDatabaseSerialCodes"
+                  >
+                    複製目前篩選 {{ filteredDatabaseSerialCodesForCopy.length }} 組
+                  </button>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                    :disabled="!selectedDatabaseSerialCodesForCopy.length"
+                    @click="copySelectedDatabaseSerialCodes"
+                  >
+                    複製已選取 {{ selectedDatabaseSerialCodesForCopy.length }} 組
+                  </button>
+
+                  <button
+                    type="button"
                     class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
                     :disabled="!visibleDatabaseSerialCodes.length"
                     @click="isAllVisibleDatabaseSerialSelected ? clearSelectedDatabaseSerials() : selectAllVisibleDatabaseSerials()"
@@ -5738,7 +5842,7 @@ watch(
                 </div>
 
                 <p class="mt-2 text-xs font-bold text-cyan-700">
-                  建議只批次刪除 TEST01 / DEMO / 測試序號；正式 LIVE01 序號請不要任意刪除。
+                  可先用篩選找出指定批次，再複製目前篩選結果貼到 LINE、Excel 或客服訊息；正式 LIVE01 序號請不要任意刪除。
                 </p>
               </div>
 
@@ -5792,6 +5896,14 @@ watch(
                     </div>
 
                     <div class="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                        @click="copyDatabaseSerialCode(item)"
+                      >
+                        複製序號
+                      </button>
+
                       <button
                         type="button"
                         class="rounded-xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
