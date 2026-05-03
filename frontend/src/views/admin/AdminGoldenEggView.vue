@@ -4686,7 +4686,7 @@ watch(
           </div>
 
           <div class="rounded-3xl border border-slate-200 bg-white p-4">
-            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h3 class="text-base font-black text-slate-900">
                   資料庫模式快速導航
@@ -4998,20 +4998,20 @@ watch(
             </div>
 
             <div class="space-y-4 p-4 sm:p-5">
-              <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div class="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3">
                 <div
                   v-for="item in databaseCampaignFormSummaryItems"
                   :key="item.label"
-                  class="rounded-3xl bg-white/85 p-4 shadow-sm ring-1 ring-orange-100"
+                  class="min-w-0 rounded-3xl bg-white/85 p-4 shadow-sm ring-1 ring-orange-100"
                 >
                   <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
-                  <p class="mt-2 text-xl font-black text-slate-950">{{ item.value }}</p>
+                  <p class="mt-2 break-words text-lg font-black leading-tight text-slate-950 sm:text-xl">{{ item.value }}</p>
                   <p class="mt-1 text-xs font-bold text-slate-500">{{ item.description }}</p>
                 </div>
               </div>
 
               <div class="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-orange-100">
-                <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p class="text-xs font-black text-slate-400">活動期間</p>
                     <p class="mt-1 text-xs font-bold text-slate-500">
@@ -5020,7 +5020,7 @@ watch(
                   </div>
                 </div>
 
-                <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div class="mt-3 grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3">
                   <div class="rounded-2xl bg-orange-50 px-4 py-3 ring-1 ring-orange-100">
                     <p class="text-xs font-black text-orange-600">開始</p>
                     <p class="mt-1 text-base font-black text-slate-950">{{ databaseCampaignFormTimeSummary.startText }}</p>
@@ -5032,7 +5032,7 @@ watch(
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+              <div class="grid grid-cols-1 gap-4 2xl:grid-cols-[1.1fr_0.9fr]">
                 <div class="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-orange-100">
                   <div class="mb-4 flex items-center justify-between gap-3">
                     <div>
@@ -5041,7 +5041,7 @@ watch(
                     </div>
                   </div>
 
-                  <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3">
                     <label class="admin-field md:col-span-2">
                       <span>活動名稱 title</span>
                       <input
@@ -5089,7 +5089,7 @@ watch(
                     <p class="mt-1 text-xs font-bold text-slate-500">控制活動開放時間、參加次數與登入要求。</p>
                   </div>
 
-                  <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-1">
+                  <div class="grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3">
                     <label class="admin-field">
                       <span>開始時間 startAt</span>
                       <input
@@ -5149,7 +5149,7 @@ watch(
               </div>
 
               <div class="sticky bottom-3 z-10 rounded-3xl border border-orange-100 bg-white/95 p-3 shadow-xl backdrop-blur">
-                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <p class="text-sm font-black text-slate-900">
                       {{ databaseCampaignFormHasUnsavedChanges ? '目前有尚未儲存的活動資料' : '目前表單已同步資料庫活動資料' }}
@@ -5190,7 +5190,7 @@ watch(
               活動資料
             </h3>
 
-            <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div class="mt-3 grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3">
               <div class="rounded-2xl bg-slate-50 p-3">
                 <p class="text-xs font-bold text-slate-400">活動名稱</p>
                 <p class="mt-1 text-sm font-black text-slate-900">{{ databaseCampaign.title }}</p>
@@ -6241,7 +6241,7 @@ watch(
                 </div>
 
                 <div class="mt-4 rounded-3xl border border-white/70 bg-white/70 p-3">
-                  <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <p class="text-xs font-black text-slate-700">快速篩選</p>
                       <p class="mt-1 text-[11px] font-bold text-slate-400">目前選到的條件會高亮顯示</p>
@@ -6340,7 +6340,7 @@ watch(
                 </div>
 
                 <div class="mt-4 rounded-3xl border border-violet-100 bg-white/75 p-3">
-                  <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                  <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                     <p class="text-xs font-black text-slate-700">目前條件</p>
                     <div class="flex flex-wrap gap-2">
                       <span
@@ -6744,7 +6744,7 @@ watch(
               </div>
 
               <div class="mt-3 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-violet-100">
-                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
                     <h4 class="text-sm font-black text-slate-900">
                       匯出目前篩選結果
@@ -8105,7 +8105,7 @@ watch(
           </div>
 
           <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-4">
-            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h3 class="text-base font-black text-indigo-900">
                   紀錄更新與匯出
@@ -9297,7 +9297,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                   </button>
                 </div>
 
-                <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div class="mt-3 grid grid-cols-[repeat(auto-fit,minmax(190px,1fr))] gap-3">
                   <label class="admin-field">
                     <span>批次有效期限模式</span>
                     <select v-model="bulkExpireMode">
@@ -9719,7 +9719,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
           </div>
 
           <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-4">
-            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h3 class="text-base font-black text-indigo-900">
                   紀錄更新與匯出
@@ -9843,7 +9843,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
           class="space-y-4"
         >
           <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-4">
-            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <h3 class="text-base font-black text-indigo-900">
                   前台序號兌換紀錄
@@ -10665,4 +10665,4 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 }
 </style>
 
-// 第 409 批：活動資料設定精緻版。
+// 第 409 批修正版：活動資料設定自動換行排版修正版。
