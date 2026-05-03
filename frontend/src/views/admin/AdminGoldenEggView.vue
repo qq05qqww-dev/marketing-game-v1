@@ -3652,14 +3652,122 @@ const cancelDatabaseRewardRecord = async (item) => {
   }
 }
 
-const openDatabasePlayRecordExport = () => {
-  if (!normalizedDatabaseCampaignId.value) {
-    showOperationError('請先輸入正式活動 campaignId。')
+const formatExportDatePart = (value) => String(value).padStart(2, '0')
+
+const getExportDateStamp = () => {
+  const now = new Date()
+
+  return [
+    now.getFullYear(),
+    formatExportDatePart(now.getMonth() + 1),
+    formatExportDatePart(now.getDate())
+  ].join('-')
+}
+
+const escapeCsvValue = (value) => `"${String(value ?? '').replaceAll('\"', '\"\"')}"`
+
+const downloadCsvFile = (filename, header = [], rows = []) => {
+  const csv = [
+    header.map(escapeCsvValue).join(','),
+    ...rows.map((row) => row.map(escapeCsvValue).join(','))
+  ].join('\n')
+
+  const blob = new Blob([`\ufeff${csv}`], {
+    type: 'text/csv;charset=utf-8'
+  })
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = filename
+  link.click()
+
+  URL.revokeObjectURL(url)
+}
+
+const getDatabaseExportFilterText = () => {
+  const filters = getRecordSourceArray(databaseRecordFilterSummary)
+
+  return filters.length ? filters.join('；') : '未套用篩選'
+}
+
+const exportDatabasePlayRecordsCsv = () => {
+  const records = getRecordSourceArray(filteredDatabasePlayRecords)
+
+  if (!records.length) {
+    showOperationError('目前篩選結果沒有遊玩紀錄可以匯出。')
     return
   }
 
-  window.open(getAdminGoldenEggPlayRecordExportUrl(normalizedDatabaseCampaignId.value), '_blank')
+  const filterText = getDatabaseExportFilterText()
+  const rows = records.map((item) => {
+    const isWin = item.isWin || item.result === 'WIN' || Boolean(item.prize)
+
+    return [
+      item.id || '',
+      isWin ? '中獎' : '未中獎',
+      getDatabaseRecordPrizeTitle(item) || '未記錄獎項',
+      item.playerName || '',
+      item.playerPhone || '',
+      item.playerEmail || '',
+      item.serialCode?.code || item.serialCodeCode || '',
+      item.gameType || '',
+      item.result || '',
+      formatDatabaseDateTime(item.playedAt || item.createdAt),
+      filterText
+    ]
+  })
+
+  downloadCsvFile(
+    `golden-egg-play-records-${getExportDateStamp()}.csv`,
+    ['紀錄ID', '結果', '獎項', '玩家名稱', '手機', 'Email', '序號', '遊戲類型', '原始結果', '時間', '匯出篩選'],
+    rows
+  )
+
+  showOperationSuccess(`已依目前搜尋 / 篩選結果匯出 ${records.length} 筆遊玩紀錄 CSV。`)
 }
+
+const exportDatabaseRewardRecordsCsv = () => {
+  const records = getRecordSourceArray(filteredDatabaseRewardRecords)
+
+  if (!records.length) {
+    showOperationError('目前篩選結果沒有中獎 / 發獎紀錄可以匯出。')
+    return
+  }
+
+  const filterText = getDatabaseExportFilterText()
+  const rows = records.map((item) => [
+    item.id || '',
+    getDatabaseRewardStatus(item),
+    getDatabaseRecordPrizeTitle(item) || '未記錄獎項',
+    item.winnerName || '',
+    item.winnerPhone || '',
+    item.winnerEmail || '',
+    item.claimCode || '',
+    item.serialCode?.code || item.serialCodeCode || '',
+    formatDatabaseDateTime(item.createdAt),
+    formatDatabaseDateTime(item.claimedAt || item.issuedAt),
+    item.claimedBy || item.issuedBy || '',
+    item.note || '',
+    filterText
+  ])
+
+  downloadCsvFile(
+    `golden-egg-reward-records-${getExportDateStamp()}.csv`,
+    ['紀錄ID', '發獎狀態', '獎項', '得獎者名稱', '手機', 'Email', '核銷碼', '序號', '建立時間', '發獎 / 核銷時間', '處理人員', '備註', '匯出篩選'],
+    rows
+  )
+
+  showOperationSuccess(`已依目前搜尋 / 篩選結果匯出 ${records.length} 筆中獎 / 發獎紀錄 CSV。`)
+}
+
+const exportDatabaseAllFilteredRecordsCsv = () => {
+  exportDatabasePlayRecordsCsv()
+  exportDatabaseRewardRecordsCsv()
+}
+
+const openDatabasePlayRecordExport = exportDatabasePlayRecordsCsv
 
 const formatDatabaseDateTime = (value) => {
   if (!value) return '未記錄'
@@ -5709,10 +5817,18 @@ watch(
 
                 <button
                   type="button"
-                  class="rounded-2xl bg-violet-600 px-3 py-2 text-xs font-black text-white"
-                  @click="openDatabasePlayRecordExport"
+                  class="rounded-2xl bg-violet-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
+                  @click="exportDatabasePlayRecordsCsv"
                 >
                   匯出遊玩 CSV
+                </button>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-fuchsia-600 px-3 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5"
+                  @click="exportDatabaseRewardRecordsCsv"
+                >
+                  匯出中獎 CSV
                 </button>
               </div>
             </div>
@@ -5827,6 +5943,39 @@ watch(
                   </span>
                 </div>
               </div>
+
+              <div class="mt-3 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-violet-100">
+                <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h4 class="text-sm font-black text-slate-900">
+                      匯出目前篩選結果
+                    </h4>
+                    <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+                      匯出會依照上方搜尋 / 篩選條件產生 CSV，檔名會自動加上今天日期。
+                    </p>
+                  </div>
+
+                  <div class="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-indigo-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+                      :disabled="!filteredDatabasePlayRecords.length"
+                      @click="exportDatabasePlayRecordsCsv"
+                    >
+                      匯出遊玩 {{ filteredDatabasePlayRecords.length }} 筆
+                    </button>
+
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-fuchsia-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-40"
+                      :disabled="!filteredDatabaseRewardRecords.length"
+                      @click="exportDatabaseRewardRecordsCsv"
+                    >
+                      匯出中獎 {{ filteredDatabaseRewardRecords.length }} 筆
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div class="mt-4 space-y-4">
@@ -5898,10 +6047,19 @@ watch(
                     遊玩紀錄
                   </h4>
 
-                  <div class="flex items-center gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
                       {{ filteredDatabasePlayRecords.length }} 筆
                     </span>
+
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      :disabled="!filteredDatabasePlayRecords.length"
+                      @click="exportDatabasePlayRecordsCsv"
+                    >
+                      匯出
+                    </button>
 
                     <select
                       v-model.number="databaseRecordDisplayLimit.plays"
@@ -6002,10 +6160,19 @@ watch(
                     中獎 / 發獎紀錄
                   </h4>
 
-                  <div class="flex items-center gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
                     <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
                       {{ filteredDatabaseRewardRecords.length }} 筆
                     </span>
+
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-fuchsia-50 px-3 py-2 text-xs font-black text-fuchsia-700 ring-1 ring-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      :disabled="!filteredDatabaseRewardRecords.length"
+                      @click="exportDatabaseRewardRecordsCsv"
+                    >
+                      匯出
+                    </button>
 
                     <select
                       v-model.number="databaseRecordDisplayLimit.rewards"
