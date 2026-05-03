@@ -19,6 +19,7 @@ import shareRewardRoutes from './routes/shareReward.routes.js'
 import adminRoutes from './routes/admin.routes.js'
 import healthRoutes from './routes/health.routes.js'
 import shareRoutes from './routes/share.routes.js'
+import tenantRoutes from './routes/tenant.routes.js'
 import {
   securityHeaders,
   globalApiRateLimit,
@@ -97,6 +98,7 @@ app.use('/api/draw-engine', publicDrawRateLimit, drawEngineRoutes)
 app.use('/api/draw', drawRoutes)
 app.use('/api/rewards', rewardRoutes)
 app.use('/api/share-rewards', shareRewardRoutes)
+app.use('/api/tenants', tenantRoutes)
 app.use('/api/admin', adminRoutes)
 
 app.use((req, res) => {

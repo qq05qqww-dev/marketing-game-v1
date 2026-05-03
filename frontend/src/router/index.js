@@ -37,6 +37,7 @@ import CampaignStyleEditorView from '../views/admin/CampaignStyleEditorView.vue'
 import AdminGamePreviewView from '../views/admin/AdminGamePreviewView.vue'
 import AdminSystemStatusView from '../views/admin/AdminSystemStatusView.vue'
 import AdminGoldenEggView from '../views/admin/AdminGoldenEggView.vue'
+import AdminTenantsView from '../views/admin/AdminTenantsView.vue'
 
 import { usePageProgress } from '../composables/usePageProgress'
 
@@ -45,6 +46,9 @@ const {
   finishPageProgress,
   failPageProgress
 } = usePageProgress()
+
+const PLATFORM_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
+const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
 
 const getStoredAuth = () => {
   const token = localStorage.getItem('token') || ''
@@ -73,44 +77,36 @@ const getStoredAuth = () => {
   }
 }
 
-const PLATFORM_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
-const MERCHANT_ADMIN_ROLES = ['MERCHANT_ADMIN']
-const MERCHANT_STAFF_ROLES = ['MERCHANT_STAFF']
-const ADMIN_ROLES = [
-  ...PLATFORM_ADMIN_ROLES,
-  ...MERCHANT_ADMIN_ROLES,
-  ...MERCHANT_STAFF_ROLES
-]
-const MERCHANT_OPERATE_ROLES = [
-  ...PLATFORM_ADMIN_ROLES,
-  ...MERCHANT_ADMIN_ROLES,
-  ...MERCHANT_STAFF_ROLES
-]
-const MERCHANT_REPORT_ROLES = [
-  ...PLATFORM_ADMIN_ROLES,
-  ...MERCHANT_ADMIN_ROLES
-]
-
-const getUserRole = (user) => String(user?.role || '').toUpperCase()
+const getUserRole = (user) => {
+  return String(user?.role || '').toUpperCase()
+}
 
 const isAdminUser = (user) => {
   return ADMIN_ROLES.includes(getUserRole(user))
 }
 
-const hasAllowedRole = (user, allowedRoles = []) => {
-  if (!allowedRoles.length) return true
-
-  return allowedRoles.includes(getUserRole(user))
+const isPlatformAdminUser = (user) => {
+  return PLATFORM_ADMIN_ROLES.includes(getUserRole(user))
 }
 
 const getDefaultAdminPath = (user) => {
+  return isPlatformAdminUser(user) ? '/admin/tenants' : '/admin/golden-egg'
+}
+
+const canAccessAdminRoute = (to, user) => {
+  if (!to.meta?.requiresAdmin) return true
+
   const role = getUserRole(user)
 
-  if (PLATFORM_ADMIN_ROLES.includes(role)) {
-    return '/admin/campaigns'
+  if (!ADMIN_ROLES.includes(role)) return false
+
+  const allowedRoles = to.meta?.allowedRoles
+
+  if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) {
+    return true
   }
 
-  return '/admin/golden-egg'
+  return allowedRoles.map((item) => String(item).toUpperCase()).includes(role)
 }
 
 const router = createRouter({
@@ -301,13 +297,26 @@ const router = createRouter({
       component: AdminLayout,
       meta: {
         requiresAuth: true,
-        requiresAdmin: true,
-        allowedRoles: ADMIN_ROLES
+        requiresAdmin: true
       },
       children: [
         {
           path: '',
-          redirect: '/admin/golden-egg'
+          redirect: () => {
+            const { user } = getStoredAuth()
+            return getDefaultAdminPath(user)
+          }
+        },
+        {
+          path: 'tenants',
+          name: 'admin-tenants',
+          component: AdminTenantsView,
+          meta: {
+            title: '商家管理',
+            requiresAuth: true,
+            requiresAdmin: true,
+            allowedRoles: PLATFORM_ADMIN_ROLES
+          }
         },
         {
           path: 'campaigns',
@@ -321,7 +330,7 @@ const router = createRouter({
           }
         },
         {
-          path: '/admin/game-settings',
+          path: 'game-settings',
           name: 'admin-game-settings',
           component: AdminGameSettingsView,
           meta: {
@@ -332,7 +341,7 @@ const router = createRouter({
           }
         },
         {
-          path: '/admin/game-settings/:gameId/prizes',
+          path: 'game-settings/:gameId/prizes',
           name: 'admin-game-prizes',
           component: AdminGamePrizesView,
           meta: {
@@ -343,7 +352,7 @@ const router = createRouter({
           }
         },
         {
-          path: '/admin/game-settings/:gameId/probability',
+          path: 'game-settings/:gameId/probability',
           name: 'admin-game-probability',
           component: AdminGameProbabilityView,
           meta: {
@@ -354,7 +363,7 @@ const router = createRouter({
           }
         },
         {
-          path: '/admin/game-settings/:gameId/edit',
+          path: 'game-settings/:gameId/edit',
           name: 'admin-game-edit',
           component: AdminGameEditView,
           meta: {
@@ -383,7 +392,7 @@ const router = createRouter({
             title: '報表中心',
             requiresAuth: true,
             requiresAdmin: true,
-            allowedRoles: MERCHANT_REPORT_ROLES
+            allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN']
           }
         },
         {
@@ -405,7 +414,7 @@ const router = createRouter({
             title: '發獎核銷',
             requiresAuth: true,
             requiresAdmin: true,
-            allowedRoles: MERCHANT_OPERATE_ROLES
+            allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
           }
         },
         {
@@ -438,7 +447,7 @@ const router = createRouter({
             title: '砸金蛋後台管理',
             requiresAuth: true,
             requiresAdmin: true,
-            allowedRoles: MERCHANT_OPERATE_ROLES
+            allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
           }
         },
         {
@@ -507,17 +516,9 @@ router.beforeEach((to, from) => {
     }
   }
 
-  if (to.meta.requiresAdmin && !hasAllowedRole(user, to.meta.allowedRoles || [])) {
-    const fallbackPath = getDefaultAdminPath(user)
-
-    if (to.path !== fallbackPath) {
-      return {
-        path: fallbackPath
-      }
-    }
-
+  if (to.meta.requiresAdmin && !canAccessAdminRoute(to, user)) {
     return {
-      path: '/'
+      path: getDefaultAdminPath(user)
     }
   }
 
