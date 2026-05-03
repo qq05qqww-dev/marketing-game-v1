@@ -10,6 +10,9 @@ datasource db {
 enum UserRole {
   USER
   ADMIN
+  SUPER_ADMIN
+  MERCHANT_ADMIN
+  MERCHANT_STAFF
 }
 
 enum MemberLevel {
@@ -73,6 +76,39 @@ enum ClaimStatus {
   CANCELLED
 }
 
+enum TenantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model Tenant {
+  id           Int          @id @default(autoincrement())
+  name         String
+  slug         String       @unique
+  contactName  String?
+  contactPhone String?
+  contactEmail String?
+  status       TenantStatus @default(ACTIVE)
+  note         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  campaigns       Campaign[]
+  gameConfigs     GameConfig[]
+  prizes          Prize[]
+  rewards         UserReward[]
+  serialCodes     SerialCode[]
+  playRecords     PlayRecord[]
+  rewardRecords   RewardRecord[]
+  shareRewardLogs ShareRewardLog[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
 model User {
   id          Int         @id @default(autoincrement())
   name        String
@@ -80,6 +116,12 @@ model User {
   password    String?
   role        UserRole    @default(USER)
   memberLevel MemberLevel @default(NORMAL)
+
+  // V2.3 多商家權限版：
+  // tenantId 為空代表平台帳號或一般未歸屬會員。
+  // 商家管理員 / 商家員工會綁定指定 Tenant。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
 
   authProvider AuthProvider @default(EMAIL)
   socialId     String?
@@ -92,6 +134,8 @@ model User {
   playRecords     PlayRecord[]
   shareRewardLogs ShareRewardLog[]
 
+  @@index([tenantId])
+  @@index([role])
   @@index([authProvider])
   @@index([socialId])
 }
@@ -104,12 +148,17 @@ model Campaign {
   gameType    GameType
   status      CampaignStatus @default(DRAFT)
 
+  // V2.3 多商家權限版：活動歸屬商家。
+  // 先設為可空，方便舊資料庫平滑 migrate。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
   startAt DateTime?
   endAt   DateTime?
 
-  dailyLimit    Int?    @default(3)
-  totalLimit    Int?    @default(10)
-  requireLogin  Boolean @default(true)
+  dailyLimit    Int?         @default(3)
+  totalLimit    Int?         @default(10)
+  requireLogin  Boolean      @default(true)
   allowedRole   UserRole?
   requiredLevel MemberLevel?
 
@@ -123,6 +172,7 @@ model Campaign {
   gameConfig    GameConfig?
   rewardRecords RewardRecord[]
 
+  @@index([tenantId])
   @@index([gameType])
   @@index([status])
   @@index([startAt])
@@ -131,8 +181,12 @@ model Campaign {
 
 model GameConfig {
   id         Int      @id @default(autoincrement())
-  campaignId Int     @unique
+  campaignId Int      @unique
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // V2.3 多商家權限版：讓前台設定也能依商家隔離查詢。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
 
   // 正式上線版遊戲設定集中保存：
   // 例如金蛋顏色、倒數設定、序號區塊樣式、分享設定、底部功能列設定等。
@@ -140,15 +194,21 @@ model GameConfig {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 model Prize {
   id         Int @id @default(autoincrement())
   campaignId Int
 
+  // V2.3 多商家權限版：獎項歸屬商家。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
   // 原本欄位保留
   title       String
-  remainStock Int   @default(0)
+  remainStock Int    @default(0)
   probability Float
 
   // 正式版新增欄位
@@ -174,29 +234,41 @@ model Prize {
   playRecords   PlayRecord[]
   rewardRecords RewardRecord[]
 
+  @@index([tenantId])
   @@index([campaignId])
   @@index([status])
   @@index([type])
 }
 
 model UserReward {
-  id         Int          @id @default(autoincrement())
+  id         Int @id @default(autoincrement())
   userId     Int
   campaignId Int
   prizeId    Int
-  code       String       @unique
-  status     RewardStatus @default(UNUSED)
-  createdAt  DateTime     @default(now())
+
+  // V2.3 多商家權限版：玩家獎勵歸屬商家。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  code      String       @unique
+  status    RewardStatus @default(UNUSED)
+  createdAt DateTime     @default(now())
 
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   prize    Prize    @relation(fields: [prizeId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }
 
 model SerialCode {
   id         Int      @id @default(autoincrement())
   campaignId Int
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  // V2.3 多商家權限版：序號歸屬商家。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
 
   code String @unique
 
@@ -225,6 +297,7 @@ model SerialCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([tenantId])
   @@index([campaignId])
   @@index([status])
   @@index([batchCode])
@@ -243,11 +316,15 @@ model PlayRecord {
   campaignId Int
   prizeId    Int?
 
+  // V2.3 多商家權限版：遊玩紀錄歸屬商家。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
   isWin    Boolean  @default(false)
   playedAt DateTime @default(now())
 
   // 正式版新增
-  gameType GameType @default(WHEEL)
+  gameType GameType   @default(WHEEL)
   status   PlayStatus @default(SUCCESS)
 
   serialCodeId Int?
@@ -272,6 +349,7 @@ model PlayRecord {
 
   rewardRecord RewardRecord?
 
+  @@index([tenantId])
   @@index([userId])
   @@index([campaignId])
   @@index([gameType])
@@ -285,6 +363,10 @@ model RewardRecord {
   campaignId Int
   campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
+  // V2.3 多商家權限版：中獎 / 發獎紀錄歸屬商家。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
   playRecordId Int        @unique
   playRecord   PlayRecord @relation(fields: [playRecordId], references: [id], onDelete: Cascade)
 
@@ -297,7 +379,7 @@ model RewardRecord {
   winnerPhone String?
   winnerEmail String?
 
-  claimCode String? @unique
+  claimCode String?   @unique
   claimedAt DateTime?
   claimedBy String?
 
@@ -306,6 +388,7 @@ model RewardRecord {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([tenantId])
   @@index([campaignId])
   @@index([prizeId])
   @@index([status])
@@ -313,9 +396,14 @@ model RewardRecord {
 }
 
 model ShareRewardLog {
-  id          Int      @id @default(autoincrement())
-  userId      Int
-  campaignId  Int?
+  id         Int  @id @default(autoincrement())
+  userId     Int
+  campaignId Int?
+
+  // V2.3 多商家權限版：分享獎勵紀錄歸屬商家。
+  tenantId Int?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
   gameId      String
   rewardType  String   @default("SHARE")
   rewardCount Int      @default(1)
@@ -325,6 +413,7 @@ model ShareRewardLog {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@index([userId])
   @@index([gameId])
   @@index([createdAt])
