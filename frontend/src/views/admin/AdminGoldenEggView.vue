@@ -192,6 +192,9 @@ const databaseRecordStats = computed(() => {
 
 
 const databasePreviewSyncMessage = ref('')
+const tenantAutoLoadMessage = ref('')
+const tenantAutoLoadStatus = ref('info')
+const tenantAutoLoading = ref(false)
 const gameConfigOperationLogs = ref([])
 const isSavingDatabaseCampaign = ref(false)
 const databaseCampaignForm = reactive({
@@ -3490,6 +3493,142 @@ const openDatabaseFrontPreview = () => {
   window.open(databaseFrontUrl.value, '_blank')
 }
 
+const getStoredAdminUser = () => {
+  try {
+    return safeJsonParse(localStorage.getItem('user'), null) || null
+  } catch (error) {
+    return null
+  }
+}
+
+const getStoredAuthToken = () => localStorage.getItem('token') || ''
+
+const getApiBaseUrl = () => {
+  const envBase = String(import.meta.env?.VITE_API_BASE_URL || '').trim().replace(/\/$/, '')
+
+  if (envBase) return envBase
+
+  const origin = window.location.origin
+
+  if (origin.includes('localhost:5173') || origin.includes('127.0.0.1:5173')) {
+    return 'http://localhost:3000'
+  }
+
+  return ''
+}
+
+const readTenantApiData = async (response) => {
+  const json = await response.json().catch(() => null)
+
+  if (!response.ok || json?.success === false) {
+    throw new Error(json?.message || `API 錯誤：${response.status}`)
+  }
+
+  return json?.data ?? json
+}
+
+const normalizeTenantCampaignList = (value) => {
+  if (Array.isArray(value)) return value
+  if (Array.isArray(value?.items)) return value.items
+  if (Array.isArray(value?.campaigns)) return value.campaigns
+  if (Array.isArray(value?.rows)) return value.rows
+  if (Array.isArray(value?.data)) return value.data
+
+  return []
+}
+
+const clearMerchantStaleDatabaseState = () => {
+  databaseCampaignId.value = ''
+  databaseCampaign.value = null
+  databasePrizes.value = []
+  databaseSerialCodes.value = []
+  selectedDatabaseSerialIds.value = []
+  databasePlayRecords.value = []
+  databaseRewardRecords.value = []
+  databaseDrawPool.value = null
+  localStorage.removeItem('golden_egg_admin_database_campaign_id')
+}
+
+const fetchTenantGoldenEggCampaigns = async () => {
+  const token = getStoredAuthToken()
+  const baseUrl = getApiBaseUrl()
+  const params = new URLSearchParams({
+    gameType: 'GOLDEN_EGG',
+    _ts: String(Date.now())
+  })
+
+  const response = await fetch(`${baseUrl}/api/campaigns?${params.toString()}`, {
+    headers: {
+      Accept: 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    cache: 'no-store'
+  })
+
+  const data = await readTenantApiData(response)
+  const campaigns = normalizeTenantCampaignList(data)
+  const user = getStoredAdminUser()
+  const tenantId = Number(user?.tenantId || 0)
+
+  return campaigns.filter((item) => {
+    const isGoldenEgg = String(item?.gameType || '').toUpperCase() === 'GOLDEN_EGG'
+    const sameTenant = !tenantId || !item?.tenantId || Number(item.tenantId) === tenantId
+
+    return isGoldenEgg && sameTenant
+  })
+}
+
+const autoLoadMerchantDefaultCampaign = async () => {
+  const user = getStoredAdminUser()
+  const role = String(user?.role || '').toUpperCase()
+  const isMerchant = role === 'MERCHANT_ADMIN' || role === 'MERCHANT_STAFF'
+
+  if (!isMerchant) return
+
+  tenantAutoLoading.value = true
+  tenantAutoLoadStatus.value = 'info'
+  tenantAutoLoadMessage.value = '正在依商家身分自動載入預設砸金蛋活動...'
+
+  try {
+    // 商家登入時不要沿用上一個帳號或平台管理員留下的 campaignId，避免畫面顯示舊資料。
+    clearMerchantStaleDatabaseState()
+
+    const campaigns = await fetchTenantGoldenEggCampaigns()
+    const activeCampaign = campaigns.find((item) => String(item.status || '').toUpperCase() === 'ACTIVE')
+    const goldenEggCampaign = activeCampaign || campaigns[0]
+
+    if (!goldenEggCampaign?.id) {
+      tenantAutoLoadStatus.value = 'warning'
+      tenantAutoLoadMessage.value = '目前商家尚未建立 GOLDEN_EGG 活動。請先用平台管理員在「商家管理」建立預設活動，或執行既有商家預設金蛋活動補建腳本。'
+      databaseLoadMessage.value = tenantAutoLoadMessage.value
+      return
+    }
+
+    databaseCampaignId.value = String(goldenEggCampaign.id)
+    localStorage.setItem('golden_egg_admin_database_campaign_id', String(goldenEggCampaign.id))
+    activeSection.value = 'databaseMode'
+    databaseSectionOpen.summary = true
+    databaseSectionOpen.campaign = true
+    databaseSectionOpen.gameConfig = true
+    databaseSectionOpen.prizes = true
+    databaseSectionOpen.serials = true
+    databaseSectionOpen.records = true
+
+    await loadDatabaseGoldenEggCampaign()
+
+    tenantAutoLoadStatus.value = 'success'
+    tenantAutoLoadMessage.value = `已自動載入 ${user?.tenantName || '目前商家'} 的活動：${goldenEggCampaign.title || `ID ${goldenEggCampaign.id}`}`
+  } catch (error) {
+    console.error('商家預設活動自動載入失敗：', error)
+    clearMerchantStaleDatabaseState()
+    tenantAutoLoadStatus.value = 'error'
+    tenantAutoLoadMessage.value = error.message || '商家預設活動自動載入失敗。'
+    databaseLoadMessage.value = tenantAutoLoadMessage.value
+  } finally {
+    tenantAutoLoading.value = false
+  }
+}
+
 const loadDatabaseGoldenEggCampaign = async () => {
   if (!normalizedDatabaseCampaignId.value) {
     databaseLoadMessage.value = '請先輸入正確的 campaignId。'
@@ -5427,7 +5566,7 @@ const copyDatabaseText = async (text) => {
 }
 
 
-onMounted(() => {
+onMounted(async () => {
   loadState()
   loadSerialCodes()
   loadSerialRedeemLogs()
@@ -5435,6 +5574,9 @@ onMounted(() => {
   loadGameConfigOperationLogs()
   startRedeemLogAutoRefresh()
   startEggPlayLogAutoRefresh()
+
+  await nextTick()
+  await autoLoadMerchantDefaultCampaign()
 })
 
 if (typeof window !== 'undefined') {
@@ -5723,6 +5865,29 @@ watch(
             <p class="mt-1 text-sm leading-6 text-slate-500">
               輸入正式 GOLDEN_EGG 活動的 campaignId，後台會從 PostgreSQL 讀取活動、獎項、序號、遊玩紀錄與中獎紀錄。這一批先做讀取與檢視，不會覆蓋你原本 localStorage 設定。
             </p>
+          </div>
+
+          <div
+            v-if="tenantAutoLoadMessage"
+            class="rounded-3xl border p-4 text-sm font-black"
+            :class="{
+              'border-emerald-100 bg-emerald-50 text-emerald-700': tenantAutoLoadStatus === 'success',
+              'border-amber-100 bg-amber-50 text-amber-700': tenantAutoLoadStatus === 'warning',
+              'border-rose-100 bg-rose-50 text-rose-700': tenantAutoLoadStatus === 'error',
+              'border-sky-100 bg-sky-50 text-sky-700': tenantAutoLoadStatus === 'info'
+            }"
+          >
+            <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <span>{{ tenantAutoLoadMessage }}</span>
+              <button
+                v-if="tenantAutoLoading"
+                type="button"
+                class="rounded-2xl bg-white/70 px-4 py-2 text-xs font-black text-slate-600 ring-1 ring-white/80"
+                disabled
+              >
+                載入中...
+              </button>
+            </div>
           </div>
 
           <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-4">
