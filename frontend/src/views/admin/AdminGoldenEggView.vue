@@ -3975,6 +3975,123 @@ const buildDatabaseGameConfigPayload = () => {
   }
 }
 
+
+const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => {
+  return {
+    pageTitle: String(settings.pageTitle || campaignData?.title || ''),
+    mainTitle: String(settings.mainTitle || campaignData?.title || ''),
+    subTitle: String(settings.subTitle || ''),
+    heroTagline: String(settings.heroTagline || campaignData?.description || ''),
+    noticeText: String(settings.noticeText || campaignData?.description || ''),
+    serialRedeemTitle: String(settings.serialRedeemTitle || '輸入抽獎序號'),
+    serialRedeemDescription: String(settings.serialRedeemDescription || '請輸入主辦單位提供的序號，驗證成功後即可砸蛋。'),
+    serialRedeemButtonText: String(settings.serialRedeemButtonText || '驗證序號'),
+    serialRedeemSuccessText: String(settings.serialRedeemSuccessText || '序號驗證成功，請選擇一顆金蛋。'),
+    serialRedeemErrorText: String(settings.serialRedeemErrorText || '序號無效、已使用或不存在。'),
+    activityRunningText: String(settings.activityRunningText || '正式資料庫活動進行中，請輸入序號參加。'),
+    activityNotStartedText: String(settings.activityNotStartedText || '活動尚未開始。'),
+    activityEndedText: String(settings.activityEndedText || '活動已結束。'),
+    showActivityTimeSection: settings.showActivityTimeSection !== false,
+    showActivityCountdown: settings.showActivityCountdown !== false,
+    activityCountdownAlwaysShowSeconds: settings.activityCountdownAlwaysShowSeconds !== false,
+    showBottomNav: settings.showBottomNav !== false,
+    eggSize: Number(settings.eggSize ?? 74),
+    eggCardSize: Number(settings.eggCardSize ?? 128),
+    eggGridGap: Number(settings.eggGridGap ?? settings.eggGap ?? 12),
+    eggColorTop: String(settings.eggColorTop || '#fff7ad'),
+    eggColorMiddle: String(settings.eggColorMiddle || '#fde047'),
+    eggColorBottom: String(settings.eggColorBottom || '#b45309'),
+    shareTitle: String(settings.shareTitle || campaign.shareTitle || '九宮格砸金蛋抽獎活動'),
+    shareDescription: String(settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'),
+    shareUrl: String(settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`),
+    shareImageUrl: String(settings.shareImageUrl || campaign.shareImageUrl || ''),
+    systemShareButtonText: String(settings.systemShareButtonText || campaign.systemShareButtonText || '系統分享'),
+    systemShareButtonTextSize: Number(settings.systemShareButtonTextSize || campaign.systemShareButtonTextSize || 14),
+    systemShareButtonBgColor: String(settings.systemShareButtonBgColor || campaign.systemShareButtonBgColor || '#7f1d1d'),
+    systemShareButtonTextColor: String(settings.systemShareButtonTextColor || campaign.systemShareButtonTextColor || '#ffffff'),
+    systemShareButtonRadius: Number(settings.systemShareButtonRadius || campaign.systemShareButtonRadius || 16),
+    systemShareButtonPaddingY: Number(settings.systemShareButtonPaddingY || campaign.systemShareButtonPaddingY || 12),
+    systemShareText: String(settings.systemShareText || campaign.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'),
+    lineShareText: String(settings.lineShareText || campaign.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'),
+    telegramShareText: String(settings.telegramShareText || campaign.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！')
+  }
+}
+
+const databaseGameConfigFormComparable = computed(() => ({
+  pageTitle: String(databaseGameConfigForm.pageTitle || ''),
+  mainTitle: String(databaseGameConfigForm.mainTitle || ''),
+  subTitle: String(databaseGameConfigForm.subTitle || ''),
+  heroTagline: String(databaseGameConfigForm.heroTagline || ''),
+  noticeText: String(databaseGameConfigForm.noticeText || ''),
+  serialRedeemTitle: String(databaseGameConfigForm.serialRedeemTitle || ''),
+  serialRedeemDescription: String(databaseGameConfigForm.serialRedeemDescription || ''),
+  serialRedeemButtonText: String(databaseGameConfigForm.serialRedeemButtonText || ''),
+  serialRedeemSuccessText: String(databaseGameConfigForm.serialRedeemSuccessText || ''),
+  serialRedeemErrorText: String(databaseGameConfigForm.serialRedeemErrorText || ''),
+  activityRunningText: String(databaseGameConfigForm.activityRunningText || ''),
+  activityNotStartedText: String(databaseGameConfigForm.activityNotStartedText || ''),
+  activityEndedText: String(databaseGameConfigForm.activityEndedText || ''),
+  showActivityTimeSection: Boolean(databaseGameConfigForm.showActivityTimeSection),
+  showActivityCountdown: Boolean(databaseGameConfigForm.showActivityCountdown),
+  activityCountdownAlwaysShowSeconds: Boolean(databaseGameConfigForm.activityCountdownAlwaysShowSeconds),
+  showBottomNav: Boolean(databaseGameConfigForm.showBottomNav),
+  eggSize: Number(databaseGameConfigForm.eggSize || 74),
+  eggCardSize: Number(databaseGameConfigForm.eggCardSize || 128),
+  eggGridGap: Number(databaseGameConfigForm.eggGridGap || 12),
+  eggColorTop: String(databaseGameConfigForm.eggColorTop || '#fff7ad'),
+  eggColorMiddle: String(databaseGameConfigForm.eggColorMiddle || '#fde047'),
+  eggColorBottom: String(databaseGameConfigForm.eggColorBottom || '#b45309'),
+  shareTitle: String(databaseGameConfigForm.shareTitle || ''),
+  shareDescription: String(databaseGameConfigForm.shareDescription || ''),
+  shareUrl: String(databaseGameConfigForm.shareUrl || ''),
+  shareImageUrl: String(databaseGameConfigForm.shareImageUrl || ''),
+  systemShareButtonText: String(databaseGameConfigForm.systemShareButtonText || '系統分享'),
+  systemShareButtonTextSize: Number(databaseGameConfigForm.systemShareButtonTextSize || 14),
+  systemShareButtonBgColor: String(databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d'),
+  systemShareButtonTextColor: String(databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'),
+  systemShareButtonRadius: Number(databaseGameConfigForm.systemShareButtonRadius || 16),
+  systemShareButtonPaddingY: Number(databaseGameConfigForm.systemShareButtonPaddingY || 12),
+  systemShareText: String(databaseGameConfigForm.systemShareText || ''),
+  lineShareText: String(databaseGameConfigForm.lineShareText || ''),
+  telegramShareText: String(databaseGameConfigForm.telegramShareText || '')
+}))
+
+const databaseGameConfigSavedComparable = computed(() => {
+  const campaignData = databaseCampaign.value
+  const settings = campaignData?.gameConfig?.settings || {}
+
+  return getDatabaseGameConfigComparable(settings, campaignData)
+})
+
+const databaseGameConfigFormHasUnsavedChanges = computed(() => {
+  if (!databaseCampaign.value) return false
+
+  return JSON.stringify(databaseGameConfigFormComparable.value) !== JSON.stringify(databaseGameConfigSavedComparable.value)
+})
+
+const databaseGameConfigSummaryItems = computed(() => [
+  {
+    label: '基本文案',
+    value: databaseGameConfigForm.mainTitle || databaseGameConfigForm.pageTitle || '未設定',
+    description: databaseGameConfigForm.heroTagline || '前台主標題與標語'
+  },
+  {
+    label: '序號驗證',
+    value: databaseGameConfigForm.serialRedeemButtonText || '驗證序號',
+    description: databaseGameConfigForm.serialRedeemTitle || '序號區塊'
+  },
+  {
+    label: '金蛋尺寸',
+    value: `${Number(databaseGameConfigForm.eggSize || 74)} / ${Number(databaseGameConfigForm.eggCardSize || 128)} px`,
+    description: `間距 ${Number(databaseGameConfigForm.eggGridGap || 12)} px`
+  },
+  {
+    label: '分享按鈕',
+    value: databaseGameConfigForm.systemShareButtonText || '系統分享',
+    description: databaseGameConfigForm.shareTitle || '分享設定'
+  }
+])
+
 const saveDatabaseGameConfig = async () => {
   if (!normalizedDatabaseCampaignId.value) {
     showOperationError('請先輸入並讀取正式活動 campaignId。')
@@ -4003,7 +4120,25 @@ const saveDatabaseGameConfig = async () => {
 
 const resetDatabaseGameConfigForm = () => {
   loadDatabaseGameConfigFormFromCampaign(databaseCampaign.value)
-  showSavedMessage('已還原目前資料庫設定到表單。')
+  showSavedMessage('已還原到目前已儲存的前台設定。')
+}
+
+const reloadDatabaseGameConfigFromServer = async () => {
+  if (!normalizedDatabaseCampaignId.value) {
+    showOperationError('請先輸入並讀取正式活動 campaignId。')
+    return
+  }
+
+  showOperationInfo('正在重新讀取資料庫前台設定，請稍候...', false)
+
+  try {
+    await loadDatabaseGoldenEggCampaign()
+    showOperationSuccess('已重新讀取資料庫前台設定。')
+    showSavedMessage('已重新載入資料庫目前儲存的前台設定。')
+  } catch (error) {
+    console.error('重新讀取資料庫 GameConfig 失敗：', error)
+    showOperationError(error.message || '重新讀取資料庫前台設定失敗。')
+  }
 }
 
 const refreshDatabaseRecords = async () => {
@@ -5217,30 +5352,49 @@ watch(
 
           <div
             v-if="databaseCampaign && databaseSectionOpen.gameConfig"
-            class="rounded-3xl border border-blue-100 bg-blue-50 p-4"
+            class="rounded-3xl border border-blue-100 bg-blue-50 p-4 sm:p-5"
           >
-            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-              <div>
-                <h3 class="text-base font-black text-blue-900">
+            <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div class="min-w-0">
+                <p class="text-xs font-black uppercase tracking-[0.28em] text-blue-500">
+                  GameConfig Editor
+                </p>
+                <h3 class="mt-1 text-lg font-black text-blue-950">
                   資料庫前台設定 GameConfig
                 </h3>
-                <p class="mt-1 text-xs font-bold text-blue-700/80">
-                  儲存後會寫入 GameConfig.settings，前台正式資料庫模式會讀取這些設定。
+                <p class="mt-1 max-w-2xl text-xs font-bold leading-6 text-blue-700/80">
+                  控制前台正式資料庫模式的標題、序號驗證、金蛋版面、分享內容與顏色設定。儲存後會把目前內容變成新的已儲存版本。
                 </p>
               </div>
 
-              <div class="flex flex-wrap gap-2">
+              <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap xl:justify-end">
+                <span
+                  class="inline-flex items-center justify-center rounded-2xl px-4 py-2 text-xs font-black ring-1"
+                  :class="databaseGameConfigFormHasUnsavedChanges ? 'bg-amber-50 text-amber-700 ring-amber-100' : 'bg-emerald-50 text-emerald-700 ring-emerald-100'"
+                >
+                  {{ databaseGameConfigFormHasUnsavedChanges ? '尚未儲存變更' : '已同步目前資料' }}
+                </span>
+
                 <button
                   type="button"
-                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-blue-700 ring-1 ring-blue-100"
+                  class="rounded-2xl bg-white px-4 py-2 text-xs font-black text-blue-700 ring-1 ring-blue-100 transition hover:bg-blue-50"
                   @click="resetDatabaseGameConfigForm"
                 >
-                  還原表單
+                  還原到已儲存資料
                 </button>
 
                 <button
                   type="button"
-                  class="rounded-2xl bg-blue-600 px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  class="rounded-2xl bg-white px-4 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isLoadingDatabaseCampaign"
+                  @click="reloadDatabaseGameConfigFromServer"
+                >
+                  {{ isLoadingDatabaseCampaign ? '讀取中...' : '重新讀取資料庫' }}
+                </button>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-blue-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                   :disabled="isSavingDatabaseGameConfig"
                   @click="saveDatabaseGameConfig"
                 >
@@ -5249,453 +5403,487 @@ watch(
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label class="admin-field">
-                <span>頁面名稱 pageTitle</span>
-                <input v-model="databaseGameConfigForm.pageTitle" type="text" />
-              </label>
-
-              <label class="admin-field">
-                <span>主標題 mainTitle</span>
-                <input v-model="databaseGameConfigForm.mainTitle" type="text" />
-              </label>
-
-              <label class="admin-field">
-                <span>副標題 subTitle</span>
-                <input v-model="databaseGameConfigForm.subTitle" type="text" />
-              </label>
-
-              <label class="admin-field">
-                <span>標語 heroTagline</span>
-                <input v-model="databaseGameConfigForm.heroTagline" type="text" />
-              </label>
-
-              <label class="admin-field md:col-span-2">
-                <span>公告文字 noticeText</span>
-                <textarea
-                  v-model="databaseGameConfigForm.noticeText"
-                  rows="3"
-                />
-              </label>
-
-              <label class="admin-field">
-                <span>序號區塊標題</span>
-                <input v-model="databaseGameConfigForm.serialRedeemTitle" type="text" />
-              </label>
-
-              <label class="admin-field">
-                <span>序號按鈕文字</span>
-                <input v-model="databaseGameConfigForm.serialRedeemButtonText" type="text" />
-              </label>
-
-              <label class="admin-field md:col-span-2">
-                <span>序號說明文字</span>
-                <textarea
-                  v-model="databaseGameConfigForm.serialRedeemDescription"
-                  rows="3"
-                />
-              </label>
-
-              <label class="admin-field">
-                <span>序號成功文字</span>
-                <input v-model="databaseGameConfigForm.serialRedeemSuccessText" type="text" />
-              </label>
-
-              <label class="admin-field">
-                <span>序號錯誤文字</span>
-                <input v-model="databaseGameConfigForm.serialRedeemErrorText" type="text" />
-              </label>
-
-              <label class="admin-field">
-                <span>活動進行中文字</span>
-                <input v-model="databaseGameConfigForm.activityRunningText" type="text" />
-              </label>
-
-              <label class="admin-field">
-                <span>活動尚未開始文字</span>
-                <input v-model="databaseGameConfigForm.activityNotStartedText" type="text" />
-              </label>
-
-              <label class="admin-field md:col-span-2">
-                <span>活動已結束文字</span>
-                <input v-model="databaseGameConfigForm.activityEndedText" type="text" />
-              </label>
-            </div>
-
-            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-              <label class="admin-field">
-                <span>正式前台金蛋大小 eggSize</span>
-                <input
-                  v-model.number="databaseGameConfigForm.eggSize"
-                  type="range"
-                  min="48"
-                  max="120"
-                />
-                <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggSize }}px</span>
-              </label>
-
-              <label class="admin-field">
-                <span>正式前台金蛋格子大小 eggCardSize</span>
-                <input
-                  v-model.number="databaseGameConfigForm.eggCardSize"
-                  type="range"
-                  min="96"
-                  max="160"
-                />
-                <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggCardSize }}px</span>
-              </label>
-
-              <label class="admin-field">
-                <span>正式前台金蛋間距 eggGridGap</span>
-                <input
-                  v-model.number="databaseGameConfigForm.eggGridGap"
-                  type="range"
-                  min="6"
-                  max="24"
-                />
-                <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggGridGap }}px</span>
-              </label>
-            </div>
-
-            
-            <div class="mt-4 rounded-3xl border border-sky-100 bg-sky-50/70 p-4">
-              <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h4 class="text-sm font-black text-slate-950">
-                    分享設定
-                  </h4>
-                  <p class="mt-1 text-xs font-bold text-sky-700">
-                    控制前台「系統分享 / LINE 分享 / Telegram」按鈕要帶出的文字與網址。
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
-                  @click="databaseGameConfigForm.shareUrl = `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId || 1}`"
-                >
-                  套用正式活動網址
-                </button>
+            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div
+                v-for="item in databaseGameConfigSummaryItems"
+                :key="item.label"
+                class="rounded-3xl border border-white/80 bg-white/85 p-4 shadow-sm"
+              >
+                <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
+                <p class="mt-2 truncate text-lg font-black text-slate-950">{{ item.value }}</p>
+                <p class="mt-1 line-clamp-2 text-xs font-bold leading-5 text-slate-500">{{ item.description }}</p>
               </div>
+            </div>
 
-              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <label class="admin-field">
-                  <span>分享標題 shareTitle</span>
-                  <input
-                    v-model="databaseGameConfigForm.shareTitle"
-                    type="text"
-                    placeholder="九宮格砸金蛋抽獎活動"
-                  />
-                </label>
+            <div class="mt-4 rounded-3xl border border-blue-100 bg-white/90 p-4 text-xs font-bold leading-6 text-slate-600 shadow-sm">
+              <p class="font-black text-blue-950">還原邏輯說明</p>
+              <p class="mt-1">
+                「還原到已儲存資料」會回到目前已載入的資料庫版本；按下「儲存前台設定」後，目前表單內容會成為新的已儲存版本。
+                若要重新抓伺服器上的最新資料，請按「重新讀取資料庫」。
+              </p>
+            </div>
 
-                <label class="admin-field">
-                  <span>分享網址 shareUrl</span>
-                  <input
-                    v-model="databaseGameConfigForm.shareUrl"
-                    type="url"
-                    placeholder="https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=1"
-                  />
-                </label>
-
-                <label class="admin-field md:col-span-2">
-                  <span>分享描述 shareDescription</span>
-                  <input
-                    v-model="databaseGameConfigForm.shareDescription"
-                    type="text"
-                    placeholder="輸入活動序號，立即砸金蛋抽好禮！"
-                  />
-                </label>
-
-                <label class="admin-field md:col-span-2">
-                  <span>分享圖片網址 shareImageUrl</span>
-                  <input
-                    v-model="databaseGameConfigForm.shareImageUrl"
-                    type="url"
-                    placeholder="https://example.com/share-golden-egg.jpg"
-                  />
-                  <small class="text-xs font-bold text-slate-400">
-                    LINE 預覽圖需要 Open Graph 支援；目前先作為分享資料欄位保存。
-                  </small>
-                </label>
-
-                
-                <label class="admin-field md:col-span-2">
-                  <span>系統分享按鈕文字 systemShareButtonText</span>
-                  <input
-                    v-model="databaseGameConfigForm.systemShareButtonText"
-                    type="text"
-                    placeholder="系統分享"
-                  />
-                </label>
-
-                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <p class="text-sm font-black text-slate-800">文字大小</p>
-                      <p class="text-xs font-bold text-slate-400">
-                        {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }} px
-                      </p>
-                    </div>
-                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
-                      {{ databaseGameConfigForm.systemShareButtonTextSize || 14 }}
-                    </span>
-                  </div>
-                  <input
-                    v-model.number="databaseGameConfigForm.systemShareButtonTextSize"
-                    class="mt-3 w-full accent-slate-950"
-                    type="range"
-                    min="10"
-                    max="28"
-                    step="1"
-                  />
+            <div class="mt-4 grid grid-cols-1 gap-4">
+              <section class="rounded-3xl border border-white/80 bg-white/80 p-4 shadow-sm">
+                <div class="flex flex-col gap-1">
+                  <h4 class="text-sm font-black text-slate-950">基本文案設定</h4>
+                  <p class="text-xs font-bold text-slate-500">設定玩家進入正式砸金蛋頁面時最先看到的標題、標語與公告。</p>
                 </div>
 
-                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
-                  <div class="flex items-center justify-between gap-3">
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label class="admin-field">
+                    <span>頁面名稱 pageTitle</span>
+                    <input v-model="databaseGameConfigForm.pageTitle" type="text" />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>主標題 mainTitle</span>
+                    <input v-model="databaseGameConfigForm.mainTitle" type="text" />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>副標題 subTitle</span>
+                    <input v-model="databaseGameConfigForm.subTitle" type="text" />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>標語 heroTagline</span>
+                    <input v-model="databaseGameConfigForm.heroTagline" type="text" />
+                  </label>
+
+                  <label class="admin-field md:col-span-2">
+                    <span>公告文字 noticeText</span>
+                    <textarea
+                      v-model="databaseGameConfigForm.noticeText"
+                      rows="3"
+                    />
+                  </label>
+                </div>
+              </section>
+
+              <section class="rounded-3xl border border-white/80 bg-white/80 p-4 shadow-sm">
+                <div class="flex flex-col gap-1">
+                  <h4 class="text-sm font-black text-slate-950">序號驗證文案</h4>
+                  <p class="text-xs font-bold text-slate-500">控制前台序號輸入區塊、成功訊息與錯誤訊息。</p>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label class="admin-field">
+                    <span>序號區塊標題</span>
+                    <input v-model="databaseGameConfigForm.serialRedeemTitle" type="text" />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>序號按鈕文字</span>
+                    <input v-model="databaseGameConfigForm.serialRedeemButtonText" type="text" />
+                  </label>
+
+                  <label class="admin-field md:col-span-2">
+                    <span>序號說明文字</span>
+                    <textarea
+                      v-model="databaseGameConfigForm.serialRedeemDescription"
+                      rows="3"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>序號成功文字</span>
+                    <input v-model="databaseGameConfigForm.serialRedeemSuccessText" type="text" />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>序號錯誤文字</span>
+                    <input v-model="databaseGameConfigForm.serialRedeemErrorText" type="text" />
+                  </label>
+                </div>
+              </section>
+
+              <section class="rounded-3xl border border-white/80 bg-white/80 p-4 shadow-sm">
+                <div class="flex flex-col gap-1">
+                  <h4 class="text-sm font-black text-slate-950">活動狀態文案</h4>
+                  <p class="text-xs font-bold text-slate-500">不同活動狀態時，前台要顯示給玩家看的提醒文字。</p>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <label class="admin-field">
+                    <span>活動進行中文字</span>
+                    <input v-model="databaseGameConfigForm.activityRunningText" type="text" />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>活動尚未開始文字</span>
+                    <input v-model="databaseGameConfigForm.activityNotStartedText" type="text" />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>活動已結束文字</span>
+                    <input v-model="databaseGameConfigForm.activityEndedText" type="text" />
+                  </label>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
+                  <label class="admin-toggle">
+                    <input v-model="databaseGameConfigForm.showActivityTimeSection" type="checkbox" />
+                    <span>顯示活動時間</span>
+                  </label>
+
+                  <label class="admin-toggle">
+                    <input v-model="databaseGameConfigForm.showActivityCountdown" type="checkbox" />
+                    <span>顯示活動倒數</span>
+                  </label>
+
+                  <label class="admin-toggle">
+                    <input v-model="databaseGameConfigForm.activityCountdownAlwaysShowSeconds" type="checkbox" />
+                    <span>倒數顯示秒數</span>
+                  </label>
+
+                  <label class="admin-toggle">
+                    <input v-model="databaseGameConfigForm.showBottomNav" type="checkbox" />
+                    <span>顯示底部功能列</span>
+                  </label>
+                </div>
+              </section>
+
+              <section class="rounded-3xl border border-white/80 bg-white/80 p-4 shadow-sm">
+                <div class="flex flex-col gap-1">
+                  <h4 class="text-sm font-black text-slate-950">金蛋版面設定</h4>
+                  <p class="text-xs font-bold text-slate-500">控制正式前台金蛋大小、格子大小、間距與資料庫金蛋顏色。</p>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <label class="admin-field">
+                    <span>正式前台金蛋大小 eggSize</span>
+                    <input
+                      v-model.number="databaseGameConfigForm.eggSize"
+                      type="range"
+                      min="48"
+                      max="120"
+                    />
+                    <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggSize }}px</span>
+                  </label>
+
+                  <label class="admin-field">
+                    <span>正式前台金蛋格子大小 eggCardSize</span>
+                    <input
+                      v-model.number="databaseGameConfigForm.eggCardSize"
+                      type="range"
+                      min="96"
+                      max="160"
+                    />
+                    <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggCardSize }}px</span>
+                  </label>
+
+                  <label class="admin-field">
+                    <span>正式前台金蛋間距 eggGridGap</span>
+                    <input
+                      v-model.number="databaseGameConfigForm.eggGridGap"
+                      type="range"
+                      min="6"
+                      max="24"
+                    />
+                    <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggGridGap }}px</span>
+                  </label>
+                </div>
+
+                <div class="mt-4 rounded-3xl border border-amber-100 bg-amber-50/80 p-4">
+                  <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
                     <div>
-                      <p class="text-sm font-black text-slate-800">背景顏色</p>
-                      <p class="text-xs font-bold text-slate-400">
-                        {{ databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d' }}
-                      </p>
+                      <h5 class="text-sm font-black text-amber-950">資料庫金蛋顏色同步</h5>
+                      <p class="mt-1 text-xs font-bold text-amber-700">這三個顏色會寫入 PostgreSQL gameConfig.settings，手機 / 電腦前台都會以這裡為準。</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                      @click="databaseGameConfigForm.eggColorTop = campaign.eggColorTop || '#fff7ad'; databaseGameConfigForm.eggColorMiddle = campaign.eggColorMiddle || '#fde047'; databaseGameConfigForm.eggColorBottom = campaign.eggColorBottom || '#b45309'"
+                    >
+                      套用右側預覽顏色
+                    </button>
+                  </div>
+
+                  <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                    <label class="admin-field">
+                      <span>DB 金蛋亮色 eggColorTop</span>
+                      <input v-model="databaseGameConfigForm.eggColorTop" type="color" />
+                      <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorTop }}</code>
+                    </label>
+
+                    <label class="admin-field">
+                      <span>DB 金蛋主色 eggColorMiddle</span>
+                      <input v-model="databaseGameConfigForm.eggColorMiddle" type="color" />
+                      <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorMiddle }}</code>
+                    </label>
+
+                    <label class="admin-field">
+                      <span>DB 金蛋暗色 eggColorBottom</span>
+                      <input v-model="databaseGameConfigForm.eggColorBottom" type="color" />
+                      <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorBottom }}</code>
+                    </label>
+                  </div>
+
+                  <div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-black text-slate-600">
+                    目前準備寫入資料庫：
+                    <span class="ml-2 text-slate-900">{{ databaseGameConfigForm.eggColorTop }}</span>
+                    <span class="mx-1">/</span>
+                    <span class="text-slate-900">{{ databaseGameConfigForm.eggColorMiddle }}</span>
+                    <span class="mx-1">/</span>
+                    <span class="text-slate-900">{{ databaseGameConfigForm.eggColorBottom }}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="rounded-3xl border border-sky-100 bg-sky-50/80 p-4 shadow-sm">
+                <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h4 class="text-sm font-black text-slate-950">分享設定</h4>
+                    <p class="mt-1 text-xs font-bold text-sky-700">控制前台「系統分享 / LINE 分享 / Telegram」按鈕要帶出的文字與網址。</p>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
+                    @click="databaseGameConfigForm.shareUrl = `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId || 1}`"
+                  >
+                    套用正式活動網址
+                  </button>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                  <label class="admin-field">
+                    <span>分享標題 shareTitle</span>
+                    <input
+                      v-model="databaseGameConfigForm.shareTitle"
+                      type="text"
+                      placeholder="九宮格砸金蛋抽獎活動"
+                    />
+                  </label>
+
+                  <label class="admin-field">
+                    <span>分享網址 shareUrl</span>
+                    <input
+                      v-model="databaseGameConfigForm.shareUrl"
+                      type="url"
+                      placeholder="https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=1"
+                    />
+                  </label>
+
+                  <label class="admin-field md:col-span-2">
+                    <span>分享描述 shareDescription</span>
+                    <input
+                      v-model="databaseGameConfigForm.shareDescription"
+                      type="text"
+                      placeholder="輸入活動序號，立即砸金蛋抽好禮！"
+                    />
+                  </label>
+
+                  <label class="admin-field md:col-span-2">
+                    <span>分享圖片網址 shareImageUrl</span>
+                    <input
+                      v-model="databaseGameConfigForm.shareImageUrl"
+                      type="url"
+                      placeholder="https://example.com/share-golden-egg.jpg"
+                    />
+                    <small class="text-xs font-bold text-slate-400">LINE 預覽圖需要 Open Graph 支援；目前先作為分享資料欄位保存。</small>
+                  </label>
+
+                  <label class="admin-field md:col-span-2">
+                    <span>系統分享按鈕文字 systemShareButtonText</span>
+                    <input
+                      v-model="databaseGameConfigForm.systemShareButtonText"
+                      type="text"
+                      placeholder="系統分享"
+                    />
+                  </label>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-black text-slate-800">文字大小</p>
+                        <p class="text-xs font-bold text-slate-400">{{ databaseGameConfigForm.systemShareButtonTextSize || 14 }} px</p>
+                      </div>
+                      <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">{{ databaseGameConfigForm.systemShareButtonTextSize || 14 }}</span>
                     </div>
                     <input
-                      v-model="databaseGameConfigForm.systemShareButtonBgColor"
-                      class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
-                      type="color"
+                      v-model.number="databaseGameConfigForm.systemShareButtonTextSize"
+                      class="mt-3 w-full accent-slate-950"
+                      type="range"
+                      min="10"
+                      max="28"
+                      step="1"
+                    />
+                  </div>
+
+                  <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-black text-slate-800">背景顏色</p>
+                        <p class="text-xs font-bold text-slate-400">{{ databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d' }}</p>
+                      </div>
+                      <input
+                        v-model="databaseGameConfigForm.systemShareButtonBgColor"
+                        class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
+                        type="color"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-black text-slate-800">文字顏色</p>
+                        <p class="text-xs font-bold text-slate-400">{{ databaseGameConfigForm.systemShareButtonTextColor || '#ffffff' }}</p>
+                      </div>
+                      <input
+                        v-model="databaseGameConfigForm.systemShareButtonTextColor"
+                        class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
+                        type="color"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-black text-slate-800">按鈕圓角</p>
+                        <p class="text-xs font-bold text-slate-400">{{ databaseGameConfigForm.systemShareButtonRadius || 16 }} px</p>
+                      </div>
+                      <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">{{ databaseGameConfigForm.systemShareButtonRadius || 16 }}</span>
+                    </div>
+                    <input
+                      v-model.number="databaseGameConfigForm.systemShareButtonRadius"
+                      class="mt-3 w-full accent-slate-950"
+                      type="range"
+                      min="0"
+                      max="40"
+                      step="1"
+                    />
+                  </div>
+
+                  <div class="rounded-3xl border border-slate-100 bg-white/80 p-4 md:col-span-2 xl:col-span-4">
+                    <div class="flex items-center justify-between gap-3">
+                      <div>
+                        <p class="text-sm font-black text-slate-800">按鈕高度</p>
+                        <p class="text-xs font-bold text-slate-400">上下內距 {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }} px</p>
+                      </div>
+                      <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">{{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }}</span>
+                    </div>
+                    <input
+                      v-model.number="databaseGameConfigForm.systemShareButtonPaddingY"
+                      class="mt-3 w-full accent-slate-950"
+                      type="range"
+                      min="6"
+                      max="28"
+                      step="1"
                     />
                   </div>
                 </div>
 
-                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <p class="text-sm font-black text-slate-800">文字顏色</p>
-                      <p class="text-xs font-bold text-slate-400">
-                        {{ databaseGameConfigForm.systemShareButtonTextColor || '#ffffff' }}
-                      </p>
-                    </div>
-                    <input
-                      v-model="databaseGameConfigForm.systemShareButtonTextColor"
-                      class="h-10 w-14 cursor-pointer rounded-2xl border border-slate-200 bg-white p-1"
-                      type="color"
-                    />
-                  </div>
-                </div>
-
-                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <p class="text-sm font-black text-slate-800">按鈕圓角</p>
-                      <p class="text-xs font-bold text-slate-400">
-                        {{ databaseGameConfigForm.systemShareButtonRadius || 16 }} px
-                      </p>
-                    </div>
-                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
-                      {{ databaseGameConfigForm.systemShareButtonRadius || 16 }}
-                    </span>
-                  </div>
-                  <input
-                    v-model.number="databaseGameConfigForm.systemShareButtonRadius"
-                    class="mt-3 w-full accent-slate-950"
-                    type="range"
-                    min="0"
-                    max="40"
-                    step="1"
-                  />
-                </div>
-
-                <div class="rounded-3xl border border-slate-100 bg-white/80 p-4">
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <p class="text-sm font-black text-slate-800">按鈕高度</p>
-                      <p class="text-xs font-bold text-slate-400">
-                        上下內距 {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }} px
-                      </p>
-                    </div>
-                    <span class="rounded-full bg-slate-950 px-3 py-1 text-xs font-black text-white">
-                      {{ databaseGameConfigForm.systemShareButtonPaddingY || 12 }}
-                    </span>
-                  </div>
-                  <input
-                    v-model.number="databaseGameConfigForm.systemShareButtonPaddingY"
-                    class="mt-3 w-full accent-slate-950"
-                    type="range"
-                    min="6"
-                    max="28"
-                    step="1"
-                  />
-                </div>
-
-
-                <div class="md:col-span-2 rounded-3xl border border-amber-100 bg-amber-50/80 p-4">
+                <div class="mt-4 rounded-3xl border border-amber-100 bg-amber-50/80 p-4">
                   <p class="text-sm font-black text-slate-800">快速配色</p>
                   <div class="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      class="rounded-2xl bg-[#7f1d1d] px-4 py-2 text-xs font-black text-white"
-                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#7f1d1d'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
-                    >
-                      深紅
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-2xl bg-[#facc15] px-4 py-2 text-xs font-black text-[#7f1d1d]"
-                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#facc15'; databaseGameConfigForm.systemShareButtonTextColor = '#7f1d1d'"
-                    >
-                      金色
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-2xl bg-[#22c55e] px-4 py-2 text-xs font-black text-white"
-                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#22c55e'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
-                    >
-                      綠色
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-2xl bg-[#111827] px-4 py-2 text-xs font-black text-white"
-                      @click="databaseGameConfigForm.systemShareButtonBgColor = '#111827'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'"
-                    >
-                      深色
-                    </button>
+                    <button type="button" class="rounded-2xl bg-[#7f1d1d] px-4 py-2 text-xs font-black text-white" @click="databaseGameConfigForm.systemShareButtonBgColor = '#7f1d1d'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'">深紅</button>
+                    <button type="button" class="rounded-2xl bg-[#facc15] px-4 py-2 text-xs font-black text-[#7f1d1d]" @click="databaseGameConfigForm.systemShareButtonBgColor = '#facc15'; databaseGameConfigForm.systemShareButtonTextColor = '#7f1d1d'">金色</button>
+                    <button type="button" class="rounded-2xl bg-[#22c55e] px-4 py-2 text-xs font-black text-white" @click="databaseGameConfigForm.systemShareButtonBgColor = '#22c55e'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'">綠色</button>
+                    <button type="button" class="rounded-2xl bg-[#111827] px-4 py-2 text-xs font-black text-white" @click="databaseGameConfigForm.systemShareButtonBgColor = '#111827'; databaseGameConfigForm.systemShareButtonTextColor = '#ffffff'">深色</button>
                   </div>
                 </div>
 
-<label class="admin-field md:col-span-2">
-                  <span>系統分享文字 systemShareText</span>
-                  <textarea
-                    v-model="databaseGameConfigForm.systemShareText"
-                    rows="3"
-                    placeholder="🎉 九宮格砸金蛋抽獎活動&#10;輸入活動序號，立即砸金蛋抽好禮！"
-                  ></textarea>
-                </label>
+                <div class="mt-4 grid grid-cols-1 gap-3">
+                  <label class="admin-field">
+                    <span>系統分享文字 systemShareText</span>
+                    <textarea
+                      v-model="databaseGameConfigForm.systemShareText"
+                      rows="3"
+                      placeholder="🎉 九宮格砸金蛋抽獎活動&#10;輸入活動序號，立即砸金蛋抽好禮！"
+                    ></textarea>
+                  </label>
 
-                <label class="admin-field md:col-span-2">
-                  <span>LINE 分享文字 lineShareText</span>
-                  <textarea
-                    v-model="databaseGameConfigForm.lineShareText"
-                    rows="3"
-                    placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
-                  ></textarea>
-                </label>
+                  <label class="admin-field">
+                    <span>LINE 分享文字 lineShareText</span>
+                    <textarea
+                      v-model="databaseGameConfigForm.lineShareText"
+                      rows="3"
+                      placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
+                    ></textarea>
+                  </label>
 
-                <label class="admin-field md:col-span-2">
-                  <span>Telegram 分享文字 telegramShareText</span>
-                  <textarea
-                    v-model="databaseGameConfigForm.telegramShareText"
-                    rows="3"
-                    placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
-                  ></textarea>
-                </label>
-              </div>
-
-              
-              <div class="mt-3 rounded-2xl bg-white/80 p-3">
-                <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
-                <p class="mt-1 text-xs font-bold text-rose-500">右側預覽是 iframe；調整後會自動刷新右側預覽。若正式前台要同步，仍需按「儲存前台設定 / 立即同步前台」。</p>
-                <button
-                  type="button"
-                  class="w-full font-black shadow-lg"
-                  :style="{
-                    borderRadius: `${Number(databaseGameConfigForm.systemShareButtonRadius || 16)}px`,
-                    fontSize: `${Number(databaseGameConfigForm.systemShareButtonTextSize || 14)}px`,
-                    paddingTop: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
-                    paddingBottom: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
-                    background: databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d',
-                    color: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
-                  }"
-                >
-                  {{ databaseGameConfigForm.systemShareButtonText || '系統分享' }}
-                </button>
-              </div>
-
-<div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-bold text-slate-600">
-                分享預覽：
-                <span class="font-black text-slate-950">{{ databaseGameConfigForm.shareTitle }}</span>
-                <span class="mx-1">｜</span>
-                <span>{{ databaseGameConfigForm.shareDescription }}</span>
-              </div>
-            </div>
-
-            <div class="mt-4 rounded-3xl border border-amber-100 bg-amber-50/70 p-4">
-              <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                <div>
-                  <h4 class="text-sm font-black text-amber-950">
-                    資料庫金蛋顏色同步
-                  </h4>
-                  <p class="mt-1 text-xs font-bold text-amber-700">
-                    這三個顏色會寫入 PostgreSQL gameConfig.settings，手機 / 電腦前台都會以這裡為準。
-                  </p>
+                  <label class="admin-field">
+                    <span>Telegram 分享文字 telegramShareText</span>
+                    <textarea
+                      v-model="databaseGameConfigForm.telegramShareText"
+                      rows="3"
+                      placeholder="🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！"
+                    ></textarea>
+                  </label>
                 </div>
 
-                <button
-                  type="button"
-                  class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
-                  @click="databaseGameConfigForm.eggColorTop = campaign.eggColorTop || '#fff7ad'; databaseGameConfigForm.eggColorMiddle = campaign.eggColorMiddle || '#fde047'; databaseGameConfigForm.eggColorBottom = campaign.eggColorBottom || '#b45309'"
-                >
-                  套用右側預覽顏色
-                </button>
-              </div>
+                <div class="mt-4 rounded-2xl bg-white/80 p-3">
+                  <p class="mb-2 text-xs font-black text-slate-500">系統分享按鈕預覽</p>
+                  <p class="mt-1 text-xs font-bold text-rose-500">右側預覽是 iframe；調整後會自動刷新右側預覽。若正式前台要同步，仍需按「儲存前台設定 / 立即同步前台」。</p>
+                  <button
+                    type="button"
+                    class="mt-3 w-full font-black shadow-lg"
+                    :style="{
+                      borderRadius: `${Number(databaseGameConfigForm.systemShareButtonRadius || 16)}px`,
+                      fontSize: `${Number(databaseGameConfigForm.systemShareButtonTextSize || 14)}px`,
+                      paddingTop: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
+                      paddingBottom: `${Number(databaseGameConfigForm.systemShareButtonPaddingY || 12)}px`,
+                      background: databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d',
+                      color: databaseGameConfigForm.systemShareButtonTextColor || '#ffffff'
+                    }"
+                  >
+                    {{ databaseGameConfigForm.systemShareButtonText || '系統分享' }}
+                  </button>
+                </div>
 
-              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                <label class="admin-field">
-                  <span>DB 金蛋亮色 eggColorTop</span>
-                  <input
-                    v-model="databaseGameConfigForm.eggColorTop"
-                    type="color"
-                  />
-                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorTop }}</code>
-                </label>
-
-                <label class="admin-field">
-                  <span>DB 金蛋主色 eggColorMiddle</span>
-                  <input
-                    v-model="databaseGameConfigForm.eggColorMiddle"
-                    type="color"
-                  />
-                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorMiddle }}</code>
-                </label>
-
-                <label class="admin-field">
-                  <span>DB 金蛋暗色 eggColorBottom</span>
-                  <input
-                    v-model="databaseGameConfigForm.eggColorBottom"
-                    type="color"
-                  />
-                  <code class="text-xs font-black text-slate-700">{{ databaseGameConfigForm.eggColorBottom }}</code>
-                </label>
-              </div>
-
-              <div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-black text-slate-600">
-                目前準備寫入資料庫：
-                <span class="ml-2 text-slate-900">{{ databaseGameConfigForm.eggColorTop }}</span>
-                <span class="mx-1">/</span>
-                <span class="text-slate-900">{{ databaseGameConfigForm.eggColorMiddle }}</span>
-                <span class="mx-1">/</span>
-                <span class="text-slate-900">{{ databaseGameConfigForm.eggColorBottom }}</span>
-              </div>
+                <div class="mt-3 rounded-2xl bg-white/80 p-3 text-xs font-bold leading-6 text-slate-600">
+                  分享預覽：
+                  <span class="font-black text-slate-950">{{ databaseGameConfigForm.shareTitle }}</span>
+                  <span class="mx-1">｜</span>
+                  <span>{{ databaseGameConfigForm.shareDescription }}</span>
+                </div>
+              </section>
             </div>
 
-<div class="mt-4 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-4">
-              <label class="admin-toggle">
-                <input v-model="databaseGameConfigForm.showActivityTimeSection" type="checkbox" />
-                <span>顯示活動時間</span>
-              </label>
+            <div class="mt-4 flex flex-col gap-3 rounded-3xl border border-blue-100 bg-white/90 p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+              <div>
+                <p class="text-sm font-black text-slate-950">
+                  {{ databaseGameConfigFormHasUnsavedChanges ? '目前有尚未儲存的前台設定' : '目前前台設定已與資料庫同步' }}
+                </p>
+                <p class="mt-1 text-xs font-bold text-slate-500">
+                  儲存後會寫入 GameConfig.settings，並把目前表單內容視為新的已儲存版本。
+                </p>
+              </div>
 
-              <label class="admin-toggle">
-                <input v-model="databaseGameConfigForm.showActivityCountdown" type="checkbox" />
-                <span>顯示活動倒數</span>
-              </label>
+              <div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  class="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-200"
+                  @click="resetDatabaseGameConfigForm"
+                >
+                  還原到已儲存資料
+                </button>
 
-              <label class="admin-toggle">
-                <input v-model="databaseGameConfigForm.activityCountdownAlwaysShowSeconds" type="checkbox" />
-                <span>倒數顯示秒數</span>
-              </label>
+                <button
+                  type="button"
+                  class="rounded-2xl bg-white px-4 py-3 text-sm font-black text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isLoadingDatabaseCampaign"
+                  @click="reloadDatabaseGameConfigFromServer"
+                >
+                  {{ isLoadingDatabaseCampaign ? '讀取中...' : '重新讀取資料庫' }}
+                </button>
 
-              <label class="admin-toggle">
-                <input v-model="databaseGameConfigForm.showBottomNav" type="checkbox" />
-                <span>顯示底部功能列</span>
-              </label>
+                <button
+                  type="button"
+                  class="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-sm transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  :disabled="isSavingDatabaseGameConfig"
+                  @click="saveDatabaseGameConfig"
+                >
+                  {{ isSavingDatabaseGameConfig ? '儲存中...' : '儲存前台設定' }}
+                </button>
+              </div>
             </div>
           </div>
 
