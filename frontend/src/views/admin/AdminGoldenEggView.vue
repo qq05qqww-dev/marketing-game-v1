@@ -3289,12 +3289,41 @@ const removeDatabaseSerialCode = async (item) => {
 }
 
 const openDatabaseSerialExport = () => {
-  if (!normalizedDatabaseCampaignId.value) {
-    showOperationError('請先輸入正式活動 campaignId。')
+  const records = getRecordSourceArray(filteredDatabaseSerialCodes)
+
+  if (!records.length) {
+    showOperationError('目前沒有資料庫序號可以匯出。')
     return
   }
 
-  window.open(getAdminGoldenEggSerialExportUrl(normalizedDatabaseCampaignId.value), '_blank')
+  const rows = records.map((item) => {
+    const statusInfo = getDatabaseSerialStatusInfo(item)
+
+    return [
+      item.id || '',
+      item.code || '',
+      statusInfo.label || item.status || '',
+      item.batchCode || '',
+      item.rewardChance ?? item.maxUseCount ?? item.totalCount ?? '',
+      getDatabaseSerialUsedCount(item),
+      getDatabaseSerialRemainingCount(item),
+      item.isIssued ? '已發放' : '未發放',
+      item.distributedTo || '',
+      item.distributedChannel || '',
+      formatDatabaseDateTime(item.expireAt),
+      formatDatabaseDateTime(item.usedAt || item.redeemedAt),
+      formatDatabaseDateTime(item.createdAt),
+      item.note || ''
+    ]
+  })
+
+  downloadCsvFile(
+    `golden-egg-database-serial-codes-${getExportDateStamp()}.csv`,
+    ['序號ID', '序號', '狀態', '批次代碼', '可用次數', '已用次數', '剩餘次數', '發放狀態', '發放對象', '發放管道', '有效期限', '使用時間', '建立時間', '備註'],
+    rows
+  )
+
+  showOperationSuccess(`已匯出 ${records.length} 組資料庫序號 CSV。`)
 }
 
 const toDatetimeLocalValue = (value) => {
@@ -5381,7 +5410,7 @@ watch(
               v-if="databaseSectionOpen.serials"
               class="rounded-3xl border border-cyan-100 bg-cyan-50 p-5 xl:col-span-2"
             >
-              <div class="flex items-start justify-between gap-3">
+              <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
                   <h3 class="text-base font-black text-cyan-900">
                     資料庫序號管理
@@ -5393,10 +5422,10 @@ watch(
 
                 <button
                   type="button"
-                  class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
+                  class="self-start rounded-2xl bg-white px-4 py-2 text-xs font-black text-cyan-700 shadow-sm ring-1 ring-cyan-100 transition hover:-translate-y-0.5 hover:bg-cyan-50"
                   @click="openDatabaseSerialExport"
                 >
-                  匯出 CSV
+                  匯出目前序號 CSV
                 </button>
               </div>
 
@@ -6052,15 +6081,6 @@ watch(
                       {{ filteredDatabasePlayRecords.length }} 筆
                     </span>
 
-                    <button
-                      type="button"
-                      class="rounded-2xl bg-indigo-50 px-3 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      :disabled="!filteredDatabasePlayRecords.length"
-                      @click="exportDatabasePlayRecordsCsv"
-                    >
-                      匯出
-                    </button>
-
                     <select
                       v-model.number="databaseRecordDisplayLimit.plays"
                       class="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 outline-none transition focus:border-violet-400"
@@ -6164,15 +6184,6 @@ watch(
                     <span class="rounded-full bg-violet-50 px-3 py-1 text-xs font-black text-violet-700">
                       {{ filteredDatabaseRewardRecords.length }} 筆
                     </span>
-
-                    <button
-                      type="button"
-                      class="rounded-2xl bg-fuchsia-50 px-3 py-2 text-xs font-black text-fuchsia-700 ring-1 ring-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      :disabled="!filteredDatabaseRewardRecords.length"
-                      @click="exportDatabaseRewardRecordsCsv"
-                    >
-                      匯出
-                    </button>
 
                     <select
                       v-model.number="databaseRecordDisplayLimit.rewards"
