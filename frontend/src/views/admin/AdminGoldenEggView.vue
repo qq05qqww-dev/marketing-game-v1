@@ -5846,19 +5846,38 @@ watch(
                 </p>
               </div>
 
-              <div class="mt-4 max-h-[560px] space-y-3 overflow-y-auto pr-1">
-                <article
-                  v-for="item in visibleDatabaseSerialCodes"
-                  :key="item.id"
-                  class="rounded-3xl border p-3 transition"
-                  :class="[
-                    getDatabaseSerialStatusInfo(item).cardClass,
-                    selectedDatabaseSerialIdSet.has(Number(item.id)) ? 'ring-2 ring-violet-300' : ''
-                  ]"
-                >
-                  <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div class="flex items-start gap-3">
-                      <label class="mt-1 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-100">
+              <div class="mt-4 rounded-3xl border border-cyan-100 bg-white/80 p-3 shadow-inner">
+                <div class="mb-3 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <p class="text-sm font-black text-slate-900">
+                    資料庫序號列表
+                  </p>
+                  <p class="text-xs font-bold text-cyan-700">
+                    窄版畫面可左右滑動查看，避免序號資料被擠成直排。
+                  </p>
+                </div>
+
+                <div class="max-h-[560px] overflow-auto pr-1">
+                  <div class="min-w-[980px] space-y-2">
+                    <div class="grid grid-cols-[76px_230px_120px_120px_150px_1fr_270px] gap-3 rounded-2xl bg-cyan-50 px-4 py-3 text-xs font-black text-cyan-900 ring-1 ring-cyan-100">
+                      <span>選取</span>
+                      <span>序號</span>
+                      <span>狀態</span>
+                      <span>批次</span>
+                      <span>使用次數</span>
+                      <span>發放 / 期限</span>
+                      <span>操作</span>
+                    </div>
+
+                    <article
+                      v-for="item in visibleDatabaseSerialCodes"
+                      :key="item.id"
+                      class="grid grid-cols-[76px_230px_120px_120px_150px_1fr_270px] items-center gap-3 rounded-2xl border px-4 py-3 text-sm transition"
+                      :class="[
+                        getDatabaseSerialStatusInfo(item).cardClass,
+                        selectedDatabaseSerialIdSet.has(Number(item.id)) ? 'ring-2 ring-violet-300' : ''
+                      ]"
+                    >
+                      <label class="inline-flex cursor-pointer items-center gap-2 text-xs font-black text-slate-700">
                         <input
                           type="checkbox"
                           class="h-4 w-4 rounded border-slate-300"
@@ -5869,68 +5888,85 @@ watch(
                       </label>
 
                       <div>
-                        <div class="mb-2 flex flex-wrap items-center gap-2">
-                          <span class="rounded-full px-3 py-1 text-xs font-black" :class="getDatabaseSerialStatusInfo(item).badgeClass">
-                            {{ getDatabaseSerialStatusInfo(item).label }}
-                          </span>
-                          <span class="rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">
-                            批次 {{ item.batchCode || '未分類' }}
-                          </span>
-                          <span class="rounded-full bg-cyan-50 px-3 py-1 text-xs font-black text-cyan-700">
-                            已用 {{ getDatabaseSerialUsedCount(item) }} / {{ getDatabaseSerialTotalCount(item) }} 次
-                          </span>
-                        </div>
-                        <p class="break-all font-mono text-sm font-black text-slate-900">
+                        <p class="font-mono text-sm font-black leading-5 text-slate-950">
                           {{ item.code }}
                         </p>
-                      <p class="mt-1 text-xs font-bold text-slate-500">
-                        {{ item.effectiveStatus || item.status }}｜批次 {{ item.batchCode || '無' }}｜增加 {{ item.rewardChance }} 次
-                      </p>
-                      <p class="mt-1 text-xs font-bold text-slate-400">
-                        發放：{{ item.distributedAt ? `${item.distributedChannel || '未填管道'}｜${item.distributedTo || '未填對象'}` : '未發放' }}
-                      </p>
-                      <p class="mt-1 text-xs font-bold text-slate-400">
-                        期限：{{ item.expireAt || '永不過期' }}
-                      </p>
+                        <p class="mt-1 text-[11px] font-bold text-slate-400">
+                          ID：{{ item.id }}
+                        </p>
                       </div>
-                    </div>
 
-                    <div class="flex shrink-0 flex-wrap gap-2">
-                      <button
-                        type="button"
-                        class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
-                        @click="copyDatabaseSerialCode(item)"
-                      >
-                        複製序號
-                      </button>
+                      <div>
+                        <span class="inline-flex rounded-full px-3 py-1 text-xs font-black" :class="getDatabaseSerialStatusInfo(item).badgeClass">
+                          {{ getDatabaseSerialStatusInfo(item).label }}
+                        </span>
+                      </div>
 
-                      <button
-                        type="button"
-                        class="rounded-xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
-                        @click="distributeDatabaseSerialCode(item)"
-                      >
-                        標記發放
-                      </button>
+                      <div>
+                        <p class="text-xs font-black text-indigo-700">
+                          {{ item.batchCode || '未分類' }}
+                        </p>
+                        <p class="mt-1 text-[11px] font-bold text-slate-400">
+                          增加 {{ item.rewardChance }} 次
+                        </p>
+                      </div>
 
-                      <button
-                        type="button"
-                        class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700"
-                        @click="toggleDatabaseSerialStatus(item)"
-                      >
-                        {{ item.status === 'DISABLED' ? '啟用' : '停用' }}
-                      </button>
+                      <div>
+                        <p class="text-xs font-black text-cyan-700">
+                          已用 {{ getDatabaseSerialUsedCount(item) }} / {{ getDatabaseSerialTotalCount(item) }} 次
+                        </p>
+                        <p class="mt-1 text-[11px] font-bold text-slate-400">
+                          {{ item.effectiveStatus || item.status }}
+                        </p>
+                      </div>
 
-                      <button
-                        type="button"
-                        class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100"
-                        @click="removeDatabaseSerialCode(item)"
-                      >
-                        刪除
-                      </button>
-                    </div>
+                      <div>
+                        <p class="text-xs font-bold text-slate-500">
+                          發放：{{ item.distributedAt ? `${item.distributedChannel || '未填管道'}｜${item.distributedTo || '未填對象'}` : '未發放' }}
+                        </p>
+                        <p class="mt-1 text-xs font-bold text-slate-400">
+                          期限：{{ item.expireAt || '永不過期' }}
+                        </p>
+                      </div>
+
+                      <div class="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                          @click="copyDatabaseSerialCode(item)"
+                        >
+                          複製序號
+                        </button>
+
+                        <button
+                          type="button"
+                          class="rounded-xl bg-cyan-50 px-3 py-2 text-xs font-black text-cyan-700 ring-1 ring-cyan-100"
+                          @click="distributeDatabaseSerialCode(item)"
+                        >
+                          標記發放
+                        </button>
+
+                        <button
+                          type="button"
+                          class="rounded-xl bg-slate-100 px-3 py-2 text-xs font-black text-slate-700"
+                          @click="toggleDatabaseSerialStatus(item)"
+                        >
+                          {{ item.status === 'DISABLED' ? '啟用' : '停用' }}
+                        </button>
+
+                        <button
+                          type="button"
+                          class="rounded-xl bg-rose-50 px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100"
+                          @click="removeDatabaseSerialCode(item)"
+                        >
+                          刪除
+                        </button>
+                      </div>
+                    </article>
                   </div>
-                </article>
+                </div>
               </div>
+
             </div>
           </div>
           <div
