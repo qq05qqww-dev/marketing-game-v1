@@ -1108,8 +1108,10 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
     shareImageUrl: databaseGameConfigForm.shareImageUrl || campaign.shareImageUrl || '',
     systemShareButtonText: databaseGameConfigForm.systemShareButtonText || campaign.systemShareButtonText || '系統分享',
     systemShareButtonTextSize: Number(databaseGameConfigForm.systemShareButtonTextSize || campaign.systemShareButtonTextSize || 14),
-    systemShareButtonBgColor: databaseGameConfigForm.systemShareButtonBgColor || campaign.systemShareButtonBgColor || '#7f1d1d',
+    systemShareButtonBgColor: databaseGameConfigForm.systemShareButtonBgColor || campaign.systemShareButtonBgColor || databaseGameConfigForm.themeButtonColor || campaign.themeButtonColor || '#7f1d1d',
     systemShareButtonTextColor: databaseGameConfigForm.systemShareButtonTextColor || campaign.systemShareButtonTextColor || '#ffffff',
+    systemShareButtonRadius: Number(databaseGameConfigForm.systemShareButtonRadius || campaign.systemShareButtonRadius || 16),
+    systemShareButtonPaddingY: Number(databaseGameConfigForm.systemShareButtonPaddingY || campaign.systemShareButtonPaddingY || 12),
     systemShareText: databaseGameConfigForm.systemShareText || campaign.systemShareText || '',
     lineShareText: databaseGameConfigForm.lineShareText || campaign.lineShareText || '',
     telegramShareText: databaseGameConfigForm.telegramShareText || campaign.telegramShareText || ''
@@ -1212,7 +1214,7 @@ const databaseGameConfigTemplatePresets = [
       eggNumberTextColor: '#fef3c7',
       shareTitle: '九宮格砸金蛋抽獎活動',
       shareDescription: '輸入活動序號，立即砸金蛋抽好禮！',
-      systemShareButtonBgColor: '#7f1d1d',
+      systemShareButtonBgColor: '#dc2626',
       systemShareButtonTextColor: '#ffffff',
       systemShareText: '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！',
       lineShareText: '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
@@ -1244,8 +1246,8 @@ const databaseGameConfigTemplatePresets = [
       themeBgTo: '#000000',
       themePanelColor: '#111827',
       themeAccentColor: '#facc15',
-      themeButtonColor: '#d97706',
-      themeButtonDarkColor: '#78350f',
+      themeButtonColor: '#111827',
+      themeButtonDarkColor: '#020617',
       eggColorTop: '#fef9c3',
       eggColorMiddle: '#facc15',
       eggColorBottom: '#92400e',
@@ -1255,8 +1257,8 @@ const databaseGameConfigTemplatePresets = [
       eggNumberTextColor: '#111827',
       shareTitle: 'VIP 黑金砸金蛋活動',
       shareDescription: '專屬序號限定參加，開出你的尊榮好禮。',
-      systemShareButtonBgColor: '#facc15',
-      systemShareButtonTextColor: '#111827',
+      systemShareButtonBgColor: '#111827',
+      systemShareButtonTextColor: '#facc15',
       systemShareText: '✨ VIP 黑金砸金蛋活動\n專屬序號限定參加，開出你的尊榮好禮。',
       lineShareText: '✨ VIP 黑金砸金蛋活動｜專屬序號限定參加！',
       telegramShareText: '✨ VIP 黑金砸金蛋活動｜專屬序號限定參加！'
@@ -6466,7 +6468,11 @@ watch(
                   <div class="mt-3 flex flex-wrap gap-2 text-xs font-black">
                     <span class="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-100">{{ template.fields.mainTitle }}</span>
                     <span class="rounded-full px-3 py-1 ring-1 ring-white/70" :style="{ background: template.fields.eggColorMiddle, color: template.fields.eggNumberTextColor }">金蛋色</span>
-                    <span class="rounded-full px-3 py-1 text-white" :style="{ background: template.fields.themeButtonColor }">按鈕色</span>
+                    <span class="rounded-full px-3 py-1 text-white" :style="{ background: template.fields.themeButtonColor }">主按鈕色</span>
+                    <span
+                      class="rounded-full px-3 py-1"
+                      :style="{ background: template.fields.systemShareButtonBgColor || template.fields.themeButtonColor, color: template.fields.systemShareButtonTextColor || '#ffffff' }"
+                    >分享按鈕</span>
                   </div>
                 </div>
               </div>
