@@ -33,6 +33,7 @@ const GOLDEN_EGG_SERIAL_CODES_KEY = 'multi_game_platform_golden_egg_serial_codes
 const GOLDEN_EGG_SERIAL_REDEEM_LOG_KEY = 'multi_game_platform_golden_egg_serial_redeem_log_v1'
 const GOLDEN_EGG_HISTORY_KEY = 'multi_game_platform_golden_egg_history_v1'
 const GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY = 'multi_game_platform_golden_egg_game_config_operation_log_v1'
+const GOLDEN_EGG_FRONT_PUBLIC_ORIGIN_KEY = 'multi_game_platform_golden_egg_front_public_origin_v1'
 
 
 const cloneByJson = (value) => JSON.parse(JSON.stringify(value))
@@ -54,6 +55,7 @@ const operationMessage = ref('')
 const operationMessageType = ref('info')
 const activeSection = ref('databaseMode')
 const databaseCampaignId = ref(localStorage.getItem('golden_egg_admin_database_campaign_id') || '')
+const databasePublicFrontOrigin = ref(localStorage.getItem(GOLDEN_EGG_FRONT_PUBLIC_ORIGIN_KEY) || '')
 const isLoadingDatabaseCampaign = ref(false)
 const databaseLoadMessage = ref('')
 const databaseCampaign = ref(null)
@@ -3239,6 +3241,58 @@ watch(
 )
 
 
+const normalizeFrontOrigin = (value = '') => {
+  const text = String(value || '').trim()
+
+  if (!text) return ''
+
+  const withProtocol = /^https?:\/\//i.test(text) ? text : `http://${text}`
+
+  return withProtocol.replace(/\/+$/, '')
+}
+
+const activeDatabaseFrontOrigin = computed(() => {
+  return normalizeFrontOrigin(databasePublicFrontOrigin.value) || window.location.origin
+})
+
+const isDatabaseFrontUrlLocalhost = computed(() => {
+  const origin = activeDatabaseFrontOrigin.value.toLowerCase()
+
+  return origin.includes('localhost') || origin.includes('127.0.0.1')
+})
+
+const databaseFrontScanHint = computed(() => {
+  if (isDatabaseFrontUrlLocalhost.value) {
+    return '目前 QR Code 使用 localhost，手機掃描通常無法開啟。請改成電腦區網 IP，例如 http://192.168.1.100:5173，或正式網域。'
+  }
+
+  return '目前 QR Code 使用可分享網址，手機掃描會進入目前商家的前台活動。'
+})
+
+const saveDatabasePublicFrontOrigin = () => {
+  const normalized = normalizeFrontOrigin(databasePublicFrontOrigin.value)
+  databasePublicFrontOrigin.value = normalized
+
+  if (normalized) {
+    localStorage.setItem(GOLDEN_EGG_FRONT_PUBLIC_ORIGIN_KEY, normalized)
+    showOperationSuccess('已儲存 QR Code 手機掃描網址設定。')
+  } else {
+    localStorage.removeItem(GOLDEN_EGG_FRONT_PUBLIC_ORIGIN_KEY)
+    showOperationSuccess('已清除 QR Code 手機掃描網址設定，改用目前瀏覽器網址。')
+  }
+}
+
+const useCurrentBrowserOriginForQrCode = () => {
+  databasePublicFrontOrigin.value = window.location.origin
+  saveDatabasePublicFrontOrigin()
+}
+
+const clearDatabasePublicFrontOrigin = () => {
+  databasePublicFrontOrigin.value = ''
+  saveDatabasePublicFrontOrigin()
+}
+
+
 const normalizedDatabaseCampaignId = computed(() => {
   const id = Number(databaseCampaignId.value)
 
@@ -3252,10 +3306,10 @@ const databaseFrontUrl = computed(() => {
   const tenantSlug = String(databaseCampaign.value?.tenant?.slug || user?.tenantSlug || '').trim()
 
   if (tenantSlug) {
-    return `${window.location.origin}/play/${tenantSlug}/golden-egg`
+    return `${activeDatabaseFrontOrigin.value}/play/${tenantSlug}/golden-egg`
   }
 
-  return `${window.location.origin}/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value}`
+  return `${activeDatabaseFrontOrigin.value}/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value}`
 })
 
 
@@ -6154,6 +6208,49 @@ watch(
                   >
                     複製網址
                   </button>
+                </div>
+
+                <div class="mt-3 rounded-2xl border border-emerald-100 bg-white p-3">
+                  <div class="flex flex-col gap-2 lg:flex-row lg:items-end">
+                    <label class="min-w-0 flex-1">
+                      <span class="text-xs font-black text-emerald-700">手機掃描網址根目錄</span>
+                      <input
+                        v-model="databasePublicFrontOrigin"
+                        type="text"
+                        class="mt-1 w-full rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-emerald-300 focus:bg-white"
+                        placeholder="例如：http://192.168.1.100:5173 或 https://your-domain.com"
+                      >
+                    </label>
+                    <div class="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white"
+                        @click="saveDatabasePublicFrontOrigin"
+                      >
+                        儲存網址
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                        @click="useCurrentBrowserOriginForQrCode"
+                      >
+                        使用目前網址
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-600 ring-1 ring-slate-200"
+                        @click="clearDatabasePublicFrontOrigin"
+                      >
+                        清除
+                      </button>
+                    </div>
+                  </div>
+                  <p
+                    class="mt-2 rounded-xl px-3 py-2 text-[11px] font-bold leading-5"
+                    :class="isDatabaseFrontUrlLocalhost ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'"
+                  >
+                    {{ databaseFrontScanHint }}
+                  </p>
                 </div>
 
                 <div class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3">
