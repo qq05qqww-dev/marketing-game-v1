@@ -101,6 +101,8 @@ const databaseSerialForm = reactive({
 const databaseRecordKeyword = ref('')
 const databaseRecordWinFilter = ref('all')
 const databaseRewardStatusFilter = ref('all')
+const databaseRecordPrizeFilter = ref('all')
+const databaseRecordDateFilter = ref('all')
 const databaseSectionOpen = reactive({
   links: true,
   summary: true,
@@ -179,7 +181,7 @@ const databaseRecordStats = computed(() => {
     playLose: losePlayCount,
     rewardTotal: rewardRecords.length,
     rewardPending: rewardStatusCounts.PENDING || 0,
-    rewardIssued: rewardStatusCounts.ISSUED || 0,
+    rewardIssued: (rewardStatusCounts.ISSUED || 0) + (rewardStatusCounts.CLAIMED || 0),
     rewardCancelled: rewardStatusCounts.CANCELLED || 0
   }
 })
@@ -2540,40 +2542,175 @@ const databaseStats = computed(() => {
 })
 
 
+const normalizeDatabaseRecordText = (value) => String(value ?? '').trim().toUpperCase()
+
+const getDatabaseRecordPrizeTitle = (item = {}) => {
+  return item.prize?.title || item.prizeTitle || item.prizeName || item.rewardTitle || ''
+}
+
+const getDatabaseRecordCreatedAt = (item = {}) => {
+  return item.playedAt || item.createdAt || item.updatedAt || item.claimedAt || null
+}
+
+const getDatabaseRewardStatus = (item = {}) => {
+  return String(item.status || 'PENDING').toUpperCase()
+}
+
+const isDatabaseRewardIssuedStatus = (item = {}) => {
+  const status = getDatabaseRewardStatus(item)
+  return status === 'ISSUED' || status === 'CLAIMED'
+}
+
+const isDatabaseRecordWithinDateFilter = (item = {}, filter = 'all') => {
+  if (filter === 'all') return true
+
+  const sourceDate = new Date(getDatabaseRecordCreatedAt(item))
+  if (Number.isNaN(sourceDate.getTime())) return false
+
+  const now = new Date()
+  const start = new Date(now)
+
+  if (filter === 'today') {
+    return sourceDate.toDateString() === now.toDateString()
+  }
+
+  if (filter === '7days') {
+    start.setDate(now.getDate() - 7)
+    return sourceDate >= start
+  }
+
+  if (filter === '30days') {
+    start.setDate(now.getDate() - 30)
+    return sourceDate >= start
+  }
+
+  return true
+}
+
+const matchDatabaseRecordKeyword = (item = {}, keyword = '') => {
+  if (!keyword) return true
+
+  const searchableText = [
+    item.id,
+    item.gameType,
+    item.result,
+    item.status,
+    item.playerName,
+    item.playerPhone,
+    item.playerEmail,
+    item.winnerName,
+    item.winnerPhone,
+    item.winnerEmail,
+    item.claimCode,
+    item.serialCode?.code,
+    item.serialCodeCode,
+    getDatabaseRecordPrizeTitle(item),
+    item.prize?.shortName,
+    item.prize?.description
+  ]
+    .map((value) => normalizeDatabaseRecordText(value))
+    .join(' ')
+
+  return searchableText.includes(keyword)
+}
+
+const databaseRecordPrizeOptions = computed(() => {
+  const titleMap = new Map()
+
+  databasePrizes.value.forEach((item) => {
+    const title = String(item.title || item.name || '').trim()
+    if (title) titleMap.set(title, title)
+  })
+
+  databasePlayRecords.value.forEach((item) => {
+    const title = String(getDatabaseRecordPrizeTitle(item)).trim()
+    if (title) titleMap.set(title, title)
+  })
+
+  databaseRewardRecords.value.forEach((item) => {
+    const title = String(getDatabaseRecordPrizeTitle(item)).trim()
+    if (title) titleMap.set(title, title)
+  })
+
+  return Array.from(titleMap.values()).sort((a, b) => a.localeCompare(b, 'zh-Hant'))
+})
+
 const filteredDatabasePlayRecords = computed(() => {
-  const keyword = String(databaseRecordKeyword.value || '').trim().toUpperCase()
+  const keyword = normalizeDatabaseRecordText(databaseRecordKeyword.value)
   const winFilter = databaseRecordWinFilter.value
+  const prizeFilter = databaseRecordPrizeFilter.value
+  const dateFilter = databaseRecordDateFilter.value
 
   return databasePlayRecords.value.filter((item) => {
-    if (winFilter === 'win' && !item.isWin) return false
-    if (winFilter === 'lose' && item.isWin) return false
+    const isWin = item.isWin || item.result === 'WIN' || Boolean(item.prize)
+    const prizeTitle = getDatabaseRecordPrizeTitle(item)
 
-    if (!keyword) return true
+    if (winFilter === 'win' && !isWin) return false
+    if (winFilter === 'lose' && isWin) return false
+    if (prizeFilter !== 'all' && prizeTitle !== prizeFilter) return false
+    if (!isDatabaseRecordWithinDateFilter(item, dateFilter)) return false
 
-    return String(item.playerName || '').toUpperCase().includes(keyword)
-      || String(item.playerPhone || '').toUpperCase().includes(keyword)
-      || String(item.playerEmail || '').toUpperCase().includes(keyword)
-      || String(item.prize?.title || '').toUpperCase().includes(keyword)
-      || String(item.serialCode?.code || '').toUpperCase().includes(keyword)
+    return matchDatabaseRecordKeyword(item, keyword)
   })
 })
 
 const filteredDatabaseRewardRecords = computed(() => {
-  const keyword = String(databaseRecordKeyword.value || '').trim().toUpperCase()
+  const keyword = normalizeDatabaseRecordText(databaseRecordKeyword.value)
   const statusFilter = databaseRewardStatusFilter.value
+  const prizeFilter = databaseRecordPrizeFilter.value
+  const dateFilter = databaseRecordDateFilter.value
 
   return databaseRewardRecords.value.filter((item) => {
-    if (statusFilter !== 'all' && item.status !== statusFilter) return false
+    const status = getDatabaseRewardStatus(item)
+    const prizeTitle = getDatabaseRecordPrizeTitle(item)
 
-    if (!keyword) return true
+    if (statusFilter === 'PENDING' && status !== 'PENDING') return false
+    if (statusFilter === 'ISSUED' && !isDatabaseRewardIssuedStatus(item)) return false
+    if (statusFilter === 'CANCELLED' && status !== 'CANCELLED') return false
+    if (prizeFilter !== 'all' && prizeTitle !== prizeFilter) return false
+    if (!isDatabaseRecordWithinDateFilter(item, dateFilter)) return false
 
-    return String(item.winnerName || '').toUpperCase().includes(keyword)
-      || String(item.winnerPhone || '').toUpperCase().includes(keyword)
-      || String(item.winnerEmail || '').toUpperCase().includes(keyword)
-      || String(item.prize?.title || '').toUpperCase().includes(keyword)
-      || String(item.claimCode || '').toUpperCase().includes(keyword)
+    return matchDatabaseRecordKeyword(item, keyword)
   })
 })
+
+const databaseRecordHasActiveFilters = computed(() => {
+  return Boolean(String(databaseRecordKeyword.value || '').trim())
+    || databaseRecordWinFilter.value !== 'all'
+    || databaseRewardStatusFilter.value !== 'all'
+    || databaseRecordPrizeFilter.value !== 'all'
+    || databaseRecordDateFilter.value !== 'all'
+})
+
+const databaseRecordFilterSummary = computed(() => {
+  const chips = []
+
+  if (String(databaseRecordKeyword.value || '').trim()) chips.push(`關鍵字：${databaseRecordKeyword.value}`)
+
+  if (databaseRecordWinFilter.value === 'win') chips.push('遊玩：只看中獎')
+  if (databaseRecordWinFilter.value === 'lose') chips.push('遊玩：只看未中獎')
+
+  if (databaseRewardStatusFilter.value === 'PENDING') chips.push('發獎：待核銷')
+  if (databaseRewardStatusFilter.value === 'ISSUED') chips.push('發獎：已發獎')
+  if (databaseRewardStatusFilter.value === 'CANCELLED') chips.push('發獎：已取消')
+
+  if (databaseRecordPrizeFilter.value !== 'all') chips.push(`獎項：${databaseRecordPrizeFilter.value}`)
+
+  if (databaseRecordDateFilter.value === 'today') chips.push('時間：今天')
+  if (databaseRecordDateFilter.value === '7days') chips.push('時間：近 7 天')
+  if (databaseRecordDateFilter.value === '30days') chips.push('時間：近 30 天')
+
+  return chips
+})
+
+const resetDatabaseRecordFilters = () => {
+  databaseRecordKeyword.value = ''
+  databaseRecordWinFilter.value = 'all'
+  databaseRewardStatusFilter.value = 'all'
+  databaseRecordPrizeFilter.value = 'all'
+  databaseRecordDateFilter.value = 'all'
+  showOperationSuccess('已清除紀錄搜尋與篩選條件。')
+}
 
 const setDatabasePreviewSyncMessage = (message = '資料庫已更新，請刷新前台正式頁查看最新結果。') => {
   databasePreviewSyncMessage.value = message
@@ -3837,6 +3974,7 @@ watch(
 // 第 400 批：紀錄管理顯示筆數真正生效版。
 
 // 第 401 批：紀錄管理快速篩選統計版。
+// 第 404 批：紀錄搜尋與篩選強化版。
 
 // 第 402 批：操作狀態提示強化與序號處理中顯示補強版。
 
@@ -5579,34 +5717,116 @@ watch(
               </div>
             </div>
 
-            <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-              <label class="admin-field">
-                <span>搜尋紀錄</span>
-                <input
-                  v-model="databaseRecordKeyword"
-                  type="text"
-                  placeholder="搜尋玩家、獎項、序號、核銷碼"
-                />
-              </label>
+            <div class="mt-4 rounded-3xl bg-white p-4 shadow-sm ring-1 ring-violet-100">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 class="text-sm font-black text-slate-900">
+                    紀錄搜尋與篩選
+                  </h4>
+                  <p class="mt-1 text-xs font-bold text-slate-500">
+                    可依玩家、手機、序號、獎項、發獎狀態與時間範圍快速找資料。
+                  </p>
+                </div>
 
-              <label class="admin-field">
-                <span>遊玩紀錄篩選</span>
-                <select v-model="databaseRecordWinFilter">
-                  <option value="all">全部遊玩</option>
-                  <option value="win">只看中獎</option>
-                  <option value="lose">只看未中獎</option>
-                </select>
-              </label>
+                <button
+                  type="button"
+                  class="rounded-2xl px-4 py-2 text-xs font-black shadow-sm ring-1 transition disabled:cursor-not-allowed disabled:opacity-40"
+                  :class="databaseRecordHasActiveFilters ? 'bg-violet-600 text-white ring-violet-500 hover:-translate-y-0.5' : 'bg-slate-50 text-slate-400 ring-slate-100'"
+                  :disabled="!databaseRecordHasActiveFilters"
+                  @click="resetDatabaseRecordFilters"
+                >
+                  清除篩選
+                </button>
+              </div>
 
-              <label class="admin-field">
-                <span>中獎紀錄篩選</span>
-                <select v-model="databaseRewardStatusFilter">
-                  <option value="all">全部狀態</option>
-                  <option value="PENDING">待核銷</option>
-                  <option value="CLAIMED">已核銷</option>
-                  <option value="CANCELLED">已取消</option>
-                </select>
-              </label>
+              <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
+                <label class="admin-field xl:col-span-2">
+                  <span>搜尋紀錄</span>
+                  <input
+                    v-model="databaseRecordKeyword"
+                    type="text"
+                    placeholder="搜尋玩家、手機、Email、獎項、序號、核銷碼"
+                  />
+                </label>
+
+                <label class="admin-field">
+                  <span>遊玩結果</span>
+                  <select v-model="databaseRecordWinFilter">
+                    <option value="all">全部遊玩</option>
+                    <option value="win">只看中獎</option>
+                    <option value="lose">只看未中獎</option>
+                  </select>
+                </label>
+
+                <label class="admin-field">
+                  <span>發獎狀態</span>
+                  <select v-model="databaseRewardStatusFilter">
+                    <option value="all">全部狀態</option>
+                    <option value="PENDING">待核銷</option>
+                    <option value="ISSUED">已發獎</option>
+                    <option value="CANCELLED">已取消</option>
+                  </select>
+                </label>
+
+                <label class="admin-field">
+                  <span>獎項名稱</span>
+                  <select v-model="databaseRecordPrizeFilter">
+                    <option value="all">全部獎項</option>
+                    <option
+                      v-for="title in databaseRecordPrizeOptions"
+                      :key="`record-prize-${title}`"
+                      :value="title"
+                    >
+                      {{ title }}
+                    </option>
+                  </select>
+                </label>
+
+                <label class="admin-field">
+                  <span>時間範圍</span>
+                  <select v-model="databaseRecordDateFilter">
+                    <option value="all">全部時間</option>
+                    <option value="today">今天</option>
+                    <option value="7days">近 7 天</option>
+                    <option value="30days">近 30 天</option>
+                  </select>
+                </label>
+
+                <div class="flex flex-col justify-end rounded-3xl bg-white p-3 ring-1 ring-violet-100">
+                  <span class="mb-2 text-xs font-black text-slate-500">篩選操作</span>
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-700"
+                    @click="resetDatabaseRecordFilters"
+                  >
+                    清除篩選
+                  </button>
+                </div>
+              </div>
+
+              <div class="mt-4 rounded-2xl bg-violet-50/70 p-3 text-xs font-black text-violet-700">
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="rounded-full bg-white px-3 py-1 ring-1 ring-violet-100">
+                    遊玩符合 {{ filteredDatabasePlayRecords.length }} / {{ databasePlayRecords.length }} 筆
+                  </span>
+                  <span class="rounded-full bg-white px-3 py-1 ring-1 ring-violet-100">
+                    發獎符合 {{ filteredDatabaseRewardRecords.length }} / {{ databaseRewardRecords.length }} 筆
+                  </span>
+                  <span
+                    v-if="!databaseRecordHasActiveFilters"
+                    class="rounded-full bg-white px-3 py-1 text-slate-500 ring-1 ring-slate-100"
+                  >
+                    目前未套用篩選
+                  </span>
+                  <span
+                    v-for="chip in databaseRecordFilterSummary"
+                    :key="chip"
+                    class="rounded-full bg-white px-3 py-1 ring-1 ring-violet-100"
+                  >
+                    {{ chip }}
+                  </span>
+                </div>
+              </div>
             </div>
 
             <div class="mt-4 space-y-4">
@@ -5869,7 +6089,7 @@ watch(
                             <button
                               type="button"
                               class="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-                              :disabled="item.status === 'CLAIMED'"
+                              :disabled="isDatabaseRewardIssuedStatus(item)"
                               @click="claimDatabaseRewardRecord(item)"
                             >
                               核銷
