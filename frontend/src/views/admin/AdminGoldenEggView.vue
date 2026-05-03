@@ -2960,15 +2960,125 @@ const databaseSerialFilterSummary = computed(() => {
   const used = filteredDatabaseSerialCodes.value.filter((item) => getDatabaseSerialStatusInfo(item).key === 'USED').length
   const unused = filteredDatabaseSerialCodes.value.filter((item) => getDatabaseSerialStatusInfo(item).key === 'UNUSED').length
   const disabled = filteredDatabaseSerialCodes.value.filter((item) => getDatabaseSerialStatusInfo(item).key === 'DISABLED').length
+  const issued = filteredDatabaseSerialCodes.value.filter((item) => Boolean(item?.isIssued)).length
+  const unissued = filteredDatabaseSerialCodes.value.filter((item) => !item?.isIssued).length
+  const percent = (value, base = filtered) => {
+    if (!base) return '0%'
+    return `${Math.round((value / base) * 100)}%`
+  }
 
   return {
     total,
     filtered,
     used,
     unused,
-    disabled
+    disabled,
+    issued,
+    unissued,
+    filterRate: percent(filtered, total),
+    usedPercent: percent(used),
+    unusedPercent: percent(unused),
+    disabledPercent: percent(disabled),
+    issuedPercent: percent(issued),
+    unissuedPercent: percent(unissued)
   }
 })
+
+const databaseSerialActiveFilterTags = computed(() => {
+  const tags = []
+  const keyword = databaseSerialSearchKeyword.value.trim()
+
+  if (keyword) {
+    tags.push(`關鍵字：${keyword}`)
+  }
+
+  if (databaseSerialBatchFilter.value !== 'ALL') {
+    tags.push(`批次：${databaseSerialBatchFilter.value}`)
+  }
+
+  if (databaseSerialStatusFilter.value !== 'ALL') {
+    const statusMap = {
+      UNUSED: '可使用',
+      USED: '已使用',
+      DISABLED: '已停用'
+    }
+    tags.push(`狀態：${statusMap[databaseSerialStatusFilter.value] || databaseSerialStatusFilter.value}`)
+  }
+
+  if (databaseSerialIssueFilter.value !== 'ALL') {
+    const issueMap = {
+      ISSUED: '已發放',
+      UNISSUED: '未發放'
+    }
+    tags.push(`發放：${issueMap[databaseSerialIssueFilter.value] || databaseSerialIssueFilter.value}`)
+  }
+
+  return tags.length ? tags : ['全部序號']
+})
+
+const isDatabaseSerialQuickFilterActive = (type) => {
+  if (type === 'LIVE01') {
+    return databaseSerialBatchFilter.value === 'LIVE01'
+      && databaseSerialStatusFilter.value === 'ALL'
+      && databaseSerialIssueFilter.value === 'ALL'
+      && !databaseSerialSearchKeyword.value.trim()
+  }
+
+  if (type === 'USED') {
+    return databaseSerialStatusFilter.value === 'USED'
+  }
+
+  if (type === 'UNUSED') {
+    return databaseSerialStatusFilter.value === 'UNUSED'
+  }
+
+  if (type === 'DISABLED') {
+    return databaseSerialStatusFilter.value === 'DISABLED'
+  }
+
+  if (type === 'TEST') {
+    return databaseSerialSearchKeyword.value.trim().toLowerCase() === 'test'
+  }
+
+  return false
+}
+
+const databaseSerialQuickButtonClass = (type) => {
+  const base = 'rounded-full px-4 py-2 text-xs font-black transition hover:-translate-y-0.5 hover:shadow-sm'
+  const active = isDatabaseSerialQuickFilterActive(type)
+
+  if (type === 'LIVE01') {
+    return active
+      ? `${base} bg-violet-700 text-white shadow-sm ring-2 ring-violet-200`
+      : `${base} bg-white text-violet-700 ring-1 ring-violet-100`
+  }
+
+  if (type === 'USED') {
+    return active
+      ? `${base} bg-rose-600 text-white shadow-sm ring-2 ring-rose-200`
+      : `${base} bg-white text-rose-700 ring-1 ring-rose-100`
+  }
+
+  if (type === 'UNUSED') {
+    return active
+      ? `${base} bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-200`
+      : `${base} bg-white text-emerald-700 ring-1 ring-emerald-100`
+  }
+
+  if (type === 'DISABLED') {
+    return active
+      ? `${base} bg-slate-700 text-white shadow-sm ring-2 ring-slate-200`
+      : `${base} bg-white text-slate-700 ring-1 ring-slate-100`
+  }
+
+  if (type === 'TEST') {
+    return active
+      ? `${base} bg-amber-500 text-white shadow-sm ring-2 ring-amber-200`
+      : `${base} bg-white text-amber-700 ring-1 ring-amber-100`
+  }
+
+  return `${base} bg-slate-950 text-white`
+}
 
 const setDatabaseSerialQuickFilter = (type) => {
   if (type === 'LIVE01') {
@@ -2985,6 +3095,11 @@ const setDatabaseSerialQuickFilter = (type) => {
 
   if (type === 'UNUSED') {
     databaseSerialStatusFilter.value = 'UNUSED'
+    return
+  }
+
+  if (type === 'DISABLED') {
+    databaseSerialStatusFilter.value = 'DISABLED'
     return
   }
 
@@ -5648,58 +5763,88 @@ watch(
               </div>
 
               
-              <div class="mt-4 rounded-3xl border border-violet-100 bg-violet-50/70 p-4">
-                <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+              <div class="mt-4 rounded-3xl border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-cyan-50 p-4 shadow-sm">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h4 class="text-sm font-black text-slate-950">
+                    <p class="text-[11px] font-black uppercase tracking-[0.24em] text-violet-500">
+                      Serial Filter Center
+                    </p>
+                    <h4 class="mt-1 text-base font-black text-slate-950">
                       序號查詢與營運篩選
                     </h4>
-                    <p class="mt-1 text-xs font-bold text-slate-500">
-                      序號多時可用搜尋、批次、狀態快速篩選，避免一直往下滑。
+                    <p class="mt-1 max-w-2xl text-xs font-bold leading-relaxed text-slate-500">
+                      先用快速篩選抓常用條件，再搭配搜尋、批次、狀態與發放條件縮小序號清單。
                     </p>
                   </div>
 
-                  <div class="flex flex-wrap gap-2">
+                  <div class="rounded-2xl bg-white/80 px-4 py-3 text-right ring-1 ring-violet-100">
+                    <p class="text-[11px] font-black text-slate-400">目前篩選</p>
+                    <p class="text-xl font-black text-violet-700">
+                      {{ databaseSerialFilterSummary.filtered }} / {{ databaseSerialFilterSummary.total }}
+                    </p>
+                    <p class="text-[11px] font-black text-slate-400">
+                      佔全部 {{ databaseSerialFilterSummary.filterRate }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="mt-4 rounded-3xl border border-white/70 bg-white/70 p-3">
+                  <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p class="text-xs font-black text-slate-700">快速篩選</p>
+                      <p class="mt-1 text-[11px] font-bold text-slate-400">目前選到的條件會高亮顯示</p>
+                    </div>
+
                     <button
                       type="button"
-                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-violet-700 ring-1 ring-violet-100"
+                      :class="databaseSerialQuickButtonClass('CLEAR')"
+                      @click="setDatabaseSerialQuickFilter('CLEAR')"
+                    >
+                      清除全部篩選
+                    </button>
+                  </div>
+
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      :class="databaseSerialQuickButtonClass('LIVE01')"
                       @click="setDatabaseSerialQuickFilter('LIVE01')"
                     >
                       只看 LIVE01
                     </button>
                     <button
                       type="button"
-                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-rose-700 ring-1 ring-rose-100"
-                      @click="setDatabaseSerialQuickFilter('USED')"
-                    >
-                      只看已使用
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                      :class="databaseSerialQuickButtonClass('UNUSED')"
                       @click="setDatabaseSerialQuickFilter('UNUSED')"
                     >
                       只看可使用
                     </button>
                     <button
                       type="button"
-                      class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-100"
+                      :class="databaseSerialQuickButtonClass('USED')"
+                      @click="setDatabaseSerialQuickFilter('USED')"
+                    >
+                      只看已使用
+                    </button>
+                    <button
+                      type="button"
+                      :class="databaseSerialQuickButtonClass('DISABLED')"
+                      @click="setDatabaseSerialQuickFilter('DISABLED')"
+                    >
+                      只看已停用
+                    </button>
+                    <button
+                      type="button"
+                      :class="databaseSerialQuickButtonClass('TEST')"
                       @click="setDatabaseSerialQuickFilter('TEST')"
                     >
                       找測試序號
                     </button>
-                    <button
-                      type="button"
-                      class="rounded-2xl bg-slate-950 px-3 py-2 text-xs font-black text-white"
-                      @click="setDatabaseSerialQuickFilter('CLEAR')"
-                    >
-                      清除篩選
-                    </button>
                   </div>
                 </div>
 
-                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-4">
-                  <label class="admin-field">
+                <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4">
+                  <label class="admin-field lg:col-span-1">
                     <span>搜尋序號 / 批次</span>
                     <input
                       v-model="databaseSerialSearchKeyword"
@@ -5742,30 +5887,55 @@ watch(
                   </label>
                 </div>
 
-                <div class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
-                  <div class="rounded-2xl bg-white/80 p-3">
-                    <p class="text-[11px] font-black text-slate-400">全部序號</p>
-                    <p class="text-lg font-black text-slate-950">{{ databaseSerialFilterSummary.total }}</p>
-                  </div>
-                  <div class="rounded-2xl bg-white/80 p-3">
-                    <p class="text-[11px] font-black text-slate-400">篩選結果</p>
-                    <p class="text-lg font-black text-violet-700">{{ databaseSerialFilterSummary.filtered }}</p>
-                  </div>
-                  <div class="rounded-2xl bg-white/80 p-3">
-                    <p class="text-[11px] font-black text-slate-400">可使用</p>
-                    <p class="text-lg font-black text-emerald-700">{{ databaseSerialFilterSummary.unused }}</p>
-                  </div>
-                  <div class="rounded-2xl bg-white/80 p-3">
-                    <p class="text-[11px] font-black text-slate-400">已使用</p>
-                    <p class="text-lg font-black text-rose-700">{{ databaseSerialFilterSummary.used }}</p>
-                  </div>
-                  <div class="rounded-2xl bg-white/80 p-3">
-                    <p class="text-[11px] font-black text-slate-400">已停用</p>
-                    <p class="text-lg font-black text-slate-700">{{ databaseSerialFilterSummary.disabled }}</p>
+                <div class="mt-4 rounded-3xl border border-violet-100 bg-white/75 p-3">
+                  <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <p class="text-xs font-black text-slate-700">目前條件</p>
+                    <div class="flex flex-wrap gap-2">
+                      <span
+                        v-for="tag in databaseSerialActiveFilterTags"
+                        :key="tag"
+                        class="rounded-full bg-violet-50 px-3 py-1 text-[11px] font-black text-violet-700 ring-1 ring-violet-100"
+                      >
+                        {{ tag }}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <p class="mt-3 text-xs font-bold text-slate-500">
+                <div class="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+                  <div class="rounded-3xl bg-white/85 p-3 ring-1 ring-slate-100">
+                    <p class="text-[11px] font-black text-slate-400">全部序號</p>
+                    <p class="mt-1 text-xl font-black text-slate-950">{{ databaseSerialFilterSummary.total }}</p>
+                    <p class="text-[11px] font-bold text-slate-400">資料庫總量</p>
+                  </div>
+                  <div class="rounded-3xl bg-violet-50 p-3 ring-1 ring-violet-100">
+                    <p class="text-[11px] font-black text-violet-500">篩選結果</p>
+                    <p class="mt-1 text-xl font-black text-violet-700">{{ databaseSerialFilterSummary.filtered }}</p>
+                    <p class="text-[11px] font-bold text-violet-400">{{ databaseSerialFilterSummary.filterRate }}</p>
+                  </div>
+                  <div class="rounded-3xl bg-emerald-50 p-3 ring-1 ring-emerald-100">
+                    <p class="text-[11px] font-black text-emerald-500">可使用</p>
+                    <p class="mt-1 text-xl font-black text-emerald-700">{{ databaseSerialFilterSummary.unused }}</p>
+                    <p class="text-[11px] font-bold text-emerald-500">{{ databaseSerialFilterSummary.unusedPercent }}</p>
+                  </div>
+                  <div class="rounded-3xl bg-rose-50 p-3 ring-1 ring-rose-100">
+                    <p class="text-[11px] font-black text-rose-500">已使用</p>
+                    <p class="mt-1 text-xl font-black text-rose-700">{{ databaseSerialFilterSummary.used }}</p>
+                    <p class="text-[11px] font-bold text-rose-500">{{ databaseSerialFilterSummary.usedPercent }}</p>
+                  </div>
+                  <div class="rounded-3xl bg-slate-50 p-3 ring-1 ring-slate-100">
+                    <p class="text-[11px] font-black text-slate-500">已停用</p>
+                    <p class="mt-1 text-xl font-black text-slate-700">{{ databaseSerialFilterSummary.disabled }}</p>
+                    <p class="text-[11px] font-bold text-slate-400">{{ databaseSerialFilterSummary.disabledPercent }}</p>
+                  </div>
+                  <div class="rounded-3xl bg-cyan-50 p-3 ring-1 ring-cyan-100">
+                    <p class="text-[11px] font-black text-cyan-600">未發放</p>
+                    <p class="mt-1 text-xl font-black text-cyan-700">{{ databaseSerialFilterSummary.unissued }}</p>
+                    <p class="text-[11px] font-bold text-cyan-500">{{ databaseSerialFilterSummary.unissuedPercent }}</p>
+                  </div>
+                </div>
+
+                <p class="mt-3 text-xs font-bold leading-relaxed text-slate-500">
                   目前列表最多顯示前 60 筆篩選結果；若正式資料超過上千筆，下一階段建議改成後端分頁查詢。
                 </p>
               </div>
