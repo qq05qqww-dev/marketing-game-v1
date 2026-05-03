@@ -3534,6 +3534,117 @@ const formatDatabaseDateTime = (value) => {
   return date.toLocaleString('zh-TW')
 }
 
+
+const formatDatabaseOverviewDate = (value) => {
+  if (!value) return '未設定'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) return String(value)
+
+  return date.toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const getDatabaseCampaignStatusMeta = (campaign = {}) => {
+  const rawStatus = String(campaign.status || '').toUpperCase()
+  const now = new Date()
+  const startDate = campaign.startAt ? new Date(campaign.startAt) : null
+  const endDate = campaign.endAt ? new Date(campaign.endAt) : null
+  const hasValidStart = startDate && !Number.isNaN(startDate.getTime())
+  const hasValidEnd = endDate && !Number.isNaN(endDate.getTime())
+
+  if (rawStatus === 'DRAFT') {
+    return {
+      label: '草稿',
+      tone: 'bg-slate-100 text-slate-700 ring-slate-200',
+      description: '活動尚未正式啟用'
+    }
+  }
+
+  if (rawStatus === 'INACTIVE') {
+    return {
+      label: '停用',
+      tone: 'bg-zinc-100 text-zinc-700 ring-zinc-200',
+      description: '活動目前已停用'
+    }
+  }
+
+  if (rawStatus === 'ENDED' || (hasValidEnd && now > endDate)) {
+    return {
+      label: '已結束',
+      tone: 'bg-rose-50 text-rose-700 ring-rose-100',
+      description: '活動時間已結束'
+    }
+  }
+
+  if (hasValidStart && now < startDate) {
+    return {
+      label: '尚未開始',
+      tone: 'bg-amber-50 text-amber-700 ring-amber-100',
+      description: '活動尚未到開始時間'
+    }
+  }
+
+  if (rawStatus === 'ACTIVE') {
+    return {
+      label: '進行中',
+      tone: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+      description: '活動目前可正常參加'
+    }
+  }
+
+  return {
+    label: rawStatus || '未設定',
+    tone: 'bg-slate-100 text-slate-700 ring-slate-200',
+    description: '請確認活動狀態設定'
+  }
+}
+
+const databaseActivityOverview = computed(() => {
+  const campaign = databaseCampaign.value || {}
+  const statusMeta = getDatabaseCampaignStatusMeta(campaign)
+  const totalPrizeStock = databasePrizes.value.reduce((total, item) => total + Number(item.stockTotal || 0), 0)
+  const remainingPrizeStock = databasePrizes.value.reduce((total, item) => {
+    const remainStock = item.remainStock ?? item.stockRemaining ?? null
+    const stockUsed = Number(item.stockUsed || 0)
+    const stockTotal = Number(item.stockTotal || 0)
+
+    return total + Number((remainStock ?? Math.max(0, stockTotal - stockUsed)) || 0)
+  }, 0)
+  const issuedRewardCount = databaseRewardRecords.value.filter((item) => ['ISSUED', 'CLAIMED'].includes(String(item.status || '').toUpperCase())).length
+  const pendingRewardCount = databaseRewardRecords.value.filter((item) => String(item.status || 'PENDING').toUpperCase() === 'PENDING').length
+  const winRate = databasePlayRecords.value.length
+    ? Math.round((databaseRewardRecords.value.length / databasePlayRecords.value.length) * 1000) / 10
+    : 0
+
+  return {
+    title: campaign.title || databaseCampaignForm.title || '未命名砸金蛋活動',
+    slug: campaign.slug || databaseCampaignForm.slug || '未設定',
+    rawStatus: campaign.status || databaseCampaignForm.status || '未設定',
+    statusLabel: statusMeta.label,
+    statusTone: statusMeta.tone,
+    statusDescription: statusMeta.description,
+    activityTimeText: `${formatDatabaseOverviewDate(campaign.startAt || databaseCampaignForm.startAt)} ～ ${formatDatabaseOverviewDate(campaign.endAt || databaseCampaignForm.endAt)}`,
+    prizeCount: databasePrizes.value.length,
+    totalPrizeStock,
+    remainingPrizeStock,
+    serialTotal: databaseSerialCodes.value.length,
+    serialUsed: databaseStats.value.usedSerialCount,
+    serialUnused: databaseStats.value.unusedSerialCount,
+    playTotal: databasePlayRecords.value.length,
+    rewardTotal: databaseRewardRecords.value.length,
+    issuedRewardCount,
+    pendingRewardCount,
+    winRate
+  }
+})
+
 const copyDatabaseText = async (text) => {
   if (!text) return
 
@@ -3724,6 +3835,10 @@ watch(
 // 第 400 批：紀錄管理顯示筆數真正生效版。
 
 // 第 401 批：紀錄管理快速篩選統計版。
+
+// 第 402 批：操作狀態提示強化與序號處理中顯示補強版。
+
+// 第 403 批：砸金蛋後台活動總覽卡版。
 </script>
 
 <template>
@@ -4030,6 +4145,97 @@ watch(
                   >
                     複製
                   </button>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div
+            v-if="databaseCampaign && databaseSectionOpen.summary"
+            class="rounded-3xl border border-yellow-100 bg-gradient-to-br from-yellow-50 via-white to-orange-50 p-4 shadow-sm"
+          >
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.2em] text-yellow-600">
+                  Activity Overview
+                </p>
+                <h3 class="mt-1 text-lg font-black text-slate-900">
+                  {{ databaseActivityOverview.title }}
+                </h3>
+                <p class="mt-1 text-xs font-bold text-slate-500">
+                  Slug：{{ databaseActivityOverview.slug }} ｜ 原始狀態：{{ databaseActivityOverview.rawStatus }}
+                </p>
+              </div>
+
+              <div class="flex flex-col items-start gap-2 md:items-end">
+                <span :class="['inline-flex rounded-2xl px-4 py-2 text-sm font-black ring-1', databaseActivityOverview.statusTone]">
+                  {{ databaseActivityOverview.statusLabel }}
+                </span>
+                <p class="text-xs font-black text-slate-500">
+                  {{ databaseActivityOverview.statusDescription }}
+                </p>
+              </div>
+            </div>
+
+            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
+                <p class="text-xs font-black text-slate-400">活動期間</p>
+                <p class="mt-2 text-sm font-black leading-6 text-slate-800">
+                  {{ databaseActivityOverview.activityTimeText }}
+                </p>
+              </article>
+
+              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
+                <p class="text-xs font-black text-slate-400">獎項庫存</p>
+                <p class="mt-2 text-2xl font-black text-slate-900">
+                  {{ databaseActivityOverview.remainingPrizeStock }} / {{ databaseActivityOverview.totalPrizeStock }}
+                </p>
+                <p class="mt-1 text-xs font-bold text-slate-500">
+                  共 {{ databaseActivityOverview.prizeCount }} 個獎項
+                </p>
+              </article>
+
+              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
+                <p class="text-xs font-black text-slate-400">序號使用</p>
+                <p class="mt-2 text-2xl font-black text-slate-900">
+                  {{ databaseActivityOverview.serialUsed }} / {{ databaseActivityOverview.serialTotal }}
+                </p>
+                <p class="mt-1 text-xs font-bold text-slate-500">
+                  未使用 {{ databaseActivityOverview.serialUnused }} 組
+                </p>
+              </article>
+
+              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100">
+                <p class="text-xs font-black text-slate-400">中獎率概覽</p>
+                <p class="mt-2 text-2xl font-black text-slate-900">
+                  {{ databaseActivityOverview.winRate }}%
+                </p>
+                <p class="mt-1 text-xs font-bold text-slate-500">
+                  {{ databaseActivityOverview.rewardTotal }} 次中獎 / {{ databaseActivityOverview.playTotal }} 次遊玩
+                </p>
+              </article>
+
+              <article class="rounded-3xl bg-white/80 p-4 ring-1 ring-yellow-100 sm:col-span-2 xl:col-span-4">
+                <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <div class="rounded-2xl bg-slate-50 p-3 text-center">
+                    <p class="text-xs font-black text-slate-400">遊玩次數</p>
+                    <p class="mt-1 text-xl font-black text-slate-900">{{ databaseActivityOverview.playTotal }}</p>
+                  </div>
+
+                  <div class="rounded-2xl bg-rose-50 p-3 text-center">
+                    <p class="text-xs font-black text-rose-400">中獎次數</p>
+                    <p class="mt-1 text-xl font-black text-rose-700">{{ databaseActivityOverview.rewardTotal }}</p>
+                  </div>
+
+                  <div class="rounded-2xl bg-emerald-50 p-3 text-center">
+                    <p class="text-xs font-black text-emerald-500">已發獎</p>
+                    <p class="mt-1 text-xl font-black text-emerald-700">{{ databaseActivityOverview.issuedRewardCount }}</p>
+                  </div>
+
+                  <div class="rounded-2xl bg-amber-50 p-3 text-center">
+                    <p class="text-xs font-black text-amber-500">未發獎</p>
+                    <p class="mt-1 text-xl font-black text-amber-700">{{ databaseActivityOverview.pendingRewardCount }}</p>
+                  </div>
                 </div>
               </article>
             </div>
