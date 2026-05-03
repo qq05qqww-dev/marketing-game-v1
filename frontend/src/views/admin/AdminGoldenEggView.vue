@@ -5032,7 +5032,7 @@ watch(
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 gap-4 2xl:grid-cols-[1.1fr_0.9fr]">
+              <div class="grid grid-cols-1 gap-4">
                 <div class="rounded-3xl bg-white/90 p-4 shadow-sm ring-1 ring-orange-100">
                   <div class="mb-4 flex items-center justify-between gap-3">
                     <div>
@@ -10501,6 +10501,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 <style scoped>
 .admin-field {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: 6px;
 }
@@ -10516,6 +10517,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 .admin-field select,
 .admin-field textarea {
   width: 100%;
+  min-width: 0;
   border-radius: 16px;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
