@@ -963,6 +963,161 @@ const gameConfigOperationLogTypeClass = (type) => {
 }
 
 
+const getDatabaseGameConfigBackupFilename = () => {
+  const titlePart = String(databaseCampaign.value?.slug || databaseCampaign.value?.title || 'golden-egg')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\u4e00-\u9fa5]+/gi, '-')
+    .replace(/^-+|-+$/g, '') || 'golden-egg'
+
+  return `${titlePart}-game-config-${getExportDateStamp()}.json`
+}
+
+const exportDatabaseGameConfigBackupJson = () => {
+  if (!databaseCampaign.value) {
+    showOperationError('目前沒有可匯出的資料庫活動，請先讀取活動資料。')
+    return
+  }
+
+  const settings = buildDatabaseGameConfigPayload()
+  const backupPayload = {
+    type: 'golden-egg-game-config-backup',
+    version: 'v2.2-batch417',
+    exportedAt: new Date().toISOString(),
+    campaignId: normalizedDatabaseCampaignId.value,
+    campaignTitle: databaseCampaign.value?.title || '',
+    campaignSlug: databaseCampaign.value?.slug || '',
+    note: '此檔案可匯入 AdminGoldenEggView.vue 的資料庫前台設定 GameConfig。匯入後只會套用到表單，需再按「儲存前台設定」才會寫入資料庫。',
+    settings
+  }
+
+  const blob = new Blob([JSON.stringify(backupPayload, null, 2)], {
+    type: 'application/json;charset=utf-8'
+  })
+
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = getDatabaseGameConfigBackupFilename()
+  link.click()
+
+  URL.revokeObjectURL(url)
+  showOperationSuccess('已匯出目前前台設定 GameConfig JSON 備份。')
+  addGameConfigOperationLog({
+    title: '匯出 GameConfig 備份',
+    description: `已匯出 ${getDatabaseGameConfigBackupFilename()}，可用於之後還原前台設定。`,
+    type: 'success'
+  })
+}
+
+const normalizeImportedDatabaseGameConfigSettings = (rawData = {}) => {
+  if (!rawData || typeof rawData !== 'object' || Array.isArray(rawData)) return null
+
+  if (rawData.settings && typeof rawData.settings === 'object') return rawData.settings
+  if (rawData.gameConfig?.settings && typeof rawData.gameConfig.settings === 'object') return rawData.gameConfig.settings
+  if (rawData.data?.settings && typeof rawData.data.settings === 'object') return rawData.data.settings
+
+  return rawData
+}
+
+const applyImportedDatabaseGameConfigSettingsToForm = (settings = {}) => {
+  const allowedKeys = Object.keys(databaseGameConfigFormComparable.value)
+  const numberKeys = new Set([
+    'eggSize',
+    'eggCardSize',
+    'eggGridGap',
+    'systemShareButtonTextSize',
+    'systemShareButtonRadius',
+    'systemShareButtonPaddingY'
+  ])
+  const booleanKeys = new Set([
+    'showActivityTimeSection',
+    'showActivityCountdown',
+    'activityCountdownAlwaysShowSeconds',
+    'showBottomNav'
+  ])
+
+  let appliedCount = 0
+
+  allowedKeys.forEach((key) => {
+    if (!Object.prototype.hasOwnProperty.call(settings, key)) return
+
+    if (numberKeys.has(key)) {
+      const parsedNumber = Number(settings[key])
+      if (!Number.isNaN(parsedNumber)) {
+        databaseGameConfigForm[key] = parsedNumber
+        appliedCount += 1
+      }
+      return
+    }
+
+    if (booleanKeys.has(key)) {
+      databaseGameConfigForm[key] = settings[key] === true || settings[key] === 'true' || settings[key] === 1 || settings[key] === '1'
+      appliedCount += 1
+      return
+    }
+
+    databaseGameConfigForm[key] = settings[key] ?? ''
+    appliedCount += 1
+  })
+
+  return appliedCount
+}
+
+const importDatabaseGameConfigBackupJson = async (event) => {
+  const file = event?.target?.files?.[0]
+  if (!file) return
+
+  try {
+    const rawText = await file.text()
+    const parsed = JSON.parse(rawText)
+    const settings = normalizeImportedDatabaseGameConfigSettings(parsed)
+
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+      throw new Error('備份檔格式不正確，找不到 settings 物件。')
+    }
+
+    const previewKeys = Object.keys(settings).filter((key) => Object.prototype.hasOwnProperty.call(databaseGameConfigFormComparable.value, key))
+
+    if (!previewKeys.length) {
+      throw new Error('備份檔沒有可套用到 GameConfig 表單的欄位。')
+    }
+
+    const previewList = previewKeys
+      .slice(0, 10)
+      .map((key, index) => `${index + 1}. ${databaseGameConfigDiffLabelMap[key] || key}`)
+      .join('\n')
+    const moreText = previewKeys.length > 10 ? `\n...另有 ${previewKeys.length - 10} 個欄位未列出。` : ''
+    const confirmed = window.confirm(
+      `即將匯入 ${previewKeys.length} 個 GameConfig 欄位到表單。\n\n匯入後只會套用到表單，不會直接寫入資料庫。確認內容後，仍需要按「儲存前台設定」。\n\n${previewList}${moreText}\n\n是否繼續？`
+    )
+
+    if (!confirmed) return
+
+    const appliedCount = applyImportedDatabaseGameConfigSettingsToForm(settings)
+
+    showOperationSuccess(`已匯入 ${appliedCount} 個 GameConfig 欄位到表單，請確認後再按「儲存前台設定」。`)
+    addGameConfigOperationLog({
+      title: '匯入 GameConfig 備份',
+      description: `已從「${file.name}」套用 ${appliedCount} 個欄位到表單，尚未寫入資料庫。`,
+      type: 'warning',
+      changedCount: databaseGameConfigChangedCount.value
+    })
+  } catch (error) {
+    console.error('匯入 GameConfig 備份失敗：', error)
+    showOperationError(error.message || '匯入 GameConfig 備份失敗，請確認 JSON 格式。')
+    addGameConfigOperationLog({
+      title: '匯入 GameConfig 備份失敗',
+      description: error.message || 'JSON 格式不正確或內容無法套用。',
+      type: 'error'
+    })
+  } finally {
+    if (event?.target) event.target.value = ''
+  }
+}
+
+
 const waitOperationFeedbackFrame = async (minimumMs = 450) => {
   await nextTick()
   await new Promise((resolve) => window.setTimeout(resolve, minimumMs))
@@ -5899,6 +6054,56 @@ watch(
                 「還原到已儲存資料」會回到目前已載入的資料庫版本；按下「儲存前台設定」後，目前表單內容會成為新的已儲存版本。
                 若要重新抓伺服器上的最新資料，請按「重新讀取資料庫」。
               </p>
+            </div>
+
+            <div class="mt-4 rounded-3xl border border-violet-100 bg-white/95 p-4 shadow-sm">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                  <p class="text-xs font-black uppercase tracking-[0.22em] text-violet-500">Config Backup</p>
+                  <h4 class="mt-1 text-sm font-black text-slate-950">設定備份工具</h4>
+                  <p class="mt-1 text-xs font-bold leading-6 text-slate-500">
+                    可匯出目前 GameConfig JSON 備份；匯入備份只會先套用到表單，不會直接寫入資料庫，確認後再按「儲存前台設定」。
+                  </p>
+                </div>
+
+                <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap lg:justify-end">
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-violet-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    :disabled="!databaseCampaign"
+                    @click="exportDatabaseGameConfigBackupJson"
+                  >
+                    匯出目前設定 JSON
+                  </button>
+
+                  <label class="inline-flex cursor-pointer items-center justify-center rounded-2xl bg-white px-4 py-2 text-xs font-black text-violet-700 ring-1 ring-violet-100 transition hover:bg-violet-50">
+                    匯入設定 JSON
+                    <input
+                      type="file"
+                      accept="application/json,.json"
+                      class="hidden"
+                      @change="importDatabaseGameConfigBackupJson"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                <div class="rounded-2xl bg-violet-50 p-3 ring-1 ring-violet-100">
+                  <p class="text-xs font-black text-violet-700">匯出內容</p>
+                  <p class="mt-1 text-xs font-bold leading-5 text-violet-600">目前表單完整設定、活動名稱、Slug、匯出時間。</p>
+                </div>
+
+                <div class="rounded-2xl bg-amber-50 p-3 ring-1 ring-amber-100">
+                  <p class="text-xs font-black text-amber-700">匯入安全機制</p>
+                  <p class="mt-1 text-xs font-bold leading-5 text-amber-600">只套用到表單，按儲存前台設定後才會寫入 PostgreSQL。</p>
+                </div>
+
+                <div class="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100">
+                  <p class="text-xs font-black text-slate-700">建議用途</p>
+                  <p class="mt-1 text-xs font-bold leading-5 text-slate-500">套用主題前先備份，避免誤改後找不回原設定。</p>
+                </div>
+              </div>
             </div>
 
             <div class="mt-4 rounded-3xl border border-indigo-100 bg-white/95 p-4 shadow-sm">
