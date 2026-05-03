@@ -229,7 +229,18 @@ const databaseGameConfigForm = reactive({
   eggGridGap: 12,
   eggColorTop: '#fff7ad',
   eggColorMiddle: '#fde047',
-  eggColorBottom: '#b45309'
+  eggColorBottom: '#b45309',
+  themeBgFrom: '#991b1b',
+  themeBgMiddle: '#dc2626',
+  themeBgTo: '#450a0a',
+  themePanelColor: '#fff7ed',
+  themeAccentColor: '#facc15',
+  themeButtonColor: '#ef4444',
+  themeButtonDarkColor: '#991b1b',
+  eggCardBgFrom: '#ef4444',
+  eggCardBgTo: '#7f1d1d',
+  eggNumberBgColor: '#7f1d1d',
+  eggNumberTextColor: '#fef3c7'
 })
 const isAutoPreviewEnabled = ref(true)
 const serialCodes = ref([])
@@ -996,6 +1007,17 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
   databaseGameConfigForm.eggColorTop = campaign.eggColorTop || databaseGameConfigForm.eggColorTop || '#fff7ad'
   databaseGameConfigForm.eggColorMiddle = campaign.eggColorMiddle || databaseGameConfigForm.eggColorMiddle || '#fde047'
   databaseGameConfigForm.eggColorBottom = campaign.eggColorBottom || databaseGameConfigForm.eggColorBottom || '#b45309'
+  databaseGameConfigForm.themeBgFrom = campaign.themeBgFrom || databaseGameConfigForm.themeBgFrom || '#991b1b'
+  databaseGameConfigForm.themeBgMiddle = campaign.themeBgMiddle || databaseGameConfigForm.themeBgMiddle || '#dc2626'
+  databaseGameConfigForm.themeBgTo = campaign.themeBgTo || databaseGameConfigForm.themeBgTo || '#450a0a'
+  databaseGameConfigForm.themePanelColor = campaign.themePanelColor || databaseGameConfigForm.themePanelColor || '#fff7ed'
+  databaseGameConfigForm.themeAccentColor = campaign.themeAccentColor || databaseGameConfigForm.themeAccentColor || '#facc15'
+  databaseGameConfigForm.themeButtonColor = campaign.themeButtonColor || databaseGameConfigForm.themeButtonColor || '#ef4444'
+  databaseGameConfigForm.themeButtonDarkColor = campaign.themeButtonDarkColor || databaseGameConfigForm.themeButtonDarkColor || '#991b1b'
+  databaseGameConfigForm.eggCardBgFrom = campaign.eggCardBgFrom || databaseGameConfigForm.eggCardBgFrom || '#ef4444'
+  databaseGameConfigForm.eggCardBgTo = campaign.eggCardBgTo || databaseGameConfigForm.eggCardBgTo || '#7f1d1d'
+  databaseGameConfigForm.eggNumberBgColor = campaign.eggNumberBgColor || databaseGameConfigForm.eggNumberBgColor || '#7f1d1d'
+  databaseGameConfigForm.eggNumberTextColor = campaign.eggNumberTextColor || databaseGameConfigForm.eggNumberTextColor || '#fef3c7'
   databaseGameConfigForm.shareTitle = campaign.shareTitle || databaseGameConfigForm.shareTitle || '九宮格砸金蛋抽獎活動'
   databaseGameConfigForm.shareDescription = campaign.shareDescription || databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.shareUrl = campaign.shareUrl || databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
@@ -1008,7 +1030,7 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
 const applyPreviewVisualSettingsToDatabaseForm = () => {
   syncPreviewVisualSettingsToDatabaseForm()
   setDatabasePreviewSyncMessage(
-    `已套用目前預覽視覺設定：金蛋 ${databaseGameConfigForm.eggSize}px / 卡牌 ${databaseGameConfigForm.eggCardSize}px / 間距 ${databaseGameConfigForm.eggGridGap}px`
+    `已套用目前預覽視覺設定：背景 ${databaseGameConfigForm.themeBgFrom} / ${databaseGameConfigForm.themeBgMiddle} / ${databaseGameConfigForm.themeBgTo}，金蛋 ${databaseGameConfigForm.eggSize}px`
   )
   showOperationSuccess('已套用目前預覽視覺設定到資料庫前台設定表單，請記得按「儲存前台設定」。')
 }
@@ -4030,6 +4052,17 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.eggColorTop = settings.eggColorTop || '#fff7ad'
   databaseGameConfigForm.eggColorMiddle = settings.eggColorMiddle || '#fde047'
   databaseGameConfigForm.eggColorBottom = settings.eggColorBottom || '#b45309'
+  databaseGameConfigForm.themeBgFrom = settings.themeBgFrom || '#991b1b'
+  databaseGameConfigForm.themeBgMiddle = settings.themeBgMiddle || '#dc2626'
+  databaseGameConfigForm.themeBgTo = settings.themeBgTo || '#450a0a'
+  databaseGameConfigForm.themePanelColor = settings.themePanelColor || '#fff7ed'
+  databaseGameConfigForm.themeAccentColor = settings.themeAccentColor || '#facc15'
+  databaseGameConfigForm.themeButtonColor = settings.themeButtonColor || '#ef4444'
+  databaseGameConfigForm.themeButtonDarkColor = settings.themeButtonDarkColor || '#991b1b'
+  databaseGameConfigForm.eggCardBgFrom = settings.eggCardBgFrom || '#ef4444'
+  databaseGameConfigForm.eggCardBgTo = settings.eggCardBgTo || '#7f1d1d'
+  databaseGameConfigForm.eggNumberBgColor = settings.eggNumberBgColor || '#7f1d1d'
+  databaseGameConfigForm.eggNumberTextColor = settings.eggNumberTextColor || '#fef3c7'
 }
 
 const buildDatabaseGameConfigPayload = () => {
@@ -4061,6 +4094,18 @@ const buildDatabaseGameConfigPayload = () => {
     eggColorTop: databaseGameConfigForm.eggColorTop || '#fff7ad',
     eggColorMiddle: databaseGameConfigForm.eggColorMiddle || '#fde047',
     eggColorBottom: databaseGameConfigForm.eggColorBottom || '#b45309',
+    // 第 414 批：主題背景與按鈕色也必須寫進 PostgreSQL，手機前台才會同步。
+    themeBgFrom: databaseGameConfigForm.themeBgFrom || '#991b1b',
+    themeBgMiddle: databaseGameConfigForm.themeBgMiddle || '#dc2626',
+    themeBgTo: databaseGameConfigForm.themeBgTo || '#450a0a',
+    themePanelColor: databaseGameConfigForm.themePanelColor || '#fff7ed',
+    themeAccentColor: databaseGameConfigForm.themeAccentColor || '#facc15',
+    themeButtonColor: databaseGameConfigForm.themeButtonColor || '#ef4444',
+    themeButtonDarkColor: databaseGameConfigForm.themeButtonDarkColor || '#991b1b',
+    eggCardBgFrom: databaseGameConfigForm.eggCardBgFrom || '#ef4444',
+    eggCardBgTo: databaseGameConfigForm.eggCardBgTo || '#7f1d1d',
+    eggNumberBgColor: databaseGameConfigForm.eggNumberBgColor || '#7f1d1d',
+    eggNumberTextColor: databaseGameConfigForm.eggNumberTextColor || '#fef3c7',
     shareTitle: databaseGameConfigForm.shareTitle || '九宮格砸金蛋抽獎活動',
     shareDescription: databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！',
     shareUrl: databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`,
@@ -4109,6 +4154,17 @@ const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => 
     eggColorTop: String(settings.eggColorTop || '#fff7ad'),
     eggColorMiddle: String(settings.eggColorMiddle || '#fde047'),
     eggColorBottom: String(settings.eggColorBottom || '#b45309'),
+    themeBgFrom: String(settings.themeBgFrom || '#991b1b'),
+    themeBgMiddle: String(settings.themeBgMiddle || '#dc2626'),
+    themeBgTo: String(settings.themeBgTo || '#450a0a'),
+    themePanelColor: String(settings.themePanelColor || '#fff7ed'),
+    themeAccentColor: String(settings.themeAccentColor || '#facc15'),
+    themeButtonColor: String(settings.themeButtonColor || '#ef4444'),
+    themeButtonDarkColor: String(settings.themeButtonDarkColor || '#991b1b'),
+    eggCardBgFrom: String(settings.eggCardBgFrom || '#ef4444'),
+    eggCardBgTo: String(settings.eggCardBgTo || '#7f1d1d'),
+    eggNumberBgColor: String(settings.eggNumberBgColor || '#7f1d1d'),
+    eggNumberTextColor: String(settings.eggNumberTextColor || '#fef3c7'),
     shareTitle: String(settings.shareTitle || campaign.shareTitle || '九宮格砸金蛋抽獎活動'),
     shareDescription: String(settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'),
     shareUrl: String(settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`),
@@ -4149,6 +4205,17 @@ const databaseGameConfigFormComparable = computed(() => ({
   eggColorTop: String(databaseGameConfigForm.eggColorTop || '#fff7ad'),
   eggColorMiddle: String(databaseGameConfigForm.eggColorMiddle || '#fde047'),
   eggColorBottom: String(databaseGameConfigForm.eggColorBottom || '#b45309'),
+  themeBgFrom: String(databaseGameConfigForm.themeBgFrom || '#991b1b'),
+  themeBgMiddle: String(databaseGameConfigForm.themeBgMiddle || '#dc2626'),
+  themeBgTo: String(databaseGameConfigForm.themeBgTo || '#450a0a'),
+  themePanelColor: String(databaseGameConfigForm.themePanelColor || '#fff7ed'),
+  themeAccentColor: String(databaseGameConfigForm.themeAccentColor || '#facc15'),
+  themeButtonColor: String(databaseGameConfigForm.themeButtonColor || '#ef4444'),
+  themeButtonDarkColor: String(databaseGameConfigForm.themeButtonDarkColor || '#991b1b'),
+  eggCardBgFrom: String(databaseGameConfigForm.eggCardBgFrom || '#ef4444'),
+  eggCardBgTo: String(databaseGameConfigForm.eggCardBgTo || '#7f1d1d'),
+  eggNumberBgColor: String(databaseGameConfigForm.eggNumberBgColor || '#7f1d1d'),
+  eggNumberTextColor: String(databaseGameConfigForm.eggNumberTextColor || '#fef3c7'),
   shareTitle: String(databaseGameConfigForm.shareTitle || ''),
   shareDescription: String(databaseGameConfigForm.shareDescription || ''),
   shareUrl: String(databaseGameConfigForm.shareUrl || ''),
