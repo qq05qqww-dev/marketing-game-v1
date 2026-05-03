@@ -3258,6 +3258,41 @@ const databaseFrontUrl = computed(() => {
   return `${window.location.origin}/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value}`
 })
 
+
+const databaseFrontUrlDisplayType = computed(() => {
+  const user = getStoredAdminUser()
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || user?.tenantSlug || '').trim()
+
+  return tenantSlug ? '商家專屬網址' : 'Campaign ID 網址'
+})
+
+const databaseFrontShareText = computed(() => {
+  if (!databaseFrontUrl.value) return ''
+
+  const title = databaseCampaign.value?.title || databaseCampaign.value?.name || '砸金蛋活動'
+  const tenantName = databaseCampaign.value?.tenant?.name || getStoredAdminUser()?.tenantName || '活動商家'
+
+  return `🎁 ${tenantName}｜${title}
+立即參加砸金蛋活動：
+${databaseFrontUrl.value}`
+})
+
+const databaseFrontQrCodeUrl = computed(() => {
+  if (!databaseFrontUrl.value) return ''
+
+  const encodedUrl = encodeURIComponent(databaseFrontUrl.value)
+
+  return `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=16&data=${encodedUrl}`
+})
+
+const databaseFrontQrCodeDownloadUrl = computed(() => {
+  if (!databaseFrontUrl.value) return ''
+
+  const encodedUrl = encodeURIComponent(databaseFrontUrl.value)
+
+  return `https://api.qrserver.com/v1/create-qr-code/?size=1024x1024&margin=40&format=png&data=${encodedUrl}`
+})
+
 const databaseApiUrls = computed(() => {
   if (!normalizedDatabaseCampaignId.value) return []
 
@@ -3498,6 +3533,50 @@ const openDatabaseFrontPreview = () => {
   }
 
   window.open(databaseFrontUrl.value, '_blank')
+}
+
+const copyDatabaseFrontShareText = async () => {
+  if (!databaseFrontShareText.value) {
+    showOperationError('目前沒有可複製的分享文案。')
+    return
+  }
+
+  await copyDatabaseText(databaseFrontShareText.value)
+}
+
+const downloadDatabaseFrontQrCode = async () => {
+  if (!databaseFrontQrCodeDownloadUrl.value) {
+    showOperationError('請先載入正式活動網址。')
+    return
+  }
+
+  const safeSlug = String(databaseCampaign.value?.tenant?.slug || getStoredAdminUser()?.tenantSlug || 'golden-egg').trim() || 'golden-egg'
+  const filename = `golden-egg-${safeSlug}-qrcode.png`
+
+  try {
+    const response = await fetch(databaseFrontQrCodeDownloadUrl.value, {
+      cache: 'no-store'
+    })
+
+    if (!response.ok) {
+      throw new Error('QR Code 圖片下載失敗')
+    }
+
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    showOperationSuccess('已下載前台專屬網址 QR Code。')
+  } catch (error) {
+    console.error('下載 QR Code 失敗:', error)
+    window.open(databaseFrontQrCodeDownloadUrl.value, '_blank')
+    showOperationError('瀏覽器無法直接下載 QR Code，已改用新分頁開啟，請在圖片上另存。')
+  }
 }
 
 const getStoredAdminUser = () => {
@@ -6053,21 +6132,91 @@ watch(
               </div>
             </div>
 
-            <div class="mt-3 rounded-2xl bg-white/80 p-3">
-              <p class="text-xs font-bold text-emerald-600">
-                前台正式資料庫金蛋 / 商家專屬網址
-              </p>
-              <div class="mt-2 flex flex-col gap-2 md:flex-row md:items-center">
-                <code class="flex-1 overflow-x-auto rounded-xl bg-emerald-950 px-3 py-2 text-xs font-bold text-emerald-50">
-                  {{ databaseFrontUrl }}
-                </code>
-                <button
-                  type="button"
-                  class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white"
-                  @click="copyDatabaseText(databaseFrontUrl)"
-                >
-                  複製
-                </button>
+            <div class="mt-3 grid gap-3">
+              <div class="rounded-2xl bg-white/90 p-3 sm:p-4">
+                <div class="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <p class="text-xs font-bold text-emerald-600">
+                    前台正式資料庫金蛋 / {{ databaseFrontUrlDisplayType }}
+                  </p>
+                  <span class="w-fit rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-700">
+                    此網址只會進入目前商家的活動
+                  </span>
+                </div>
+
+                <div class="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                  <code class="block min-w-0 break-all rounded-xl bg-emerald-950 px-3 py-2 text-xs font-bold leading-5 text-emerald-50">
+                    {{ databaseFrontUrl }}
+                  </code>
+                  <button
+                    type="button"
+                    class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm"
+                    @click="copyDatabaseText(databaseFrontUrl)"
+                  >
+                    複製網址
+                  </button>
+                </div>
+
+                <div class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3">
+                  <p class="text-xs font-black text-emerald-700">
+                    分享文案
+                  </p>
+                  <p class="mt-1 whitespace-pre-line text-xs font-bold leading-5 text-emerald-900">
+                    {{ databaseFrontShareText }}
+                  </p>
+                  <button
+                    type="button"
+                    class="mt-2 rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                    @click="copyDatabaseFrontShareText"
+                  >
+                    複製分享文案
+                  </button>
+                </div>
+              </div>
+
+              <div class="rounded-2xl bg-white/90 p-3 sm:p-4">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p class="text-xs font-black text-emerald-700">
+                      商家活動 QR Code
+                    </p>
+                    <p class="mt-1 text-[11px] font-bold text-slate-500">
+                      可放 LINE、海報、桌卡或社群貼文。
+                    </p>
+                  </div>
+                  <span class="rounded-full bg-slate-900 px-2 py-1 text-[11px] font-black text-white">
+                    QR
+                  </span>
+                </div>
+
+                <div class="mt-3 grid gap-4 rounded-2xl border border-dashed border-emerald-200 bg-white p-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
+                  <img
+                    v-if="databaseFrontQrCodeUrl"
+                    :src="databaseFrontQrCodeUrl"
+                    alt="商家前台專屬網址 QR Code"
+                    class="mx-auto h-44 w-44 rounded-2xl border border-slate-100 bg-white p-2 shadow-sm lg:mx-0"
+                  >
+                  <div class="min-w-0 space-y-3 text-center lg:text-left">
+                    <p class="text-[11px] font-bold leading-5 text-slate-500">
+                      掃描後會開啟目前商家的砸金蛋前台，不會導到其他商家。
+                    </p>
+                    <div class="flex flex-wrap justify-center gap-2 lg:justify-start">
+                    <button
+                      type="button"
+                      class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white"
+                      @click="downloadDatabaseFrontQrCode"
+                    >
+                      下載 QR Code
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                      @click="openDatabaseFrontPreview"
+                    >
+                      開新分頁測試
+                    </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
