@@ -3017,27 +3017,42 @@ const databaseSerialActiveFilterTags = computed(() => {
 })
 
 const isDatabaseSerialQuickFilterActive = (type) => {
+  const keyword = databaseSerialSearchKeyword.value.trim().toLowerCase()
+  const isCleanIssueFilter = databaseSerialIssueFilter.value === 'ALL'
+
   if (type === 'LIVE01') {
     return databaseSerialBatchFilter.value === 'LIVE01'
       && databaseSerialStatusFilter.value === 'ALL'
-      && databaseSerialIssueFilter.value === 'ALL'
-      && !databaseSerialSearchKeyword.value.trim()
+      && isCleanIssueFilter
+      && !keyword
   }
 
   if (type === 'USED') {
-    return databaseSerialStatusFilter.value === 'USED'
+    return databaseSerialBatchFilter.value === 'ALL'
+      && databaseSerialStatusFilter.value === 'USED'
+      && isCleanIssueFilter
+      && !keyword
   }
 
   if (type === 'UNUSED') {
-    return databaseSerialStatusFilter.value === 'UNUSED'
+    return databaseSerialBatchFilter.value === 'ALL'
+      && databaseSerialStatusFilter.value === 'UNUSED'
+      && isCleanIssueFilter
+      && !keyword
   }
 
   if (type === 'DISABLED') {
-    return databaseSerialStatusFilter.value === 'DISABLED'
+    return databaseSerialBatchFilter.value === 'ALL'
+      && databaseSerialStatusFilter.value === 'DISABLED'
+      && isCleanIssueFilter
+      && !keyword
   }
 
   if (type === 'TEST') {
-    return databaseSerialSearchKeyword.value.trim().toLowerCase() === 'test'
+    return databaseSerialBatchFilter.value === 'ALL'
+      && databaseSerialStatusFilter.value === 'ALL'
+      && isCleanIssueFilter
+      && keyword === 'test'
   }
 
   return false
@@ -3081,10 +3096,13 @@ const databaseSerialQuickButtonClass = (type) => {
 }
 
 const setDatabaseSerialQuickFilter = (type) => {
+  databaseSerialSearchKeyword.value = ''
+  databaseSerialBatchFilter.value = 'ALL'
+  databaseSerialStatusFilter.value = 'ALL'
+  databaseSerialIssueFilter.value = 'ALL'
+
   if (type === 'LIVE01') {
     databaseSerialBatchFilter.value = 'LIVE01'
-    databaseSerialStatusFilter.value = 'ALL'
-    databaseSerialIssueFilter.value = 'ALL'
     return
   }
 
@@ -3104,18 +3122,8 @@ const setDatabaseSerialQuickFilter = (type) => {
   }
 
   if (type === 'TEST') {
-    databaseSerialSearchKeyword.value = ''
-    databaseSerialBatchFilter.value = 'ALL'
-    databaseSerialStatusFilter.value = 'ALL'
-    databaseSerialIssueFilter.value = 'ALL'
     databaseSerialSearchKeyword.value = 'TEST'
-    return
   }
-
-  databaseSerialSearchKeyword.value = ''
-  databaseSerialBatchFilter.value = 'ALL'
-  databaseSerialStatusFilter.value = 'ALL'
-  databaseSerialIssueFilter.value = 'ALL'
 }
 
 const visibleDatabaseSerialCodes = computed(() => {
