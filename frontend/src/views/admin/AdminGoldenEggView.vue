@@ -46,6 +46,7 @@ const safeJsonParse = (value, fallback = null) => {
 }
 
 const previewRefreshKey = ref(Date.now())
+const previewDevice = ref('mobile')
 const savedMessage = ref('')
 const savedMessageType = ref('success')
 const operationMessage = ref('')
@@ -603,6 +604,50 @@ const previewUrl = computed(() => {
   return `/games/golden-egg?preview=${previewRefreshKey.value}`
 })
 
+const previewDeviceOptions = [
+  {
+    key: 'mobile',
+    label: '手機',
+    width: '390px',
+    height: 'calc(100vh - 16rem)',
+    note: '常用手機尺寸'
+  },
+  {
+    key: 'tablet',
+    label: '平板',
+    width: '720px',
+    height: 'calc(100vh - 16rem)',
+    note: '平板寬版檢查'
+  },
+  {
+    key: 'desktop',
+    label: '桌機',
+    width: '100%',
+    height: 'calc(100vh - 16rem)',
+    note: '桌機完整寬度'
+  }
+]
+
+const currentPreviewDevice = computed(() => {
+  return previewDeviceOptions.find((item) => item.key === previewDevice.value) || previewDeviceOptions[0]
+})
+
+const previewFrameStyle = computed(() => {
+  return {
+    width: currentPreviewDevice.value.width,
+    height: currentPreviewDevice.value.height,
+    maxWidth: '100%'
+  }
+})
+
+const previewDeviceButtonClass = (deviceKey) => {
+  if (previewDevice.value === deviceKey) {
+    return 'bg-yellow-300 text-slate-950 ring-yellow-200 shadow-sm'
+  }
+
+  return 'bg-white/10 text-slate-200 ring-white/10 hover:bg-white/15'
+}
+
 const probabilityTotal = computed(() => {
   return prizes.value.reduce((sum, prize) => sum + Number(prize.probability || 0), 0)
 })
@@ -981,6 +1026,11 @@ const refreshPreview = () => {
   refreshRightPreviewFromSystemShareSettings()
   previewRefreshKey.value = Date.now()
   showOperationSuccess('已重新整理右側預覽。')
+}
+
+const openPreviewInNewTab = () => {
+  const url = `${window.location.origin}/games/golden-egg?preview=${Date.now()}`
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 const resetAllSettings = () => {
@@ -10642,45 +10692,97 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
       </aside>
 
       <section class="min-h-[calc(100vh-8rem)] rounded-[2rem] border border-slate-200 bg-slate-900 p-4 shadow-sm">
-        <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p class="text-xs font-black uppercase tracking-[0.22em] text-yellow-300">
-              Live Preview
-            </p>
-            <h2 class="text-xl font-black text-white">
-              前台即時預覽
-            </h2>
+        <div class="mb-4 space-y-4">
+          <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.22em] text-yellow-300">
+                Live Preview Center
+              </p>
+              <h2 class="text-xl font-black text-white">
+                右側前台即時預覽
+              </h2>
+              <p class="mt-1 text-xs font-bold leading-5 text-slate-400">
+                保留第 381 批 iframe 同步基礎；修改左側設定後可重新整理預覽確認玩家畫面。
+              </p>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div class="rounded-2xl bg-white/10 px-3 py-2 text-white">
+                <p class="text-[10px] font-bold text-slate-300">獎項</p>
+                <p class="text-lg font-black">{{ enabledPrizeCount }}</p>
+              </div>
+              <div class="rounded-2xl bg-white/10 px-3 py-2 text-white">
+                <p class="text-[10px] font-bold text-slate-300">中獎</p>
+                <p class="text-lg font-black">{{ winPrizeCount }}</p>
+              </div>
+              <div class="rounded-2xl bg-white/10 px-3 py-2 text-white">
+                <p class="text-[10px] font-bold text-slate-300">總權重</p>
+                <p class="text-lg font-black">{{ probabilityTotal }}</p>
+              </div>
+            </div>
           </div>
 
-          <div class="grid grid-cols-3 gap-2 text-center">
-            <div class="rounded-2xl bg-white/10 px-3 py-2 text-white">
-              <p class="text-[10px] font-bold text-slate-300">獎項</p>
-              <p class="text-lg font-black">{{ enabledPrizeCount }}</p>
-            </div>
-            <div class="rounded-2xl bg-white/10 px-3 py-2 text-white">
-              <p class="text-[10px] font-bold text-slate-300">中獎</p>
-              <p class="text-lg font-black">{{ winPrizeCount }}</p>
-            </div>
-            <div class="rounded-2xl bg-white/10 px-3 py-2 text-white">
-              <p class="text-[10px] font-bold text-slate-300">總權重</p>
-              <p class="text-lg font-black">{{ probabilityTotal }}</p>
+          <div class="rounded-[1.5rem] border border-white/10 bg-white/5 p-3">
+            <div class="flex flex-col gap-3 2xl:flex-row 2xl:items-center 2xl:justify-between">
+              <div>
+                <p class="text-xs font-black text-slate-300">預覽尺寸</p>
+                <p class="text-[11px] font-bold text-slate-500">
+                  目前：{{ currentPreviewDevice.label }}｜{{ currentPreviewDevice.note }}
+                </p>
+              </div>
+
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="device in previewDeviceOptions"
+                  :key="device.key"
+                  type="button"
+                  class="rounded-2xl px-4 py-2 text-xs font-black ring-1 transition"
+                  :class="previewDeviceButtonClass(device.key)"
+                  @click="previewDevice = device.key"
+                >
+                  {{ device.label }}
+                </button>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-yellow-300 px-4 py-2 text-xs font-black text-slate-950 shadow-sm transition hover:bg-yellow-200"
+                  @click="refreshPreview"
+                >
+                  重新整理預覽
+                </button>
+
+                <button
+                  type="button"
+                  class="rounded-2xl bg-white px-4 py-2 text-xs font-black text-slate-900 transition hover:bg-slate-100"
+                  @click="openPreviewInNewTab"
+                >
+                  開新分頁查看
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="mx-auto h-[calc(100vh-13rem)] max-w-[430px] overflow-hidden rounded-[2rem] border-[10px] border-slate-800 bg-black shadow-2xl">
-          <!-- 第 381 批：右側預覽是 iframe，需靠 previewRefreshKey 重新掛載讀 localStorage。 -->
-          <iframe
-            :key="previewRefreshKey"
-            :src="previewUrl"
-            title="砸金蛋前台預覽"
-            class="h-full w-full bg-white"
-          />
+        <div class="overflow-x-auto rounded-[1.75rem] bg-slate-950/60 p-3">
+          <div
+            class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-800 bg-black shadow-2xl transition-all duration-300"
+            :style="previewFrameStyle"
+          >
+            <!-- 第 381 批：右側預覽是 iframe，需靠 previewRefreshKey 重新掛載讀 localStorage。 -->
+            <iframe
+              :key="previewRefreshKey"
+              :src="previewUrl"
+              title="砸金蛋前台預覽"
+              class="h-full w-full bg-white"
+            />
+          </div>
         </div>
 
-        <p class="mt-4 text-center text-xs font-bold text-slate-400">
-          修改左側設定後會自動儲存並同步。若右側沒有變化，請按「重新整理預覽」。
-        </p>
+        <div class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+          <p class="text-center text-xs font-bold leading-5 text-slate-400">
+            修改左側設定後會自動儲存並同步；若右側沒有變化，請按「重新整理預覽」。桌機 / 平板模式較寬時，可在預覽框下方左右滑動查看。
+          </p>
+        </div>
       </section>
     </main>
   </div>
