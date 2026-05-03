@@ -33,7 +33,6 @@ const GOLDEN_EGG_SERIAL_CODES_KEY = 'multi_game_platform_golden_egg_serial_codes
 const GOLDEN_EGG_SERIAL_REDEEM_LOG_KEY = 'multi_game_platform_golden_egg_serial_redeem_log_v1'
 const GOLDEN_EGG_HISTORY_KEY = 'multi_game_platform_golden_egg_history_v1'
 const GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY = 'multi_game_platform_golden_egg_game_config_operation_log_v1'
-const GOLDEN_EGG_FRONT_PUBLIC_ORIGIN_KEY = 'multi_game_platform_golden_egg_front_public_origin_v1'
 
 
 const cloneByJson = (value) => JSON.parse(JSON.stringify(value))
@@ -55,7 +54,6 @@ const operationMessage = ref('')
 const operationMessageType = ref('info')
 const activeSection = ref('databaseMode')
 const databaseCampaignId = ref(localStorage.getItem('golden_egg_admin_database_campaign_id') || '')
-const databasePublicFrontOrigin = ref(localStorage.getItem(GOLDEN_EGG_FRONT_PUBLIC_ORIGIN_KEY) || '')
 const isLoadingDatabaseCampaign = ref(false)
 const databaseLoadMessage = ref('')
 const databaseCampaign = ref(null)
@@ -3241,58 +3239,6 @@ watch(
 )
 
 
-const normalizeFrontOrigin = (value = '') => {
-  const text = String(value || '').trim()
-
-  if (!text) return ''
-
-  const withProtocol = /^https?:\/\//i.test(text) ? text : `http://${text}`
-
-  return withProtocol.replace(/\/+$/, '')
-}
-
-const activeDatabaseFrontOrigin = computed(() => {
-  return normalizeFrontOrigin(databasePublicFrontOrigin.value) || window.location.origin
-})
-
-const isDatabaseFrontUrlLocalhost = computed(() => {
-  const origin = activeDatabaseFrontOrigin.value.toLowerCase()
-
-  return origin.includes('localhost') || origin.includes('127.0.0.1')
-})
-
-const databaseFrontScanHint = computed(() => {
-  if (isDatabaseFrontUrlLocalhost.value) {
-    return '目前 QR Code 使用 localhost，手機掃描通常無法開啟。請改成電腦區網 IP，例如 http://192.168.1.100:5173，或正式網域。'
-  }
-
-  return '目前 QR Code 使用可分享網址，手機掃描會進入目前商家的前台活動。'
-})
-
-const saveDatabasePublicFrontOrigin = () => {
-  const normalized = normalizeFrontOrigin(databasePublicFrontOrigin.value)
-  databasePublicFrontOrigin.value = normalized
-
-  if (normalized) {
-    localStorage.setItem(GOLDEN_EGG_FRONT_PUBLIC_ORIGIN_KEY, normalized)
-    showOperationSuccess('已儲存 QR Code 手機掃描網址設定。')
-  } else {
-    localStorage.removeItem(GOLDEN_EGG_FRONT_PUBLIC_ORIGIN_KEY)
-    showOperationSuccess('已清除 QR Code 手機掃描網址設定，改用目前瀏覽器網址。')
-  }
-}
-
-const useCurrentBrowserOriginForQrCode = () => {
-  databasePublicFrontOrigin.value = window.location.origin
-  saveDatabasePublicFrontOrigin()
-}
-
-const clearDatabasePublicFrontOrigin = () => {
-  databasePublicFrontOrigin.value = ''
-  saveDatabasePublicFrontOrigin()
-}
-
-
 const normalizedDatabaseCampaignId = computed(() => {
   const id = Number(databaseCampaignId.value)
 
@@ -3306,10 +3252,10 @@ const databaseFrontUrl = computed(() => {
   const tenantSlug = String(databaseCampaign.value?.tenant?.slug || user?.tenantSlug || '').trim()
 
   if (tenantSlug) {
-    return `${activeDatabaseFrontOrigin.value}/play/${tenantSlug}/golden-egg`
+    return `${window.location.origin}/play/${tenantSlug}/golden-egg`
   }
 
-  return `${activeDatabaseFrontOrigin.value}/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value}`
+  return `${window.location.origin}/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value}`
 })
 
 
@@ -3331,21 +3277,9 @@ const databaseFrontShareText = computed(() => {
 ${databaseFrontUrl.value}`
 })
 
-const databaseFrontQrCodeUrl = computed(() => {
-  if (!databaseFrontUrl.value) return ''
 
-  const encodedUrl = encodeURIComponent(databaseFrontUrl.value)
 
-  return `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=16&data=${encodedUrl}`
-})
 
-const databaseFrontQrCodeDownloadUrl = computed(() => {
-  if (!databaseFrontUrl.value) return ''
-
-  const encodedUrl = encodeURIComponent(databaseFrontUrl.value)
-
-  return `https://api.qrserver.com/v1/create-qr-code/?size=1024x1024&margin=40&format=png&data=${encodedUrl}`
-})
 
 const databaseApiUrls = computed(() => {
   if (!normalizedDatabaseCampaignId.value) return []
@@ -3598,40 +3532,6 @@ const copyDatabaseFrontShareText = async () => {
   await copyDatabaseText(databaseFrontShareText.value)
 }
 
-const downloadDatabaseFrontQrCode = async () => {
-  if (!databaseFrontQrCodeDownloadUrl.value) {
-    showOperationError('請先載入正式活動網址。')
-    return
-  }
-
-  const safeSlug = String(databaseCampaign.value?.tenant?.slug || getStoredAdminUser()?.tenantSlug || 'golden-egg').trim() || 'golden-egg'
-  const filename = `golden-egg-${safeSlug}-qrcode.png`
-
-  try {
-    const response = await fetch(databaseFrontQrCodeDownloadUrl.value, {
-      cache: 'no-store'
-    })
-
-    if (!response.ok) {
-      throw new Error('QR Code 圖片下載失敗')
-    }
-
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-    showOperationSuccess('已下載前台專屬網址 QR Code。')
-  } catch (error) {
-    console.error('下載 QR Code 失敗:', error)
-    window.open(databaseFrontQrCodeDownloadUrl.value, '_blank')
-    showOperationError('瀏覽器無法直接下載 QR Code，已改用新分頁開啟，請在圖片上另存。')
-  }
-}
 
 const getStoredAdminUser = () => {
   try {
@@ -6163,7 +6063,7 @@ watch(
                   正式觀看網址
                 </h3>
                 <p class="mt-1 text-xs font-bold text-emerald-700/80">
-                  後台儲存資料庫設定後，請到前台正式頁刷新確認同步結果；商家活動會優先產生 /play/商家Slug/golden-egg 專屬網址。
+                  後台儲存資料庫設定後，請到前台正式頁刷新確認同步結果；商家活動會優先顯示 /play/商家Slug/golden-egg 專屬網址。
                 </p>
               </div>
 
@@ -6210,48 +6110,6 @@ watch(
                   </button>
                 </div>
 
-                <div class="mt-3 rounded-2xl border border-emerald-100 bg-white p-3">
-                  <div class="flex flex-col gap-2 lg:flex-row lg:items-end">
-                    <label class="min-w-0 flex-1">
-                      <span class="text-xs font-black text-emerald-700">手機掃描網址根目錄</span>
-                      <input
-                        v-model="databasePublicFrontOrigin"
-                        type="text"
-                        class="mt-1 w-full rounded-xl border border-emerald-100 bg-emerald-50/60 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:border-emerald-300 focus:bg-white"
-                        placeholder="例如：http://192.168.1.100:5173 或 https://your-domain.com"
-                      >
-                    </label>
-                    <div class="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white"
-                        @click="saveDatabasePublicFrontOrigin"
-                      >
-                        儲存網址
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
-                        @click="useCurrentBrowserOriginForQrCode"
-                      >
-                        使用目前網址
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded-xl bg-white px-3 py-2 text-xs font-black text-slate-600 ring-1 ring-slate-200"
-                        @click="clearDatabasePublicFrontOrigin"
-                      >
-                        清除
-                      </button>
-                    </div>
-                  </div>
-                  <p
-                    class="mt-2 rounded-xl px-3 py-2 text-[11px] font-bold leading-5"
-                    :class="isDatabaseFrontUrlLocalhost ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-100' : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'"
-                  >
-                    {{ databaseFrontScanHint }}
-                  </p>
-                </div>
 
                 <div class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3">
                   <p class="text-xs font-black text-emerald-700">
@@ -6267,52 +6125,6 @@ watch(
                   >
                     複製分享文案
                   </button>
-                </div>
-              </div>
-
-              <div class="rounded-2xl bg-white/90 p-3 sm:p-4">
-                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <p class="text-xs font-black text-emerald-700">
-                      商家活動 QR Code
-                    </p>
-                    <p class="mt-1 text-[11px] font-bold text-slate-500">
-                      可放 LINE、海報、桌卡或社群貼文。
-                    </p>
-                  </div>
-                  <span class="rounded-full bg-slate-900 px-2 py-1 text-[11px] font-black text-white">
-                    QR
-                  </span>
-                </div>
-
-                <div class="mt-3 grid gap-4 rounded-2xl border border-dashed border-emerald-200 bg-white p-4 lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center">
-                  <img
-                    v-if="databaseFrontQrCodeUrl"
-                    :src="databaseFrontQrCodeUrl"
-                    alt="商家前台專屬網址 QR Code"
-                    class="mx-auto h-44 w-44 rounded-2xl border border-slate-100 bg-white p-2 shadow-sm lg:mx-0"
-                  >
-                  <div class="min-w-0 space-y-3 text-center lg:text-left">
-                    <p class="text-[11px] font-bold leading-5 text-slate-500">
-                      掃描後會開啟目前商家的砸金蛋前台，不會導到其他商家。
-                    </p>
-                    <div class="flex flex-wrap justify-center gap-2 lg:justify-start">
-                    <button
-                      type="button"
-                      class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white"
-                      @click="downloadDatabaseFrontQrCode"
-                    >
-                      下載 QR Code
-                    </button>
-                    <button
-                      type="button"
-                      class="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
-                      @click="openDatabaseFrontPreview"
-                    >
-                      開新分頁測試
-                    </button>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
