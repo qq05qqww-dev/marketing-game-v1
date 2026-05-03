@@ -982,7 +982,7 @@ const exportDatabaseGameConfigBackupJson = () => {
   const settings = buildDatabaseGameConfigPayload()
   const backupPayload = {
     type: 'golden-egg-game-config-backup',
-    version: 'v2.2-batch417',
+    version: 'v2.2-batch418',
     exportedAt: new Date().toISOString(),
     campaignId: normalizedDatabaseCampaignId.value,
     campaignTitle: databaseCampaign.value?.title || '',
@@ -1117,6 +1117,259 @@ const importDatabaseGameConfigBackupJson = async (event) => {
   }
 }
 
+
+
+const databaseGameConfigTemplatePresets = [
+  {
+    id: 'classic-red-gold',
+    name: '經典紅金活動',
+    badge: '通用抽獎',
+    description: '適合開幕、週年慶、一般品牌抽獎，紅金主題最穩定。',
+    tone: '喜氣、醒目、活動感',
+    fields: {
+      pageTitle: '九宮格砸金蛋抽獎活動',
+      mainTitle: '九宮格砸金蛋抽獎活動',
+      subTitle: '輸入序號，立即砸金蛋抽好禮！',
+      heroTagline: '限時活動・好禮等你拿',
+      noticeText: '請先輸入活動序號，驗證成功後即可選擇一顆金蛋。',
+      serialRedeemTitle: '輸入抽獎序號',
+      serialRedeemDescription: '請輸入主辦單位提供的序號，驗證成功後即可砸蛋。',
+      serialRedeemButtonText: '驗證序號',
+      serialRedeemSuccessText: '序號驗證成功，請選擇一顆金蛋。',
+      serialRedeemErrorText: '序號無效、已使用或不存在。',
+      activityRunningText: '活動進行中，請輸入序號參加。',
+      activityNotStartedText: '活動尚未開始，請稍後再回來。',
+      activityEndedText: '活動已結束，感謝參與。',
+      themeBgFrom: '#991b1b',
+      themeBgMiddle: '#dc2626',
+      themeBgTo: '#450a0a',
+      themePanelColor: '#fff7ed',
+      themeAccentColor: '#facc15',
+      themeButtonColor: '#ef4444',
+      themeButtonDarkColor: '#991b1b',
+      eggColorTop: '#fff7ad',
+      eggColorMiddle: '#fde047',
+      eggColorBottom: '#b45309',
+      eggCardBgFrom: '#ef4444',
+      eggCardBgTo: '#7f1d1d',
+      eggNumberBgColor: '#7f1d1d',
+      eggNumberTextColor: '#fef3c7',
+      shareTitle: '九宮格砸金蛋抽獎活動',
+      shareDescription: '輸入活動序號，立即砸金蛋抽好禮！',
+      systemShareButtonBgColor: '#7f1d1d',
+      systemShareButtonTextColor: '#ffffff',
+      systemShareText: '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！',
+      lineShareText: '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！',
+      telegramShareText: '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
+    }
+  },
+  {
+    id: 'vip-black-gold',
+    name: 'VIP 黑金活動',
+    badge: '高級感',
+    description: '適合高單價、會員、VIP、精品感活動，前台視覺更沉穩。',
+    tone: '高級、沉穩、精品',
+    fields: {
+      pageTitle: 'VIP 黑金砸金蛋活動',
+      mainTitle: 'VIP 黑金砸金蛋',
+      subTitle: '專屬序號限定參加，開出你的尊榮好禮。',
+      heroTagline: 'VIP 專屬・限量好禮',
+      noticeText: '請輸入 VIP 活動序號，驗證成功後即可開啟金蛋。',
+      serialRedeemTitle: '輸入 VIP 專屬序號',
+      serialRedeemDescription: '此活動採專屬序號制，請確認序號後再送出。',
+      serialRedeemButtonText: '驗證 VIP 序號',
+      serialRedeemSuccessText: 'VIP 序號驗證成功，請選擇一顆金蛋。',
+      serialRedeemErrorText: '序號無效、已使用或不符合 VIP 活動資格。',
+      activityRunningText: 'VIP 活動進行中，請輸入專屬序號參加。',
+      activityNotStartedText: 'VIP 活動尚未開始。',
+      activityEndedText: 'VIP 活動已結束，感謝參與。',
+      themeBgFrom: '#020617',
+      themeBgMiddle: '#111827',
+      themeBgTo: '#000000',
+      themePanelColor: '#111827',
+      themeAccentColor: '#facc15',
+      themeButtonColor: '#d97706',
+      themeButtonDarkColor: '#78350f',
+      eggColorTop: '#fef9c3',
+      eggColorMiddle: '#facc15',
+      eggColorBottom: '#92400e',
+      eggCardBgFrom: '#1f2937',
+      eggCardBgTo: '#020617',
+      eggNumberBgColor: '#facc15',
+      eggNumberTextColor: '#111827',
+      shareTitle: 'VIP 黑金砸金蛋活動',
+      shareDescription: '專屬序號限定參加，開出你的尊榮好禮。',
+      systemShareButtonBgColor: '#facc15',
+      systemShareButtonTextColor: '#111827',
+      systemShareText: '✨ VIP 黑金砸金蛋活動\n專屬序號限定參加，開出你的尊榮好禮。',
+      lineShareText: '✨ VIP 黑金砸金蛋活動｜專屬序號限定參加！',
+      telegramShareText: '✨ VIP 黑金砸金蛋活動｜專屬序號限定參加！'
+    }
+  },
+  {
+    id: 'cute-pink-gold',
+    name: '可愛粉金活動',
+    badge: '美容女性',
+    description: '適合美容、按摩、甜點、女性客群，畫面更柔和可愛。',
+    tone: '可愛、柔和、粉金',
+    fields: {
+      pageTitle: '粉金幸運砸金蛋活動',
+      mainTitle: '粉金幸運砸金蛋',
+      subTitle: '輸入活動序號，敲開你的限定小驚喜。',
+      heroTagline: '限定優惠・甜蜜驚喜',
+      noticeText: '輸入活動序號後，即可選擇一顆幸運金蛋。',
+      serialRedeemTitle: '輸入優惠序號',
+      serialRedeemDescription: '請輸入本次活動序號，驗證後即可參加抽獎。',
+      serialRedeemButtonText: '開啟驚喜',
+      serialRedeemSuccessText: '序號驗證成功，請選擇你的幸運金蛋。',
+      serialRedeemErrorText: '序號無效或已使用，請重新確認。',
+      activityRunningText: '粉金幸運活動進行中，快來抽限定好禮。',
+      activityNotStartedText: '活動即將開始，敬請期待。',
+      activityEndedText: '活動已結束，謝謝你的參與。',
+      themeBgFrom: '#f9a8d4',
+      themeBgMiddle: '#fb7185',
+      themeBgTo: '#be185d',
+      themePanelColor: '#fff1f2',
+      themeAccentColor: '#facc15',
+      themeButtonColor: '#ec4899',
+      themeButtonDarkColor: '#9d174d',
+      eggColorTop: '#fef3c7',
+      eggColorMiddle: '#fbbf24',
+      eggColorBottom: '#b45309',
+      eggCardBgFrom: '#fb7185',
+      eggCardBgTo: '#be185d',
+      eggNumberBgColor: '#be185d',
+      eggNumberTextColor: '#fff7ed',
+      shareTitle: '粉金幸運砸金蛋活動',
+      shareDescription: '輸入活動序號，敲開你的限定小驚喜。',
+      systemShareButtonBgColor: '#ec4899',
+      systemShareButtonTextColor: '#ffffff',
+      systemShareText: '💗 粉金幸運砸金蛋活動\n輸入序號，敲開你的限定小驚喜！',
+      lineShareText: '💗 粉金幸運砸金蛋｜限定優惠等你抽！',
+      telegramShareText: '💗 粉金幸運砸金蛋｜限定優惠等你抽！'
+    }
+  },
+  {
+    id: 'fresh-blue-white',
+    name: '清爽藍白活動',
+    badge: '科技會員',
+    description: '適合科技、會員系統、品牌正式活動，畫面乾淨清爽。',
+    tone: '清爽、專業、科技感',
+    fields: {
+      pageTitle: '會員限定砸金蛋活動',
+      mainTitle: '會員限定砸金蛋',
+      subTitle: '輸入活動序號，立即解鎖會員專屬好禮。',
+      heroTagline: '會員限定・專屬回饋',
+      noticeText: '請輸入會員活動序號，驗證成功後即可參加。',
+      serialRedeemTitle: '輸入會員序號',
+      serialRedeemDescription: '請輸入會員專屬序號，驗證後即可選擇金蛋。',
+      serialRedeemButtonText: '驗證會員序號',
+      serialRedeemSuccessText: '序號驗證成功，請選擇一顆金蛋。',
+      serialRedeemErrorText: '序號無效、已使用或不符合活動資格。',
+      activityRunningText: '會員活動進行中，請輸入序號參加。',
+      activityNotStartedText: '會員活動尚未開始。',
+      activityEndedText: '會員活動已結束，感謝參與。',
+      themeBgFrom: '#0f172a',
+      themeBgMiddle: '#2563eb',
+      themeBgTo: '#e0f2fe',
+      themePanelColor: '#eff6ff',
+      themeAccentColor: '#38bdf8',
+      themeButtonColor: '#2563eb',
+      themeButtonDarkColor: '#1e3a8a',
+      eggColorTop: '#fef9c3',
+      eggColorMiddle: '#facc15',
+      eggColorBottom: '#b45309',
+      eggCardBgFrom: '#38bdf8',
+      eggCardBgTo: '#1d4ed8',
+      eggNumberBgColor: '#1e3a8a',
+      eggNumberTextColor: '#ffffff',
+      shareTitle: '會員限定砸金蛋活動',
+      shareDescription: '輸入活動序號，立即解鎖會員專屬好禮。',
+      systemShareButtonBgColor: '#2563eb',
+      systemShareButtonTextColor: '#ffffff',
+      systemShareText: '🎁 會員限定砸金蛋活動\n輸入序號，解鎖會員專屬好禮！',
+      lineShareText: '🎁 會員限定砸金蛋｜專屬好禮等你抽！',
+      telegramShareText: '🎁 會員限定砸金蛋｜專屬好禮等你抽！'
+    }
+  },
+  {
+    id: 'festival-lucky',
+    name: '節慶喜氣活動',
+    badge: '節慶開幕',
+    description: '適合春節、開幕、週年慶、檔期活動，整體更熱鬧。',
+    tone: '熱鬧、喜氣、節慶',
+    fields: {
+      pageTitle: '節慶幸運砸金蛋活動',
+      mainTitle: '節慶幸運砸金蛋',
+      subTitle: '輸入序號，敲開節慶限定好禮。',
+      heroTagline: '節慶限定・好運加倍',
+      noticeText: '節慶限定活動開跑，輸入序號即可參加抽獎。',
+      serialRedeemTitle: '輸入節慶序號',
+      serialRedeemDescription: '請輸入活動序號，驗證成功後即可砸金蛋。',
+      serialRedeemButtonText: '開啟節慶好禮',
+      serialRedeemSuccessText: '序號驗證成功，請選擇一顆金蛋。',
+      serialRedeemErrorText: '序號無效或已使用，請重新確認。',
+      activityRunningText: '節慶活動進行中，輸入序號就有機會中獎。',
+      activityNotStartedText: '節慶活動尚未開始，敬請期待。',
+      activityEndedText: '節慶活動已結束，感謝參與。',
+      themeBgFrom: '#7f1d1d',
+      themeBgMiddle: '#ea580c',
+      themeBgTo: '#431407',
+      themePanelColor: '#fffbeb',
+      themeAccentColor: '#f59e0b',
+      themeButtonColor: '#f97316',
+      themeButtonDarkColor: '#9a3412',
+      eggColorTop: '#fff7ad',
+      eggColorMiddle: '#facc15',
+      eggColorBottom: '#a16207',
+      eggCardBgFrom: '#f97316',
+      eggCardBgTo: '#991b1b',
+      eggNumberBgColor: '#991b1b',
+      eggNumberTextColor: '#fef3c7',
+      shareTitle: '節慶幸運砸金蛋活動',
+      shareDescription: '輸入序號，敲開節慶限定好禮。',
+      systemShareButtonBgColor: '#f97316',
+      systemShareButtonTextColor: '#ffffff',
+      systemShareText: '🧧 節慶幸運砸金蛋活動\n輸入序號，敲開節慶限定好禮！',
+      lineShareText: '🧧 節慶幸運砸金蛋｜限定好禮等你抽！',
+      telegramShareText: '🧧 節慶幸運砸金蛋｜限定好禮等你抽！'
+    }
+  }
+]
+
+const getDatabaseGameConfigTemplateFieldCount = (template) => {
+  if (!template?.fields) return 0
+  return Object.keys(template.fields).filter((key) => Object.prototype.hasOwnProperty.call(databaseGameConfigFormComparable.value, key)).length
+}
+
+const applyDatabaseGameConfigTemplatePreset = (template) => {
+  if (!template?.fields) return
+
+  const fieldCount = getDatabaseGameConfigTemplateFieldCount(template)
+  const previewKeys = Object.keys(template.fields)
+    .filter((key) => Object.prototype.hasOwnProperty.call(databaseGameConfigFormComparable.value, key))
+    .slice(0, 10)
+
+  const previewList = previewKeys
+    .map((key, index) => `${index + 1}. ${databaseGameConfigDiffLabelMap[key] || key}`)
+    .join('\n')
+  const moreText = fieldCount > previewKeys.length ? `\n...另有 ${fieldCount - previewKeys.length} 個欄位未列出。` : ''
+  const confirmed = window.confirm(
+    `即將套用「${template.name}」到 GameConfig 表單。\n\n這只會先改表單，不會直接寫入資料庫。確認內容後，仍需要按「儲存前台設定」。\n\n預計套用 ${fieldCount} 個欄位：\n${previewList}${moreText}\n\n是否繼續？`
+  )
+
+  if (!confirmed) return
+
+  const appliedCount = applyImportedDatabaseGameConfigSettingsToForm(template.fields)
+
+  showOperationSuccess(`已套用「${template.name}」模板到表單，請確認後再按「儲存前台設定」。`)
+  addGameConfigOperationLog({
+    title: `套用模板：${template.name}`,
+    description: `已把 ${appliedCount} 個模板欄位套用到表單，尚未寫入資料庫。`,
+    type: 'warning',
+    changedCount: databaseGameConfigChangedCount.value
+  })
+}
 
 const waitOperationFeedbackFrame = async (minimumMs = 450) => {
   await nextTick()
@@ -6103,6 +6356,66 @@ watch(
                   <p class="text-xs font-black text-slate-700">建議用途</p>
                   <p class="mt-1 text-xs font-bold leading-5 text-slate-500">套用主題前先備份，避免誤改後找不回原設定。</p>
                 </div>
+              </div>
+            </div>
+
+
+            <div class="mt-4 rounded-3xl border border-rose-100 bg-white/95 p-4 shadow-sm">
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                  <p class="text-xs font-black uppercase tracking-[0.22em] text-rose-500">Quick Presets</p>
+                  <h4 class="mt-1 text-sm font-black text-slate-950">快速套用模板</h4>
+                  <p class="mt-1 text-xs font-bold leading-6 text-slate-500">
+                    可一鍵套用常用活動文案、背景主題、按鈕色、金蛋色與分享文字。套用後只會先改表單，不會直接寫入資料庫。
+                  </p>
+                </div>
+
+                <span class="inline-flex w-fit items-center rounded-full bg-rose-50 px-3 py-1 text-xs font-black text-rose-700 ring-1 ring-rose-100">
+                  套用後仍需儲存
+                </span>
+              </div>
+
+              <div class="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-2">
+                <div
+                  v-for="template in databaseGameConfigTemplatePresets"
+                  :key="template.id"
+                  class="rounded-3xl border border-slate-100 bg-slate-50/80 p-4 transition hover:border-rose-100 hover:bg-rose-50/60"
+                >
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="text-sm font-black text-slate-950">{{ template.name }}</p>
+                        <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-rose-600 ring-1 ring-rose-100">{{ template.badge }}</span>
+                      </div>
+                      <p class="mt-2 text-xs font-bold leading-5 text-slate-500">{{ template.description }}</p>
+                      <p class="mt-2 text-xs font-black text-slate-400">風格：{{ template.tone }}｜欄位：{{ getDatabaseGameConfigTemplateFieldCount(template) }} 個</p>
+                    </div>
+
+                    <button
+                      type="button"
+                      class="shrink-0 rounded-2xl bg-rose-600 px-4 py-2 text-xs font-black text-white shadow-sm transition hover:bg-rose-500"
+                      @click="applyDatabaseGameConfigTemplatePreset(template)"
+                    >
+                      套用模板
+                    </button>
+                  </div>
+
+                  <div class="mt-3 grid grid-cols-3 gap-2">
+                    <div class="h-8 rounded-2xl ring-1 ring-white/70" :style="{ background: template.fields.themeBgFrom }"></div>
+                    <div class="h-8 rounded-2xl ring-1 ring-white/70" :style="{ background: template.fields.themeBgMiddle }"></div>
+                    <div class="h-8 rounded-2xl ring-1 ring-white/70" :style="{ background: template.fields.themeBgTo }"></div>
+                  </div>
+
+                  <div class="mt-3 flex flex-wrap gap-2 text-xs font-black">
+                    <span class="rounded-full bg-white px-3 py-1 text-slate-600 ring-1 ring-slate-100">{{ template.fields.mainTitle }}</span>
+                    <span class="rounded-full px-3 py-1 ring-1 ring-white/70" :style="{ background: template.fields.eggColorMiddle, color: template.fields.eggNumberTextColor }">金蛋色</span>
+                    <span class="rounded-full px-3 py-1 text-white" :style="{ background: template.fields.themeButtonColor }">按鈕色</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-3 rounded-2xl bg-amber-50 p-3 text-xs font-bold leading-6 text-amber-700 ring-1 ring-amber-100">
+                建議：套用模板前可先用「設定備份工具」匯出 JSON。套用後會觸發第 415 批差異提示，確認沒問題再按「儲存前台設定」。
               </div>
             </div>
 
