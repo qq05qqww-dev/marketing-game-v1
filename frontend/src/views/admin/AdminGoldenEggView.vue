@@ -197,6 +197,7 @@ const tenantAutoLoadStatus = ref('info')
 const tenantAutoLoading = ref(false)
 const gameConfigOperationLogs = ref([])
 const isSavingDatabaseCampaign = ref(false)
+const isUpdatingDatabaseCampaignStatus = ref(false)
 const databaseCampaignForm = reactive({
   title: '',
   slug: '',
@@ -4917,6 +4918,95 @@ const saveDatabaseCampaign = async () => {
   }
 }
 
+const databaseCampaignPublishActions = computed(() => [
+  {
+    status: 'ACTIVE',
+    label: '啟用活動',
+    description: '前台可正常開放玩家進入與抽獎。',
+    buttonClass: 'bg-emerald-600 text-white shadow-emerald-200 hover:bg-emerald-700',
+    badgeClass: 'bg-emerald-50 text-emerald-700 ring-emerald-100'
+  },
+  {
+    status: 'INACTIVE',
+    label: '暫停活動',
+    description: '前台會停止參加，適合暫時下架或調整設定。',
+    buttonClass: 'bg-amber-500 text-white shadow-amber-200 hover:bg-amber-600',
+    badgeClass: 'bg-amber-50 text-amber-700 ring-amber-100'
+  },
+  {
+    status: 'DRAFT',
+    label: '設為草稿',
+    description: '適合尚未正式公開前的準備狀態。',
+    buttonClass: 'bg-slate-700 text-white shadow-slate-200 hover:bg-slate-800',
+    badgeClass: 'bg-slate-100 text-slate-700 ring-slate-200'
+  },
+  {
+    status: 'ENDED',
+    label: '結束活動',
+    description: '活動結束後前台不可再參加。',
+    buttonClass: 'bg-rose-600 text-white shadow-rose-200 hover:bg-rose-700',
+    badgeClass: 'bg-rose-50 text-rose-700 ring-rose-100'
+  }
+])
+
+const updateDatabaseCampaignStatusQuick = async (targetStatus) => {
+  const status = String(targetStatus || '').toUpperCase()
+
+  if (!normalizedDatabaseCampaignId.value) {
+    showOperationError('請先讀取活動資料後再切換上架狀態。')
+    return
+  }
+
+  if (!databaseCampaign.value) {
+    showOperationError('目前沒有可切換狀態的活動資料。')
+    return
+  }
+
+  if (status === String(databaseCampaign.value?.status || '').toUpperCase()) {
+    showSavedMessage('目前活動已經是這個狀態。')
+    databaseCampaignForm.status = status
+    return
+  }
+
+  const action = databaseCampaignPublishActions.value.find((item) => item.status === status)
+  const actionLabel = action?.label || `切換為 ${status}`
+  const warningText = status === 'ACTIVE'
+    ? '啟用後，若活動時間在有效期間內，玩家前台即可參加。'
+    : '切換後，前台會依最新狀態顯示，玩家可能無法再參加。'
+
+  const confirmed = window.confirm(`${actionLabel}
+
+${warningText}
+
+是否確認更新活動狀態？`)
+  if (!confirmed) return
+
+  isUpdatingDatabaseCampaignStatus.value = true
+  showOperationInfo(`正在${actionLabel}，請稍候...`, false)
+
+  try {
+    databaseCampaignForm.status = status
+
+    await updateAdminGoldenEggCampaign(
+      normalizedDatabaseCampaignId.value,
+      {
+        ...buildDatabaseCampaignPayload(),
+        status
+      }
+    )
+
+    showOperationSuccess(`已${actionLabel}。`)
+    setDatabasePreviewSyncMessage(`活動狀態已更新為 ${status}，前台重新整理後會套用最新狀態。`)
+    await loadDatabaseGoldenEggCampaign()
+  } catch (error) {
+    console.error('切換活動上架狀態失敗：', error)
+    showOperationError(error.message || '切換活動上架狀態失敗。')
+    loadDatabaseCampaignFormFromCampaign(databaseCampaign.value)
+  } finally {
+    isUpdatingDatabaseCampaignStatus.value = false
+  }
+}
+
 const resetDatabaseCampaignForm = () => {
   loadDatabaseCampaignFormFromCampaign(databaseCampaign.value)
   showSavedMessage('已還原目前資料庫活動資料到表單。')
@@ -6531,6 +6621,68 @@ watch(
             </div>
 
             <div class="space-y-4 p-4 sm:p-5">
+              <div class="rounded-[1.75rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-amber-50 p-4 shadow-sm">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div class="min-w-0">
+                    <p class="text-xs font-black uppercase tracking-[0.24em] text-emerald-600">Publish Control</p>
+                    <h4 class="mt-2 text-base font-black text-slate-950">活動上架狀態</h4>
+                    <p class="mt-1 max-w-2xl text-xs font-bold leading-relaxed text-slate-600">
+                      商家可以在這裡快速啟用、暫停或結束目前活動；系統仍會同時檢查開始與結束時間，避免前台誤開放。
+                    </p>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span :class="['inline-flex rounded-2xl px-4 py-2 text-xs font-black ring-1', databaseCampaignFormStatusMeta.tone]">
+                      目前：{{ databaseCampaignFormStatusMeta.label }}
+                    </span>
+                    <span class="inline-flex rounded-2xl bg-white px-4 py-2 text-xs font-black text-slate-600 ring-1 ring-slate-200">
+                      {{ databaseCampaignFormTimeSummary.startText }} ～ {{ databaseCampaignFormTimeSummary.endText }}
+                    </span>
+                  </div>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-4">
+                  <button
+                    v-for="action in databaseCampaignPublishActions"
+                    :key="action.status"
+                    type="button"
+                    :disabled="isUpdatingDatabaseCampaignStatus || isSavingDatabaseCampaign"
+                    :class="[
+                      'rounded-3xl p-4 text-left shadow-lg transition disabled:cursor-not-allowed disabled:opacity-60',
+                      String(databaseCampaignForm.status || '').toUpperCase() === action.status
+                        ? action.buttonClass
+                        : 'bg-white text-slate-800 ring-1 ring-slate-200 hover:-translate-y-0.5 hover:shadow-xl'
+                    ]"
+                    @click="updateDatabaseCampaignStatusQuick(action.status)"
+                  >
+                    <span
+                      :class="[
+                        'inline-flex rounded-full px-3 py-1 text-[11px] font-black ring-1',
+                        String(databaseCampaignForm.status || '').toUpperCase() === action.status
+                          ? 'bg-white/20 text-white ring-white/30'
+                          : action.badgeClass
+                      ]"
+                    >
+                      {{ action.status }}
+                    </span>
+                    <span class="mt-3 block text-sm font-black">{{ action.label }}</span>
+                    <span
+                      :class="[
+                        'mt-1 block text-xs font-bold leading-relaxed',
+                        String(databaseCampaignForm.status || '').toUpperCase() === action.status ? 'text-white/85' : 'text-slate-500'
+                      ]"
+                    >
+                      {{ action.description }}
+                    </span>
+                  </button>
+                </div>
+
+                <div class="mt-4 rounded-2xl bg-white/85 p-3 text-xs font-bold leading-relaxed text-slate-600 ring-1 ring-emerald-100">
+                  <span class="font-black text-emerald-700">前台顯示規則：</span>
+                  只有狀態為 ACTIVE 且目前時間介於開始 / 結束時間內，玩家才能正常參加；草稿、暫停或已結束會停止抽獎流程。
+                </div>
+              </div>
+
               <div class="grid grid-cols-[repeat(auto-fit,minmax(170px,1fr))] gap-3">
                 <div
                   v-for="item in databaseCampaignFormSummaryItems"
