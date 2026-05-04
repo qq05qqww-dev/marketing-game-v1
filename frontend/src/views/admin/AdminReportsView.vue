@@ -191,6 +191,60 @@ const sourceStats = computed(() => {
   ]
 })
 
+
+const latestDailyChartRows = computed(() => {
+  return safeArray(dailyRows.value)
+    .slice()
+    .reverse()
+    .slice(-14)
+    .map((row) => {
+      const playCount = Number(row.playCount || row.totalPlays || 0)
+      const winCount = Number(row.winCount || row.totalWins || 0)
+      const winRate = playCount > 0 ? Number(((winCount / playCount) * 100).toFixed(1)) : 0
+
+      return {
+        ...row,
+        dateLabel: String(row.date || '').slice(5) || '—',
+        playCount,
+        winCount,
+        winRate
+      }
+    })
+})
+
+const maxDailyPlayCount = computed(() => {
+  return Math.max(1, ...latestDailyChartRows.value.map((row) => Number(row.playCount || 0)))
+})
+
+const maxDailyWinCount = computed(() => {
+  return Math.max(1, ...latestDailyChartRows.value.map((row) => Number(row.winCount || 0)))
+})
+
+const maxSourceCount = computed(() => {
+  return Math.max(1, ...sourceStats.value.map((item) => Number(item.count || 0)))
+})
+
+const hasChartData = computed(() => {
+  return latestDailyChartRows.value.some((row) => row.playCount > 0 || row.winCount > 0) ||
+    sourceStats.value.some((item) => Number(item.count || 0) > 0)
+})
+
+const getPlayBarHeight = (count) => {
+  return `${Math.max(6, Math.round((Number(count || 0) / maxDailyPlayCount.value) * 100))}%`
+}
+
+const getWinBarHeight = (count) => {
+  return `${Math.max(6, Math.round((Number(count || 0) / maxDailyWinCount.value) * 100))}%`
+}
+
+const getSourceBarWidth = (count) => {
+  return `${Math.max(3, Math.round((Number(count || 0) / maxSourceCount.value) * 100))}%`
+}
+
+const getWinRateBarHeight = (rate) => {
+  return `${Math.max(6, Math.min(100, Math.round(Number(rate || 0))))}%`
+}
+
 const fetchReports = async () => {
   loading.value = true
 
@@ -530,6 +584,107 @@ onMounted(async () => {
               class="h-full rounded-full bg-cyan-500"
               :style="{ width: `${Math.min(100, Math.max(0, item.percent || 0))}%` }"
             ></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+
+    <section class="rounded-[32px] border border-indigo-100 bg-white p-8 shadow-sm">
+      <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.35em] text-indigo-500">Visual Analytics</p>
+          <h3 class="mt-2 text-2xl font-black text-slate-900">圖表視覺化</h3>
+          <p class="mt-2 text-sm text-slate-500">
+            圖表會依照目前商家與日期篩選自動更新，方便快速判斷遊玩趨勢、來源成效與中獎率。
+          </p>
+        </div>
+        <div class="rounded-2xl bg-indigo-50 px-5 py-3 text-sm font-black text-indigo-700">
+          顯示最近 {{ latestDailyChartRows.length }} 天
+        </div>
+      </div>
+
+      <div v-if="!hasChartData && !loading" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
+        目前篩選條件下沒有可視覺化資料。
+      </div>
+
+      <div v-else class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+          <div class="mb-5 flex items-center justify-between gap-3">
+            <div>
+              <h4 class="text-lg font-black text-slate-900">每日遊玩 / 中獎</h4>
+              <p class="mt-1 text-xs text-slate-500">深色為遊玩數，淺色為中獎數。</p>
+            </div>
+          </div>
+
+          <div class="flex h-64 items-end gap-3 overflow-x-auto rounded-2xl bg-white p-4">
+            <div
+              v-for="row in latestDailyChartRows"
+              :key="`daily-chart-${row.date}`"
+              class="flex min-w-[44px] flex-1 flex-col items-center gap-2"
+            >
+              <div class="flex h-44 w-full items-end justify-center gap-1 rounded-xl bg-slate-100 px-2 py-2">
+                <div
+                  class="w-3 rounded-t-full bg-slate-800 transition-all"
+                  :style="{ height: getPlayBarHeight(row.playCount) }"
+                  :title="`遊玩 ${row.playCount}`"
+                ></div>
+                <div
+                  class="w-3 rounded-t-full bg-emerald-400 transition-all"
+                  :style="{ height: getWinBarHeight(row.winCount) }"
+                  :title="`中獎 ${row.winCount}`"
+                ></div>
+              </div>
+              <div class="text-center text-[11px] font-bold text-slate-500">{{ row.dateLabel }}</div>
+              <div class="text-center text-[11px] text-slate-400">{{ row.playCount }} / {{ row.winCount }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+          <div class="mb-5">
+            <h4 class="text-lg font-black text-slate-900">來源成效排行</h4>
+            <p class="mt-1 text-xs text-slate-500">依分享來源統計遊玩紀錄。</p>
+          </div>
+
+          <div class="space-y-4 rounded-2xl bg-white p-4">
+            <div v-for="item in sourceStats" :key="`source-chart-${item.key}`" class="space-y-2">
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="font-black text-slate-700">{{ item.label }}</span>
+                <span class="font-black text-slate-900">{{ item.count }} 筆・{{ item.percent }}%</span>
+              </div>
+              <div class="h-4 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  class="h-full rounded-full bg-cyan-500 transition-all"
+                  :style="{ width: getSourceBarWidth(item.count) }"
+                ></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
+          <div class="mb-5">
+            <h4 class="text-lg font-black text-slate-900">每日中獎率</h4>
+            <p class="mt-1 text-xs text-slate-500">每日中獎數 ÷ 每日遊玩數。</p>
+          </div>
+
+          <div class="flex h-64 items-end gap-3 overflow-x-auto rounded-2xl bg-white p-4">
+            <div
+              v-for="row in latestDailyChartRows"
+              :key="`rate-chart-${row.date}`"
+              class="flex min-w-[44px] flex-1 flex-col items-center gap-2"
+            >
+              <div class="flex h-44 w-full items-end justify-center rounded-xl bg-slate-100 px-2 py-2">
+                <div
+                  class="w-5 rounded-t-full bg-rose-400 transition-all"
+                  :style="{ height: getWinRateBarHeight(row.winRate) }"
+                  :title="`中獎率 ${row.winRate}%`"
+                ></div>
+              </div>
+              <div class="text-center text-[11px] font-bold text-slate-500">{{ row.dateLabel }}</div>
+              <div class="text-center text-[11px] text-slate-400">{{ row.winRate }}%</div>
+            </div>
           </div>
         </div>
       </div>
