@@ -1676,22 +1676,70 @@ const getPrizePerformanceRows = async (req, query = {}) => {
     })
   )
 
-  return rows.sort((a, b) => {
+  const sortedRows = rows.sort((a, b) => {
     if (Number(b.winCount || 0) !== Number(a.winCount || 0)) {
       return Number(b.winCount || 0) - Number(a.winCount || 0)
     }
 
     return Number(a.remainStock || 0) - Number(b.remainStock || 0)
   })
+
+  const hasRecordFocusedFilter = Boolean(
+    getTextFilter(query.serialCode) ||
+    getSourceFilter(query) ||
+    getTextFilter(query.keyword) ||
+    String(query.isWin || '').trim() ||
+    String(query.status || '').trim()
+  )
+
+  if (!hasRecordFocusedFilter) {
+    return sortedRows
+  }
+
+  // When the user is searching record-level fields such as serial code/source/result,
+  // hide unrelated prize rows that have zero matching records. This keeps the prize table
+  // aligned with the current query instead of showing every historical prize.
+  return sortedRows.filter((row) => {
+    return Number(row.hitCount || 0) > 0 ||
+      Number(row.winCount || 0) > 0 ||
+      Number(row.rewardCount || 0) > 0 ||
+      Number(row.claimedCount || 0) > 0 ||
+      Number(row.pendingCount || 0) > 0 ||
+      Number(row.cancelledCount || 0) > 0
+  })
+}
+
+const paginateRows = (rows = [], query = {}) => {
+  const page = Math.max(Number(query.page || query.prizePage || 1), 1)
+  const pageSize = Math.max(Number(query.pageSize || 10), 1)
+  const total = rows.length
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1)
+  const safePage = Math.min(page, totalPages)
+  const startIndex = (safePage - 1) * pageSize
+
+  return {
+    items: rows.slice(startIndex, startIndex + pageSize),
+    pagination: {
+      page: safePage,
+      pageSize,
+      total,
+      totalPages
+    }
+  }
 }
 
 router.get('/reports/prize-performance', async (req, res) => {
   try {
     const rows = await getPrizePerformanceRows(req, req.query)
+    const { items, pagination } = paginateRows(rows, req.query)
 
     return res.json({
       success: true,
-      data: rows
+      data: {
+        items,
+        topRows: rows.slice(0, 8),
+        pagination
+      }
     })
   } catch (error) {
     console.error('取得獎項成效統計失敗:', error)

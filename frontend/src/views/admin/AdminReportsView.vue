@@ -44,6 +44,7 @@ const dailyRows = ref([])
 const playRows = ref([])
 const rewardRows = ref([])
 const prizePerformanceRows = ref([])
+const prizeRankingRows = ref([])
 
 const playPagination = ref({
   page: 1,
@@ -53,6 +54,13 @@ const playPagination = ref({
 })
 
 const rewardPagination = ref({
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  totalPages: 1
+})
+
+const prizePagination = ref({
   page: 1,
   pageSize: 10,
   total: 0,
@@ -72,6 +80,7 @@ const filters = ref({
   tenantId: '',
   playPage: 1,
   rewardPage: 1,
+  prizePage: 1,
   pageSize: 10
 })
 
@@ -273,7 +282,11 @@ const hasChartData = computed(() => {
 
 
 const topPrizePerformanceRows = computed(() => {
-  return safeArray(prizePerformanceRows.value)
+  const sourceRows = safeArray(prizeRankingRows.value).length
+    ? safeArray(prizeRankingRows.value)
+    : safeArray(prizePerformanceRows.value)
+
+  return sourceRows
     .slice()
     .sort((a, b) => Number(b.winCount || 0) - Number(a.winCount || 0))
     .slice(0, 8)
@@ -350,7 +363,9 @@ const fetchReports = async () => {
         params: {
           ...commonParams,
           isWin: filters.value.isWin,
-          status: filters.value.status
+          status: filters.value.status,
+          page: filters.value.prizePage,
+          pageSize: filters.value.pageSize
         }
       })
     ])
@@ -363,7 +378,21 @@ const fetchReports = async () => {
     dailyRows.value = safeArray(apiData(dailyRes, []))
     playRows.value = safeArray(apiData(playRes, []))
     rewardRows.value = safeArray(apiData(rewardRes, []))
-    prizePerformanceRows.value = safeArray(apiData(prizePerformanceRes, []))
+    const prizePayload = apiData(prizePerformanceRes, [])
+    prizePerformanceRows.value = Array.isArray(prizePayload)
+      ? safeArray(prizePayload)
+      : safeArray(prizePayload?.items)
+    prizeRankingRows.value = Array.isArray(prizePayload)
+      ? safeArray(prizePayload)
+      : safeArray(prizePayload?.topRows)
+
+    const prizeP = Array.isArray(prizePayload) ? {} : (prizePayload?.pagination || {})
+    prizePagination.value = {
+      page: Number(prizeP.page || filters.value.prizePage || 1),
+      pageSize: Number(prizeP.pageSize || filters.value.pageSize || 10),
+      total: Number(prizeP.total || prizePerformanceRows.value.length || 0),
+      totalPages: Number(prizeP.totalPages || 1)
+    }
 
     const playP = playRes?.data?.pagination || {}
     playPagination.value = {
@@ -388,8 +417,10 @@ const fetchReports = async () => {
     playRows.value = []
     rewardRows.value = []
     prizePerformanceRows.value = []
+    prizeRankingRows.value = []
     playPagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
     rewardPagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
+    prizePagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
   } finally {
     loading.value = false
   }
@@ -398,7 +429,7 @@ const fetchReports = async () => {
 const totalDailyRows = computed(() => dailyRows.value.length)
 const totalPlayRows = computed(() => playPagination.value.total)
 const totalRewardRows = computed(() => rewardPagination.value.total)
-const totalPrizePerformanceRows = computed(() => prizePerformanceRows.value.length)
+const totalPrizePerformanceRows = computed(() => prizePagination.value.total)
 
 const getPageStart = (pager) => {
   if (!pager?.total) return 0
@@ -414,6 +445,8 @@ const playPageStart = computed(() => getPageStart(playPagination.value))
 const playPageEnd = computed(() => getPageEnd(playPagination.value))
 const rewardPageStart = computed(() => getPageStart(rewardPagination.value))
 const rewardPageEnd = computed(() => getPageEnd(rewardPagination.value))
+const prizePageStart = computed(() => getPageStart(prizePagination.value))
+const prizePageEnd = computed(() => getPageEnd(prizePagination.value))
 
 const isPlatformReport = computed(() => {
   return ['ALL', 'PLATFORM_TENANT'].includes(String(summary.value?.scope || '').toUpperCase())
@@ -597,6 +630,7 @@ const exportPrizePerformanceXlsx = () => {
 const applyFilters = async () => {
   filters.value.playPage = 1
   filters.value.rewardPage = 1
+  filters.value.prizePage = 1
   await fetchReports()
 }
 
@@ -614,14 +648,27 @@ const clearFilters = async () => {
     tenantId: '',
     playPage: 1,
     rewardPage: 1,
+    prizePage: 1,
     pageSize: filters.value.pageSize || 10
   }
 
   await fetchReports()
 }
 
+const getPagerKey = (type = 'reward') => {
+  if (type === 'play') return 'playPage'
+  if (type === 'prize') return 'prizePage'
+  return 'rewardPage'
+}
+
+const getPagerByType = (type = 'reward') => {
+  if (type === 'play') return playPagination.value
+  if (type === 'prize') return prizePagination.value
+  return rewardPagination.value
+}
+
 const goPrevPage = async (type = 'reward') => {
-  const key = type === 'play' ? 'playPage' : 'rewardPage'
+  const key = getPagerKey(type)
 
   if (filters.value[key] > 1) {
     filters.value[key] -= 1
@@ -630,8 +677,8 @@ const goPrevPage = async (type = 'reward') => {
 }
 
 const goNextPage = async (type = 'reward') => {
-  const key = type === 'play' ? 'playPage' : 'rewardPage'
-  const pager = type === 'play' ? playPagination.value : rewardPagination.value
+  const key = getPagerKey(type)
+  const pager = getPagerByType(type)
 
   if (filters.value[key] < pager.totalPages) {
     filters.value[key] += 1
@@ -642,6 +689,7 @@ const goNextPage = async (type = 'reward') => {
 const changePageSize = async () => {
   filters.value.playPage = 1
   filters.value.rewardPage = 1
+  filters.value.prizePage = 1
   await fetchReports()
 }
 
@@ -1124,7 +1172,7 @@ onMounted(async () => {
           </p>
         </div>
         <div class="rounded-2xl bg-violet-50 px-5 py-3 text-sm font-black text-violet-700">
-          獎項數：{{ totalPrizePerformanceRows }}
+          目前顯示 {{ prizePageStart }} - {{ prizePageEnd }} 筆，共 {{ totalPrizePerformanceRows }} 筆
         </div>
       </div>
 
@@ -1196,6 +1244,28 @@ onMounted(async () => {
               </tr>
             </tbody>
           </table>
+
+          <div class="flex flex-col gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 md:flex-row md:items-center md:justify-between">
+            <div class="text-sm font-semibold text-slate-500">
+              第 {{ prizePagination.page }} / {{ prizePagination.totalPages }} 頁，每頁 {{ filters.pageSize }} 筆
+            </div>
+            <div class="flex gap-3">
+              <button
+                @click="goPrevPage('prize')"
+                :disabled="prizePagination.page <= 1"
+                class="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                上一頁
+              </button>
+              <button
+                @click="goNextPage('prize')"
+                :disabled="prizePagination.page >= prizePagination.totalPages"
+                class="rounded-2xl bg-slate-900 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                下一頁
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </section>
