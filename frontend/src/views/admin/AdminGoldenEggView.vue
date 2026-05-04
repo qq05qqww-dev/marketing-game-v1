@@ -3331,10 +3331,31 @@ const databaseFrontUrlDisplayType = computed(() => {
   return tenantSlug ? '商家專屬網址' : 'Campaign ID 網址'
 })
 
-const getDatabaseFrontShareContext = () => {
+const buildDatabaseFrontUrlWithSource = (source = '') => {
+  const rawUrl = String(databaseFrontUrl.value || '').trim()
+
+  if (!rawUrl) return ''
+
+  const normalizedSource = String(source || '').trim().toLowerCase()
+
+  if (!normalizedSource || normalizedSource === 'direct') {
+    return rawUrl
+  }
+
+  try {
+    const url = new URL(rawUrl, window.location.origin)
+    url.searchParams.set('from', normalizedSource)
+    return url.toString()
+  } catch (error) {
+    const joiner = rawUrl.includes('?') ? '&' : '?'
+    return `${rawUrl}${joiner}from=${encodeURIComponent(normalizedSource)}`
+  }
+}
+
+const getDatabaseFrontShareContext = (source = '') => {
   const title = databaseCampaign.value?.title || databaseCampaign.value?.name || '砸金蛋活動'
   const tenantName = databaseCampaign.value?.tenant?.name || getStoredAdminUser()?.tenantName || '活動商家'
-  const url = databaseFrontUrl.value || ''
+  const url = source ? buildDatabaseFrontUrlWithSource(source) : (databaseFrontUrl.value || '')
 
   return {
     tenantName,
@@ -3342,6 +3363,13 @@ const getDatabaseFrontShareContext = () => {
     frontUrl: url
   }
 }
+
+const databaseShareSourceOptions = [
+  { key: 'line', label: 'LINE', badge: 'LINE 分享', description: '適合貼到 LINE 官方、群組或一對一訊息。' },
+  { key: 'facebook', label: 'FB', badge: 'Facebook', description: '適合 Facebook 貼文、粉專或社團。' },
+  { key: 'instagram', label: 'IG', badge: 'Instagram', description: '適合 IG 個人檔案、限動連結或私訊。' },
+  { key: 'direct', label: '一般', badge: '直接開啟', description: '不帶來源參數，適合網站按鈕或一般分享。' }
+]
 
 const databaseFrontSharePresetTemplates = computed(() => {
   const { tenantName, campaignTitle, frontUrl } = getDatabaseFrontShareContext()
@@ -3363,8 +3391,8 @@ ${frontUrl}`
   }
 })
 
-const renderDatabaseFrontShareText = (templateText = '') => {
-  const { tenantName, campaignTitle, frontUrl } = getDatabaseFrontShareContext()
+const renderDatabaseFrontShareText = (templateText = '', source = '') => {
+  const { tenantName, campaignTitle, frontUrl } = getDatabaseFrontShareContext(source)
 
   return String(templateText || '')
     .replaceAll('{tenantName}', tenantName)
@@ -3378,6 +3406,63 @@ const databaseFrontShareText = computed(() => {
   const rawText = databaseGameConfigForm.lineShareText || databaseFrontSharePresetTemplates.value.basic
 
   return renderDatabaseFrontShareText(rawText)
+})
+
+const databaseShareSourceLinks = computed(() => {
+  if (!databaseFrontUrl.value) return []
+
+  return databaseShareSourceOptions.map((item) => ({
+    ...item,
+    url: buildDatabaseFrontUrlWithSource(item.key),
+    text: renderDatabaseFrontShareText(databaseGameConfigForm.lineShareText || databaseFrontSharePresetTemplates.value.basic, item.key)
+  }))
+})
+
+const normalizeDatabaseShareSource = (value = '') => {
+  const source = String(value || '').trim().toLowerCase()
+
+  if (['line', 'fb', 'facebook', 'ig', 'instagram', 'direct'].includes(source)) {
+    if (source === 'fb') return 'facebook'
+    if (source === 'ig') return 'instagram'
+    return source
+  }
+
+  return source || 'unknown'
+}
+
+const getDatabasePlayRecordSource = (record = {}) => {
+  const payload = record?.resultPayload || {}
+  const normalizedPayload = typeof payload === 'string' ? safeJsonParse(payload, {}) : payload
+
+  return normalizeDatabaseShareSource(
+    normalizedPayload?.source ||
+    normalizedPayload?.trafficSource ||
+    normalizedPayload?.from ||
+    record?.source ||
+    record?.trafficSource ||
+    'direct'
+  )
+}
+
+const databaseShareSourceStats = computed(() => {
+  const records = getRecordSourceArray(databasePlayRecords)
+  const total = records.length
+  const counts = records.reduce((summary, record) => {
+    const source = getDatabasePlayRecordSource(record)
+    summary[source] = (summary[source] || 0) + 1
+    return summary
+  }, {})
+
+  return databaseShareSourceOptions.map((item) => {
+    const count = counts[item.key] || 0
+    const percent = total ? Math.round((count / total) * 100) : 0
+
+    return {
+      ...item,
+      count,
+      percent
+    }
+  })
 })
 
 const databaseFrontShareTemplates = computed(() => {
@@ -3676,6 +3761,30 @@ const copyDatabaseFrontShareText = async () => {
   }
 
   await copyDatabaseText(databaseFrontShareText.value)
+}
+
+const copyDatabaseShareSourceUrl = async (sourceItem) => {
+  const url = sourceItem?.url || ''
+
+  if (!url) {
+    showOperationError('目前沒有可複製的分享連結。')
+    return
+  }
+
+  await copyDatabaseText(url)
+  showOperationSuccess(`已複製 ${sourceItem.label || '分享'} 連結。`)
+}
+
+const copyDatabaseShareSourceText = async (sourceItem) => {
+  const text = sourceItem?.text || ''
+
+  if (!text) {
+    showOperationError('目前沒有可複製的分享文案。')
+    return
+  }
+
+  await copyDatabaseText(text)
+  showOperationSuccess(`已複製 ${sourceItem.label || '分享'} 文案。`)
 }
 
 const copyDatabaseFrontShareTemplate = async (template) => {
@@ -6376,6 +6485,94 @@ watch(
                     複製網址
                   </button>
                 </div>
+                <div class="mt-3 rounded-2xl border border-cyan-100 bg-cyan-50/80 p-3 sm:p-4">
+                  <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="min-w-0">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <p class="text-xs font-black tracking-[0.16em] text-cyan-700">
+                          SHARE SOURCE LINKS
+                        </p>
+                        <span class="rounded-full bg-white px-3 py-1 text-[11px] font-black text-cyan-700 ring-1 ring-cyan-100">
+                          ?from=來源
+                        </span>
+                      </div>
+                      <h4 class="mt-1 text-base font-black text-slate-950">
+                        分享來源連結
+                      </h4>
+                      <p class="mt-1 text-xs font-bold leading-5 text-cyan-700/80">
+                        複製不同平台連結後，玩家遊玩紀錄會寫入來源，方便後續統計 LINE / FB / IG 成效。
+                      </p>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:min-w-[360px]">
+                      <article
+                        v-for="source in databaseShareSourceStats"
+                        :key="`stat-${source.key}`"
+                        class="rounded-2xl bg-white/95 p-3 text-center ring-1 ring-cyan-100"
+                      >
+                        <p class="text-[11px] font-black text-slate-500">
+                          {{ source.label }}
+                        </p>
+                        <p class="mt-1 text-2xl font-black text-cyan-700">
+                          {{ source.count }}
+                        </p>
+                        <p class="text-[11px] font-bold text-slate-400">
+                          {{ source.percent }}%
+                        </p>
+                      </article>
+                    </div>
+                  </div>
+
+                  <div class="mt-4 space-y-3">
+                    <article
+                      v-for="source in databaseShareSourceLinks"
+                      :key="source.key"
+                      class="rounded-3xl border border-cyan-100 bg-white/95 p-3 shadow-sm sm:p-4"
+                    >
+                      <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+                        <div class="min-w-0 xl:w-[220px] xl:shrink-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <p class="text-sm font-black text-slate-950">
+                              {{ source.label }}
+                            </p>
+                            <span class="rounded-full bg-cyan-100 px-2 py-1 text-[10px] font-black text-cyan-700">
+                              {{ source.badge }}
+                            </span>
+                          </div>
+                          <p class="mt-1 text-[11px] font-bold leading-5 text-slate-500">
+                            {{ source.description }}
+                          </p>
+                        </div>
+
+                        <div class="min-w-0 flex-1">
+                          <p class="mb-1 text-[11px] font-black text-slate-400">
+                            分享網址
+                          </p>
+                          <code class="block min-w-0 overflow-hidden text-ellipsis whitespace-nowrap rounded-2xl bg-slate-950 px-3 py-3 text-xs font-bold text-cyan-50">
+                            {{ source.url }}
+                          </code>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+                          <button
+                            type="button"
+                            class="rounded-2xl bg-white px-4 py-3 text-xs font-black text-cyan-700 ring-1 ring-cyan-100 transition hover:bg-cyan-50"
+                            @click="copyDatabaseShareSourceUrl(source)"
+                          >
+                            複製連結
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-2xl bg-cyan-600 px-4 py-3 text-xs font-black text-white shadow-sm transition hover:bg-cyan-700"
+                            @click="copyDatabaseShareSourceText(source)"
+                          >
+                            複製文案
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                </div>
+
                 <div class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 sm:p-4">
                   <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                     <div>
