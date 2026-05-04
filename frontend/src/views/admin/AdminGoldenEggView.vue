@@ -1119,6 +1119,10 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
     eggCardBgTo: databaseGameConfigForm.eggCardBgTo || campaign.eggCardBgTo,
     eggNumberBgColor: databaseGameConfigForm.eggNumberBgColor || campaign.eggNumberBgColor,
     eggNumberTextColor: databaseGameConfigForm.eggNumberTextColor || campaign.eggNumberTextColor,
+    startAt: databaseCampaign.value?.startAt || campaign.startAt || '',
+    endAt: databaseCampaign.value?.endAt || campaign.endAt || '',
+    activityStartAt: databaseCampaign.value?.startAt || databaseGameConfigForm.activityStartAt || campaign.activityStartAt || '',
+    activityEndAt: databaseCampaign.value?.endAt || databaseGameConfigForm.activityEndAt || campaign.activityEndAt || '',
     shareTitle: databaseGameConfigForm.shareTitle || campaign.shareTitle,
     shareDescription: databaseGameConfigForm.shareDescription || campaign.shareDescription,
     shareUrl: databaseGameConfigForm.shareUrl || campaign.shareUrl,
@@ -1135,6 +1139,29 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
   })
 
   setDatabasePreviewSyncMessage(message)
+  saveState(message)
+  previewRefreshKey.value = Date.now()
+}
+
+const syncDatabaseCampaignToLivePreview = (campaignData = databaseCampaign.value, message = '已同步資料庫活動時間到右側預覽。') => {
+  if (!campaignData) return
+
+  const settings = campaignData?.gameConfig?.settings && typeof campaignData.gameConfig.settings === 'object'
+    ? campaignData.gameConfig.settings
+    : {}
+
+  Object.assign(campaign, {
+    pageTitle: settings.pageTitle || campaignData.title || campaign.pageTitle,
+    mainTitle: settings.mainTitle || campaignData.title || campaign.mainTitle,
+    heroTagline: settings.heroTagline || campaignData.description || campaign.heroTagline,
+    noticeText: settings.noticeText || campaignData.description || campaign.noticeText,
+    status: campaignData.status || campaign.status,
+    startAt: campaignData.startAt || '',
+    endAt: campaignData.endAt || '',
+    activityStartAt: campaignData.startAt || settings.activityStartAt || '',
+    activityEndAt: campaignData.endAt || settings.activityEndAt || ''
+  })
+
   saveState(message)
   previewRefreshKey.value = Date.now()
 }
@@ -3821,6 +3848,7 @@ const loadDatabaseGoldenEggCampaign = async () => {
     databaseDrawPool.value = drawPoolResult
     loadDatabaseCampaignFormFromCampaign(campaignResult)
     loadDatabaseGameConfigFormFromCampaign(campaignResult)
+    syncDatabaseCampaignToLivePreview(campaignResult, '已同步資料庫活動時間到右側預覽。')
 
     databaseLoadMessage.value = `已載入正式資料庫活動：${campaignResult?.title || `ID ${id}`}`
   } catch (error) {

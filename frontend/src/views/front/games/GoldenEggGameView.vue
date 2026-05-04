@@ -431,6 +431,12 @@ const applyRemoteCampaignData = (apiCampaign = {}) => {
     Object.assign(campaign, remoteSettings)
   }
 
+  // V2.3 第 18 批修正：正式活動時間以 Campaign.startAt / endAt 為準。
+  // 避免舊 GameConfig.settings 裡的空 activityStartAt / activityEndAt 覆蓋掉資料庫活動時間，
+  // 造成前台顯示「開始：未設定 / 結束：未設定」。
+  campaign.activityStartAt = apiCampaign.startAt || remoteSettings.activityStartAt || ''
+  campaign.activityEndAt = apiCampaign.endAt || remoteSettings.activityEndAt || ''
+
   campaign.eggSize = Number(remoteSettings.eggSize ?? campaign.eggSize ?? 74)
   campaign.eggCardSize = Number(remoteSettings.eggCardSize ?? campaign.eggCardSize ?? 128)
   campaign.eggGap = Number(remoteSettings.eggGap ?? remoteSettings.eggGridGap ?? campaign.eggGap ?? campaign.eggGridGap ?? 12)
