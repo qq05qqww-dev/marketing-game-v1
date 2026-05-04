@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import {
   getReportSummaryApi,
   getReportDailyApi,
+  getPlayRecordsApi,
   getRewardRecordsApi,
   downloadRewardsCsvUrl,
   downloadRewardsXlsxUrl,
@@ -15,6 +16,7 @@ const API_BASE = http?.defaults?.baseURL || 'http://localhost:3000/api'
 
 const loading = ref(true)
 const exporting = ref(false)
+const advancedFiltersOpen = ref(false)
 
 const emptySummary = () => ({
   scope: 'ALL',
@@ -39,10 +41,18 @@ const emptySummary = () => ({
 const summary = ref(emptySummary())
 const tenantOptions = ref([])
 const dailyRows = ref([])
+const playRows = ref([])
 const rewardRows = ref([])
 const prizePerformanceRows = ref([])
 
-const pagination = ref({
+const playPagination = ref({
+  page: 1,
+  pageSize: 10,
+  total: 0,
+  totalPages: 1
+})
+
+const rewardPagination = ref({
   page: 1,
   pageSize: 10,
   total: 0,
@@ -54,9 +64,14 @@ const filters = ref({
   endDate: '',
   keyword: '',
   status: '',
+  source: '',
+  isWin: '',
+  prizeId: '',
+  serialCode: '',
   campaignId: '',
   tenantId: '',
-  page: 1,
+  playPage: 1,
+  rewardPage: 1,
   pageSize: 10
 })
 
@@ -167,17 +182,41 @@ const currentDateRangeText = computed(() => {
   return `目前查詢期間：${filters.value.endDate} 以前`
 })
 
+
+const sourceFilterOptions = [
+  { value: '', label: '全部來源' },
+  { value: 'line', label: 'LINE' },
+  { value: 'facebook', label: 'Facebook' },
+  { value: 'instagram', label: 'Instagram' },
+  { value: 'direct', label: '一般 / 直接' }
+]
+
+const winFilterOptions = [
+  { value: '', label: '全部結果' },
+  { value: 'WIN', label: '只看中獎' },
+  { value: 'LOSE', label: '只看未中獎' }
+]
+
+const rewardStatusOptions = [
+  { value: '', label: '全部發獎狀態' },
+  { value: 'PENDING', label: '待發獎' },
+  { value: 'CLAIMED', label: '已核銷' },
+  { value: 'CANCELLED', label: '已取消' }
+]
+
 const applyDatePreset = async (preset) => {
   filters.value.startDate = preset.startDate
   filters.value.endDate = preset.endDate
-  filters.value.page = 1
+  filters.value.playPage = 1
+  filters.value.rewardPage = 1
   await fetchReports()
 }
 
 const clearDateRange = async () => {
   filters.value.startDate = ''
   filters.value.endDate = ''
-  filters.value.page = 1
+  filters.value.playPage = 1
+  filters.value.rewardPage = 1
   await fetchReports()
 }
 
@@ -274,35 +313,44 @@ const fetchReports = async () => {
   loading.value = true
 
   try {
-    const [summaryRes, dailyRes, rewardRes, prizePerformanceRes] = await Promise.all([
+    const commonParams = {
+      startDate: filters.value.startDate,
+      endDate: filters.value.endDate,
+      campaignId: filters.value.campaignId,
+      tenantId: filters.value.tenantId,
+      keyword: filters.value.keyword,
+      source: filters.value.source,
+      prizeId: filters.value.prizeId,
+      serialCode: filters.value.serialCode
+    }
+
+    const [summaryRes, dailyRes, playRes, rewardRes, prizePerformanceRes] = await Promise.all([
       getReportSummaryApi({
-        startDate: filters.value.startDate,
-        endDate: filters.value.endDate,
-        campaignId: filters.value.campaignId,
-        tenantId: filters.value.tenantId
+        ...commonParams,
+        isWin: filters.value.isWin,
+        status: filters.value.status
       }),
       getReportDailyApi({
-        startDate: filters.value.startDate,
-        endDate: filters.value.endDate,
-        campaignId: filters.value.campaignId,
-        tenantId: filters.value.tenantId
+        ...commonParams,
+        isWin: filters.value.isWin
+      }),
+      getPlayRecordsApi({
+        ...commonParams,
+        isWin: filters.value.isWin,
+        page: filters.value.playPage,
+        pageSize: filters.value.pageSize
       }),
       getRewardRecordsApi({
-        keyword: filters.value.keyword,
+        ...commonParams,
         status: filters.value.status,
-        campaignId: filters.value.campaignId,
-        tenantId: filters.value.tenantId,
-        startDate: filters.value.startDate,
-        endDate: filters.value.endDate,
-        page: filters.value.page,
+        page: filters.value.rewardPage,
         pageSize: filters.value.pageSize
       }),
       http.get('/admin/reports/prize-performance', {
         params: {
-          startDate: filters.value.startDate,
-          endDate: filters.value.endDate,
-          campaignId: filters.value.campaignId,
-          tenantId: filters.value.tenantId
+          ...commonParams,
+          isWin: filters.value.isWin,
+          status: filters.value.status
         }
       })
     ])
@@ -313,47 +361,59 @@ const fetchReports = async () => {
     }
 
     dailyRows.value = safeArray(apiData(dailyRes, []))
+    playRows.value = safeArray(apiData(playRes, []))
     rewardRows.value = safeArray(apiData(rewardRes, []))
     prizePerformanceRows.value = safeArray(apiData(prizePerformanceRes, []))
 
-    const p = rewardRes?.data?.pagination || {}
-    pagination.value = {
-      page: Number(p.page || filters.value.page || 1),
-      pageSize: Number(p.pageSize || filters.value.pageSize || 10),
-      total: Number(p.total || 0),
-      totalPages: Number(p.totalPages || 1)
+    const playP = playRes?.data?.pagination || {}
+    playPagination.value = {
+      page: Number(playP.page || filters.value.playPage || 1),
+      pageSize: Number(playP.pageSize || filters.value.pageSize || 10),
+      total: Number(playP.total || 0),
+      totalPages: Number(playP.totalPages || 1)
+    }
+
+    const rewardP = rewardRes?.data?.pagination || {}
+    rewardPagination.value = {
+      page: Number(rewardP.page || filters.value.rewardPage || 1),
+      pageSize: Number(rewardP.pageSize || filters.value.pageSize || 10),
+      total: Number(rewardP.total || 0),
+      totalPages: Number(rewardP.totalPages || 1)
     }
   } catch (error) {
     console.error('取得報表資料失敗', error)
     alert(error?.response?.data?.message || '取得報表資料失敗')
     summary.value = emptySummary()
     dailyRows.value = []
+    playRows.value = []
     rewardRows.value = []
     prizePerformanceRows.value = []
-    pagination.value = {
-      page: 1,
-      pageSize: filters.value.pageSize,
-      total: 0,
-      totalPages: 1
-    }
+    playPagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
+    rewardPagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
   } finally {
     loading.value = false
   }
 }
 
 const totalDailyRows = computed(() => dailyRows.value.length)
-const totalRewardRows = computed(() => pagination.value.total)
+const totalPlayRows = computed(() => playPagination.value.total)
+const totalRewardRows = computed(() => rewardPagination.value.total)
 const totalPrizePerformanceRows = computed(() => prizePerformanceRows.value.length)
 
-const currentPageStart = computed(() => {
-  if (pagination.value.total === 0) return 0
-  return (pagination.value.page - 1) * pagination.value.pageSize + 1
-})
+const getPageStart = (pager) => {
+  if (!pager?.total) return 0
+  return (Number(pager.page || 1) - 1) * Number(pager.pageSize || filters.value.pageSize || 10) + 1
+}
 
-const currentPageEnd = computed(() => {
-  const end = pagination.value.page * pagination.value.pageSize
-  return Math.min(end, pagination.value.total)
-})
+const getPageEnd = (pager) => {
+  const end = Number(pager?.page || 1) * Number(pager?.pageSize || filters.value.pageSize || 10)
+  return Math.min(end, Number(pager?.total || 0))
+}
+
+const playPageStart = computed(() => getPageStart(playPagination.value))
+const playPageEnd = computed(() => getPageEnd(playPagination.value))
+const rewardPageStart = computed(() => getPageStart(rewardPagination.value))
+const rewardPageEnd = computed(() => getPageEnd(rewardPagination.value))
 
 const isPlatformReport = computed(() => {
   return ['ALL', 'PLATFORM_TENANT'].includes(String(summary.value?.scope || '').toUpperCase())
@@ -421,6 +481,18 @@ const getRewardSource = (row) => {
   return sourceLabelMap[source] || '一般 / 直接'
 }
 
+const getPlaySource = (row) => {
+  const payload = row?.resultPayload || {}
+  const source = String(payload.source || payload.trafficSource || 'direct').toLowerCase()
+
+  return sourceLabelMap[source] || '一般 / 直接'
+}
+
+const getPlayResultText = (row) => (row?.isWin ? '中獎' : '未中獎')
+
+const getPlaySerialCode = (row) => row?.serialCode?.code || '—'
+
+
 const getStockWarningText = (row) => {
   const remainStock = Number(row?.remainStock || 0)
   const status = String(row?.prizeStatus || '').toUpperCase()
@@ -445,6 +517,10 @@ const buildExportParams = () => ({
   endDate: filters.value.endDate,
   keyword: filters.value.keyword,
   status: filters.value.status,
+  source: filters.value.source,
+  isWin: filters.value.isWin,
+  prizeId: filters.value.prizeId,
+  serialCode: filters.value.serialCode,
   campaignId: filters.value.campaignId,
   tenantId: filters.value.tenantId
 })
@@ -519,7 +595,8 @@ const exportPrizePerformanceXlsx = () => {
 }
 
 const applyFilters = async () => {
-  filters.value.page = 1
+  filters.value.playPage = 1
+  filters.value.rewardPage = 1
   await fetchReports()
 }
 
@@ -529,33 +606,60 @@ const clearFilters = async () => {
     endDate: '',
     keyword: '',
     status: '',
+    source: '',
+    isWin: '',
+    prizeId: '',
+    serialCode: '',
     campaignId: '',
     tenantId: '',
-    page: 1,
+    playPage: 1,
+    rewardPage: 1,
     pageSize: filters.value.pageSize || 10
   }
 
   await fetchReports()
 }
 
-const goPrevPage = async () => {
-  if (filters.value.page > 1) {
-    filters.value.page -= 1
+const goPrevPage = async (type = 'reward') => {
+  const key = type === 'play' ? 'playPage' : 'rewardPage'
+
+  if (filters.value[key] > 1) {
+    filters.value[key] -= 1
     await fetchReports()
   }
 }
 
-const goNextPage = async () => {
-  if (filters.value.page < pagination.value.totalPages) {
-    filters.value.page += 1
+const goNextPage = async (type = 'reward') => {
+  const key = type === 'play' ? 'playPage' : 'rewardPage'
+  const pager = type === 'play' ? playPagination.value : rewardPagination.value
+
+  if (filters.value[key] < pager.totalPages) {
+    filters.value[key] += 1
     await fetchReports()
   }
 }
 
 const changePageSize = async () => {
-  filters.value.page = 1
+  filters.value.playPage = 1
+  filters.value.rewardPage = 1
   await fetchReports()
 }
+
+const queryBadges = computed(() => {
+  const badges = []
+
+  if (selectedTenantName.value) badges.push(`商家：${selectedTenantName.value}`)
+  if (filters.value.startDate || filters.value.endDate) badges.push(currentDateRangeText.value.replace('目前查詢期間：', '日期：'))
+  if (filters.value.keyword) badges.push(`關鍵字：${filters.value.keyword}`)
+  if (filters.value.source) badges.push(`來源：${sourceFilterOptions.find((item) => item.value === filters.value.source)?.label || filters.value.source}`)
+  if (filters.value.isWin) badges.push(`結果：${winFilterOptions.find((item) => item.value === filters.value.isWin)?.label || filters.value.isWin}`)
+  if (filters.value.status) badges.push(`發獎：${rewardStatusOptions.find((item) => item.value === filters.value.status)?.label || filters.value.status}`)
+  if (filters.value.campaignId) badges.push(`活動 ID：${filters.value.campaignId}`)
+  if (filters.value.prizeId) badges.push(`獎項 ID：${filters.value.prizeId}`)
+  if (filters.value.serialCode) badges.push(`序號：${filters.value.serialCode}`)
+
+  return badges.length ? badges : ['目前未套用進階查詢條件']
+})
 
 onMounted(async () => {
   await fetchTenantOptions()
@@ -842,103 +946,170 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-5 xl:grid-cols-8">
-        <div v-if="isPlatformReport" class="xl:col-span-2">
-          <label class="mb-2 block text-sm font-bold text-slate-700">商家篩選</label>
-          <select
-            v-model="filters.tenantId"
-            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+      <div class="rounded-3xl border border-slate-200 bg-white p-5">
+        <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h4 class="text-lg font-black text-slate-900">查詢條件</h4>
+            <p class="mt-1 text-sm text-slate-500">先用基本查詢快速縮小資料，資料量大時再展開進階查詢。</p>
+          </div>
+          <button
+            @click="advancedFiltersOpen = !advancedFiltersOpen"
+            class="rounded-2xl border border-slate-300 bg-slate-50 px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-100"
           >
-            <option value="">全部商家</option>
-            <option
-              v-for="tenant in tenantOptions"
-              :key="tenant.id"
-              :value="String(tenant.id)"
+            {{ advancedFiltersOpen ? '收合進階查詢' : '展開進階查詢' }}
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-4">
+          <div v-if="isPlatformReport">
+            <label class="mb-2 block text-sm font-bold text-slate-700">商家篩選</label>
+            <select
+              v-model="filters.tenantId"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
             >
-              {{ tenant.name }} / {{ tenant.slug }}
-            </option>
-          </select>
+              <option value="">全部商家</option>
+              <option
+                v-for="tenant in tenantOptions"
+                :key="tenant.id"
+                :value="String(tenant.id)"
+              >
+                {{ tenant.name }} / {{ tenant.slug }}
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">開始日期</label>
+            <input
+              v-model="filters.startDate"
+              type="date"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">結束日期</label>
+            <input
+              v-model="filters.endDate"
+              type="date"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">關鍵字</label>
+            <input
+              v-model="filters.keyword"
+              type="text"
+              placeholder="姓名 / 電話 / Email / 序號 / 獎項"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            />
+          </div>
         </div>
 
-        <div>
-          <label class="mb-2 block text-sm font-bold text-slate-700">開始日期</label>
-          <input
-            v-model="filters.startDate"
-            type="date"
-            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-          />
+        <div v-if="advancedFiltersOpen" class="mt-5 grid grid-cols-1 gap-5 lg:grid-cols-4">
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">活動 ID</label>
+            <input
+              v-model="filters.campaignId"
+              type="number"
+              min="1"
+              placeholder="例如：13"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">獎項 ID</label>
+            <input
+              v-model="filters.prizeId"
+              type="number"
+              min="1"
+              placeholder="例如：5"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">序號</label>
+            <input
+              v-model="filters.serialCode"
+              type="text"
+              placeholder="例如：888888"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">來源</label>
+            <select
+              v-model="filters.source"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            >
+              <option v-for="item in sourceFilterOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">遊玩結果</label>
+            <select
+              v-model="filters.isWin"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            >
+              <option v-for="item in winFilterOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">發獎狀態</label>
+            <select
+              v-model="filters.status"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            >
+              <option v-for="item in rewardStatusOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="mb-2 block text-sm font-bold text-slate-700">每頁筆數</label>
+            <select
+              v-model.number="filters.pageSize"
+              @change="changePageSize"
+              class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+            >
+              <option :value="10">10</option>
+              <option :value="20">20</option>
+              <option :value="50">50</option>
+              <option :value="100">100</option>
+            </select>
+          </div>
         </div>
 
-        <div>
-          <label class="mb-2 block text-sm font-bold text-slate-700">結束日期</label>
-          <input
-            v-model="filters.endDate"
-            type="date"
-            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-          />
-        </div>
+        <div class="mt-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex flex-wrap gap-2">
+            <span
+              v-for="badge in queryBadges"
+              :key="badge"
+              class="rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600"
+            >
+              {{ badge }}
+            </span>
+          </div>
 
-        <div>
-          <label class="mb-2 block text-sm font-bold text-slate-700">活動 ID</label>
-          <input
-            v-model="filters.campaignId"
-            type="number"
-            min="1"
-            placeholder="例如：13"
-            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label class="mb-2 block text-sm font-bold text-slate-700">關鍵字</label>
-          <input
-            v-model="filters.keyword"
-            type="text"
-            placeholder="姓名 / 電話 / 獎項 / 活動"
-            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div>
-          <label class="mb-2 block text-sm font-bold text-slate-700">發獎狀態</label>
-          <select
-            v-model="filters.status"
-            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-          >
-            <option value="">全部</option>
-            <option value="PENDING">待發獎</option>
-            <option value="CLAIMED">已核銷</option>
-            <option value="CANCELLED">已取消</option>
-          </select>
-        </div>
-
-        <div>
-          <label class="mb-2 block text-sm font-bold text-slate-700">每頁筆數</label>
-          <select
-            v-model.number="filters.pageSize"
-            @change="changePageSize"
-            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
-          >
-            <option :value="10">10</option>
-            <option :value="20">20</option>
-            <option :value="50">50</option>
-            <option :value="100">100</option>
-          </select>
-        </div>
-
-        <div class="flex gap-3 xl:flex-col xl:justify-end">
-          <button
-            @click="applyFilters"
-            class="flex-1 rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
-          >
-            套用
-          </button>
-          <button
-            @click="clearFilters"
-            class="flex-1 rounded-2xl border border-slate-300 bg-white px-6 py-3 font-bold text-slate-700 transition hover:bg-slate-50"
-          >
-            清除
-          </button>
+          <div class="flex flex-wrap gap-3">
+            <button
+              @click="applyFilters"
+              class="rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
+            >
+              套用查詢
+            </button>
+            <button
+              @click="clearFilters"
+              class="rounded-2xl border border-slate-300 bg-white px-6 py-3 font-bold text-slate-700 transition hover:bg-slate-50"
+            >
+              清除條件
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -1076,9 +1247,81 @@ onMounted(async () => {
     <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
       <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
+          <h3 class="text-2xl font-black text-slate-900">遊玩紀錄</h3>
+          <p class="mt-2 text-slate-500">
+            目前顯示 {{ playPageStart }} - {{ playPageEnd }} 筆，共 {{ totalPlayRows }} 筆。
+          </p>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto rounded-3xl border border-slate-200">
+        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <tr>
+              <th class="px-5 py-4">ID</th>
+              <th class="px-5 py-4">活動</th>
+              <th class="px-5 py-4">獎項</th>
+              <th class="px-5 py-4">玩家</th>
+              <th class="px-5 py-4">序號</th>
+              <th class="px-5 py-4">來源</th>
+              <th class="px-5 py-4">結果</th>
+              <th class="px-5 py-4">遊玩時間</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 bg-white">
+            <tr v-if="loading">
+              <td colspan="8" class="px-5 py-10 text-center text-slate-500">讀取中...</td>
+            </tr>
+            <tr v-else-if="playRows.length === 0">
+              <td colspan="8" class="px-5 py-10 text-center text-slate-500">目前沒有遊玩紀錄。</td>
+            </tr>
+            <tr v-for="row in playRows" v-else :key="row.id" class="hover:bg-slate-50">
+              <td class="px-5 py-4 font-bold text-slate-900">#{{ row.id }}</td>
+              <td class="px-5 py-4">{{ row.campaign?.title || '—' }}</td>
+              <td class="px-5 py-4">{{ row.prize?.title || '—' }}</td>
+              <td class="px-5 py-4">{{ row.playerName || row.playerPhone || row.playerEmail || '—' }}</td>
+              <td class="px-5 py-4 font-mono text-xs">{{ getPlaySerialCode(row) }}</td>
+              <td class="px-5 py-4">{{ getPlaySource(row) }}</td>
+              <td class="px-5 py-4">
+                <span class="rounded-full px-3 py-1 text-xs font-black" :class="row.isWin ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'">
+                  {{ getPlayResultText(row) }}
+                </span>
+              </td>
+              <td class="px-5 py-4">{{ formatDateTime(row.playedAt) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div class="text-sm text-slate-500">
+          第 {{ playPagination.page }} / {{ playPagination.totalPages }} 頁，每頁 {{ filters.pageSize }} 筆
+        </div>
+        <div class="flex gap-3">
+          <button
+            @click="goPrevPage('play')"
+            :disabled="playPagination.page <= 1"
+            class="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            上一頁
+          </button>
+          <button
+            @click="goNextPage('play')"
+            :disabled="playPagination.page >= playPagination.totalPages"
+            class="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            下一頁
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+      <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
           <h3 class="text-2xl font-black text-slate-900">中獎 / 發獎紀錄</h3>
           <p class="mt-2 text-slate-500">
-            目前顯示 {{ currentPageStart }} - {{ currentPageEnd }} 筆，共 {{ totalRewardRows }} 筆。
+            目前顯示 {{ rewardPageStart }} - {{ rewardPageEnd }} 筆，共 {{ totalRewardRows }} 筆。
           </p>
         </div>
       </div>
@@ -1124,19 +1367,19 @@ onMounted(async () => {
 
       <div class="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div class="text-sm text-slate-500">
-          第 {{ pagination.page }} / {{ pagination.totalPages }} 頁
+          第 {{ rewardPagination.page }} / {{ rewardPagination.totalPages }} 頁，每頁 {{ filters.pageSize }} 筆
         </div>
         <div class="flex gap-3">
           <button
-            @click="goPrevPage"
-            :disabled="pagination.page <= 1"
+            @click="goPrevPage('reward')"
+            :disabled="rewardPagination.page <= 1"
             class="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             上一頁
           </button>
           <button
-            @click="goNextPage"
-            :disabled="pagination.page >= pagination.totalPages"
+            @click="goNextPage('reward')"
+            :disabled="rewardPagination.page >= rewardPagination.totalPages"
             class="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
             下一頁

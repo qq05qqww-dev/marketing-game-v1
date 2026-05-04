@@ -982,21 +982,112 @@ const getRecordSource = (record = {}) => {
   )
 }
 
-const buildPlayWhere = (req, query = {}) => {
+const normalizeWinFilter = (value) => {
+  const normalized = String(value || '').trim().toUpperCase()
+
+  if (['WIN', 'TRUE', '1', 'YES'].includes(normalized)) return true
+  if (['LOSE', 'FALSE', '0', 'NO'].includes(normalized)) return false
+
+  return null
+}
+
+const getTextFilter = (value) => String(value || '').trim()
+
+const buildPlayBaseWhere = (req, query = {}) => {
+  const keyword = getTextFilter(query.keyword)
+  const serialCode = getTextFilter(query.serialCode)
+  const isWin = normalizeWinFilter(query.isWin)
+
   return buildTenantScopedWhere(req, {
     ...buildDateWhere(query.startDate, query.endDate, 'playedAt'),
-    ...(query.campaignId ? { campaignId: Number(query.campaignId) } : {})
+    ...(query.campaignId ? { campaignId: Number(query.campaignId) } : {}),
+    ...(query.prizeId ? { prizeId: Number(query.prizeId) } : {}),
+    ...(isWin !== null ? { isWin } : {}),
+    ...(serialCode
+      ? {
+          serialCode: {
+            is: {
+              code: {
+                contains: serialCode,
+                mode: 'insensitive'
+              }
+            }
+          }
+        }
+      : {}),
+    ...(keyword
+      ? {
+          OR: [
+            { playerName: { contains: keyword, mode: 'insensitive' } },
+            { playerPhone: { contains: keyword, mode: 'insensitive' } },
+            { playerEmail: { contains: keyword, mode: 'insensitive' } },
+            { campaign: { title: { contains: keyword, mode: 'insensitive' } } },
+            { prize: { title: { contains: keyword, mode: 'insensitive' } } },
+            { serialCode: { code: { contains: keyword, mode: 'insensitive' } } }
+          ]
+        }
+      : {})
   })
 }
 
-const buildRewardRecordWhere = (req, query = {}) => {
-  const keyword = String(query.keyword || '').trim()
+const getSourceFilter = (query = {}) => {
+  const raw = String(query.source || query.trafficSource || '').trim().toLowerCase()
+
+  if (!raw) return ''
+
+  return normalizeSource(raw)
+}
+
+const buildPlayWhere = async (req, query = {}) => {
+  const baseWhere = buildPlayBaseWhere(req, query)
+  const source = getSourceFilter(query)
+
+  if (!source) return baseWhere
+
+  const candidates = await prisma.playRecord.findMany({
+    where: baseWhere,
+    select: {
+      id: true,
+      resultPayload: true
+    }
+  })
+
+  const ids = candidates
+    .filter((record) => getRecordSource(record) === source)
+    .map((record) => record.id)
+
+  return {
+    ...baseWhere,
+    id: {
+      in: ids.length ? ids : [-1]
+    }
+  }
+}
+
+const buildRewardRecordBaseWhere = (req, query = {}) => {
+  const keyword = getTextFilter(query.keyword)
   const status = String(query.status || '').trim().toUpperCase()
+  const serialCode = getTextFilter(query.serialCode)
 
   return buildTenantScopedWhere(req, {
     ...buildDateWhere(query.startDate, query.endDate, 'createdAt'),
     ...(status ? { status } : {}),
     ...(query.campaignId ? { campaignId: Number(query.campaignId) } : {}),
+    ...(query.prizeId ? { prizeId: Number(query.prizeId) } : {}),
+    ...(serialCode
+      ? {
+          playRecord: {
+            serialCode: {
+              is: {
+                code: {
+                  contains: serialCode,
+                  mode: 'insensitive'
+                }
+              }
+            }
+          }
+        }
+      : {}),
     ...(keyword
       ? {
           OR: [
@@ -1005,11 +1096,42 @@ const buildRewardRecordWhere = (req, query = {}) => {
             { winnerEmail: { contains: keyword, mode: 'insensitive' } },
             { claimCode: { contains: keyword, mode: 'insensitive' } },
             { campaign: { title: { contains: keyword, mode: 'insensitive' } } },
-            { prize: { title: { contains: keyword, mode: 'insensitive' } } }
+            { prize: { title: { contains: keyword, mode: 'insensitive' } } },
+            { playRecord: { serialCode: { code: { contains: keyword, mode: 'insensitive' } } } }
           ]
         }
       : {})
   })
+}
+
+const buildRewardRecordWhere = async (req, query = {}) => {
+  const baseWhere = buildRewardRecordBaseWhere(req, query)
+  const source = getSourceFilter(query)
+
+  if (!source) return baseWhere
+
+  const candidates = await prisma.rewardRecord.findMany({
+    where: baseWhere,
+    select: {
+      id: true,
+      playRecord: {
+        select: {
+          resultPayload: true
+        }
+      }
+    }
+  })
+
+  const ids = candidates
+    .filter((record) => getRecordSource(record.playRecord || {}) === source)
+    .map((record) => record.id)
+
+  return {
+    ...baseWhere,
+    id: {
+      in: ids.length ? ids : [-1]
+    }
+  }
 }
 
 const formatExportDate = (value) => {
@@ -1132,8 +1254,8 @@ router.get('/reports/tenants', async (req, res) => {
 
 router.get('/reports/summary', async (req, res) => {
   try {
-    const playWhere = buildPlayWhere(req, req.query)
-    const rewardWhere = buildRewardRecordWhere(req, req.query)
+    const playWhere = await buildPlayWhere(req, req.query)
+    const rewardWhere = await buildRewardRecordWhere(req, req.query)
     const tenantId = getScopedTenantId(req)
     const tenantWhere = tenantId ? { tenantId } : {}
 
@@ -1197,7 +1319,7 @@ router.get('/reports/summary', async (req, res) => {
 
 router.get('/reports/daily', async (req, res) => {
   try {
-    const where = buildPlayWhere(req, req.query)
+    const where = await buildPlayWhere(req, req.query)
 
     const records = await prisma.playRecord.findMany({
       where,
@@ -1276,7 +1398,7 @@ router.get('/reports/play-records', async (req, res) => {
   try {
     const page = Math.max(Number(req.query.page || 1), 1)
     const pageSize = Math.max(Number(req.query.pageSize || 10), 1)
-    const where = buildPlayWhere(req, req.query)
+    const where = await buildPlayWhere(req, req.query)
 
     const [total, records] = await Promise.all([
       prisma.playRecord.count({
@@ -1322,7 +1444,7 @@ router.get('/reports/reward-records', async (req, res) => {
   try {
     const page = Math.max(Number(req.query.page || 1), 1)
     const pageSize = Math.max(Number(req.query.pageSize || 10), 1)
-    const where = buildRewardRecordWhere(req, req.query)
+    const where = await buildRewardRecordWhere(req, req.query)
 
     const [total, records] = await Promise.all([
       prisma.rewardRecord.count({
@@ -1369,7 +1491,7 @@ router.get('/reports/reward-records', async (req, res) => {
 })
 
 const getPlayExportRows = async (req, query = {}) => {
-  const where = buildPlayWhere(req, query)
+  const where = await buildPlayWhere(req, query)
 
   const records = await prisma.playRecord.findMany({
     where,
@@ -1403,7 +1525,7 @@ const getPlayExportRows = async (req, query = {}) => {
 }
 
 const getRewardExportRows = async (req, query = {}) => {
-  const where = buildRewardRecordWhere(req, query)
+  const where = await buildRewardRecordWhere(req, query)
 
   const records = await prisma.rewardRecord.findMany({
     where,
@@ -1453,8 +1575,8 @@ const getPrizePerformanceRows = async (req, query = {}) => {
     ...(campaignId ? { campaignId } : {})
   }
 
-  const playWhere = buildPlayWhere(req, query)
-  const rewardWhere = buildRewardRecordWhere(req, query)
+  const playWhere = await buildPlayWhere(req, query)
+  const rewardWhere = await buildRewardRecordWhere(req, query)
 
   const [prizes, totalPlaysInScope] = await Promise.all([
     prisma.prize.findMany({
