@@ -11,13 +11,27 @@ import {
 } from '../../api/campaign'
 
 const loading = ref(true)
-const summary = ref({
+const exporting = ref(false)
+
+const emptySummary = () => ({
+  scope: 'ALL',
+  tenantId: null,
   totalCampaigns: 0,
   totalPrizes: 0,
   totalUsers: 0,
   totalRewards: 0,
-  totalPlayRecords: 0
+  totalPlayRecords: 0,
+  totalWins: 0,
+  claimedRewards: 0,
+  pendingRewards: 0,
+  winRate: 0,
+  sourceStats: {
+    total: 0,
+    items: []
+  }
 })
+
+const summary = ref(emptySummary())
 const dailyRows = ref([])
 const rewardRows = ref([])
 
@@ -40,37 +54,63 @@ const filters = ref({
 
 const safeArray = (value) => (Array.isArray(value) ? value : [])
 
+const apiData = (response, fallback = null) => {
+  return response?.data?.data ?? response?.data ?? fallback
+}
+
+const sourceLabelMap = {
+  line: 'LINE',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  direct: '一般 / 直接'
+}
+
+const sourceStats = computed(() => {
+  const items = safeArray(summary.value?.sourceStats?.items)
+
+  if (items.length) return items
+
+  return [
+    { key: 'line', label: 'LINE', count: 0, percent: 0 },
+    { key: 'facebook', label: 'Facebook', count: 0, percent: 0 },
+    { key: 'instagram', label: 'Instagram', count: 0, percent: 0 },
+    { key: 'direct', label: '一般 / 直接', count: 0, percent: 0 }
+  ]
+})
+
 const fetchReports = async () => {
   loading.value = true
+
   try {
     const [summaryRes, dailyRes, rewardRes] = await Promise.all([
       getReportSummaryApi({
         startDate: filters.value.startDate,
-        endDate: filters.value.endDate
+        endDate: filters.value.endDate,
+        campaignId: filters.value.campaignId
       }),
       getReportDailyApi({
         startDate: filters.value.startDate,
-        endDate: filters.value.endDate
+        endDate: filters.value.endDate,
+        campaignId: filters.value.campaignId
       }),
       getRewardRecordsApi({
         keyword: filters.value.keyword,
         status: filters.value.status,
         campaignId: filters.value.campaignId,
+        startDate: filters.value.startDate,
+        endDate: filters.value.endDate,
         page: filters.value.page,
         pageSize: filters.value.pageSize
       })
     ])
 
-    summary.value = summaryRes?.data?.data || {
-      totalCampaigns: 0,
-      totalPrizes: 0,
-      totalUsers: 0,
-      totalRewards: 0,
-      totalPlayRecords: 0
+    summary.value = {
+      ...emptySummary(),
+      ...(apiData(summaryRes, {}) || {})
     }
 
-    dailyRows.value = safeArray(dailyRes?.data?.data)
-    rewardRows.value = safeArray(rewardRes?.data?.data)
+    dailyRows.value = safeArray(apiData(dailyRes, []))
+    rewardRows.value = safeArray(apiData(rewardRes, []))
 
     const p = rewardRes?.data?.pagination || {}
     pagination.value = {
@@ -82,13 +122,7 @@ const fetchReports = async () => {
   } catch (error) {
     console.error('取得報表資料失敗', error)
     alert(error?.response?.data?.message || '取得報表資料失敗')
-    summary.value = {
-      totalCampaigns: 0,
-      totalPrizes: 0,
-      totalUsers: 0,
-      totalRewards: 0,
-      totalPlayRecords: 0
-    }
+    summary.value = emptySummary()
     dailyRows.value = []
     rewardRows.value = []
     pagination.value = {
@@ -115,6 +149,12 @@ const currentPageEnd = computed(() => {
   return Math.min(end, pagination.value.total)
 })
 
+const reportScopeText = computed(() => {
+  return summary.value.scope === 'TENANT'
+    ? '目前只顯示此商家的資料'
+    : '平台管理員檢視全部商家資料'
+})
+
 const formatDateTime = (value) => {
   if (!value) return '—'
   const date = new Date(value)
@@ -128,50 +168,108 @@ const formatDateTime = (value) => {
   return `${yyyy}-${mm}-${dd} ${hh}:${mi}`
 }
 
+const getRewardStatusText = (status) => {
+  const value = String(status || '').toUpperCase()
+
+  if (value === 'CLAIMED') return '已核銷'
+  if (value === 'CANCELLED') return '已取消'
+  if (value === 'PENDING') return '待發獎'
+
+  return value || '—'
+}
+
+const getRewardWinner = (row) => {
+  return row?.winnerName || row?.winnerPhone || row?.winnerEmail || '—'
+}
+
+const getRewardSerialCode = (row) => {
+  return row?.playRecord?.serialCode?.code || row?.serialCode?.code || '—'
+}
+
+const getRewardSource = (row) => {
+  const payload = row?.playRecord?.resultPayload || {}
+  const source = String(payload.source || payload.trafficSource || 'direct').toLowerCase()
+
+  return sourceLabelMap[source] || '一般 / 直接'
+}
+
+const buildExportParams = () => ({
+  startDate: filters.value.startDate,
+  endDate: filters.value.endDate,
+  keyword: filters.value.keyword,
+  status: filters.value.status,
+  campaignId: filters.value.campaignId
+})
+
+const downloadByFetch = async (url, fallbackFilename) => {
+  exporting.value = true
+
+  try {
+    const token = localStorage.getItem('token') || ''
+    const response = await fetch(url, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(errorText || `下載失敗：${response.status}`)
+    }
+
+    const blob = await response.blob()
+    const disposition = response.headers.get('Content-Disposition') || ''
+    const filenameMatch = disposition.match(/filename="?([^";]+)"?/i)
+    const filename = filenameMatch?.[1] || fallbackFilename
+    const objectUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+
+    link.href = objectUrl
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(objectUrl)
+  } catch (error) {
+    console.error('匯出失敗', error)
+    alert(error?.message || '匯出失敗')
+  } finally {
+    exporting.value = false
+  }
+}
+
 const exportRewardsCsv = () => {
-  window.open(
-    downloadRewardsCsvUrl({
-      keyword: filters.value.keyword,
-      status: filters.value.status,
-      campaignId: filters.value.campaignId
-    }),
-    '_blank'
-  )
+  downloadByFetch(downloadRewardsCsvUrl(buildExportParams()), 'reward-records.csv')
 }
 
 const exportRewardsXlsx = () => {
-  window.open(
-    downloadRewardsXlsxUrl({
-      keyword: filters.value.keyword,
-      status: filters.value.status,
-      campaignId: filters.value.campaignId
-    }),
-    '_blank'
-  )
+  downloadByFetch(downloadRewardsXlsxUrl(buildExportParams()), 'reward-records.xlsx')
 }
 
 const exportPlayCsv = () => {
-  window.open(
-    downloadPlayRecordsCsvUrl({
-      startDate: filters.value.startDate,
-      endDate: filters.value.endDate
-    }),
-    '_blank'
-  )
+  downloadByFetch(downloadPlayRecordsCsvUrl(buildExportParams()), 'play-records.csv')
 }
 
 const exportPlayXlsx = () => {
-  window.open(
-    downloadPlayRecordsXlsxUrl({
-      startDate: filters.value.startDate,
-      endDate: filters.value.endDate
-    }),
-    '_blank'
-  )
+  downloadByFetch(downloadPlayRecordsXlsxUrl(buildExportParams()), 'play-records.xlsx')
 }
 
 const applyFilters = async () => {
   filters.value.page = 1
+  await fetchReports()
+}
+
+const clearFilters = async () => {
+  filters.value = {
+    startDate: '',
+    endDate: '',
+    keyword: '',
+    status: '',
+    campaignId: '',
+    page: 1,
+    pageSize: filters.value.pageSize || 10
+  }
+
   await fetchReports()
 }
 
@@ -204,9 +302,10 @@ onMounted(() => {
     <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h2 class="text-3xl font-black text-slate-900">報表中心</h2>
+          <p class="text-xs font-black uppercase tracking-[0.35em] text-indigo-500">Tenant Reports</p>
+          <h2 class="mt-2 text-3xl font-black text-slate-900">報表中心</h2>
           <p class="mt-2 text-slate-500">
-            查看活動摘要、每日統計與獎勵紀錄。
+            查看活動摘要、每日統計、來源成效與發獎紀錄。{{ reportScopeText }}。
           </p>
         </div>
 
@@ -220,39 +319,73 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
         <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
           <div class="text-sm text-slate-500">活動總數</div>
-          <div class="mt-2 text-4xl font-black text-slate-900">
-            {{ summary.totalCampaigns ?? 0 }}
-          </div>
-        </div>
-
-        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-          <div class="text-sm text-slate-500">獎項總數</div>
-          <div class="mt-2 text-4xl font-black text-slate-900">
-            {{ summary.totalPrizes ?? 0 }}
-          </div>
-        </div>
-
-        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-          <div class="text-sm text-slate-500">會員總數</div>
-          <div class="mt-2 text-4xl font-black text-slate-900">
-            {{ summary.totalUsers ?? 0 }}
-          </div>
-        </div>
-
-        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
-          <div class="text-sm text-slate-500">發獎總數</div>
-          <div class="mt-2 text-4xl font-black text-slate-900">
-            {{ summary.totalRewards ?? 0 }}
-          </div>
+          <div class="mt-2 text-4xl font-black text-slate-900">{{ summary.totalCampaigns ?? 0 }}</div>
         </div>
 
         <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6">
           <div class="text-sm text-slate-500">遊玩總數</div>
-          <div class="mt-2 text-4xl font-black text-slate-900">
-            {{ summary.totalPlayRecords ?? 0 }}
+          <div class="mt-2 text-4xl font-black text-slate-900">{{ summary.totalPlayRecords ?? 0 }}</div>
+        </div>
+
+        <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-6">
+          <div class="text-sm text-emerald-700">中獎數</div>
+          <div class="mt-2 text-4xl font-black text-emerald-700">{{ summary.totalWins ?? 0 }}</div>
+        </div>
+
+        <div class="rounded-3xl border border-amber-100 bg-amber-50 p-6">
+          <div class="text-sm text-amber-700">待發獎</div>
+          <div class="mt-2 text-4xl font-black text-amber-700">{{ summary.pendingRewards ?? 0 }}</div>
+        </div>
+
+        <div class="rounded-3xl border border-blue-100 bg-blue-50 p-6">
+          <div class="text-sm text-blue-700">已核銷</div>
+          <div class="mt-2 text-4xl font-black text-blue-700">{{ summary.claimedRewards ?? 0 }}</div>
+        </div>
+
+        <div class="rounded-3xl border border-rose-100 bg-rose-50 p-6">
+          <div class="text-sm text-rose-700">中獎率</div>
+          <div class="mt-2 text-4xl font-black text-rose-700">{{ summary.winRate ?? 0 }}%</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-[32px] border border-cyan-100 bg-cyan-50/60 p-8 shadow-sm">
+      <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.35em] text-cyan-600">Traffic Source</p>
+          <h3 class="mt-2 text-2xl font-black text-slate-900">來源成效統計</h3>
+          <p class="mt-2 text-sm text-slate-500">
+            依第 22 批分享連結的 <span class="font-bold text-slate-700">?from=</span> 參數統計玩家來源。
+          </p>
+        </div>
+        <div class="rounded-2xl bg-white px-5 py-3 text-sm font-black text-cyan-700 shadow-sm">
+          總來源筆數：{{ summary.sourceStats?.total || 0 }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          v-for="item in sourceStats"
+          :key="item.key"
+          class="rounded-3xl border border-cyan-100 bg-white p-6 shadow-sm"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <div>
+              <div class="text-sm font-bold text-slate-500">{{ item.label }}</div>
+              <div class="mt-2 text-4xl font-black text-slate-900">{{ item.count }}</div>
+            </div>
+            <div class="rounded-2xl bg-cyan-50 px-4 py-2 text-lg font-black text-cyan-700">
+              {{ item.percent }}%
+            </div>
+          </div>
+          <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+            <div
+              class="h-full rounded-full bg-cyan-500"
+              :style="{ width: `${Math.min(100, Math.max(0, item.percent || 0))}%` }"
+            ></div>
           </div>
         </div>
       </div>
@@ -262,38 +395,42 @@ onMounted(() => {
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h3 class="text-2xl font-black text-slate-900">查詢條件</h3>
-          <p class="mt-2 text-slate-500">可依日期與關鍵字篩選資料。</p>
+          <p class="mt-2 text-slate-500">可依日期、活動 ID、關鍵字與發獎狀態篩選資料。</p>
         </div>
 
         <div class="flex flex-wrap gap-3">
           <button
             @click="exportPlayCsv"
-            class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50"
+            :disabled="exporting"
+            class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             匯出遊玩 CSV
           </button>
           <button
             @click="exportPlayXlsx"
-            class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50"
+            :disabled="exporting"
+            class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             匯出遊玩 XLSX
           </button>
           <button
             @click="exportRewardsCsv"
-            class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50"
+            :disabled="exporting"
+            class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            匯出獎勵 CSV
+            匯出發獎 CSV
           </button>
           <button
             @click="exportRewardsXlsx"
-            class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50"
+            :disabled="exporting"
+            class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
-            匯出獎勵 XLSX
+            匯出發獎 XLSX
           </button>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-5 xl:grid-cols-6">
+      <div class="grid grid-cols-1 gap-5 xl:grid-cols-7">
         <div>
           <label class="mb-2 block text-sm font-bold text-slate-700">開始日期</label>
           <input
@@ -313,25 +450,36 @@ onMounted(() => {
         </div>
 
         <div>
-          <label class="mb-2 block text-sm font-bold text-slate-700">關鍵字</label>
+          <label class="mb-2 block text-sm font-bold text-slate-700">活動 ID</label>
           <input
-            v-model="filters.keyword"
-            type="text"
-            placeholder="使用者 / 獎項 / 活動"
+            v-model="filters.campaignId"
+            type="number"
+            min="1"
+            placeholder="例如：13"
             class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
           />
         </div>
 
         <div>
-          <label class="mb-2 block text-sm font-bold text-slate-700">獎勵狀態</label>
+          <label class="mb-2 block text-sm font-bold text-slate-700">關鍵字</label>
+          <input
+            v-model="filters.keyword"
+            type="text"
+            placeholder="姓名 / 電話 / 獎項 / 活動"
+            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+          />
+        </div>
+
+        <div>
+          <label class="mb-2 block text-sm font-bold text-slate-700">發獎狀態</label>
           <select
             v-model="filters.status"
             class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
           >
             <option value="">全部</option>
-            <option value="UNUSED">UNUSED</option>
-            <option value="USED">USED</option>
-            <option value="EXPIRED">EXPIRED</option>
+            <option value="PENDING">待發獎</option>
+            <option value="CLAIMED">已核銷</option>
+            <option value="CANCELLED">已取消</option>
           </select>
         </div>
 
@@ -349,52 +497,61 @@ onMounted(() => {
           </select>
         </div>
 
-        <div class="flex items-end">
+        <div class="flex gap-3 xl:flex-col xl:justify-end">
           <button
             @click="applyFilters"
-            class="w-full rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
+            class="flex-1 rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
           >
-            套用查詢
+            套用
+          </button>
+          <button
+            @click="clearFilters"
+            class="flex-1 rounded-2xl border border-slate-300 bg-white px-6 py-3 font-bold text-slate-700 transition hover:bg-slate-50"
+          >
+            清除
           </button>
         </div>
       </div>
     </section>
 
     <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-      <div class="mb-6 flex items-center justify-between">
-        <h3 class="text-2xl font-black text-slate-900">每日統計</h3>
-        <div class="text-slate-400">共 {{ totalDailyRows }} 筆</div>
+      <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 class="text-2xl font-black text-slate-900">每日遊玩統計</h3>
+          <p class="mt-2 text-slate-500">目前顯示 {{ totalDailyRows }} 天資料。</p>
+        </div>
       </div>
 
-      <div
-        v-if="loading"
-        class="rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center text-slate-500"
-      >
-        載入中...
-      </div>
-
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full">
-          <thead>
-            <tr class="border-b border-slate-200 text-left text-sm font-bold text-slate-500">
-              <th class="px-4 py-4">日期</th>
-              <th class="px-4 py-4">遊玩次數</th>
-              <th class="px-4 py-4">中獎次數</th>
-              <th class="px-4 py-4">活動數</th>
+      <div class="overflow-x-auto rounded-3xl border border-slate-200">
+        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <tr>
+              <th class="px-5 py-4">日期</th>
+              <th class="px-5 py-4">遊玩數</th>
+              <th class="px-5 py-4">中獎數</th>
+              <th class="px-5 py-4">活動數</th>
+              <th class="px-5 py-4">LINE</th>
+              <th class="px-5 py-4">FB</th>
+              <th class="px-5 py-4">IG</th>
+              <th class="px-5 py-4">一般</th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="item in dailyRows" :key="item.date" class="border-b border-slate-100">
-              <td class="px-4 py-4 text-slate-700">{{ item.date }}</td>
-              <td class="px-4 py-4 text-slate-700">{{ item.playCount ?? 0 }}</td>
-              <td class="px-4 py-4 text-slate-700">{{ item.winCount ?? 0 }}</td>
-              <td class="px-4 py-4 text-slate-700">{{ item.campaignCount ?? 0 }}</td>
+          <tbody class="divide-y divide-slate-100 bg-white">
+            <tr v-if="loading">
+              <td colspan="8" class="px-5 py-10 text-center text-slate-500">讀取中...</td>
             </tr>
-
-            <tr v-if="dailyRows.length === 0">
-              <td colspan="4" class="px-4 py-10 text-center text-slate-400">
-                目前沒有每日統計資料
-              </td>
+            <tr v-else-if="dailyRows.length === 0">
+              <td colspan="8" class="px-5 py-10 text-center text-slate-500">目前沒有每日統計資料。</td>
+            </tr>
+            <tr v-for="row in dailyRows" v-else :key="row.date" class="hover:bg-slate-50">
+              <td class="px-5 py-4 font-bold text-slate-900">{{ row.date }}</td>
+              <td class="px-5 py-4">{{ row.playCount }}</td>
+              <td class="px-5 py-4">{{ row.winCount }}</td>
+              <td class="px-5 py-4">{{ row.campaignCount }}</td>
+              <td class="px-5 py-4">{{ row.sourceLine || 0 }}</td>
+              <td class="px-5 py-4">{{ row.sourceFacebook || 0 }}</td>
+              <td class="px-5 py-4">{{ row.sourceInstagram || 0 }}</td>
+              <td class="px-5 py-4">{{ row.sourceDirect || 0 }}</td>
             </tr>
           </tbody>
         </table>
@@ -402,79 +559,74 @@ onMounted(() => {
     </section>
 
     <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-      <div class="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <h3 class="text-2xl font-black text-slate-900">獎勵紀錄</h3>
-
-        <div class="text-sm text-slate-500">
-          第 {{ pagination.page }} / {{ pagination.totalPages }} 頁　
-          顯示 {{ currentPageStart }} - {{ currentPageEnd }} 筆　
-          共 {{ totalRewardRows }} 筆
+      <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h3 class="text-2xl font-black text-slate-900">中獎 / 發獎紀錄</h3>
+          <p class="mt-2 text-slate-500">
+            目前顯示 {{ currentPageStart }} - {{ currentPageEnd }} 筆，共 {{ totalRewardRows }} 筆。
+          </p>
         </div>
       </div>
 
-      <div
-        v-if="loading"
-        class="rounded-3xl border border-slate-200 bg-slate-50 p-10 text-center text-slate-500"
-      >
-        載入中...
-      </div>
-
-      <div v-else class="overflow-x-auto">
-        <table class="min-w-full">
-          <thead>
-            <tr class="border-b border-slate-200 text-left text-sm font-bold text-slate-500">
-              <th class="px-4 py-4">ID</th>
-              <th class="px-4 py-4">會員</th>
-              <th class="px-4 py-4">活動</th>
-              <th class="px-4 py-4">獎項</th>
-              <th class="px-4 py-4">兌換碼</th>
-              <th class="px-4 py-4">狀態</th>
-              <th class="px-4 py-4">建立時間</th>
+      <div class="overflow-x-auto rounded-3xl border border-slate-200">
+        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+            <tr>
+              <th class="px-5 py-4">ID</th>
+              <th class="px-5 py-4">活動</th>
+              <th class="px-5 py-4">獎項</th>
+              <th class="px-5 py-4">得獎者</th>
+              <th class="px-5 py-4">序號</th>
+              <th class="px-5 py-4">來源</th>
+              <th class="px-5 py-4">狀態</th>
+              <th class="px-5 py-4">建立時間</th>
             </tr>
           </thead>
-          <tbody>
-            <tr v-for="item in rewardRows" :key="item.id" class="border-b border-slate-100">
-              <td class="px-4 py-4 text-slate-700">{{ item.id }}</td>
-              <td class="px-4 py-4 text-slate-700">
-                {{ item.user?.name || '—' }}
-                <div class="text-xs text-slate-400">{{ item.user?.email || '' }}</div>
-              </td>
-              <td class="px-4 py-4 text-slate-700">{{ item.campaign?.title || '—' }}</td>
-              <td class="px-4 py-4 text-slate-700">{{ item.prize?.title || '—' }}</td>
-              <td class="px-4 py-4 text-slate-700">{{ item.code || '—' }}</td>
-              <td class="px-4 py-4 text-slate-700">{{ item.status || '—' }}</td>
-              <td class="px-4 py-4 text-slate-700">{{ formatDateTime(item.createdAt) }}</td>
+          <tbody class="divide-y divide-slate-100 bg-white">
+            <tr v-if="loading">
+              <td colspan="8" class="px-5 py-10 text-center text-slate-500">讀取中...</td>
             </tr>
-
-            <tr v-if="rewardRows.length === 0">
-              <td colspan="7" class="px-4 py-10 text-center text-slate-400">
-                目前沒有獎勵紀錄資料
+            <tr v-else-if="rewardRows.length === 0">
+              <td colspan="8" class="px-5 py-10 text-center text-slate-500">目前沒有發獎紀錄。</td>
+            </tr>
+            <tr v-for="row in rewardRows" v-else :key="row.id" class="hover:bg-slate-50">
+              <td class="px-5 py-4 font-bold text-slate-900">#{{ row.id }}</td>
+              <td class="px-5 py-4">{{ row.campaign?.title || '—' }}</td>
+              <td class="px-5 py-4">{{ row.prize?.title || '—' }}</td>
+              <td class="px-5 py-4">{{ getRewardWinner(row) }}</td>
+              <td class="px-5 py-4 font-mono text-xs">{{ getRewardSerialCode(row) }}</td>
+              <td class="px-5 py-4">{{ getRewardSource(row) }}</td>
+              <td class="px-5 py-4">
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+                  {{ getRewardStatusText(row.status) }}
+                </span>
               </td>
+              <td class="px-5 py-4">{{ formatDateTime(row.createdAt) }}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
-      <div class="mt-6 flex items-center justify-end gap-3">
-        <button
-          @click="goPrevPage"
-          :disabled="pagination.page <= 1"
-          class="rounded-2xl border border-slate-300 bg-white px-5 py-2 font-bold text-slate-700 disabled:opacity-40"
-        >
-          上一頁
-        </button>
-
-        <div class="rounded-2xl bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700">
-          第 {{ pagination.page }} 頁 / 共 {{ pagination.totalPages }} 頁
+      <div class="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div class="text-sm text-slate-500">
+          第 {{ pagination.page }} / {{ pagination.totalPages }} 頁
         </div>
-
-        <button
-          @click="goNextPage"
-          :disabled="pagination.page >= pagination.totalPages"
-          class="rounded-2xl border border-slate-300 bg-white px-5 py-2 font-bold text-slate-700 disabled:opacity-40"
-        >
-          下一頁
-        </button>
+        <div class="flex gap-3">
+          <button
+            @click="goPrevPage"
+            :disabled="pagination.page <= 1"
+            class="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            上一頁
+          </button>
+          <button
+            @click="goNextPage"
+            :disabled="pagination.page >= pagination.totalPages"
+            class="rounded-2xl border border-slate-300 px-5 py-3 font-bold text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            下一頁
+          </button>
+        </div>
       </div>
     </section>
   </div>

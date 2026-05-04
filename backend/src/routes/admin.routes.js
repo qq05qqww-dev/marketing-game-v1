@@ -1,9 +1,13 @@
 import express from 'express'
 import { PrismaClient } from '@prisma/client'
 import ExcelJS from 'exceljs'
+import { requireAuth, requireAdmin } from '../middleware/security.middleware.js'
 
 const router = express.Router()
 const prisma = new PrismaClient()
+
+// V2.3 第 23 批：後台 API 必須先登入，並支援平台管理員 / 商家管理員。
+router.use(requireAuth, requireAdmin)
 
 const toNumber = (value, fallback = 0) => {
   const n = Number(value)
@@ -877,13 +881,27 @@ router.delete('/rewards/:id', async (req, res) => {
   }
 })
 
-/* =========================================================
-   Reports
-========================================================= */
 
 /* =========================================================
-   Reports
+   Reports - V2.3 第 23 批：商家報表中心 tenantId 統計版
 ========================================================= */
+
+const PLATFORM_ADMIN_ROLES = new Set(['ADMIN', 'SUPER_ADMIN'])
+
+const getUserRole = (user = {}) => String(user?.role || '').toUpperCase()
+
+const canAccessAllTenants = (user = {}) => {
+  const role = getUserRole(user)
+
+  return Boolean(user?.isSuperAdmin || PLATFORM_ADMIN_ROLES.has(role))
+}
+
+const getScopedTenantId = (req) => {
+  if (canAccessAllTenants(req.user)) return null
+
+  const tenantId = Number(req.user?.tenantId)
+  return Number.isInteger(tenantId) && tenantId > 0 ? tenantId : -1
+}
 
 const buildDateWhere = (startDate, endDate, fieldName = 'createdAt') => {
   const start = toDateOrNull(startDate)
@@ -908,33 +926,70 @@ const buildDateWhere = (startDate, endDate, fieldName = 'createdAt') => {
   }
 }
 
-const buildRewardWhere = (query = {}) => {
-  const keyword = String(query.keyword || '').trim()
-  const status = String(query.status || '').trim()
-  const campaignId = query.campaignId ? Number(query.campaignId) : null
+const buildTenantScopedWhere = (req, baseWhere = {}) => {
+  const tenantId = getScopedTenantId(req)
+
+  if (!tenantId) return baseWhere
 
   return {
-    ...(status ? { status } : {}),
-    ...(campaignId ? { campaignId } : {}),
-    ...(keyword
-      ? {
-          OR: [
-            { code: { contains: keyword } },
-            { user: { name: { contains: keyword } } },
-            { user: { email: { contains: keyword } } },
-            { campaign: { title: { contains: keyword } } },
-            { prize: { title: { contains: keyword } } }
-          ]
-        }
-      : {})
+    ...baseWhere,
+    tenantId
   }
 }
 
-const buildPlayWhere = (query = {}) => {
-  return {
+const normalizeSource = (value) => {
+  const source = String(value || '').trim().toLowerCase()
+
+  if (['line', 'facebook', 'instagram', 'direct'].includes(source)) {
+    return source
+  }
+
+  if (source === 'fb') return 'facebook'
+  if (source === 'ig') return 'instagram'
+
+  return 'direct'
+}
+
+const getRecordSource = (record = {}) => {
+  const payload = record.resultPayload || {}
+
+  return normalizeSource(
+    payload.source ||
+      payload.trafficSource ||
+      payload.from ||
+      payload.shareSource ||
+      'direct'
+  )
+}
+
+const buildPlayWhere = (req, query = {}) => {
+  return buildTenantScopedWhere(req, {
     ...buildDateWhere(query.startDate, query.endDate, 'playedAt'),
     ...(query.campaignId ? { campaignId: Number(query.campaignId) } : {})
-  }
+  })
+}
+
+const buildRewardRecordWhere = (req, query = {}) => {
+  const keyword = String(query.keyword || '').trim()
+  const status = String(query.status || '').trim().toUpperCase()
+
+  return buildTenantScopedWhere(req, {
+    ...buildDateWhere(query.startDate, query.endDate, 'createdAt'),
+    ...(status ? { status } : {}),
+    ...(query.campaignId ? { campaignId: Number(query.campaignId) } : {}),
+    ...(keyword
+      ? {
+          OR: [
+            { winnerName: { contains: keyword, mode: 'insensitive' } },
+            { winnerPhone: { contains: keyword, mode: 'insensitive' } },
+            { winnerEmail: { contains: keyword, mode: 'insensitive' } },
+            { claimCode: { contains: keyword, mode: 'insensitive' } },
+            { campaign: { title: { contains: keyword, mode: 'insensitive' } } },
+            { prize: { title: { contains: keyword, mode: 'insensitive' } } }
+          ]
+        }
+      : {})
+  })
 }
 
 const formatExportDate = (value) => {
@@ -942,6 +997,32 @@ const formatExportDate = (value) => {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return ''
   return date.toISOString()
+}
+
+const buildSourceStats = (records = []) => {
+  const stats = {
+    line: 0,
+    facebook: 0,
+    instagram: 0,
+    direct: 0
+  }
+
+  records.forEach((record) => {
+    const source = getRecordSource(record)
+    stats[source] = Number(stats[source] || 0) + 1
+  })
+
+  const total = Object.values(stats).reduce((sum, value) => sum + Number(value || 0), 0)
+
+  return {
+    total,
+    items: [
+      { key: 'line', label: 'LINE', count: stats.line, percent: total ? Math.round((stats.line / total) * 100) : 0 },
+      { key: 'facebook', label: 'Facebook', count: stats.facebook, percent: total ? Math.round((stats.facebook / total) * 100) : 0 },
+      { key: 'instagram', label: 'Instagram', count: stats.instagram, percent: total ? Math.round((stats.instagram / total) * 100) : 0 },
+      { key: 'direct', label: '一般 / 直接', count: stats.direct, percent: total ? Math.round((stats.direct / total) * 100) : 0 }
+    ]
+  }
 }
 
 const sendRealXlsx = async (res, filename, sheetName, rows) => {
@@ -954,7 +1035,7 @@ const sendRealXlsx = async (res, filename, sheetName, rows) => {
     worksheet.columns = Object.keys(safeRows[0]).map((key) => ({
       header: key,
       key,
-      width: 20
+      width: 22
     }))
 
     worksheet.addRows(safeRows)
@@ -993,29 +1074,52 @@ const sendRealXlsx = async (res, filename, sheetName, rows) => {
   return res.end()
 }
 
-// 摘要
 router.get('/reports/summary', async (req, res) => {
   try {
-    const playWhere = buildPlayWhere(req.query)
+    const playWhere = buildPlayWhere(req, req.query)
+    const rewardWhere = buildRewardRecordWhere(req, req.query)
+    const tenantId = getScopedTenantId(req)
+    const tenantWhere = tenantId ? { tenantId } : {}
 
-    const [campaigns, prizes, users, rewards, playRecords] = await Promise.all([
-      prisma.campaign.count(),
-      prisma.prize.count(),
-      prisma.user.count(),
-      prisma.userReward.count(),
-      prisma.playRecord.count({
-        where: playWhere
+    const [campaigns, prizes, users, rewardRecords, playRecords, playRows, claimedRewards] = await Promise.all([
+      prisma.campaign.count({ where: tenantWhere }),
+      prisma.prize.count({ where: tenantWhere }),
+      prisma.user.count({ where: tenantWhere }),
+      prisma.rewardRecord.count({ where: rewardWhere }),
+      prisma.playRecord.count({ where: playWhere }),
+      prisma.playRecord.findMany({
+        where: playWhere,
+        select: {
+          id: true,
+          resultPayload: true,
+          isWin: true
+        }
+      }),
+      prisma.rewardRecord.count({
+        where: {
+          ...rewardWhere,
+          status: 'CLAIMED'
+        }
       })
     ])
+
+    const totalWins = playRows.filter((record) => record.isWin).length
 
     return res.json({
       success: true,
       data: {
+        scope: tenantId ? 'TENANT' : 'ALL',
+        tenantId: tenantId || null,
         totalCampaigns: campaigns,
         totalPrizes: prizes,
         totalUsers: users,
-        totalRewards: rewards,
-        totalPlayRecords: playRecords
+        totalRewards: rewardRecords,
+        totalPlayRecords: playRecords,
+        totalWins,
+        claimedRewards,
+        pendingRewards: Math.max(0, rewardRecords - claimedRewards),
+        winRate: playRecords > 0 ? Number(((totalWins / playRecords) * 100).toFixed(2)) : 0,
+        sourceStats: buildSourceStats(playRows)
       }
     })
   } catch (error) {
@@ -1028,17 +1132,16 @@ router.get('/reports/summary', async (req, res) => {
   }
 })
 
-// 每日報表
 router.get('/reports/daily', async (req, res) => {
   try {
-    const where = buildPlayWhere(req.query)
+    const where = buildPlayWhere(req, req.query)
 
     const records = await prisma.playRecord.findMany({
       where,
       include: {
         campaign: true,
         prize: true,
-        user: true
+        serialCode: true
       },
       orderBy: {
         id: 'desc'
@@ -1057,11 +1160,18 @@ router.get('/reports/daily', async (req, res) => {
           date,
           playCount: 0,
           winCount: 0,
+          line: 0,
+          facebook: 0,
+          instagram: 0,
+          direct: 0,
           campaigns: new Set()
         }
       }
 
+      const source = getRecordSource(item)
+
       grouped[date].playCount += 1
+      grouped[date][source] += 1
 
       if (item.isWin) {
         grouped[date].winCount += 1
@@ -1077,7 +1187,11 @@ router.get('/reports/daily', async (req, res) => {
         date: item.date,
         playCount: item.playCount,
         winCount: item.winCount,
-        campaignCount: item.campaigns.size
+        campaignCount: item.campaigns.size,
+        sourceLine: item.line,
+        sourceFacebook: item.facebook,
+        sourceInstagram: item.instagram,
+        sourceDirect: item.direct
       }))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)))
 
@@ -1095,12 +1209,11 @@ router.get('/reports/daily', async (req, res) => {
   }
 })
 
-// 遊玩紀錄
 router.get('/reports/play-records', async (req, res) => {
   try {
     const page = Math.max(Number(req.query.page || 1), 1)
     const pageSize = Math.max(Number(req.query.pageSize || 10), 1)
-    const where = buildPlayWhere(req.query)
+    const where = buildPlayWhere(req, req.query)
 
     const [total, records] = await Promise.all([
       prisma.playRecord.count({
@@ -1109,9 +1222,10 @@ router.get('/reports/play-records', async (req, res) => {
       prisma.playRecord.findMany({
         where,
         include: {
-          user: true,
+          tenant: true,
           campaign: true,
-          prize: true
+          prize: true,
+          serialCode: true
         },
         orderBy: {
           id: 'desc'
@@ -1141,23 +1255,27 @@ router.get('/reports/play-records', async (req, res) => {
   }
 })
 
-// 發獎紀錄
 router.get('/reports/reward-records', async (req, res) => {
   try {
     const page = Math.max(Number(req.query.page || 1), 1)
     const pageSize = Math.max(Number(req.query.pageSize || 10), 1)
-    const where = buildRewardWhere(req.query)
+    const where = buildRewardRecordWhere(req, req.query)
 
     const [total, records] = await Promise.all([
-      prisma.userReward.count({
+      prisma.rewardRecord.count({
         where
       }),
-      prisma.userReward.findMany({
+      prisma.rewardRecord.findMany({
         where,
         include: {
-          user: true,
+          tenant: true,
           campaign: true,
-          prize: true
+          prize: true,
+          playRecord: {
+            include: {
+              serialCode: true
+            }
+          }
         },
         orderBy: {
           id: 'desc'
@@ -1167,8 +1285,6 @@ router.get('/reports/reward-records', async (req, res) => {
       })
     ])
 
-    const totalPages = Math.max(Math.ceil(total / pageSize), 1)
-
     return res.json({
       success: true,
       data: records,
@@ -1176,7 +1292,7 @@ router.get('/reports/reward-records', async (req, res) => {
         page,
         pageSize,
         total,
-        totalPages
+        totalPages: Math.max(Math.ceil(total / pageSize), 1)
       }
     })
   } catch (error) {
@@ -1189,15 +1305,16 @@ router.get('/reports/reward-records', async (req, res) => {
   }
 })
 
-const getPlayExportRows = async (query = {}) => {
-  const where = buildPlayWhere(query)
+const getPlayExportRows = async (req, query = {}) => {
+  const where = buildPlayWhere(req, query)
 
   const records = await prisma.playRecord.findMany({
     where,
     include: {
-      user: true,
+      tenant: true,
       campaign: true,
-      prize: true
+      prize: true,
+      serialCode: true
     },
     orderBy: {
       id: 'desc'
@@ -1206,27 +1323,36 @@ const getPlayExportRows = async (query = {}) => {
 
   return records.map((item) => ({
     id: item.id,
+    tenantId: item.tenantId || '',
+    tenantName: item.tenant?.name || '',
     campaignId: item.campaignId || '',
     campaign: item.campaign?.title || '',
     prizeId: item.prizeId || '',
     prize: item.prize?.title || '',
-    userId: item.userId || '',
-    user: item.user?.name || '',
-    email: item.user?.email || '',
+    serialCode: item.serialCode?.code || '',
+    source: getRecordSource(item),
     isWin: item.isWin ? 'YES' : 'NO',
+    playerName: item.playerName || '',
+    playerPhone: item.playerPhone || '',
+    playerEmail: item.playerEmail || '',
     playedAt: formatExportDate(item.playedAt)
   }))
 }
 
-const getRewardExportRows = async (query = {}) => {
-  const where = buildRewardWhere(query)
+const getRewardExportRows = async (req, query = {}) => {
+  const where = buildRewardRecordWhere(req, query)
 
-  const records = await prisma.userReward.findMany({
+  const records = await prisma.rewardRecord.findMany({
     where,
     include: {
-      user: true,
+      tenant: true,
       campaign: true,
-      prize: true
+      prize: true,
+      playRecord: {
+        include: {
+          serialCode: true
+        }
+      }
     },
     orderBy: {
       id: 'desc'
@@ -1235,24 +1361,27 @@ const getRewardExportRows = async (query = {}) => {
 
   return records.map((item) => ({
     id: item.id,
+    tenantId: item.tenantId || '',
+    tenantName: item.tenant?.name || '',
     campaignId: item.campaignId || '',
     campaign: item.campaign?.title || '',
     prizeId: item.prizeId || '',
     prize: item.prize?.title || '',
-    userId: item.userId || '',
-    user: item.user?.name || '',
-    email: item.user?.email || '',
-    code: item.code || '',
+    serialCode: item.playRecord?.serialCode?.code || '',
+    source: getRecordSource(item.playRecord || {}),
     status: item.status || '',
+    claimCode: item.claimCode || '',
+    winnerName: item.winnerName || '',
+    winnerPhone: item.winnerPhone || '',
+    winnerEmail: item.winnerEmail || '',
     createdAt: formatExportDate(item.createdAt),
-    updatedAt: formatExportDate(item.updatedAt)
+    claimedAt: formatExportDate(item.claimedAt)
   }))
 }
 
-// 匯出 play-records csv
 router.get('/reports/play-records/csv', async (req, res) => {
   try {
-    const rows = await getPlayExportRows(req.query)
+    const rows = await getPlayExportRows(req, req.query)
     return sendCsv(res, 'play-records.csv', rows)
   } catch (error) {
     console.error('匯出 play records csv 失敗:', error)
@@ -1264,10 +1393,9 @@ router.get('/reports/play-records/csv', async (req, res) => {
   }
 })
 
-// 匯出 play-records xlsx
 router.get('/reports/play-records/xlsx', async (req, res) => {
   try {
-    const rows = await getPlayExportRows(req.query)
+    const rows = await getPlayExportRows(req, req.query)
     return sendRealXlsx(res, 'play-records.xlsx', 'Play Records', rows)
   } catch (error) {
     console.error('匯出 play records xlsx 失敗:', error)
@@ -1279,10 +1407,9 @@ router.get('/reports/play-records/xlsx', async (req, res) => {
   }
 })
 
-// 匯出 reward-records csv
 router.get('/reports/reward-records/csv', async (req, res) => {
   try {
-    const rows = await getRewardExportRows(req.query)
+    const rows = await getRewardExportRows(req, req.query)
     return sendCsv(res, 'reward-records.csv', rows)
   } catch (error) {
     console.error('匯出 reward records csv 失敗:', error)
@@ -1294,10 +1421,9 @@ router.get('/reports/reward-records/csv', async (req, res) => {
   }
 })
 
-// 匯出 reward-records xlsx
 router.get('/reports/reward-records/xlsx', async (req, res) => {
   try {
-    const rows = await getRewardExportRows(req.query)
+    const rows = await getRewardExportRows(req, req.query)
     return sendRealXlsx(res, 'reward-records.xlsx', 'Reward Records', rows)
   } catch (error) {
     console.error('匯出 reward records xlsx 失敗:', error)
