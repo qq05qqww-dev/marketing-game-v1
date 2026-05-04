@@ -43,6 +43,21 @@ const normalizeClaimStatus = (value) => {
   return 'PENDING'
 }
 
+const normalizeTrafficSource = (value = '') => {
+  const source = String(value || '').trim().toLowerCase()
+
+  if (source === 'fb') return 'facebook'
+  if (source === 'ig') return 'instagram'
+  if (['line', 'facebook', 'instagram', 'direct'].includes(source)) return source
+
+  return source || 'direct'
+}
+
+const getRecordTrafficSource = (record = {}) => {
+  const payload = record?.resultPayload || {}
+  return normalizeTrafficSource(payload.source || payload.trafficSource || payload.from || 'direct')
+}
+
 const createClaimCode = () => {
   const randomText = crypto.randomBytes(6).toString('hex').toUpperCase()
 
@@ -443,7 +458,13 @@ export const createPlayRecord = async (campaignId, payload = {}, currentUser = n
         playerEmail: payload.playerEmail || null,
         playerIp: payload.playerIp || null,
         userAgent: payload.userAgent || null,
-        resultPayload: payload.resultPayload || {}
+        resultPayload: {
+          ...(payload.resultPayload || {}),
+          source: normalizeTrafficSource(payload.source || payload.trafficSource || payload?.resultPayload?.source || 'direct'),
+          trafficSource: normalizeTrafficSource(payload.trafficSource || payload.source || payload?.resultPayload?.trafficSource || payload?.resultPayload?.source || 'direct'),
+          tenantSlug: payload.tenantSlug || payload?.resultPayload?.tenantSlug || null,
+          frontUrl: payload.frontUrl || payload?.resultPayload?.frontUrl || null
+        }
       },
       include: {
         prize: true,
@@ -552,6 +573,7 @@ export const exportPlayRecordsCsv = async (campaignId, query = {}, currentUser =
       'prizeId',
       'prizeTitle',
       'serialCode',
+      'source',
       'playerName',
       'playerPhone',
       'playerEmail',
@@ -570,6 +592,7 @@ export const exportPlayRecordsCsv = async (campaignId, query = {}, currentUser =
       record.prizeId || '',
       record.prize?.title || '',
       record.serialCode?.code || '',
+      getRecordTrafficSource(record),
       record.playerName || '',
       record.playerPhone || '',
       record.playerEmail || '',

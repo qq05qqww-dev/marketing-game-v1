@@ -241,6 +241,14 @@ const router = createRouter({
       }
     },
     {
+      path: '/play/:tenantSlug/premium-grid',
+      name: 'tenant-premium-grid-play',
+      component: PremiumGridLotteryView,
+      meta: {
+        title: '商家精緻九宮格活動'
+      }
+    },
+    {
       path: '/play/:tenantSlug/golden-egg',
       name: 'tenant-golden-egg-play',
       component: GoldenEggGameView,

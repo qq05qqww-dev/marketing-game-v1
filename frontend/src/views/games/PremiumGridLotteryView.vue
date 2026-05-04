@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAdminGameSettings } from '../../composables/useAdminGameSettings'
 import { useDrawHistory } from '../../composables/useDrawHistory'
+import { getTenantPremiumGridCampaignApi, playDrawEngineCampaignApi } from '../../api/campaign'
 
 const route = useRoute()
 const router = useRouter()
@@ -34,6 +35,12 @@ const logoImageError = ref(false)
 const bannerImageError = ref(false)
 const brandImportFileInput = ref(null)
 const themeImportFileInput = ref(null)
+const tenantPremiumGridCampaign = ref(null)
+const tenantPremiumGridLoading = ref(false)
+const tenantPremiumGridError = ref('')
+const tenantPremiumGridLoadedAt = ref('')
+const tenantPremiumGridLastDraw = ref(null)
+
 
 const PREMIUM_GRID_STORAGE_KEY = 'v22_premium_grid_lottery_state'
 const PREMIUM_GRID_SYNC_EVENT = 'premium-grid-state-updated'
@@ -43,6 +50,19 @@ const isSavingPremiumGridState = ref(false)
 
 const isAdminMode = computed(() => {
   return route.query.mode === 'admin'
+})
+
+const tenantSlug = computed(() => {
+  return String(route.params.tenantSlug || '').trim()
+})
+
+const isTenantPremiumGridMode = computed(() => {
+  return Boolean(tenantSlug.value)
+})
+
+const tenantCampaignId = computed(() => {
+  const id = Number(tenantPremiumGridCampaign.value?.id || route.query.campaignId || 0)
+  return Number.isInteger(id) && id > 0 ? id : null
 })
 
 const urlGameId = computed(() => {
@@ -60,6 +80,52 @@ const safeJsonParse = (value, fallback) => {
 
 const cloneByJson = (value) => {
   return JSON.parse(JSON.stringify(value))
+}
+
+const unwrapApiData = (response) => {
+  return response?.data?.data ?? response?.data ?? response
+}
+
+const normalizeTrafficSource = (value = '') => {
+  const source = String(value || '').trim().toLowerCase()
+
+  if (source === 'fb') return 'facebook'
+  if (source === 'ig') return 'instagram'
+  if (['line', 'facebook', 'instagram', 'direct'].includes(source)) return source
+
+  return source || 'direct'
+}
+
+const getRouteTrafficSource = () => {
+  return normalizeTrafficSource(route.query.from || route.query.source || 'direct')
+}
+
+const normalizeCampaignStatus = (value = '') => {
+  return String(value || '').trim().toUpperCase()
+}
+
+const formatCampaignDateTime = (value) => {
+  if (!value) return ''
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) return ''
+
+  return date.toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const getCampaignStartTime = (campaignData = {}) => {
+  return campaignData?.startAt || campaignData?.startTime || campaignData?.startedAt || campaignData?.publishedAt || ''
+}
+
+const getCampaignEndTime = (campaignData = {}) => {
+  return campaignData?.endAt || campaignData?.endTime || campaignData?.endedAt || campaignData?.expiredAt || ''
 }
 
 const campaign = reactive({
@@ -952,6 +1018,10 @@ const currentGame = computed(() => {
 })
 
 const currentGameId = computed(() => {
+  if (isTenantPremiumGridMode.value) {
+    return tenantCampaignId.value ? `tenant-premium-grid-${tenantCampaignId.value}` : `tenant-premium-grid-${tenantSlug.value}`
+  }
+
   return currentGame.value?.id || urlGameId.value || 'premium-grid'
 })
 
@@ -974,12 +1044,21 @@ const gameIdStatusText = computed(() => {
 })
 
 const sourcePath = computed(() => {
+  if (isTenantPremiumGridMode.value) {
+    const query = route.query.from ? `?from=${encodeURIComponent(String(route.query.from))}` : ''
+    return `/play/${tenantSlug.value}/premium-grid${query}`
+  }
+
   const query = urlGameId.value ? `?gameId=${urlGameId.value}` : ''
 
   return `/games/premium-grid${query}`
 })
 
 const adminSourcePath = computed(() => {
+  if (isTenantPremiumGridMode.value) {
+    return `/play/${tenantSlug.value}/premium-grid?mode=admin`
+  }
+
   const query = urlGameId.value
     ? `?gameId=${urlGameId.value}&mode=admin`
     : '?mode=admin'
@@ -987,14 +1066,86 @@ const adminSourcePath = computed(() => {
   return `/games/premium-grid${query}`
 })
 
+const tenantPremiumGridStatusInfo = computed(() => {
+  if (!isTenantPremiumGridMode.value || !tenantPremiumGridCampaign.value) return null
+
+  const data = tenantPremiumGridCampaign.value
+  const status = normalizeCampaignStatus(data?.status || data?.publishStatus || data?.state)
+  const startValue = getCampaignStartTime(data)
+  const endValue = getCampaignEndTime(data)
+  const startDate = startValue ? new Date(startValue) : null
+  const endDate = endValue ? new Date(endValue) : null
+  const now = new Date()
+
+  if (['DRAFT', 'INACTIVE', 'DISABLED', 'ARCHIVED', 'PAUSED', 'UNPUBLISHED'].includes(status)) {
+    return {
+      canPlay: false,
+      title: '活動尚未上架',
+      label: '尚未開放',
+      buttonText: '尚未開放',
+      message: '目前活動尚未上架，請等待商家正式開放後再參加。'
+    }
+  }
+
+  if (startDate && !Number.isNaN(startDate.getTime()) && now < startDate) {
+    return {
+      canPlay: false,
+      title: '活動尚未開始',
+      label: '未開始',
+      buttonText: '尚未開始',
+      message: `活動開始時間：${formatCampaignDateTime(startValue)}，請於開始後再回來參加。`
+    }
+  }
+
+  if (endDate && !Number.isNaN(endDate.getTime()) && now > endDate) {
+    return {
+      canPlay: false,
+      title: '活動已結束',
+      label: '已結束',
+      buttonText: '已結束',
+      message: `活動已於 ${formatCampaignDateTime(endValue)} 結束，感謝你的參與。`
+    }
+  }
+
+  if (['CLOSED', 'ENDED', 'EXPIRED'].includes(status)) {
+    return {
+      canPlay: false,
+      title: '活動已結束',
+      label: '已結束',
+      buttonText: '已結束',
+      message: '目前活動已結束，感謝你的參與。'
+    }
+  }
+
+  return {
+    canPlay: true,
+    title: '活動進行中',
+    label: status === 'ACTIVE' ? '進行中' : '可參加',
+    buttonText: '',
+    message: '活動已開放，請點擊九宮格中間按鈕開始抽獎。'
+  }
+})
+
+const hasTenantPremiumGridBlock = computed(() => {
+  return Boolean(tenantPremiumGridStatusInfo.value && !tenantPremiumGridStatusInfo.value.canPlay)
+})
+
+const tenantPremiumGridStatusBadgeClass = computed(() => {
+  if (!tenantPremiumGridStatusInfo.value) return 'bg-white/15 text-white/80 border-white/20'
+
+  return tenantPremiumGridStatusInfo.value.canPlay
+    ? 'border-emerald-200/70 bg-emerald-50 text-emerald-700'
+    : 'border-yellow-200/70 bg-yellow-50 text-orange-700'
+})
+
 const premiumVersionInfo = computed(() => {
   return {
     version: 'Premium Grid V1 Stable',
-    platformVersion: 'Multi Game Platform V2.2 Stable',
-    batch: '第 175 批',
+    platformVersion: 'Multi Game Platform V2.3 Tenant Edition',
+    batch: '第 30 批：精緻九宮格前台狀態提示與抽獎體驗精緻版',
     playerMode: '玩家簡潔版',
     adminMode: '管理預覽版',
-    status: '可展示 / 可測試 / 可延伸'
+    status: '商家狀態提示 / 抽獎防連點 / 前台阻擋優化'
   }
 })
 
@@ -1336,10 +1487,29 @@ const availablePrizeCount = computed(() => {
 })
 
 const canDraw = computed(() => {
+  if (tenantPremiumGridLoading.value) return false
+  if (tenantPremiumGridError.value) return false
+  if (hasTenantPremiumGridBlock.value) return false
+
   return player.chances > 0 && availablePrizeCount.value > 0 && !isDrawing.value
 })
 
+const canShareCampaign = computed(() => {
+  if (isDrawing.value) return false
+  if (tenantPremiumGridLoading.value) return false
+  if (tenantPremiumGridError.value) return false
+  if (hasTenantPremiumGridBlock.value) return false
+
+  return true
+})
+
 const drawButtonText = computed(() => {
+  if (tenantPremiumGridLoading.value) return '載入中'
+
+  if (tenantPremiumGridError.value) return '尚未開放'
+
+  if (hasTenantPremiumGridBlock.value) return tenantPremiumGridStatusInfo.value?.buttonText || '尚未開放'
+
   if (isDrawing.value) return '抽選中'
 
   if (player.chances <= 0) return '次數用完'
@@ -1350,6 +1520,18 @@ const drawButtonText = computed(() => {
 })
 
 const playerStatusMessage = computed(() => {
+  if (tenantPremiumGridLoading.value) {
+    return '正在載入商家九宮格活動，請稍候。'
+  }
+
+  if (tenantPremiumGridError.value) {
+    return tenantPremiumGridError.value
+  }
+
+  if (hasTenantPremiumGridBlock.value) {
+    return tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。'
+  }
+
   if (isDrawing.value) {
     return '抽獎進行中，請稍候結果出現。'
   }
@@ -1410,6 +1592,135 @@ const showStorageMessage = (message) => {
 
 const updateChanceText = () => {
   campaign.chanceText = `還有 ${player.chances} 次抽獎機會`
+}
+
+
+const normalizeTenantCampaignList = (response) => {
+  const payload = unwrapApiData(response)
+
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.items)) return payload.items
+  if (Array.isArray(payload?.campaigns)) return payload.campaigns
+  if (Array.isArray(payload?.data)) return payload.data
+
+  return payload ? [payload] : []
+}
+
+const getPrizeIconByType = (prize = {}) => {
+  const type = String(prize.type || '').toUpperCase()
+  const title = String(prize.title || prize.name || '')
+
+  if (type === 'LOSE') return '💫'
+  if (title.includes('咖啡')) return '☕'
+  if (title.includes('折') || title.includes('券')) return '🎟️'
+  if (title.includes('金') || title.includes('獎')) return '🏆'
+
+  return '🎁'
+}
+
+const applyTenantPremiumGridCampaign = (campaignData = {}) => {
+  tenantPremiumGridCampaign.value = campaignData
+
+  campaign.brandName = campaignData?.tenant?.name || campaignData?.tenantName || campaign.brandName
+  campaign.pageTitle = campaignData?.title || '精緻九宮格抽獎'
+  campaign.mainTitle = campaignData?.title || '精緻九宮格抽獎'
+  campaign.subTitle = campaignData?.description || '商家專屬九宮格活動'
+  campaign.heroTagline = normalizeCampaignStatus(campaignData?.status) === 'ACTIVE' ? '活動進行中' : '商家專屬活動'
+  campaign.logoText = String(campaign.brandName || 'P').slice(0, 1).toUpperCase()
+  campaign.noticeText = '本活動由商家後台建立，玩家紀錄會自動歸屬目前商家。'
+
+  const prizes = Array.isArray(campaignData?.prizes) ? campaignData.prizes.slice(0, 8) : []
+
+  if (prizes.length) {
+    gridItems.value = defaultGridItems.map((item, index) => {
+      if (item.isButton) return item
+
+      const prize = prizes[index]
+
+      if (!prize) {
+        return {
+          ...item,
+          weight: 0,
+          quantity: 0
+        }
+      }
+
+      return {
+        ...item,
+        id: prize.id || item.id,
+        name: prize.title || prize.name || item.name,
+        shortName: prize.shortName || prize.title || prize.name || item.shortName,
+        icon: prize.icon || getPrizeIconByType(prize),
+        imageUrl: prize.imageUrl || '',
+        weight: Number(prize.probability || prize.weight || 0),
+        quantity: Number(prize.remainStock ?? prize.quantity ?? 0),
+        backendPrize: prize
+      }
+    })
+  }
+
+  player.chances = Number(campaignData?.dailyLimit || campaignData?.totalLimit || player.chances || 1)
+  updateChanceText()
+  tenantPremiumGridLoadedAt.value = new Date().toLocaleString('zh-TW')
+}
+
+const loadTenantPremiumGridCampaign = async () => {
+  if (!isTenantPremiumGridMode.value) return
+
+  tenantPremiumGridLoading.value = true
+  tenantPremiumGridError.value = ''
+
+  try {
+    const response = await getTenantPremiumGridCampaignApi(tenantSlug.value)
+    const campaigns = normalizeTenantCampaignList(response)
+    const activeCampaign = campaigns.find((item) => String(item?.gameType || '').toUpperCase() === 'GRID') || campaigns[0]
+
+    if (!activeCampaign?.id) {
+      tenantPremiumGridCampaign.value = null
+      tenantPremiumGridError.value = '目前商家尚未建立精緻九宮格活動，請聯絡平台管理員建立 GRID 活動。'
+      return
+    }
+
+    applyTenantPremiumGridCampaign(activeCampaign)
+  } catch (error) {
+    console.error('載入商家精緻九宮格活動失敗：', error)
+    tenantPremiumGridCampaign.value = null
+    tenantPremiumGridError.value = '載入商家精緻九宮格活動失敗，請稍後再試。'
+  } finally {
+    tenantPremiumGridLoading.value = false
+  }
+}
+
+const playTenantPremiumGridDraw = async () => {
+  if (!tenantCampaignId.value) return null
+
+  const response = await playDrawEngineCampaignApi(tenantCampaignId.value, {
+    gameType: 'GRID',
+    requireSerialCode: false,
+    source: getRouteTrafficSource(),
+    trafficSource: getRouteTrafficSource(),
+    tenantSlug: tenantSlug.value,
+    frontUrl: getShareUrl(),
+    resultPayload: {
+      source: getRouteTrafficSource(),
+      tenantSlug: tenantSlug.value,
+      frontUrl: getShareUrl(),
+      template: 'premium-grid'
+    }
+  })
+
+  const payload = unwrapApiData(response)
+  const result = payload?.result || payload
+  const selectedPrizeId = result?.prizeId || payload?.prize?.id || payload?.playRecord?.prizeId
+  const selectedPrizeTitle = result?.prizeTitle || payload?.prize?.title || payload?.playRecord?.prize?.title || ''
+
+  tenantPremiumGridLastDraw.value = payload
+
+  return gridItems.value.find((item) => {
+    if (item.isButton) return false
+
+    return String(item.id) === String(selectedPrizeId) || String(item.name) === String(selectedPrizeTitle)
+  }) || null
 }
 
 const applyGameSettingsToCampaign = () => {
@@ -1532,6 +1843,7 @@ const handlePremiumGridCustomSync = (event) => {
 }
 
 const savePremiumGridState = () => {
+  if (isTenantPremiumGridMode.value && !isAdminMode.value) return
   if (typeof localStorage === 'undefined') return
   if (isApplyingPremiumGridRemoteState.value) return
 
@@ -1558,6 +1870,11 @@ const savePremiumGridState = () => {
 }
 
 const loadPremiumGridState = () => {
+  if (isTenantPremiumGridMode.value) {
+    loadTenantPremiumGridCampaign()
+    return
+  }
+
   if (typeof localStorage === 'undefined') return
 
   isApplyingPremiumGridRemoteState.value = true
@@ -1787,21 +2104,47 @@ const showShareSuccess = (message) => {
 const startDraw = async () => {
   if (isDrawing.value) return
 
-  if (player.chances <= 0) {
-    showShareSuccess('目前沒有抽獎機會，請先分享活動增加次數。')
+  if (tenantPremiumGridLoading.value) {
+    showShareSuccess('活動資料仍在載入中，請稍候。')
     return
   }
 
-  const prize = pickPrize()
+  if (tenantPremiumGridError.value) {
+    showShareSuccess(tenantPremiumGridError.value)
+    return
+  }
 
-  if (!prize) {
-    showShareSuccess('目前獎品已抽完，請等待主辦單位更新活動。')
+  if (hasTenantPremiumGridBlock.value) {
+    showShareSuccess(tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。')
+    return
+  }
+
+  if (player.chances <= 0) {
+    showShareSuccess('目前沒有抽獎機會，請先分享活動增加次數。')
     return
   }
 
   isDrawing.value = true
   resultPrize.value = null
   showResultModal.value = false
+
+  let prize = null
+
+  try {
+    prize = isTenantPremiumGridMode.value ? await playTenantPremiumGridDraw() : pickPrize()
+  } catch (error) {
+    console.error('精緻九宮格抽獎失敗：', error)
+    isDrawing.value = false
+    showShareSuccess(error?.response?.data?.message || error?.message || '抽獎失敗，請稍後再試。')
+    return
+  }
+
+  if (!prize) {
+    isDrawing.value = false
+    showShareSuccess('目前獎品已抽完，請等待主辦單位更新活動。')
+    return
+  }
+
   player.chances -= 1
   updateChanceText()
 
@@ -1842,6 +2185,11 @@ const startDraw = async () => {
 }
 
 const shareCampaign = async () => {
+  if (!canShareCampaign.value) {
+    showShareSuccess(playerStatusMessage.value || '目前活動尚未開放，暫時無法分享增加次數。')
+    return
+  }
+
   player.sharedCount += 1
   player.chances += 1
   updateChanceText()
@@ -1960,6 +2308,10 @@ onMounted(() => {
   if (typeof window === 'undefined') return
 
   window.addEventListener('storage', handlePremiumGridStorageSync)
+
+  if (isTenantPremiumGridMode.value) {
+    loadTenantPremiumGridCampaign()
+  }
 })
 
 onBeforeUnmount(() => {
@@ -2450,6 +2802,34 @@ watch(
                 </section>
 
                 <section
+                  v-if="isTenantPremiumGridMode && tenantPremiumGridStatusInfo"
+                  class="relative mt-5 rounded-3xl border border-white/25 bg-white/15 p-4 text-center shadow-inner backdrop-blur"
+                >
+                  <div
+                    class="mx-auto inline-flex items-center gap-2 rounded-full border px-4 py-2 text-xs font-black shadow-sm"
+                    :class="tenantPremiumGridStatusBadgeClass"
+                  >
+                    <span>{{ tenantPremiumGridStatusInfo.canPlay ? '✅' : '⚠️' }}</span>
+                    <span>{{ tenantPremiumGridStatusInfo.label }}</span>
+                  </div>
+
+                  <p class="mt-3 text-sm font-black text-white">
+                    {{ tenantPremiumGridStatusInfo.title }}
+                  </p>
+
+                  <p class="mx-auto mt-2 max-w-md text-xs font-bold leading-6 text-white/75">
+                    {{ tenantPremiumGridStatusInfo.message }}
+                  </p>
+
+                  <p
+                    v-if="tenantPremiumGridLoadedAt"
+                    class="mt-2 text-[11px] font-bold text-white/55"
+                  >
+                    活動資料同步時間：{{ tenantPremiumGridLoadedAt }}
+                  </p>
+                </section>
+
+                <section
                   class="relative mt-6 rounded-[30px] border-[5px] border-orange-400/80 bg-gradient-to-b from-yellow-300 to-orange-500 p-2.5 shadow-[inset_0_3px_0_rgba(255,255,255,.45),0_24px_40px_rgba(154,52,18,.35)] sm:mt-8 sm:rounded-[36px] sm:border-[6px] sm:p-3"
                   :class="isDrawing ? 'premium-drawing-glow' : ''"
                 >
@@ -2528,8 +2908,8 @@ watch(
                     <button
                       type="button"
                       class="min-w-[150px] rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
-                      :disabled="isDrawing"
-                      :class="isDrawing ? 'cursor-not-allowed opacity-70' : ''"
+                      :disabled="!canShareCampaign"
+                      :class="!canShareCampaign ? 'cursor-not-allowed opacity-70' : ''"
                       @click="shareCampaign"
                     >
                       {{ isDrawing ? '抽選中...' : campaign.buttonText }}

@@ -38,11 +38,46 @@ const normalizeCode = (value) => {
 const normalizeGameType = (value) => {
   const gameType = String(value || 'GOLDEN_EGG').toUpperCase()
 
+  if (gameType === 'PREMIUM_GRID' || gameType === 'PREMIUM-GRID') {
+    return 'GRID'
+  }
+
   if (['WHEEL', 'SCRATCH', 'FLIP', 'GRID', 'GOLDEN_EGG'].includes(gameType)) {
     return gameType
   }
 
   return 'GOLDEN_EGG'
+}
+
+const normalizeTrafficSource = (value = '') => {
+  const source = String(value || '').trim().toLowerCase()
+
+  if (source === 'fb') return 'facebook'
+  if (source === 'ig') return 'instagram'
+  if (['line', 'facebook', 'instagram', 'direct'].includes(source)) return source
+
+  return source || 'direct'
+}
+
+const buildTrafficPayload = (payload = {}) => {
+  const rawPayload = payload.resultPayload || {}
+  const source = normalizeTrafficSource(
+    payload.source ||
+    payload.trafficSource ||
+    rawPayload.source ||
+    rawPayload.trafficSource ||
+    rawPayload.from ||
+    'direct'
+  )
+
+  return {
+    source,
+    trafficSource: source,
+    sourceLabel: rawPayload.sourceLabel || payload.sourceLabel || source,
+    tenantSlug: payload.tenantSlug || rawPayload.tenantSlug || null,
+    frontUrl: payload.frontUrl || rawPayload.frontUrl || null,
+    referrer: payload.referrer || rawPayload.referrer || null
+  }
 }
 
 const createHttpError = (message, status = 500) => {
@@ -382,6 +417,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
     const serialValidation = await validateSerialCodeForDraw(tx, normalizedCampaignId, payload)
     const serialCode = serialValidation?.serialCode || null
     const serialUsageInfo = serialValidation?.usageInfo || null
+    const trafficPayload = buildTrafficPayload(payload)
 
     const prize = pickPrizeByProbability(campaign.prizes)
 
@@ -419,6 +455,12 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
           drawEngine: true,
           requireSerialCode: payload.requireSerialCode !== false,
           serialCode: serialCode?.code || null,
+          source: trafficPayload.source,
+          trafficSource: trafficPayload.trafficSource,
+          sourceLabel: trafficPayload.sourceLabel,
+          tenantSlug: trafficPayload.tenantSlug,
+          frontUrl: trafficPayload.frontUrl,
+          referrer: trafficPayload.referrer,
           selectedPrizeId: prize.id,
           selectedPrizeTitle: prize.title
         }
@@ -468,6 +510,11 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       rewardRecord,
       serialCode: updatedSerialCode,
       prize: updatedPrize,
+      tracking: {
+        source: trafficPayload.source,
+        tenantSlug: trafficPayload.tenantSlug,
+        frontUrl: trafficPayload.frontUrl
+      },
       result: {
         isWin,
         prizeId: prize.id,

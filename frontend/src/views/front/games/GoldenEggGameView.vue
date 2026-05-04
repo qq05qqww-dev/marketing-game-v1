@@ -24,6 +24,17 @@ const remoteCampaignTitle = ref('')
 const remoteCampaignStatus = ref('')
 const remoteSerialMessageType = ref('info')
 const remoteDrawNotice = ref('')
+const trafficSource = computed(() => getRouteTrafficSource())
+const trafficSourceLabel = computed(() => {
+  const source = trafficSource.value
+
+  if (source === 'line') return 'LINE'
+  if (source === 'facebook') return 'Facebook'
+  if (source === 'instagram') return 'Instagram'
+  if (source === 'direct') return '直接開啟'
+
+  return source || '其他來源'
+})
 const remoteCrackDuration = computed(() => 2.8)
 
 const GOLDEN_EGG_HISTORY_KEY = 'multi_game_platform_golden_egg_history_v1'
@@ -551,6 +562,30 @@ onMounted(() => {
 const getRouteTenantSlug = () => {
   const value = route.params?.tenantSlug || route.query.tenantSlug || ''
   return String(value || '').trim()
+}
+
+const normalizeTrafficSource = (value = '') => {
+  const source = String(value || '').trim().toLowerCase()
+
+  if (source === 'fb') return 'facebook'
+  if (source === 'ig') return 'instagram'
+  if (['line', 'facebook', 'instagram', 'direct'].includes(source)) return source
+
+  return source || 'direct'
+}
+
+const getRouteTrafficSource = () => {
+  return normalizeTrafficSource(
+    route.query?.from ||
+    route.query?.source ||
+    route.query?.utm_source ||
+    'direct'
+  )
+}
+
+const getCurrentFrontUrlForTracking = () => {
+  if (typeof window === 'undefined') return ''
+  return window.location.pathname + window.location.search
 }
 
 const unwrapApiPayload = (response) => {
@@ -1568,8 +1603,17 @@ const crackEggWithRemoteApi = async (egg) => {
       playerName: '',
       playerPhone: '',
       playerEmail: '',
+      source: trafficSource.value,
+      trafficSource: trafficSource.value,
+      tenantSlug: getRouteTenantSlug(),
+      frontUrl: getCurrentFrontUrlForTracking(),
       resultPayload: {
-        eggNumber: egg.number
+        eggNumber: egg.number,
+        source: trafficSource.value,
+        trafficSource: trafficSource.value,
+        sourceLabel: trafficSourceLabel.value,
+        tenantSlug: getRouteTenantSlug(),
+        frontUrl: getCurrentFrontUrlForTracking()
       },
       note: '前台金蛋正式 API 串接'
     })

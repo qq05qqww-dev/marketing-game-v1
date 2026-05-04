@@ -24,7 +24,9 @@ export const playGoldenEggDraw = async (campaignId, payload = {}) => {
     ...payload,
     gameType: 'GOLDEN_EGG',
     code: serialCode,
-    serialCode
+    serialCode,
+    source: payload.source || payload.trafficSource || payload?.resultPayload?.source || 'direct',
+    trafficSource: payload.trafficSource || payload.source || payload?.resultPayload?.trafficSource || payload?.resultPayload?.source || 'direct'
   })
 
   return unwrapApiData(response)

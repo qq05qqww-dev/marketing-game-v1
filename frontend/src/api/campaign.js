@@ -17,6 +17,30 @@ export const getCampaignDetailApi = (id) => {
 }
 
 
+
+export const getTenantPremiumGridCampaignApi = (tenantSlug) => {
+  return http.get('/campaigns', {
+    params: {
+      tenantSlug,
+      gameType: 'GRID',
+      status: 'ACTIVE'
+    }
+  })
+}
+
+export const getTenantPremiumGridCampaignsApi = (tenantSlug) => {
+  return http.get('/campaigns', {
+    params: {
+      tenantSlug,
+      gameType: 'GRID'
+    }
+  })
+}
+
+export const playDrawEngineCampaignApi = (campaignId, data = {}) => {
+  return http.post(`/draw-engine/campaigns/${campaignId}/play`, data)
+}
+
 export const getTenantGoldenEggCampaignApi = (tenantSlug) => {
   return http.get('/campaigns', {
     params: {

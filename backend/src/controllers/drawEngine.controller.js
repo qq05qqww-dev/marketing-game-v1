@@ -45,7 +45,8 @@ export const playDrawHandler = async (req, res) => {
       ...req.body,
       userId: req.user?.id || req.body?.userId || null,
       playerIp: req.ip,
-      userAgent: req.headers['user-agent'] || ''
+      userAgent: req.headers['user-agent'] || '',
+      referrer: req.headers.referer || req.headers.referrer || ''
     })
 
     return successResponse(res, result, '抽獎成功', 201)
