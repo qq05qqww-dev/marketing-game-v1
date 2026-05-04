@@ -17,6 +17,9 @@ const API_BASE = http?.defaults?.baseURL || 'http://localhost:3000/api'
 const loading = ref(true)
 const exporting = ref(false)
 const advancedFiltersOpen = ref(false)
+const savedQueriesOpen = ref(true)
+const savedQueries = ref([])
+
 
 const emptySummary = () => ({
   scope: 'ALL',
@@ -83,6 +86,113 @@ const filters = ref({
   prizePage: 1,
   pageSize: 10
 })
+
+const getStoredReportUser = () => {
+  try {
+    return JSON.parse(localStorage.getItem('user') || '{}') || {}
+  } catch (error) {
+    console.error('報表使用者資料解析失敗', error)
+    return {}
+  }
+}
+
+const getSavedQueryStorageKey = () => {
+  const user = getStoredReportUser()
+  const role = String(user?.role || 'guest').toLowerCase()
+  const tenantId = user?.tenantId || 'platform'
+  const userId = user?.id || user?.email || 'default'
+
+  return `multi_game_platform_v23_report_saved_queries_${role}_${tenantId}_${userId}`
+}
+
+const cloneFiltersForStorage = () => ({
+  startDate: filters.value.startDate || '',
+  endDate: filters.value.endDate || '',
+  keyword: filters.value.keyword || '',
+  status: filters.value.status || '',
+  source: filters.value.source || '',
+  isWin: filters.value.isWin || '',
+  prizeId: filters.value.prizeId || '',
+  serialCode: filters.value.serialCode || '',
+  campaignId: filters.value.campaignId || '',
+  tenantId: filters.value.tenantId || '',
+  pageSize: Number(filters.value.pageSize || 10)
+})
+
+const loadSavedQueries = () => {
+  try {
+    const raw = localStorage.getItem(getSavedQueryStorageKey())
+    const parsed = raw ? JSON.parse(raw) : []
+    savedQueries.value = Array.isArray(parsed) ? parsed : []
+  } catch (error) {
+    console.error('讀取常用查詢失敗', error)
+    savedQueries.value = []
+  }
+}
+
+const persistSavedQueries = () => {
+  localStorage.setItem(getSavedQueryStorageKey(), JSON.stringify(savedQueries.value))
+}
+
+const getSavedQuerySummary = (item = {}) => {
+  const f = item.filters || {}
+  const parts = []
+
+  if (f.tenantId && selectedTenantName.value) parts.push(selectedTenantName.value)
+  if (f.startDate || f.endDate) parts.push(`${f.startDate || '不限'}～${f.endDate || '不限'}`)
+  if (f.keyword) parts.push(`關鍵字 ${f.keyword}`)
+  if (f.source) parts.push(sourceFilterOptions.find((option) => option.value === f.source)?.label || f.source)
+  if (f.isWin) parts.push(winFilterOptions.find((option) => option.value === f.isWin)?.label || f.isWin)
+  if (f.status) parts.push(rewardStatusOptions.find((option) => option.value === f.status)?.label || f.status)
+  if (f.serialCode) parts.push(`序號 ${f.serialCode}`)
+  if (f.campaignId) parts.push(`活動 ${f.campaignId}`)
+  if (f.prizeId) parts.push(`獎項 ${f.prizeId}`)
+
+  return parts.length ? parts.join('｜') : '未限制條件'
+}
+
+const saveCurrentQuery = () => {
+  const defaultName = queryBadges.value.filter((badge) => badge !== '目前未套用進階查詢條件').slice(0, 3).join('｜') || '常用查詢'
+  const name = window.prompt('請輸入常用查詢名稱', defaultName)
+
+  if (!name || !name.trim()) return
+
+  const newItem = {
+    id: `saved-${Date.now()}`,
+    name: name.trim(),
+    filters: cloneFiltersForStorage(),
+    createdAt: new Date().toISOString()
+  }
+
+  savedQueries.value = [newItem, ...savedQueries.value].slice(0, 20)
+  persistSavedQueries()
+}
+
+const applySavedQuery = async (item) => {
+  const f = item?.filters || {}
+
+  filters.value = {
+    ...filters.value,
+    ...f,
+    playPage: 1,
+    rewardPage: 1,
+    prizePage: 1,
+    pageSize: Number(f.pageSize || filters.value.pageSize || 10)
+  }
+
+  advancedFiltersOpen.value = true
+  await fetchReports()
+}
+
+const deleteSavedQuery = (id) => {
+  const target = savedQueries.value.find((item) => item.id === id)
+  const confirmed = window.confirm(`確定刪除常用查詢「${target?.name || ''}」嗎？`)
+
+  if (!confirmed) return
+
+  savedQueries.value = savedQueries.value.filter((item) => item.id !== id)
+  persistSavedQueries()
+}
 
 const safeArray = (value) => (Array.isArray(value) ? value : [])
 
@@ -710,6 +820,7 @@ const queryBadges = computed(() => {
 })
 
 onMounted(async () => {
+  loadSavedQueries()
   await fetchTenantOptions()
   await fetchReports()
 })
@@ -994,6 +1105,68 @@ onMounted(async () => {
         </div>
       </div>
 
+      <div class="mb-6 rounded-3xl border border-amber-100 bg-amber-50/70 p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[0.25em] text-amber-600">Saved Queries</p>
+            <h4 class="mt-1 text-lg font-black text-slate-900">常用查詢收藏</h4>
+            <p class="mt-1 text-sm text-slate-500">可把目前商家、日期、來源、序號、結果等條件保存起來，下次一鍵套用。</p>
+          </div>
+
+          <div class="flex flex-wrap gap-3">
+            <button
+              @click="saveCurrentQuery"
+              class="rounded-2xl bg-amber-500 px-5 py-3 text-sm font-black text-white transition hover:bg-amber-600"
+            >
+              儲存目前查詢
+            </button>
+            <button
+              @click="savedQueriesOpen = !savedQueriesOpen"
+              class="rounded-2xl border border-amber-200 bg-white px-5 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-50"
+            >
+              {{ savedQueriesOpen ? '收合收藏' : '展開收藏' }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="savedQueriesOpen" class="mt-5">
+          <div v-if="!savedQueries.length" class="rounded-2xl border border-dashed border-amber-200 bg-white/70 p-5 text-sm font-semibold text-slate-500">
+            目前尚未儲存常用查詢。先設定查詢條件後，點「儲存目前查詢」即可建立收藏。
+          </div>
+
+          <div v-else class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div
+              v-for="item in savedQueries"
+              :key="item.id"
+              class="rounded-3xl border border-amber-100 bg-white p-5 shadow-sm"
+            >
+              <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div class="min-w-0">
+                  <h5 class="truncate text-base font-black text-slate-900">{{ item.name }}</h5>
+                  <p class="mt-2 text-sm font-semibold leading-6 text-slate-500">{{ getSavedQuerySummary(item) }}</p>
+                  <p class="mt-2 text-xs font-bold text-slate-400">建立時間：{{ formatDateTime(item.createdAt) }}</p>
+                </div>
+
+                <div class="flex shrink-0 gap-2">
+                  <button
+                    @click="applySavedQuery(item)"
+                    class="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-black text-white transition hover:bg-slate-800"
+                  >
+                    套用
+                  </button>
+                  <button
+                    @click="deleteSavedQuery(item.id)"
+                    class="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-2 text-sm font-black text-rose-600 transition hover:bg-rose-100"
+                  >
+                    刪除
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="rounded-3xl border border-slate-200 bg-white p-5">
         <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -1145,6 +1318,12 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-wrap gap-3">
+            <button
+              @click="saveCurrentQuery"
+              class="rounded-2xl border border-amber-200 bg-amber-50 px-6 py-3 font-bold text-amber-700 transition hover:bg-amber-100"
+            >
+              儲存查詢
+            </button>
             <button
               @click="applyFilters"
               class="rounded-2xl bg-blue-600 px-6 py-3 font-bold text-white transition hover:bg-blue-700"
