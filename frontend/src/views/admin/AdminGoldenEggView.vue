@@ -3266,54 +3266,96 @@ const databaseFrontUrlDisplayType = computed(() => {
   return tenantSlug ? '商家專屬網址' : 'Campaign ID 網址'
 })
 
+const getDatabaseFrontShareContext = () => {
+  const title = databaseCampaign.value?.title || databaseCampaign.value?.name || '砸金蛋活動'
+  const tenantName = databaseCampaign.value?.tenant?.name || getStoredAdminUser()?.tenantName || '活動商家'
+  const url = databaseFrontUrl.value || ''
+
+  return {
+    tenantName,
+    campaignTitle: title,
+    frontUrl: url
+  }
+}
+
+const databaseFrontSharePresetTemplates = computed(() => {
+  const { tenantName, campaignTitle, frontUrl } = getDatabaseFrontShareContext()
+
+  return {
+    basic: `🎉 歡迎參加 {tenantName} 的 {campaignTitle}！
+點擊連結立即進入活動：
+{frontUrl}`,
+    promo: `🎁 限時抽獎活動開跑！
+{tenantName} 邀請你參加「{campaignTitle}」
+完成序號驗證，就有機會獲得專屬好禮👇
+{frontUrl}`,
+    service: `您好，這是 {tenantName} 的專屬活動連結：
+{frontUrl}
+請點擊連結進入活動頁面，依照畫面提示完成參加。`,
+    legacy: `🎁 ${tenantName}｜${campaignTitle}
+立即參加砸金蛋活動：
+${frontUrl}`
+  }
+})
+
+const renderDatabaseFrontShareText = (templateText = '') => {
+  const { tenantName, campaignTitle, frontUrl } = getDatabaseFrontShareContext()
+
+  return String(templateText || '')
+    .replaceAll('{tenantName}', tenantName)
+    .replaceAll('{campaignTitle}', campaignTitle)
+    .replaceAll('{frontUrl}', frontUrl)
+}
+
 const databaseFrontShareText = computed(() => {
   if (!databaseFrontUrl.value) return ''
 
-  const title = databaseCampaign.value?.title || databaseCampaign.value?.name || '砸金蛋活動'
-  const tenantName = databaseCampaign.value?.tenant?.name || getStoredAdminUser()?.tenantName || '活動商家'
+  const rawText = databaseGameConfigForm.lineShareText || databaseFrontSharePresetTemplates.value.basic
 
-  return `🎁 ${tenantName}｜${title}
-立即參加砸金蛋活動：
-${databaseFrontUrl.value}`
+  return renderDatabaseFrontShareText(rawText)
 })
 
 const databaseFrontShareTemplates = computed(() => {
   if (!databaseFrontUrl.value) return []
 
-  const title = databaseCampaign.value?.title || databaseCampaign.value?.name || '砸金蛋活動'
-  const tenantName = databaseCampaign.value?.tenant?.name || getStoredAdminUser()?.tenantName || '活動商家'
-  const url = databaseFrontUrl.value
+  const presets = databaseFrontSharePresetTemplates.value
 
-  return [
+  const items = [
     {
       key: 'basic',
+      field: 'lineShareText',
       name: '基本版',
       badge: 'LINE / 一般分享',
       description: '簡短清楚，適合直接貼給客人。',
-      text: `🎉 歡迎參加 ${tenantName} 的 ${title}！
-點擊連結立即進入活動：
-${url}`
+      preset: presets.basic
     },
     {
       key: 'promo',
+      field: 'systemShareText',
       name: '促銷版',
       badge: '社群貼文',
       description: '適合活動宣傳、限時抽獎、社群公告。',
-      text: `🎁 限時抽獎活動開跑！
-${tenantName} 邀請你參加「${title}」
-完成序號驗證，就有機會獲得專屬好禮👇
-${url}`
+      preset: presets.promo
     },
     {
       key: 'service',
+      field: 'telegramShareText',
       name: '客服版',
       badge: '客服回覆',
       description: '語氣正式，適合客服、簡訊或一對一通知。',
-      text: `您好，這是 ${tenantName} 的專屬活動連結：
-${url}
-請點擊連結進入活動頁面，依照畫面提示完成參加。`
+      preset: presets.service
     }
   ]
+
+  return items.map((item) => {
+    const rawText = databaseGameConfigForm[item.field] || item.preset
+
+    return {
+      ...item,
+      rawText,
+      text: renderDatabaseFrontShareText(rawText)
+    }
+  })
 })
 
 
@@ -3572,13 +3614,34 @@ const copyDatabaseFrontShareText = async () => {
 }
 
 const copyDatabaseFrontShareTemplate = async (template) => {
-  if (!template?.text) {
+  const text = template?.field
+    ? renderDatabaseFrontShareText(databaseGameConfigForm[template.field] || template.preset || '')
+    : template?.text
+
+  if (!text) {
     showOperationError('目前沒有可複製的分享文案。')
     return
   }
 
-  await copyDatabaseText(template.text)
+  await copyDatabaseText(text)
   showOperationSuccess(`已複製${template.name || '分享'}文案。`)
+}
+
+const resetDatabaseFrontShareTemplate = (template) => {
+  if (!template?.field) return
+
+  databaseGameConfigForm[template.field] = template.preset || ''
+  showOperationSuccess(`已套用${template.name || '分享'}預設文案。`)
+}
+
+const resetAllDatabaseFrontShareTemplates = () => {
+  const presets = databaseFrontSharePresetTemplates.value
+
+  databaseGameConfigForm.lineShareText = presets.basic
+  databaseGameConfigForm.systemShareText = presets.promo
+  databaseGameConfigForm.telegramShareText = presets.service
+
+  showOperationSuccess('已套用全部預設分享文案。')
 }
 
 
@@ -6165,7 +6228,7 @@ watch(
                         一鍵分享文案
                       </p>
                       <p class="mt-1 text-[11px] font-bold text-emerald-600">
-                        可直接複製貼到 LINE、FB、IG、簡訊或客服對話。
+                        可直接編輯內容，支援變數帶入商家名稱、活動名稱與前台網址。
                       </p>
                     </div>
                     <button
@@ -6175,6 +6238,26 @@ watch(
                     >
                       複製預設文案
                     </button>
+                  </div>
+
+                  <div class="mt-3 rounded-2xl border border-emerald-100 bg-white/80 p-3">
+                    <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p class="text-xs font-black text-slate-800">
+                          可用變數
+                        </p>
+                        <p class="mt-1 text-[11px] font-bold leading-5 text-slate-500">
+                          <code>{tenantName}</code> 商家名稱、<code>{campaignTitle}</code> 活動名稱、<code>{frontUrl}</code> 前台網址
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        class="w-fit rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm"
+                        @click="resetAllDatabaseFrontShareTemplates"
+                      >
+                        套用全部預設文案
+                      </button>
+                    </div>
                   </div>
 
                   <div class="mt-3 grid gap-3 xl:grid-cols-3">
@@ -6197,15 +6280,41 @@ watch(
                         </span>
                       </div>
 
-                      <pre class="mt-3 min-h-[128px] whitespace-pre-wrap break-words rounded-xl bg-emerald-950/95 p-3 text-[11px] font-bold leading-5 text-emerald-50">{{ template.text }}</pre>
+                      <label class="mt-3 block">
+                        <span class="text-[11px] font-black text-slate-600">
+                          可編輯文案內容
+                        </span>
+                        <textarea
+                          v-model="databaseGameConfigForm[template.field]"
+                          rows="7"
+                          class="mt-2 w-full resize-y rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs font-bold leading-5 text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                          :placeholder="template.preset"
+                        />
+                      </label>
 
-                      <button
-                        type="button"
-                        class="mt-3 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm"
-                        @click="copyDatabaseFrontShareTemplate(template)"
-                      >
-                        複製{{ template.name }}文案
-                      </button>
+                      <div class="mt-3 rounded-xl bg-emerald-950/95 p-3">
+                        <p class="text-[11px] font-black text-emerald-200">
+                          實際複製預覽
+                        </p>
+                        <pre class="mt-2 min-h-[96px] whitespace-pre-wrap break-words text-[11px] font-bold leading-5 text-emerald-50">{{ template.text }}</pre>
+                      </div>
+
+                      <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
+                        <button
+                          type="button"
+                          class="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                          @click="resetDatabaseFrontShareTemplate(template)"
+                        >
+                          套用預設
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm"
+                          @click="copyDatabaseFrontShareTemplate(template)"
+                        >
+                          複製文案
+                        </button>
+                      </div>
                     </article>
                   </div>
                 </div>
