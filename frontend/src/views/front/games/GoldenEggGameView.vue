@@ -1474,7 +1474,7 @@ const crackEggWithRemoteApi = async (egg) => {
   await playAudio(hammerAudio, campaign.enableHammerSound, campaign.hammerSoundVolume)
 
   try {
-    const drawResult = await playGoldenEggDraw(onlineCampaignId.value, {
+    const rawDrawResult = await playGoldenEggDraw(onlineCampaignId.value, {
       gameType: 'GOLDEN_EGG',
       serialCode: remoteVerifiedSerialCode.value,
       playerName: '',
@@ -1485,8 +1485,9 @@ const crackEggWithRemoteApi = async (egg) => {
       },
       note: '前台金蛋正式 API 串接'
     })
+    const drawResult = unwrapApiPayload(rawDrawResult)
 
-    const prize = mapApiPrizeToLocalPrize(drawResult.prize || drawResult.result || {}, 0)
+    const prize = mapApiPrizeToLocalPrize(drawResult?.prize || drawResult?.result || {}, 0)
 
     window.setTimeout(async () => {
       const remainingSerialChances = Number(drawResult?.result?.remainingSerialChances ?? Math.max(0, player.chances - 1))
@@ -1729,9 +1730,10 @@ const redeemSerialCode = async () => {
 
   try {
     if (isOnlineMode.value && onlineCampaignId.value) {
-      const result = await verifyGoldenEggSerialCode(onlineCampaignId.value, code)
+      const rawVerifyResult = await verifyGoldenEggSerialCode(onlineCampaignId.value, code)
+      const result = unwrapApiPayload(rawVerifyResult)
 
-      if (!result.valid) {
+      if (!result?.valid) {
         remoteSerialMessageType.value = 'error'
         serialRedeemMessage.value = result.message || campaign.serialRedeemErrorText || '序號無效、已使用或不存在。'
         return
