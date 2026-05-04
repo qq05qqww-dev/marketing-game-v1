@@ -58,6 +58,8 @@ const campaign = reactive({
   activityEndAt: '',
   activityNotStartedText: '活動尚未開始，請於指定時間再回來參加。',
   activityEndedText: '活動已結束，感謝你的參與。',
+  activityPausedText: '活動暫停中，請稍後再回來參加。',
+  activityDraftText: '活動尚未開放，請等待主辦單位公告。',
   activityRunningText: '活動進行中，請選擇一顆金蛋。',
   showActivityTimeSection: true,
   showActivityCountdown: true,
@@ -967,7 +969,21 @@ const formatCampaignDateTime = (value) => {
 const activityStartDate = computed(() => parseCampaignDateTime(campaign.activityStartAt))
 const activityEndDate = computed(() => parseCampaignDateTime(campaign.activityEndAt))
 
+const normalizedRemoteCampaignStatus = computed(() => {
+  return String(remoteCampaignStatus.value || '').toUpperCase()
+})
+
 const activityStatus = computed(() => {
+  const remoteStatus = normalizedRemoteCampaignStatus.value
+
+  if (isOnlineMode.value && remoteStatus && remoteStatus !== 'ACTIVE') {
+    if (remoteStatus === 'DRAFT') return 'draft'
+    if (remoteStatus === 'ENDED') return 'ended'
+    if (['INACTIVE', 'PAUSED', 'SUSPENDED'].includes(remoteStatus)) return 'paused'
+
+    return 'paused'
+  }
+
   const now = currentTimeTick.value
   const start = activityStartDate.value?.getTime()
   const end = activityEndDate.value?.getTime()
@@ -982,6 +998,8 @@ const isActivityPlayable = computed(() => activityStatus.value === 'running')
 
 const activityStatusLabel = computed(() => {
   if (activityStatus.value === 'not-started') return '尚未開始'
+  if (activityStatus.value === 'draft') return '未開放'
+  if (activityStatus.value === 'paused') return '暫停中'
   if (activityStatus.value === 'ended') return '已結束'
 
   return '進行中'
@@ -989,6 +1007,8 @@ const activityStatusLabel = computed(() => {
 
 const activityStatusText = computed(() => {
   if (activityStatus.value === 'not-started') return campaign.activityNotStartedText || '活動尚未開始，請於指定時間再回來參加。'
+  if (activityStatus.value === 'draft') return campaign.activityDraftText || '活動尚未開放，請等待主辦單位公告。'
+  if (activityStatus.value === 'paused') return campaign.activityPausedText || '活動暫停中，請稍後再回來參加。'
   if (activityStatus.value === 'ended') return campaign.activityEndedText || '活動已結束，感謝你的參與。'
 
   return campaign.activityRunningText || '活動進行中，請選擇一顆金蛋。'
@@ -996,7 +1016,9 @@ const activityStatusText = computed(() => {
 
 const activityStatusClass = computed(() => {
   if (activityStatus.value === 'not-started') return 'bg-amber-100 text-amber-700'
-  if (activityStatus.value === 'ended') return 'bg-slate-100 text-slate-700'
+  if (activityStatus.value === 'draft') return 'bg-slate-100 text-slate-700'
+  if (activityStatus.value === 'paused') return 'bg-orange-100 text-orange-700'
+  if (activityStatus.value === 'ended') return 'bg-rose-100 text-rose-700'
 
   return 'bg-emerald-100 text-emerald-700'
 })
@@ -1060,6 +1082,8 @@ const activityCountdownText = computed(() => {
   const target = activityCountdownTarget.value
 
   if (!target) {
+    if (activityStatus.value === 'draft') return '活動尚未開放'
+    if (activityStatus.value === 'paused') return '活動暫停中'
     return activityStatus.value === 'ended' ? '活動已結束' : '未設定倒數時間'
   }
 
@@ -1401,6 +1425,13 @@ const triggerWinEffects = () => {
 
 const crackEggWithRemoteApi = async (egg) => {
   if (!onlineCampaignId.value) return
+
+  if (!isActivityPlayable.value) {
+    remoteSerialMessageType.value = 'error'
+    serialRedeemMessage.value = activityStatusText.value
+    remoteDrawNotice.value = activityStatusText.value
+    return
+  }
   if (!remoteVerifiedSerialCode.value) {
     remoteSerialMessageType.value = 'error'
     serialRedeemMessage.value = '請先輸入並驗證抽獎序號。'
@@ -1659,6 +1690,12 @@ const redeemSerialCode = async () => {
   const code = String(serialCodeInput.value || '').trim().toUpperCase()
 
   serialRedeemMessage.value = ''
+
+  if (!isActivityPlayable.value) {
+    remoteSerialMessageType.value = 'error'
+    serialRedeemMessage.value = activityStatusText.value
+    return
+  }
 
   if (!code) {
     remoteSerialMessageType.value = 'error'
@@ -2026,6 +2063,18 @@ onUnmounted(() => {
             </p>
 
             <div
+              v-if="!isActivityPlayable"
+              class="mt-3 rounded-3xl border border-white/20 bg-white/15 px-4 py-4 text-center shadow-xl backdrop-blur"
+            >
+              <p class="text-sm font-black text-white">
+                {{ activityStatusLabel }}
+              </p>
+              <p class="mt-1 text-xs font-bold text-yellow-50/90">
+                {{ activityStatusText }}
+              </p>
+            </div>
+
+            <div
               v-if="campaign.showActivityTimeSection"
               class="mt-3 border text-left"
               :style="activityTimeBoxStyle"
@@ -2219,6 +2268,7 @@ onUnmounted(() => {
                 :placeholder="campaign.serialRedeemPlaceholder"
                 class="min-h-[48px] flex-1 rounded-2xl border border-white/15 px-4 font-black uppercase outline-none placeholder:text-slate-400"
                 :style="serialRedeemInputStyle"
+                :disabled="!isActivityPlayable || isCracking || isSerialRedeeming"
                 @keyup.enter="redeemSerialCode"
               />
 
@@ -2226,7 +2276,7 @@ onUnmounted(() => {
                 type="button"
                 class="rounded-2xl px-5 py-3 font-black shadow-xl transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 :style="serialRedeemButtonStyle"
-                :disabled="isCracking || isSerialRedeeming"
+                :disabled="!isActivityPlayable || isCracking || isSerialRedeeming"
                 @click="redeemSerialCode"
               >
                 {{ isSerialRedeemLocked ? `${serialRedeemLockLeftSeconds} 秒後再試` : campaign.serialRedeemButtonText }}
