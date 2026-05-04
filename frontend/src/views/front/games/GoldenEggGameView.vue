@@ -979,16 +979,30 @@ const normalizedRemoteCampaignStatus = computed(() => {
   return String(remoteCampaignStatus.value || '').toUpperCase()
 })
 
+const normalizedLocalCampaignStatus = computed(() => {
+  return String(campaign.status || campaign.campaignStatus || '').toUpperCase()
+})
+
+const normalizeCampaignRuntimeStatus = (status) => {
+  const value = String(status || '').toUpperCase()
+
+  if (!value || value === 'ACTIVE') return ''
+  if (value === 'DRAFT') return 'draft'
+  if (['ENDED', 'END', 'FINISHED', 'CLOSED'].includes(value)) return 'ended'
+  if (['INACTIVE', 'PAUSED', 'SUSPENDED', 'DISABLED'].includes(value)) return 'paused'
+
+  return 'paused'
+}
+
 const activityStatus = computed(() => {
-  const remoteStatus = normalizedRemoteCampaignStatus.value
+  // V2.3 第 18 批修正版：
+  // 右側 iframe 預覽多數時候不是正式 API onlineMode，而是吃後台同步到 localStorage 的 campaign.status。
+  // 因此不能只看 remoteCampaignStatus，否則後台切成 INACTIVE / ENDED 時，預覽仍會顯示「進行中」。
+  const databaseStatus = normalizeCampaignRuntimeStatus(normalizedRemoteCampaignStatus.value)
+  const localPreviewStatus = normalizeCampaignRuntimeStatus(normalizedLocalCampaignStatus.value)
 
-  if (isOnlineMode.value && remoteStatus && remoteStatus !== 'ACTIVE') {
-    if (remoteStatus === 'DRAFT') return 'draft'
-    if (remoteStatus === 'ENDED') return 'ended'
-    if (['INACTIVE', 'PAUSED', 'SUSPENDED'].includes(remoteStatus)) return 'paused'
-
-    return 'paused'
-  }
+  if (databaseStatus) return databaseStatus
+  if (localPreviewStatus) return localPreviewStatus
 
   const now = currentTimeTick.value
   const start = activityStartDate.value?.getTime()
