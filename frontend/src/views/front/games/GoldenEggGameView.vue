@@ -557,6 +557,52 @@ const unwrapApiPayload = (response) => {
   return response?.data?.data ?? response?.data ?? response ?? null
 }
 
+
+const toSafeChanceNumber = (value, fallback = 0) => {
+  const number = Number(value)
+
+  if (!Number.isFinite(number)) return fallback
+
+  return Math.max(0, Math.floor(number))
+}
+
+const extractSerialRemainingChance = (payload = {}, fallback = 0) => {
+  const data = unwrapApiPayload(payload) || {}
+
+  return toSafeChanceNumber(
+    data?.result?.remainingSerialChances
+      ?? data?.result?.serialRemainingChance
+      ?? data?.result?.remainingChance
+      ?? data?.serialCode?.remainingChance
+      ?? data?.serialCode?.remainingSerialChances
+      ?? data?.serialCode?.serialRemainingChance
+      ?? data?.remainingSerialChances
+      ?? data?.serialRemainingChance
+      ?? data?.remainingChance,
+    fallback
+  )
+}
+
+const syncRemainingChanceAfterDraw = (drawResult = {}, fallback = 0) => {
+  const remainingChance = extractSerialRemainingChance(drawResult, fallback)
+
+  player.chances = remainingChance
+  updateChanceText()
+
+  if (remainingChance <= 0) {
+    remoteVerifiedSerialCode.value = ''
+    remoteSerialMessageType.value = 'error'
+    serialRedeemMessage.value = '此序號可用次數已用完，請輸入新的抽獎序號。'
+    remoteDrawNotice.value = '本次抽獎已完成，此序號可用次數已用完。'
+  } else {
+    remoteSerialMessageType.value = 'success'
+    serialRedeemMessage.value = `已扣除 1 次砸蛋機會，此序號還剩 ${remainingChance} 次。`
+    remoteDrawNotice.value = `已扣除 1 次砸蛋機會，此序號還剩 ${remainingChance} 次。`
+  }
+
+  return remainingChance
+}
+
 const extractCampaignList = (payload) => {
   const data = unwrapApiPayload(payload)
 
@@ -1494,9 +1540,11 @@ const crackEggWithRemoteApi = async (egg) => {
     remoteDrawNotice.value = activityStatusText.value
     return
   }
-  if (!remoteVerifiedSerialCode.value) {
+  if (!remoteVerifiedSerialCode.value || player.chances <= 0) {
     remoteSerialMessageType.value = 'error'
-    serialRedeemMessage.value = '請先輸入並驗證抽獎序號。'
+    serialRedeemMessage.value = player.chances <= 0
+      ? '此序號可用次數已用完，請輸入新的抽獎序號。'
+      : '請先輸入並驗證抽獎序號。'
     return
   }
 
@@ -1526,17 +1574,14 @@ const crackEggWithRemoteApi = async (egg) => {
       note: '前台金蛋正式 API 串接'
     })
     const drawResult = unwrapApiPayload(rawDrawResult)
+    const remainingSerialChances = syncRemainingChanceAfterDraw(
+      drawResult,
+      Math.max(0, Number(player.chances || 0) - 1)
+    )
 
     const prize = mapApiPrizeToLocalPrize(drawResult?.prize || drawResult?.result || {}, 0)
 
     window.setTimeout(async () => {
-      const remainingSerialChances = Number(drawResult?.result?.remainingSerialChances ?? Math.max(0, player.chances - 1))
-      player.chances = remainingSerialChances
-      updateChanceText()
-
-      if (remainingSerialChances <= 0) {
-        remoteVerifiedSerialCode.value = ''
-      }
 
       eggs.value = eggs.value.map((item) => {
         if (item.id !== egg.id) return item
