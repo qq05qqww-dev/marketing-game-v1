@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 5 批：SerialCode 序號 API 依 tenantId 隔離版
+// 第 19 批：SerialCode 序號活動內唯一版
 //
 // 建議放置位置：
 // backend/src/services/serialCode.service.js
@@ -117,6 +117,33 @@ const createForbiddenError = (message = '找不到活動，或此帳號沒有權
   const error = new Error(message)
   error.status = 404
   return error
+}
+
+const createDuplicateSerialError = (message = '此活動內已存在相同序號，請更換序號') => {
+  const error = new Error(message)
+  error.status = 400
+  error.code = 'SERIAL_CODE_DUPLICATED_IN_CAMPAIGN'
+  return error
+}
+
+const buildCampaignScopedSerialWhere = (campaign, codes) => {
+  const where = {
+    campaignId: campaign.id
+  }
+
+  if (Array.isArray(codes)) {
+    where.code = {
+      in: codes
+    }
+  } else {
+    where.code = codes
+  }
+
+  if (campaign.tenantId) {
+    where.tenantId = campaign.tenantId
+  }
+
+  return where
 }
 
 const assertCampaignAccess = async (campaignId, currentUser = null) => {
@@ -338,6 +365,17 @@ export const createSerialCodeForCampaign = async (campaignId, payload = {}, curr
     throw error
   }
 
+  const existingSerialCode = await prisma.serialCode.findFirst({
+    where: buildCampaignScopedSerialWhere(campaign, code),
+    select: {
+      id: true
+    }
+  })
+
+  if (existingSerialCode) {
+    throw createDuplicateSerialError()
+  }
+
   return prisma.serialCode.create({
     data: {
       campaignId: campaign.id,
@@ -374,11 +412,7 @@ export const bulkCreateSerialCodesForCampaign = async (campaignId, payload = {},
   const normalizedCodes = [...new Set(rawCodes.map(normalizeCode).filter((code) => code && code.length >= 6))]
 
   const existing = await prisma.serialCode.findMany({
-    where: {
-      code: {
-        in: normalizedCodes
-      }
-    },
+    where: buildCampaignScopedSerialWhere(campaign, normalizedCodes),
     select: {
       code: true
     }
@@ -453,11 +487,7 @@ export const generateSerialCodesForCampaign = async (campaignId, payload = {}, c
 
   const codes = Array.from(generatedCodes)
   const existing = await prisma.serialCode.findMany({
-    where: {
-      code: {
-        in: codes
-      }
-    },
+    where: buildCampaignScopedSerialWhere(campaign, codes),
     select: {
       code: true
     }

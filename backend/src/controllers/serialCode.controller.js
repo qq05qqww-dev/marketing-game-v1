@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 5 批：SerialCode 序號 API 依 tenantId 隔離版
+// 第 19 批：SerialCode 序號活動內唯一版
 //
 // 建議放置位置：
 // backend/src/controllers/serialCode.controller.js
@@ -83,8 +83,8 @@ export const createSerialCodeHandler = async (req, res) => {
   } catch (error) {
     console.error('建立序號失敗:', error)
 
-    if (error.code === 'P2002') {
-      return validationErrorResponse(res, '序號已存在，不能重複建立')
+    if (error.code === 'P2002' || error.code === 'SERIAL_CODE_DUPLICATED_IN_CAMPAIGN') {
+      return validationErrorResponse(res, error.message || '此活動內已存在相同序號，請更換序號')
     }
 
     return handleSerialCodeError(res, error, '建立序號失敗')

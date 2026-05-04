@@ -270,7 +270,7 @@ model SerialCode {
   tenantId Int?
   tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
 
-  code String @unique
+  code String
 
   // 一組序號可以增加幾次抽獎機會
   rewardChance Int @default(1)
@@ -297,6 +297,7 @@ model SerialCode {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([campaignId, code])
   @@index([tenantId])
   @@index([campaignId])
   @@index([status])
