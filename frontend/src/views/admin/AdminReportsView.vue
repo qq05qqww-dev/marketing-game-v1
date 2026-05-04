@@ -70,6 +70,114 @@ const sourceLabelMap = {
   direct: '一般 / 直接'
 }
 
+
+const padDatePart = (value) => String(value).padStart(2, '0')
+
+const toLocalDateInputValue = (date) => {
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return ''
+
+  return `${d.getFullYear()}-${padDatePart(d.getMonth() + 1)}-${padDatePart(d.getDate())}`
+}
+
+const getMonthRange = (monthOffset = 0) => {
+  const now = new Date()
+  const firstDay = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + monthOffset + 1, 0)
+
+  return {
+    startDate: toLocalDateInputValue(firstDay),
+    endDate: toLocalDateInputValue(lastDay)
+  }
+}
+
+const dateQuickRanges = computed(() => {
+  const today = new Date()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+
+  const last7Start = new Date(today)
+  last7Start.setDate(today.getDate() - 6)
+
+  const last30Start = new Date(today)
+  last30Start.setDate(today.getDate() - 29)
+
+  return [
+    {
+      key: 'today',
+      label: '今日',
+      startDate: toLocalDateInputValue(today),
+      endDate: toLocalDateInputValue(today)
+    },
+    {
+      key: 'yesterday',
+      label: '昨日',
+      startDate: toLocalDateInputValue(yesterday),
+      endDate: toLocalDateInputValue(yesterday)
+    },
+    {
+      key: 'last7',
+      label: '近 7 天',
+      startDate: toLocalDateInputValue(last7Start),
+      endDate: toLocalDateInputValue(today)
+    },
+    {
+      key: 'last30',
+      label: '近 30 天',
+      startDate: toLocalDateInputValue(last30Start),
+      endDate: toLocalDateInputValue(today)
+    },
+    {
+      key: 'thisMonth',
+      label: '本月',
+      ...getMonthRange(0)
+    },
+    {
+      key: 'lastMonth',
+      label: '上月',
+      ...getMonthRange(-1)
+    }
+  ]
+})
+
+const activeDatePreset = computed(() => {
+  const matched = dateQuickRanges.value.find((item) => {
+    return item.startDate === filters.value.startDate && item.endDate === filters.value.endDate
+  })
+
+  return matched?.key || ''
+})
+
+const currentDateRangeText = computed(() => {
+  if (!filters.value.startDate && !filters.value.endDate) {
+    return '目前未限制日期範圍，顯示可查詢的全部資料。'
+  }
+
+  if (filters.value.startDate && filters.value.endDate) {
+    return `目前查詢期間：${filters.value.startDate} ～ ${filters.value.endDate}`
+  }
+
+  if (filters.value.startDate) {
+    return `目前查詢期間：${filters.value.startDate} 之後`
+  }
+
+  return `目前查詢期間：${filters.value.endDate} 以前`
+})
+
+const applyDatePreset = async (preset) => {
+  filters.value.startDate = preset.startDate
+  filters.value.endDate = preset.endDate
+  filters.value.page = 1
+  await fetchReports()
+}
+
+const clearDateRange = async () => {
+  filters.value.startDate = ''
+  filters.value.endDate = ''
+  filters.value.page = 1
+  await fetchReports()
+}
+
 const sourceStats = computed(() => {
   const items = safeArray(summary.value?.sourceStats?.items)
 
@@ -431,7 +539,7 @@ onMounted(async () => {
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h3 class="text-2xl font-black text-slate-900">查詢條件</h3>
-          <p class="mt-2 text-slate-500">可依商家、日期、活動 ID、關鍵字與發獎狀態篩選資料。</p>
+          <p class="mt-2 text-slate-500">可依商家、日期、活動 ID、關鍵字與發獎狀態篩選資料；匯出會自動套用目前條件。</p>
         </div>
 
         <div class="flex flex-wrap gap-3">
@@ -462,6 +570,34 @@ onMounted(async () => {
             class="rounded-2xl border border-slate-300 bg-white px-5 py-3 font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
           >
             匯出發獎 XLSX
+          </button>
+        </div>
+      </div>
+
+      <div class="mb-6 rounded-3xl border border-indigo-100 bg-indigo-50/60 p-5">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[0.25em] text-indigo-500">Date Range</p>
+            <h4 class="mt-1 text-lg font-black text-slate-900">日期快速篩選</h4>
+            <p class="mt-1 text-sm font-semibold text-slate-500">{{ currentDateRangeText }}</p>
+          </div>
+          <button
+            @click="clearDateRange"
+            class="rounded-2xl border border-indigo-200 bg-white px-5 py-3 text-sm font-black text-indigo-700 transition hover:bg-indigo-50"
+          >
+            清除日期
+          </button>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-3">
+          <button
+            v-for="preset in dateQuickRanges"
+            :key="preset.key"
+            @click="applyDatePreset(preset)"
+            class="rounded-2xl px-5 py-3 text-sm font-black transition"
+            :class="activeDatePreset === preset.key ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'border border-indigo-100 bg-white text-slate-700 hover:bg-indigo-50'"
+          >
+            {{ preset.label }}
           </button>
         </div>
       </div>
