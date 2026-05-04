@@ -50,7 +50,7 @@ const campaign = reactive({
   mainTitle: '砸金蛋中大奖',
   subTitle: '九宮格金蛋活動',
   heroTagline: '9 顆金蛋任你選，敲開就有機會中大獎',
-  chanceText: '還有 3 次砸蛋機會',
+  chanceText: '請先輸入抽獎序號，驗證成功後即可砸蛋。',
   buttonText: '分享活動',
   shareHint: '請向主辦單位索取抽獎序號，輸入後可增加砸蛋機會。',
   noticeText: '本活動為原創互動版型，可自由替換品牌、獎項與活動內容。',
@@ -155,7 +155,7 @@ const campaign = reactive({
   serialRedeemTitle: '輸入抽獎序號',
   serialRedeemPlaceholder: '請輸入主辦單位提供的序號',
   serialRedeemButtonText: '兌換砸蛋機會',
-  serialRedeemSuccessText: '序號兌換成功，已增加砸蛋機會。',
+  serialRedeemSuccessText: '序號驗證成功，請選擇一顆金蛋。',
   serialRedeemErrorText: '序號無效、已使用或不存在。',
   showSerialRedeemSection: true,
   serialRedeemBgColor: 'rgba(0, 0, 0, 0.16)',
@@ -239,13 +239,13 @@ const campaign = reactive({
   confettiCount: 48,
   goldRainCount: 54,
   ruleTitle: '活動規則',
-  ruleContent: '每次砸蛋會消耗 1 次機會。\n點選任一金蛋後，系統會依獎項機率產生結果。\n分享活動可依設定增加砸蛋機會。\n獎項數量有限，送完為止。',
+  ruleContent: '請先輸入主辦單位提供的抽獎序號。\n序號驗證成功後，才會取得可用砸蛋次數。\n每次砸蛋會消耗 1 次序號機會。\n獎項數量有限，送完為止。',
   prizeInfoTitle: '獎品說明',
   prizeInfoContent: '中獎結果會顯示於畫面與最近紀錄。\n實際兌換方式以主辦單位公告為準。\n請保留中獎畫面或截圖作為兌獎依據。'
 })
 
 const player = reactive({
-  chances: 3,
+  chances: 0,
   sharedCount: 0
 })
 
@@ -666,7 +666,7 @@ const statusText = computed(() => {
   if (isCracking.value) return '金蛋敲擊中，請稍候結果揭曉。'
   if (!availablePrizePool.value.length) return '目前獎品已抽完，請等待主辦單位更新。'
   if (player.chances <= 0) return '目前沒有砸蛋機會，請輸入主辦單位提供的序號兌換。'
-  return `目前還有 ${player.chances} 次砸蛋機會，請選擇一顆金蛋。`
+  return `序號已驗證，目前可砸 ${player.chances} 次，請選擇一顆金蛋。`
 })
 
 const resultLabel = computed(() => {
@@ -1142,14 +1142,14 @@ const activityCountdownNumberStyle = computed(() => {
 const playerSummaryItems = computed(() => {
   return [
     {
-      label: '剩餘次數',
-      value: player.chances,
-      subText: '可砸蛋'
+      label: '序號狀態',
+      value: remoteVerifiedSerialCode.value ? '已驗證' : '未驗證',
+      subText: remoteVerifiedSerialCode.value ? '可以砸蛋' : '請先輸入序號'
     },
     {
-      label: '已分享',
-      value: player.sharedCount,
-      subText: '分享次數'
+      label: '可用次數',
+      value: player.chances,
+      subText: '序號剩餘'
     },
     {
       label: '金蛋數',
@@ -1361,7 +1361,9 @@ const goldRainPieces = computed(() => {
 })
 
 const updateChanceText = () => {
-  campaign.chanceText = `還有 ${player.chances} 次砸蛋機會`
+  campaign.chanceText = player.chances > 0
+    ? `序號已驗證，可砸 ${player.chances} 次`
+    : '請先輸入抽獎序號，驗證成功後即可砸蛋。'
 }
 
 const pickPrize = () => {
@@ -1722,7 +1724,7 @@ const redeemSerialCode = async () => {
       updateChanceText()
       serialCodeInput.value = ''
       remoteSerialMessageType.value = 'success'
-      serialRedeemMessage.value = `${campaign.serialRedeemSuccessText || '序號驗證成功，請選擇一顆金蛋。'}｜目前剩餘 ${rewardChance} 次。`
+      serialRedeemMessage.value = `${campaign.serialRedeemSuccessText || '序號驗證成功，請選擇一顆金蛋。'}｜此序號目前可用 ${rewardChance} 次。`
       return
     }
     const codes = getSerialCodes()
@@ -1744,7 +1746,7 @@ const redeemSerialCode = async () => {
     player.chances += rewardChance
     updateChanceText()
     serialCodeInput.value = ''
-    serialRedeemMessage.value = `${campaign.serialRedeemSuccessText || '序號兌換成功，已增加砸蛋機會。'}目前還有 ${player.chances} 次。`
+    serialRedeemMessage.value = `${campaign.serialRedeemSuccessText || '序號驗證成功，請選擇一顆金蛋。'}目前可用 ${player.chances} 次。`
   } finally {
     isSerialRedeeming.value = false
   }
@@ -2257,7 +2259,7 @@ onUnmounted(() => {
                 class="mt-1 font-bold"
                 :style="serialRedeemHintStyle"
               >
-                輸入主辦單位產生的序號，可兌換砸蛋機會。
+                請輸入主辦單位產生的序號；驗證成功後才會取得砸蛋次數。
               </p>
             </div>
 
