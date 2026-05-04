@@ -3277,6 +3277,45 @@ const databaseFrontShareText = computed(() => {
 ${databaseFrontUrl.value}`
 })
 
+const databaseFrontShareTemplates = computed(() => {
+  if (!databaseFrontUrl.value) return []
+
+  const title = databaseCampaign.value?.title || databaseCampaign.value?.name || '砸金蛋活動'
+  const tenantName = databaseCampaign.value?.tenant?.name || getStoredAdminUser()?.tenantName || '活動商家'
+  const url = databaseFrontUrl.value
+
+  return [
+    {
+      key: 'basic',
+      name: '基本版',
+      badge: 'LINE / 一般分享',
+      description: '簡短清楚，適合直接貼給客人。',
+      text: `🎉 歡迎參加 ${tenantName} 的 ${title}！
+點擊連結立即進入活動：
+${url}`
+    },
+    {
+      key: 'promo',
+      name: '促銷版',
+      badge: '社群貼文',
+      description: '適合活動宣傳、限時抽獎、社群公告。',
+      text: `🎁 限時抽獎活動開跑！
+${tenantName} 邀請你參加「${title}」
+完成序號驗證，就有機會獲得專屬好禮👇
+${url}`
+    },
+    {
+      key: 'service',
+      name: '客服版',
+      badge: '客服回覆',
+      description: '語氣正式，適合客服、簡訊或一對一通知。',
+      text: `您好，這是 ${tenantName} 的專屬活動連結：
+${url}
+請點擊連結進入活動頁面，依照畫面提示完成參加。`
+    }
+  ]
+})
+
 
 
 
@@ -3530,6 +3569,16 @@ const copyDatabaseFrontShareText = async () => {
   }
 
   await copyDatabaseText(databaseFrontShareText.value)
+}
+
+const copyDatabaseFrontShareTemplate = async (template) => {
+  if (!template?.text) {
+    showOperationError('目前沒有可複製的分享文案。')
+    return
+  }
+
+  await copyDatabaseText(template.text)
+  showOperationSuccess(`已複製${template.name || '分享'}文案。`)
 }
 
 
@@ -6109,22 +6158,56 @@ watch(
                     複製網址
                   </button>
                 </div>
+                <div class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3 sm:p-4">
+                  <div class="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p class="text-xs font-black text-emerald-700">
+                        一鍵分享文案
+                      </p>
+                      <p class="mt-1 text-[11px] font-bold text-emerald-600">
+                        可直接複製貼到 LINE、FB、IG、簡訊或客服對話。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      class="w-fit rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                      @click="copyDatabaseFrontShareText"
+                    >
+                      複製預設文案
+                    </button>
+                  </div>
 
+                  <div class="mt-3 grid gap-3 xl:grid-cols-3">
+                    <article
+                      v-for="template in databaseFrontShareTemplates"
+                      :key="template.key"
+                      class="flex min-w-0 flex-col rounded-2xl border border-emerald-100 bg-white/90 p-3 shadow-sm"
+                    >
+                      <div class="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p class="text-sm font-black text-slate-950">
+                            {{ template.name }}
+                          </p>
+                          <p class="mt-1 text-[11px] font-bold text-slate-500">
+                            {{ template.description }}
+                          </p>
+                        </div>
+                        <span class="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-700">
+                          {{ template.badge }}
+                        </span>
+                      </div>
 
-                <div class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3">
-                  <p class="text-xs font-black text-emerald-700">
-                    分享文案
-                  </p>
-                  <p class="mt-1 whitespace-pre-line text-xs font-bold leading-5 text-emerald-900">
-                    {{ databaseFrontShareText }}
-                  </p>
-                  <button
-                    type="button"
-                    class="mt-2 rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
-                    @click="copyDatabaseFrontShareText"
-                  >
-                    複製分享文案
-                  </button>
+                      <pre class="mt-3 min-h-[128px] whitespace-pre-wrap break-words rounded-xl bg-emerald-950/95 p-3 text-[11px] font-bold leading-5 text-emerald-50">{{ template.text }}</pre>
+
+                      <button
+                        type="button"
+                        class="mt-3 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm"
+                        @click="copyDatabaseFrontShareTemplate(template)"
+                      >
+                        複製{{ template.name }}文案
+                      </button>
+                    </article>
+                  </div>
                 </div>
               </div>
             </div>
