@@ -1,39 +1,37 @@
-// Multi Game Platform V2.2 Stable
-// 第 313 批：金蛋前台 API Service
-//
-// 建議放置位置：
-// src/api/goldenEggApi.js
+import http from './http'
 
-import { apiRequest } from './httpClient.js'
-
-export const getGoldenEggCampaign = (campaignId) => {
-  return apiRequest(`/campaigns/${campaignId}`)
+const unwrapApiData = (response) => {
+  return response?.data?.data ?? response?.data ?? response
 }
 
-export const getGoldenEggPrizes = (campaignId) => {
-  return apiRequest(`/prizes/campaigns/${campaignId}/prizes`)
+export const getGoldenEggCampaign = async (campaignId) => {
+  const response = await http.get(`/campaigns/${campaignId}`)
+  return unwrapApiData(response)
 }
 
-export const getGoldenEggGameConfig = (campaignId) => {
-  return apiRequest(`/campaigns/${campaignId}/game-config`)
-}
-
-export const getGoldenEggDrawPool = (campaignId) => {
-  return apiRequest(`/draw-engine/campaigns/${campaignId}/pool`)
-}
-
-export const verifyGoldenEggSerialCode = (campaignId, code) => {
-  return apiRequest(`/draw-engine/campaigns/${campaignId}/verify-serial`, {
-    method: 'POST',
-    body: {
-      code
-    }
+export const verifyGoldenEggSerialCode = async (campaignId, code) => {
+  const response = await http.post(`/draw-engine/campaigns/${campaignId}/verify-serial`, {
+    code: String(code || '').trim().toUpperCase()
   })
+
+  return unwrapApiData(response)
 }
 
-export const playGoldenEggDraw = (campaignId, payload = {}) => {
-  return apiRequest(`/draw-engine/campaigns/${campaignId}/play`, {
-    method: 'POST',
-    body: payload
+export const playGoldenEggDraw = async (campaignId, payload = {}) => {
+  const serialCode = String(payload.serialCode || payload.code || '').trim().toUpperCase()
+
+  const response = await http.post(`/draw-engine/campaigns/${campaignId}/play`, {
+    ...payload,
+    gameType: 'GOLDEN_EGG',
+    code: serialCode,
+    serialCode
   })
+
+  return unwrapApiData(response)
+}
+
+export default {
+  getGoldenEggCampaign,
+  verifyGoldenEggSerialCode,
+  playGoldenEggDraw
 }
