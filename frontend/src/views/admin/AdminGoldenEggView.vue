@@ -6260,60 +6260,64 @@ watch(
                     </div>
                   </div>
 
-                  <div class="mt-3 grid gap-3 xl:grid-cols-3">
+                  <div class="mt-4 space-y-4">
                     <article
                       v-for="template in databaseFrontShareTemplates"
                       :key="template.key"
-                      class="flex min-w-0 flex-col rounded-2xl border border-emerald-100 bg-white/90 p-3 shadow-sm"
+                      class="min-w-0 rounded-3xl border border-emerald-100 bg-white/95 p-4 shadow-sm sm:p-5"
                     >
-                      <div class="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p class="text-sm font-black text-slate-950">
-                            {{ template.name }}
-                          </p>
-                          <p class="mt-1 text-[11px] font-bold text-slate-500">
+                      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="min-w-0">
+                          <div class="flex flex-wrap items-center gap-2">
+                            <p class="text-base font-black text-slate-950">
+                              {{ template.name }}
+                            </p>
+                            <span class="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-black text-emerald-700">
+                              {{ template.badge }}
+                            </span>
+                          </div>
+                          <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
                             {{ template.description }}
                           </p>
                         </div>
-                        <span class="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-black text-emerald-700">
-                          {{ template.badge }}
-                        </span>
+
+                        <div class="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            class="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
+                            @click="resetDatabaseFrontShareTemplate(template)"
+                          >
+                            套用預設
+                          </button>
+                          <button
+                            type="button"
+                            class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm"
+                            @click="copyDatabaseFrontShareTemplate(template)"
+                          >
+                            複製文案
+                          </button>
+                        </div>
                       </div>
 
-                      <label class="mt-3 block">
-                        <span class="text-[11px] font-black text-slate-600">
-                          可編輯文案內容
-                        </span>
-                        <textarea
-                          v-model="databaseGameConfigForm[template.field]"
-                          rows="7"
-                          class="mt-2 w-full resize-y rounded-xl border border-emerald-100 bg-white px-3 py-2 text-xs font-bold leading-5 text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
-                          :placeholder="template.preset"
-                        />
-                      </label>
+                      <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                        <label class="block min-w-0">
+                          <span class="text-xs font-black text-slate-700">
+                            可編輯文案內容
+                          </span>
+                          <textarea
+                            v-model="databaseGameConfigForm[template.field]"
+                            rows="8"
+                            class="mt-2 w-full resize-y rounded-2xl border border-emerald-100 bg-white px-4 py-3 text-sm font-bold leading-6 text-slate-800 outline-none transition focus:border-emerald-300 focus:ring-4 focus:ring-emerald-100"
+                            :placeholder="template.preset"
+                          />
+                        </label>
 
-                      <div class="mt-3 rounded-xl bg-emerald-950/95 p-3">
-                        <p class="text-[11px] font-black text-emerald-200">
-                          實際複製預覽
-                        </p>
-                        <pre class="mt-2 min-h-[96px] whitespace-pre-wrap break-words text-[11px] font-bold leading-5 text-emerald-50">{{ template.text }}</pre>
-                      </div>
-
-                      <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1 2xl:grid-cols-2">
-                        <button
-                          type="button"
-                          class="rounded-xl bg-white px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100"
-                          @click="resetDatabaseFrontShareTemplate(template)"
-                        >
-                          套用預設
-                        </button>
-                        <button
-                          type="button"
-                          class="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white shadow-sm"
-                          @click="copyDatabaseFrontShareTemplate(template)"
-                        >
-                          複製文案
-                        </button>
+                        <div class="min-w-0 rounded-2xl bg-emerald-950/95 p-4">
+                          <p class="text-xs font-black text-emerald-200">
+                            實際複製預覽
+                          </p>
+                          <pre class="mt-3 min-h-[176px] whitespace-pre-wrap break-words text-sm font-bold leading-6 text-emerald-50">{{ template.text }}</pre>
+                        </div>
                       </div>
                     </article>
                   </div>
