@@ -9,6 +9,7 @@ import {
   downloadPlayRecordsCsvUrl,
   downloadPlayRecordsXlsxUrl
 } from '../../api/campaign'
+import http from '../../api/http'
 
 const loading = ref(true)
 const exporting = ref(false)
@@ -25,6 +26,8 @@ const emptySummary = () => ({
   claimedRewards: 0,
   pendingRewards: 0,
   winRate: 0,
+  canSelectTenant: false,
+  selectedTenant: null,
   sourceStats: {
     total: 0,
     items: []
@@ -32,6 +35,7 @@ const emptySummary = () => ({
 })
 
 const summary = ref(emptySummary())
+const tenantOptions = ref([])
 const dailyRows = ref([])
 const rewardRows = ref([])
 
@@ -48,6 +52,7 @@ const filters = ref({
   keyword: '',
   status: '',
   campaignId: '',
+  tenantId: '',
   page: 1,
   pageSize: 10
 })
@@ -86,17 +91,20 @@ const fetchReports = async () => {
       getReportSummaryApi({
         startDate: filters.value.startDate,
         endDate: filters.value.endDate,
-        campaignId: filters.value.campaignId
+        campaignId: filters.value.campaignId,
+        tenantId: filters.value.tenantId
       }),
       getReportDailyApi({
         startDate: filters.value.startDate,
         endDate: filters.value.endDate,
-        campaignId: filters.value.campaignId
+        campaignId: filters.value.campaignId,
+        tenantId: filters.value.tenantId
       }),
       getRewardRecordsApi({
         keyword: filters.value.keyword,
         status: filters.value.status,
         campaignId: filters.value.campaignId,
+        tenantId: filters.value.tenantId,
         startDate: filters.value.startDate,
         endDate: filters.value.endDate,
         page: filters.value.page,
@@ -149,11 +157,33 @@ const currentPageEnd = computed(() => {
   return Math.min(end, pagination.value.total)
 })
 
-const reportScopeText = computed(() => {
-  return summary.value.scope === 'TENANT'
-    ? '目前只顯示此商家的資料'
-    : '平台管理員檢視全部商家資料'
+const isPlatformReport = computed(() => {
+  return ['ALL', 'PLATFORM_TENANT'].includes(String(summary.value?.scope || '').toUpperCase())
 })
+
+const selectedTenantName = computed(() => {
+  return summary.value?.selectedTenant?.name || tenantOptions.value.find((item) => String(item.id) === String(filters.value.tenantId))?.name || ''
+})
+
+const reportScopeText = computed(() => {
+  const scope = String(summary.value?.scope || '').toUpperCase()
+
+  if (scope === 'ALL') return '平台總管理員目前檢視全部商家的合併資料'
+  if (scope === 'PLATFORM_TENANT') return `平台總管理員目前檢視「${selectedTenantName.value || '指定商家'}」的資料`
+
+  return '目前只顯示此商家的資料'
+})
+
+const fetchTenantOptions = async () => {
+  try {
+    const response = await http.get('/admin/reports/tenants')
+    const data = response?.data?.data || response?.data || {}
+    tenantOptions.value = safeArray(data.tenants)
+  } catch (error) {
+    console.error('取得商家篩選清單失敗', error)
+    tenantOptions.value = []
+  }
+}
 
 const formatDateTime = (value) => {
   if (!value) return '—'
@@ -198,7 +228,8 @@ const buildExportParams = () => ({
   endDate: filters.value.endDate,
   keyword: filters.value.keyword,
   status: filters.value.status,
-  campaignId: filters.value.campaignId
+  campaignId: filters.value.campaignId,
+  tenantId: filters.value.tenantId
 })
 
 const downloadByFetch = async (url, fallbackFilename) => {
@@ -266,6 +297,7 @@ const clearFilters = async () => {
     keyword: '',
     status: '',
     campaignId: '',
+    tenantId: '',
     page: 1,
     pageSize: filters.value.pageSize || 10
   }
@@ -292,8 +324,9 @@ const changePageSize = async () => {
   await fetchReports()
 }
 
-onMounted(() => {
-  fetchReports()
+onMounted(async () => {
+  await fetchTenantOptions()
+  await fetchReports()
 })
 </script>
 
@@ -307,6 +340,9 @@ onMounted(() => {
           <p class="mt-2 text-slate-500">
             查看活動摘要、每日統計、來源成效與發獎紀錄。{{ reportScopeText }}。
           </p>
+          <div class="mt-4 inline-flex rounded-2xl px-4 py-2 text-sm font-black" :class="isPlatformReport ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'">
+            {{ isPlatformReport ? '平台總管理員報表' : '商家報表' }}
+          </div>
         </div>
 
         <div class="flex flex-wrap gap-3">
@@ -395,7 +431,7 @@ onMounted(() => {
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h3 class="text-2xl font-black text-slate-900">查詢條件</h3>
-          <p class="mt-2 text-slate-500">可依日期、活動 ID、關鍵字與發獎狀態篩選資料。</p>
+          <p class="mt-2 text-slate-500">可依商家、日期、活動 ID、關鍵字與發獎狀態篩選資料。</p>
         </div>
 
         <div class="flex flex-wrap gap-3">
@@ -430,7 +466,24 @@ onMounted(() => {
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-5 xl:grid-cols-7">
+      <div class="grid grid-cols-1 gap-5 xl:grid-cols-8">
+        <div v-if="isPlatformReport" class="xl:col-span-2">
+          <label class="mb-2 block text-sm font-bold text-slate-700">商家篩選</label>
+          <select
+            v-model="filters.tenantId"
+            class="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500"
+          >
+            <option value="">全部商家</option>
+            <option
+              v-for="tenant in tenantOptions"
+              :key="tenant.id"
+              :value="String(tenant.id)"
+            >
+              {{ tenant.name }} / {{ tenant.slug }}
+            </option>
+          </select>
+        </div>
+
         <div>
           <label class="mb-2 block text-sm font-bold text-slate-700">開始日期</label>
           <input

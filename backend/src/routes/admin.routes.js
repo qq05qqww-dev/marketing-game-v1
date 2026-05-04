@@ -896,11 +896,31 @@ const canAccessAllTenants = (user = {}) => {
   return Boolean(user?.isSuperAdmin || PLATFORM_ADMIN_ROLES.has(role))
 }
 
-const getScopedTenantId = (req) => {
-  if (canAccessAllTenants(req.user)) return null
+const getRequestedTenantId = (req) => {
+  const rawTenantId = req.query?.tenantId
 
+  if (rawTenantId === undefined || rawTenantId === null || rawTenantId === '') {
+    return null
+  }
+
+  const tenantId = Number(rawTenantId)
+  return Number.isInteger(tenantId) && tenantId > 0 ? tenantId : null
+}
+
+const getScopedTenantId = (req) => {
+  // 平台管理員：預設看全部；如果 query 帶 tenantId，則只看指定商家。
+  if (canAccessAllTenants(req.user)) {
+    return getRequestedTenantId(req)
+  }
+
+  // 商家帳號：一律只能看自己的 tenantId，忽略前端傳來的 tenantId。
   const tenantId = Number(req.user?.tenantId)
   return Number.isInteger(tenantId) && tenantId > 0 ? tenantId : -1
+}
+
+const getReportScope = (req, scopedTenantId = getScopedTenantId(req)) => {
+  if (!canAccessAllTenants(req.user)) return 'TENANT'
+  return scopedTenantId ? 'PLATFORM_TENANT' : 'ALL'
 }
 
 const buildDateWhere = (startDate, endDate, fieldName = 'createdAt') => {
@@ -1074,6 +1094,42 @@ const sendRealXlsx = async (res, filename, sheetName, rows) => {
   return res.end()
 }
 
+// 商家篩選清單：平台管理員可取得全部商家；商家帳號只回傳自己的商家。
+router.get('/reports/tenants', async (req, res) => {
+  try {
+    const tenantId = getScopedTenantId(req)
+
+    const tenants = await prisma.tenant.findMany({
+      where: tenantId ? { id: tenantId } : {},
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        status: true
+      },
+      orderBy: {
+        id: 'asc'
+      }
+    })
+
+    return res.json({
+      success: true,
+      data: {
+        scope: getReportScope(req, tenantId),
+        canSelectTenant: canAccessAllTenants(req.user),
+        tenants
+      }
+    })
+  } catch (error) {
+    console.error('取得報表商家清單失敗:', error)
+    return res.status(500).json({
+      success: false,
+      message: '取得報表商家清單失敗',
+      error: String(error)
+    })
+  }
+})
+
 router.get('/reports/summary', async (req, res) => {
   try {
     const playWhere = buildPlayWhere(req, req.query)
@@ -1108,8 +1164,15 @@ router.get('/reports/summary', async (req, res) => {
     return res.json({
       success: true,
       data: {
-        scope: tenantId ? 'TENANT' : 'ALL',
+        scope: getReportScope(req, tenantId),
+        canSelectTenant: canAccessAllTenants(req.user),
         tenantId: tenantId || null,
+        selectedTenant: tenantId
+          ? await prisma.tenant.findUnique({
+              where: { id: tenantId },
+              select: { id: true, name: true, slug: true, status: true }
+            })
+          : null,
         totalCampaigns: campaigns,
         totalPrizes: prizes,
         totalUsers: users,
