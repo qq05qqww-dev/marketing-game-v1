@@ -17,7 +17,37 @@ export const useAuthStore = defineStore('auth', {
 
   getters: {
     isLoggedIn: (state) => !!state.token,
-    isAdmin: (state) => String(state.user?.role || '').toUpperCase() === 'ADMIN'
+    currentRole: (state) => String(state.user?.role || 'USER').toUpperCase(),
+    isSuperAdmin: (state) => ['ADMIN', 'SUPER_ADMIN'].includes(String(state.user?.role || '').toUpperCase()),
+    isMerchantAdmin: (state) => String(state.user?.role || '').toUpperCase() === 'MERCHANT_ADMIN',
+    isMerchantStaff: (state) => String(state.user?.role || '').toUpperCase() === 'MERCHANT_STAFF',
+    isMerchantUser: (state) => ['MERCHANT_ADMIN', 'MERCHANT_STAFF'].includes(String(state.user?.role || '').toUpperCase()),
+    isAdmin: (state) => ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF'].includes(String(state.user?.role || '').toUpperCase()),
+    tenantId: (state) => state.user?.tenantId || null,
+    tenantName: (state) => state.user?.tenantName || state.user?.tenant?.name || '',
+    tenantSlug: (state) => state.user?.tenantSlug || state.user?.tenant?.slug || '',
+    tenantStatus: (state) => state.user?.tenantStatus || state.user?.tenant?.status || '',
+    tenantDisplayName: (state) => {
+      const role = String(state.user?.role || '').toUpperCase()
+
+      if (['ADMIN', 'SUPER_ADMIN'].includes(role)) {
+        return '平台總管理員'
+      }
+
+      return state.user?.tenantName || state.user?.tenant?.name || '未綁定商家'
+    },
+    roleDisplayName: (state) => {
+      const role = String(state.user?.role || 'USER').toUpperCase()
+      const map = {
+        ADMIN: '平台總管理員',
+        SUPER_ADMIN: '平台總管理員',
+        MERCHANT_ADMIN: '商家管理員',
+        MERCHANT_STAFF: '商家員工',
+        USER: '一般會員'
+      }
+
+      return map[role] || role
+    }
   },
 
   actions: {

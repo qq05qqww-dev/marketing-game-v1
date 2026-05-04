@@ -29,7 +29,28 @@ const {
 const isLoggedIn = computed(() => authStore.isLoggedIn)
 const currentUser = computed(() => authStore.user || {})
 const role = computed(() => String(currentUser.value?.role || '').toUpperCase())
-const isAdmin = computed(() => role.value === 'ADMIN')
+const adminRoles = ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
+const isAdmin = computed(() => adminRoles.includes(role.value))
+
+const roleLabel = computed(() => {
+  const map = {
+    ADMIN: '平台總管理員',
+    SUPER_ADMIN: '平台總管理員',
+    MERCHANT_ADMIN: '商家管理員',
+    MERCHANT_STAFF: '商家員工',
+    USER: '一般會員'
+  }
+
+  return map[role.value] || role.value || '一般會員'
+})
+
+const tenantLabel = computed(() => {
+  if (['ADMIN', 'SUPER_ADMIN'].includes(role.value)) {
+    return '平台總管理員'
+  }
+
+  return currentUser.value?.tenantName || currentUser.value?.tenant?.name || '未綁定商家'
+})
 
 const avatarText = computed(() => {
   return String(currentUser.value?.name || currentUser.value?.email || '?').slice(0, 1).toUpperCase()
@@ -216,7 +237,7 @@ watch(
                 {{ currentUser.name || '會員' }}
               </div>
               <div class="text-[11px] text-slate-500">
-                {{ currentUser.authProvider || 'EMAIL' }} / {{ currentUser.memberLevel || 'NORMAL' }}
+                {{ roleLabel }} / {{ tenantLabel }}
               </div>
             </div>
           </button>
@@ -298,7 +319,7 @@ watch(
                 {{ currentUser.email || '尚未取得 Email' }}
               </div>
               <div class="mt-1 text-xs font-black text-slate-500">
-                {{ currentUser.authProvider || 'EMAIL' }} / {{ currentUser.memberLevel || 'NORMAL' }} / {{ currentUser.role || 'USER' }}
+                {{ roleLabel }} / {{ tenantLabel }} / {{ currentUser.role || 'USER' }}
               </div>
             </div>
           </div>

@@ -1,5 +1,5 @@
-// Multi Game Platform V2.2 Stable
-// 第 309 批：SerialCode 序號 Service
+// Multi Game Platform V2.3 Tenant Edition
+// 第 5 批：SerialCode 序號 API 依 tenantId 隔離版
 //
 // 建議放置位置：
 // backend/src/services/serialCode.service.js
@@ -93,7 +93,33 @@ const getEffectiveStatus = (serialCode) => {
   return serialCode.status || 'UNUSED'
 }
 
-const buildSerialCodeWhere = (campaignId, query = {}) => {
+const getUserRole = (currentUser = {}) => {
+  return String(currentUser?.role || '').toUpperCase()
+}
+
+const getUserTenantId = (currentUser = {}) => {
+  const tenantId = Number(currentUser?.tenantId)
+
+  return Number.isInteger(tenantId) && tenantId > 0 ? tenantId : null
+}
+
+const canAccessAllTenants = (currentUser = {}) => {
+  const role = getUserRole(currentUser)
+
+  return Boolean(
+    currentUser?.isSuperAdmin ||
+    role === 'SUPER_ADMIN' ||
+    role === 'ADMIN'
+  )
+}
+
+const createForbiddenError = (message = '找不到活動，或此帳號沒有權限操作這個活動') => {
+  const error = new Error(message)
+  error.status = 404
+  return error
+}
+
+const assertCampaignAccess = async (campaignId, currentUser = null) => {
   const normalizedCampaignId = normalizeId(campaignId)
 
   if (!normalizedCampaignId) {
@@ -102,8 +128,96 @@ const buildSerialCodeWhere = (campaignId, query = {}) => {
     throw error
   }
 
+  const campaign = await prisma.campaign.findUnique({
+    where: {
+      id: normalizedCampaignId
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      title: true,
+      status: true
+    }
+  })
+
+  if (!campaign) {
+    throw createForbiddenError()
+  }
+
+  // Public / front-end read or redeem API: no登入者時，維持舊前台可依 campaignId 使用。
+  if (!currentUser) {
+    return campaign
+  }
+
+  if (canAccessAllTenants(currentUser)) {
+    return campaign
+  }
+
+  const userTenantId = getUserTenantId(currentUser)
+
+  if (!userTenantId || Number(campaign.tenantId) !== userTenantId) {
+    throw createForbiddenError()
+  }
+
+  return campaign
+}
+
+const assertSerialCodeAccess = async (id, currentUser = null) => {
+  const serialCodeId = normalizeId(id)
+
+  if (!serialCodeId) {
+    const error = new Error('序號 ID 不正確')
+    error.status = 400
+    throw error
+  }
+
+  const serialCode = await prisma.serialCode.findUnique({
+    where: {
+      id: serialCodeId
+    },
+    include: {
+      campaign: {
+        select: {
+          id: true,
+          tenantId: true,
+          title: true
+        }
+      }
+    }
+  })
+
+  if (!serialCode) {
+    const error = new Error('找不到序號')
+    error.status = 404
+    throw error
+  }
+
+  if (!currentUser || canAccessAllTenants(currentUser)) {
+    return serialCode
+  }
+
+  const userTenantId = getUserTenantId(currentUser)
+  const serialTenantId = Number(serialCode.tenantId || serialCode.campaign?.tenantId)
+
+  if (!userTenantId || serialTenantId !== userTenantId) {
+    const error = new Error('找不到序號，或此帳號沒有權限操作這組序號')
+    error.status = 404
+    throw error
+  }
+
+  return serialCode
+}
+
+const buildSerialCodeWhere = async (campaignId, query = {}, currentUser = null) => {
+  const campaign = await assertCampaignAccess(campaignId, currentUser)
+
   const where = {
-    campaignId: normalizedCampaignId
+    campaignId: campaign.id
+  }
+
+  // 商家帳號查詢序號時，強制加 tenantId，避免不同商家資料混在一起。
+  if (campaign.tenantId) {
+    where.tenantId = campaign.tenantId
   }
 
   if (query.status) {
@@ -161,11 +275,14 @@ const buildSerialCodeWhere = (campaignId, query = {}) => {
     ]
   }
 
-  return where
+  return {
+    campaign,
+    where
+  }
 }
 
-export const getSerialCodesByCampaignId = async (campaignId, query = {}) => {
-  const where = buildSerialCodeWhere(campaignId, query)
+export const getSerialCodesByCampaignId = async (campaignId, query = {}, currentUser = null) => {
+  const { where } = await buildSerialCodeWhere(campaignId, query, currentUser)
 
   const serialCodes = await prisma.serialCode.findMany({
     where,
@@ -180,8 +297,8 @@ export const getSerialCodesByCampaignId = async (campaignId, query = {}) => {
   }))
 }
 
-export const getSerialCodeStats = async (campaignId) => {
-  const serialCodes = await getSerialCodesByCampaignId(campaignId)
+export const getSerialCodeStats = async (campaignId, currentUser = null) => {
+  const serialCodes = await getSerialCodesByCampaignId(campaignId, {}, currentUser)
 
   const stats = {
     total: serialCodes.length,
@@ -211,27 +328,8 @@ export const getSerialCodeStats = async (campaignId) => {
   return stats
 }
 
-export const createSerialCodeForCampaign = async (campaignId, payload = {}) => {
-  const normalizedCampaignId = normalizeId(campaignId)
-
-  if (!normalizedCampaignId) {
-    const error = new Error('活動 ID 不正確')
-    error.status = 400
-    throw error
-  }
-
-  const campaign = await prisma.campaign.findUnique({
-    where: {
-      id: normalizedCampaignId
-    }
-  })
-
-  if (!campaign) {
-    const error = new Error('找不到活動')
-    error.status = 404
-    throw error
-  }
-
+export const createSerialCodeForCampaign = async (campaignId, payload = {}, currentUser = null) => {
+  const campaign = await assertCampaignAccess(campaignId, currentUser)
   const code = normalizeCode(payload.code)
 
   if (!code || code.length < 6) {
@@ -242,7 +340,8 @@ export const createSerialCodeForCampaign = async (campaignId, payload = {}) => {
 
   return prisma.serialCode.create({
     data: {
-      campaignId: normalizedCampaignId,
+      campaignId: campaign.id,
+      tenantId: campaign.tenantId || null,
       code,
       rewardChance: normalizeRewardChance(payload.rewardChance),
       status: normalizeStatus(payload.status),
@@ -256,14 +355,8 @@ export const createSerialCodeForCampaign = async (campaignId, payload = {}) => {
   })
 }
 
-export const bulkCreateSerialCodesForCampaign = async (campaignId, payload = {}) => {
-  const normalizedCampaignId = normalizeId(campaignId)
-
-  if (!normalizedCampaignId) {
-    const error = new Error('活動 ID 不正確')
-    error.status = 400
-    throw error
-  }
+export const bulkCreateSerialCodesForCampaign = async (campaignId, payload = {}, currentUser = null) => {
+  const campaign = await assertCampaignAccess(campaignId, currentUser)
 
   const rawCodes = Array.isArray(payload.codes)
     ? payload.codes
@@ -304,7 +397,8 @@ export const bulkCreateSerialCodesForCampaign = async (campaignId, payload = {})
 
   await prisma.serialCode.createMany({
     data: newCodes.map((code) => ({
-      campaignId: normalizedCampaignId,
+      campaignId: campaign.id,
+      tenantId: campaign.tenantId || null,
       code,
       rewardChance: normalizeRewardChance(payload.rewardChance),
       status: 'UNUSED',
@@ -315,13 +409,19 @@ export const bulkCreateSerialCodesForCampaign = async (campaignId, payload = {})
     skipDuplicates: true
   })
 
+  const createdWhere = {
+    campaignId: campaign.id,
+    code: {
+      in: newCodes
+    }
+  }
+
+  if (campaign.tenantId) {
+    createdWhere.tenantId = campaign.tenantId
+  }
+
   const created = await prisma.serialCode.findMany({
-    where: {
-      campaignId: normalizedCampaignId,
-      code: {
-        in: newCodes
-      }
-    },
+    where: createdWhere,
     orderBy: {
       id: 'desc'
     }
@@ -334,26 +434,8 @@ export const bulkCreateSerialCodesForCampaign = async (campaignId, payload = {})
   }
 }
 
-export const generateSerialCodesForCampaign = async (campaignId, payload = {}) => {
-  const normalizedCampaignId = normalizeId(campaignId)
-
-  if (!normalizedCampaignId) {
-    const error = new Error('活動 ID 不正確')
-    error.status = 400
-    throw error
-  }
-
-  const campaign = await prisma.campaign.findUnique({
-    where: {
-      id: normalizedCampaignId
-    }
-  })
-
-  if (!campaign) {
-    const error = new Error('找不到活動')
-    error.status = 404
-    throw error
-  }
+export const generateSerialCodesForCampaign = async (campaignId, payload = {}, currentUser = null) => {
+  const campaign = await assertCampaignAccess(campaignId, currentUser)
 
   const count = Math.min(500, Math.max(1, Number(payload.count || 1)))
   const rewardChance = normalizeRewardChance(payload.rewardChance)
@@ -386,7 +468,8 @@ export const generateSerialCodesForCampaign = async (campaignId, payload = {}) =
 
   await prisma.serialCode.createMany({
     data: newCodes.map((code) => ({
-      campaignId: normalizedCampaignId,
+      campaignId: campaign.id,
+      tenantId: campaign.tenantId || null,
       code,
       rewardChance,
       status: 'UNUSED',
@@ -397,13 +480,19 @@ export const generateSerialCodesForCampaign = async (campaignId, payload = {}) =
     skipDuplicates: true
   })
 
+  const createdWhere = {
+    campaignId: campaign.id,
+    code: {
+      in: newCodes
+    }
+  }
+
+  if (campaign.tenantId) {
+    createdWhere.tenantId = campaign.tenantId
+  }
+
   const created = await prisma.serialCode.findMany({
-    where: {
-      campaignId: normalizedCampaignId,
-      code: {
-        in: newCodes
-      }
-    },
+    where: createdWhere,
     orderBy: {
       id: 'desc'
     }
@@ -417,15 +506,8 @@ export const generateSerialCodesForCampaign = async (campaignId, payload = {}) =
   }
 }
 
-export const updateSerialCode = async (id, payload = {}) => {
-  const serialCodeId = normalizeId(id)
-
-  if (!serialCodeId) {
-    const error = new Error('序號 ID 不正確')
-    error.status = 400
-    throw error
-  }
-
+export const updateSerialCode = async (id, payload = {}, currentUser = null) => {
+  const serialCode = await assertSerialCodeAccess(id, currentUser)
   const data = {}
 
   if (payload.rewardChance !== undefined) {
@@ -462,22 +544,22 @@ export const updateSerialCode = async (id, payload = {}) => {
 
   return prisma.serialCode.update({
     where: {
-      id: serialCodeId
+      id: serialCode.id
     },
     data
   })
 }
 
-export const markSerialCodeDistributed = async (id, payload = {}) => {
+export const markSerialCodeDistributed = async (id, payload = {}, currentUser = null) => {
   return updateSerialCode(id, {
     distributedAt: new Date(),
     distributedTo: payload.distributedTo || null,
     distributedChannel: payload.distributedChannel || null,
     note: payload.note
-  })
+  }, currentUser)
 }
 
-export const bulkUpdateSerialCodesByIds = async (ids = [], payload = {}) => {
+export const bulkUpdateSerialCodesByIds = async (ids = [], payload = {}, currentUser = null) => {
   const normalizedIds = ids
     .map(normalizeId)
     .filter(Boolean)
@@ -486,6 +568,24 @@ export const bulkUpdateSerialCodesByIds = async (ids = [], payload = {}) => {
     const error = new Error('請提供要批次更新的序號 ID')
     error.status = 400
     throw error
+  }
+
+  const where = {
+    id: {
+      in: normalizedIds
+    }
+  }
+
+  if (currentUser && !canAccessAllTenants(currentUser)) {
+    const userTenantId = getUserTenantId(currentUser)
+
+    if (!userTenantId) {
+      const error = new Error('此帳號沒有商家權限，不能批次更新序號')
+      error.status = 403
+      throw error
+    }
+
+    where.tenantId = userTenantId
   }
 
   const data = {}
@@ -515,20 +615,12 @@ export const bulkUpdateSerialCodesByIds = async (ids = [], payload = {}) => {
   }
 
   const result = await prisma.serialCode.updateMany({
-    where: {
-      id: {
-        in: normalizedIds
-      }
-    },
+    where,
     data
   })
 
   const updated = await prisma.serialCode.findMany({
-    where: {
-      id: {
-        in: normalizedIds
-      }
-    },
+    where,
     orderBy: {
       id: 'desc'
     }
@@ -540,8 +632,8 @@ export const bulkUpdateSerialCodesByIds = async (ids = [], payload = {}) => {
   }
 }
 
-export const bulkUpdateSerialCodesByFilter = async (campaignId, query = {}, payload = {}) => {
-  const where = buildSerialCodeWhere(campaignId, query)
+export const bulkUpdateSerialCodesByFilter = async (campaignId, query = {}, payload = {}, currentUser = null) => {
+  const { where } = await buildSerialCodeWhere(campaignId, query, currentUser)
 
   const targets = await prisma.serialCode.findMany({
     where,
@@ -550,15 +642,16 @@ export const bulkUpdateSerialCodesByFilter = async (campaignId, query = {}, payl
     }
   })
 
-  return bulkUpdateSerialCodesByIds(targets.map((item) => item.id), payload)
+  return bulkUpdateSerialCodesByIds(targets.map((item) => item.id), payload, currentUser)
 }
 
-export const exportSerialCodesCsv = async (campaignId, query = {}) => {
-  const serialCodes = await getSerialCodesByCampaignId(campaignId, query)
+export const exportSerialCodesCsv = async (campaignId, query = {}, currentUser = null) => {
+  const serialCodes = await getSerialCodesByCampaignId(campaignId, query, currentUser)
 
   const rows = [
     [
       'id',
+      'tenantId',
       'campaignId',
       'code',
       'rewardChance',
@@ -577,6 +670,7 @@ export const exportSerialCodesCsv = async (campaignId, query = {}) => {
     ],
     ...serialCodes.map((item) => [
       item.id,
+      item.tenantId || '',
       item.campaignId,
       item.code,
       item.rewardChance,
@@ -601,14 +695,8 @@ export const exportSerialCodesCsv = async (campaignId, query = {}) => {
 }
 
 export const redeemSerialCode = async (campaignId, payload = {}) => {
-  const normalizedCampaignId = normalizeId(campaignId)
+  const campaign = await assertCampaignAccess(campaignId, null)
   const code = normalizeCode(payload.code)
-
-  if (!normalizedCampaignId) {
-    const error = new Error('活動 ID 不正確')
-    error.status = 400
-    throw error
-  }
 
   if (!code) {
     const error = new Error('請輸入序號')
@@ -616,11 +704,17 @@ export const redeemSerialCode = async (campaignId, payload = {}) => {
     throw error
   }
 
+  const where = {
+    campaignId: campaign.id,
+    code
+  }
+
+  if (campaign.tenantId) {
+    where.tenantId = campaign.tenantId
+  }
+
   const serialCode = await prisma.serialCode.findFirst({
-    where: {
-      campaignId: normalizedCampaignId,
-      code
-    }
+    where
   })
 
   if (!serialCode) {
@@ -666,18 +760,12 @@ export const redeemSerialCode = async (campaignId, payload = {}) => {
   }
 }
 
-export const deleteSerialCode = async (id) => {
-  const serialCodeId = normalizeId(id)
-
-  if (!serialCodeId) {
-    const error = new Error('序號 ID 不正確')
-    error.status = 400
-    throw error
-  }
+export const deleteSerialCode = async (id, currentUser = null) => {
+  const serialCode = await assertSerialCodeAccess(id, currentUser)
 
   return prisma.serialCode.delete({
     where: {
-      id: serialCodeId
+      id: serialCode.id
     }
   })
 }
