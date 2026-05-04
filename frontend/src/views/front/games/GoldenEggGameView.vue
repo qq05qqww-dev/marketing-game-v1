@@ -371,6 +371,43 @@ const serialMessageClass = computed(() => {
   return 'text-yellow-50'
 })
 
+const getSerialVerifyStatusMessage = (result = {}) => {
+  const status = String(result?.status || '').toUpperCase()
+  const apiMessage = String(result?.message || '').trim()
+
+  if (result?.valid) {
+    const remainingChance = Number(
+      result?.serialCode?.remainingChance
+        ?? result?.serialCode?.rewardChance
+        ?? result?.remainingChance
+        ?? result?.rewardChance
+        ?? 1
+    )
+
+    return `序號驗證成功，目前可用 ${Math.max(1, remainingChance)} 次。`
+  }
+
+  if (status === 'NOT_FOUND') return '找不到此序號，請確認是否輸入正確或是否為此活動的序號。'
+  if (status === 'USED') return '此序號可用次數已用完，請更換新的抽獎序號。'
+  if (status === 'DISABLED') return '此序號已停用，請聯絡主辦單位確認。'
+  if (status === 'EXPIRED') return '此序號已過期，請更換新的抽獎序號。'
+  if (status === 'INVALID') return '序號格式不正確，請重新輸入。'
+
+  return apiMessage || campaign.serialRedeemErrorText || '序號無效、已使用或不存在。'
+}
+
+const getSerialVerifyErrorMessage = (error) => {
+  const payload = error?.response?.data?.data || error?.response?.data || error?.data || null
+  const status = String(payload?.status || '').toUpperCase()
+
+  if (status === 'NOT_FOUND') return '找不到此序號，請確認是否輸入正確或是否為此活動的序號。'
+  if (status === 'USED') return '此序號可用次數已用完，請更換新的抽獎序號。'
+  if (status === 'DISABLED') return '此序號已停用，請聯絡主辦單位確認。'
+  if (status === 'EXPIRED') return '此序號已過期，請更換新的抽獎序號。'
+
+  return payload?.message || error?.message || campaign.serialRedeemErrorText || '序號驗證失敗，請稍後再試。'
+}
+
 
 
 const mapApiPrizeToLocalPrize = (prize = {}, index = 0) => {
@@ -1160,16 +1197,19 @@ const activityCountdownNumberStyle = computed(() => {
 })
 
 const playerSummaryItems = computed(() => {
+  const verifyingText = isSerialRedeeming.value ? '驗證中' : ''
+  const serialStatusText = verifyingText || (remoteVerifiedSerialCode.value ? '已驗證' : '未驗證')
+
   return [
     {
       label: '序號狀態',
-      value: remoteVerifiedSerialCode.value ? '已驗證' : '未驗證',
+      value: serialStatusText,
       subText: remoteVerifiedSerialCode.value ? '可以砸蛋' : '請先輸入序號'
     },
     {
       label: '可用次數',
       value: player.chances,
-      subText: '序號剩餘'
+      subText: remoteVerifiedSerialCode.value ? '序號剩餘' : '驗證後開放'
     },
     {
       label: '金蛋數',
@@ -1727,6 +1767,8 @@ const redeemSerialCode = async () => {
   }
 
   isSerialRedeeming.value = true
+  remoteSerialMessageType.value = 'info'
+  serialRedeemMessage.value = '正在檢查序號，請稍候...'
 
   try {
     if (isOnlineMode.value && onlineCampaignId.value) {
@@ -1735,7 +1777,10 @@ const redeemSerialCode = async () => {
 
       if (!result?.valid) {
         remoteSerialMessageType.value = 'error'
-        serialRedeemMessage.value = result.message || campaign.serialRedeemErrorText || '序號無效、已使用或不存在。'
+        remoteVerifiedSerialCode.value = ''
+        player.chances = 0
+        updateChanceText()
+        serialRedeemMessage.value = getSerialVerifyStatusMessage(result)
         return
       }
 
@@ -1746,14 +1791,17 @@ const redeemSerialCode = async () => {
       updateChanceText()
       serialCodeInput.value = ''
       remoteSerialMessageType.value = 'success'
-      serialRedeemMessage.value = `${campaign.serialRedeemSuccessText || '序號驗證成功，請選擇一顆金蛋。'}｜此序號目前可用 ${rewardChance} 次。`
+      serialRedeemMessage.value = getSerialVerifyStatusMessage(result)
       return
     }
     const codes = getSerialCodes()
     const target = codes.find((item) => String(item.code || '').toUpperCase() === code)
 
     if (!target || target.usedAt || target.isEnabled === false) {
-      serialRedeemMessage.value = campaign.serialRedeemErrorText || '序號無效、已使用或不存在。'
+      remoteSerialMessageType.value = 'error'
+      serialRedeemMessage.value = target?.usedAt
+        ? '此序號可用次數已用完，請更換新的抽獎序號。'
+        : '找不到此序號，請確認是否輸入正確或是否為此活動的序號。'
       return
     }
 
@@ -1768,7 +1816,21 @@ const redeemSerialCode = async () => {
     player.chances += rewardChance
     updateChanceText()
     serialCodeInput.value = ''
+    remoteSerialMessageType.value = 'success'
     serialRedeemMessage.value = `${campaign.serialRedeemSuccessText || '序號驗證成功，請選擇一顆金蛋。'}目前可用 ${player.chances} 次。`
+  } catch (error) {
+    console.error('序號驗證失敗:', error)
+    serialRedeemErrorCount.value += 1
+    remoteSerialMessageType.value = 'error'
+    remoteVerifiedSerialCode.value = ''
+    player.chances = 0
+    updateChanceText()
+
+    if (serialRedeemErrorCount.value >= Number(campaign.serialRedeemMaxErrorCount || 5)) {
+      lockSerialRedeem()
+    }
+
+    serialRedeemMessage.value = getSerialVerifyErrorMessage(error)
   } finally {
     isSerialRedeeming.value = false
   }
@@ -2304,7 +2366,7 @@ onUnmounted(() => {
                 :placeholder="campaign.serialRedeemPlaceholder"
                 class="min-h-[48px] flex-1 rounded-2xl border border-white/15 px-4 font-black uppercase outline-none placeholder:text-slate-400"
                 :style="serialRedeemInputStyle"
-                :disabled="!isActivityPlayable || isCracking || isSerialRedeeming"
+                :disabled="!isActivityPlayable || isCracking || isSerialRedeeming || isSerialRedeemLocked"
                 @keyup.enter="redeemSerialCode"
               />
 
@@ -2312,16 +2374,17 @@ onUnmounted(() => {
                 type="button"
                 class="rounded-2xl px-5 py-3 font-black shadow-xl transition hover:-translate-y-0.5 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
                 :style="serialRedeemButtonStyle"
-                :disabled="!isActivityPlayable || isCracking || isSerialRedeeming"
+                :disabled="!isActivityPlayable || isCracking || isSerialRedeeming || isSerialRedeemLocked"
                 @click="redeemSerialCode"
               >
-                {{ isSerialRedeemLocked ? `${serialRedeemLockLeftSeconds} 秒後再試` : campaign.serialRedeemButtonText }}
+                {{ isSerialRedeeming ? '正在檢查序號...' : (isSerialRedeemLocked ? `${serialRedeemLockLeftSeconds} 秒後再試` : campaign.serialRedeemButtonText) }}
               </button>
             </div>
 
             <p
               v-if="serialRedeemMessage"
-              class="mt-2 rounded-2xl bg-white/12 px-3 py-2 text-xs font-black text-yellow-50"
+              class="mt-2 rounded-2xl bg-white/12 px-3 py-2 text-xs font-black"
+              :class="serialMessageClass"
             >
               {{ serialRedeemMessage }}
             </p>
