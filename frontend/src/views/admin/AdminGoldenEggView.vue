@@ -630,7 +630,8 @@ const previewUrl = computed(() => {
   params.set('adminPreview', '1')
 
   const campaignId = Number(databaseCampaignId.value || databaseCampaign.value?.id || 0)
-  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || user?.tenantSlug || '').trim()
+  const storedUser = getStoredAdminUser()
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || storedUser?.tenantSlug || '').trim()
 
   // 第 19 批修正：右側 iframe 預覽必須帶 campaignId / tenantSlug，
   // 才會走正式 DrawEngine verify-serial API，而不是舊 localStorage 序號池。
@@ -1771,11 +1772,16 @@ const refreshPreview = () => {
 }
 
 const openPreviewInNewTab = () => {
-  const url = `${window.location.origin}/games/golden-egg?preview=${Date.now()}`
+  const storedUser = getStoredAdminUser()
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || storedUser?.tenantSlug || '').trim()
+  const url = databaseFrontUrl.value || (tenantSlug ? `${window.location.origin}/play/${tenantSlug}/golden-egg` : `${window.location.origin}${previewUrl.value}`)
+
   window.open(url, '_blank', 'noopener,noreferrer')
   addGameConfigOperationLog({
     title: '開新分頁查看前台',
-    description: '已開啟目前前台預覽網址。',
+    description: tenantSlug
+      ? `已開啟商家專屬前台網址：/play/${tenantSlug}/golden-egg`
+      : '已開啟目前前台預覽網址。',
     type: 'info'
   })
 }
@@ -3247,6 +3253,22 @@ const exportSettings = () => {
 }
 
 const goFront = () => {
+  const storedUser = getStoredAdminUser()
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || storedUser?.tenantSlug || '').trim()
+  const url = databaseFrontUrl.value || (tenantSlug ? `${window.location.origin}/play/${tenantSlug}/golden-egg` : '')
+
+  if (url) {
+    window.open(url, '_blank', 'noopener,noreferrer')
+    addGameConfigOperationLog({
+      title: '開啟前台',
+      description: tenantSlug
+        ? `已開啟商家專屬前台網址：/play/${tenantSlug}/golden-egg`
+        : '已開啟目前活動的前台網址。',
+      type: 'info'
+    })
+    return
+  }
+
   router.push('/games/golden-egg')
 }
 
