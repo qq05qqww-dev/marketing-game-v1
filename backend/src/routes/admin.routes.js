@@ -1442,6 +1442,173 @@ const getRewardExportRows = async (req, query = {}) => {
   }))
 }
 
+
+const getPrizePerformanceRows = async (req, query = {}) => {
+  const tenantId = getScopedTenantId(req)
+  const tenantWhere = tenantId ? { tenantId } : {}
+  const campaignId = query.campaignId ? Number(query.campaignId) : null
+
+  const prizeWhere = {
+    ...tenantWhere,
+    ...(campaignId ? { campaignId } : {})
+  }
+
+  const playWhere = buildPlayWhere(req, query)
+  const rewardWhere = buildRewardRecordWhere(req, query)
+
+  const [prizes, totalPlaysInScope] = await Promise.all([
+    prisma.prize.findMany({
+      where: prizeWhere,
+      include: {
+        tenant: true,
+        campaign: true
+      },
+      orderBy: [
+        { campaignId: 'desc' },
+        { sortOrder: 'asc' },
+        { id: 'asc' }
+      ]
+    }),
+    prisma.playRecord.count({
+      where: playWhere
+    })
+  ])
+
+  const rows = await Promise.all(
+    prizes.map(async (prize) => {
+      const prizePlayWhere = {
+        ...playWhere,
+        prizeId: prize.id
+      }
+
+      const prizeRewardWhere = {
+        ...rewardWhere,
+        prizeId: prize.id
+      }
+
+      const [hitCount, winCount, rewardCount, claimedCount, cancelledCount] = await Promise.all([
+        prisma.playRecord.count({
+          where: prizePlayWhere
+        }),
+        prisma.playRecord.count({
+          where: {
+            ...prizePlayWhere,
+            isWin: true
+          }
+        }),
+        prisma.rewardRecord.count({
+          where: prizeRewardWhere
+        }),
+        prisma.rewardRecord.count({
+          where: {
+            ...prizeRewardWhere,
+            status: 'CLAIMED'
+          }
+        }),
+        prisma.rewardRecord.count({
+          where: {
+            ...prizeRewardWhere,
+            status: 'CANCELLED'
+          }
+        })
+      ])
+
+      const pendingCount = Math.max(0, rewardCount - claimedCount - cancelledCount)
+      const stockTotal = Number(prize.stockTotal || 0)
+      const stockUsed = Number(prize.stockUsed || 0)
+      const remainStock = Number(prize.remainStock || 0)
+      const effectiveTotalStock = stockTotal > 0 ? stockTotal : stockUsed + remainStock
+      const stockUsageRate = effectiveTotalStock > 0
+        ? Number(((stockUsed / effectiveTotalStock) * 100).toFixed(2))
+        : 0
+      const winRate = totalPlaysInScope > 0
+        ? Number(((winCount / totalPlaysInScope) * 100).toFixed(2))
+        : 0
+      const claimRate = rewardCount > 0
+        ? Number(((claimedCount / rewardCount) * 100).toFixed(2))
+        : 0
+
+      return {
+        id: prize.id,
+        tenantId: prize.tenantId || '',
+        tenantName: prize.tenant?.name || '',
+        campaignId: prize.campaignId || '',
+        campaignTitle: prize.campaign?.title || '',
+        prizeTitle: prize.title || '',
+        prizeType: prize.type || '',
+        prizeStatus: prize.status || '',
+        probability: Number(prize.probability || 0),
+        stockTotal,
+        stockUsed,
+        remainStock,
+        hitCount,
+        winCount,
+        rewardCount,
+        claimedCount,
+        pendingCount,
+        cancelledCount,
+        winRate,
+        claimRate,
+        stockUsageRate
+      }
+    })
+  )
+
+  return rows.sort((a, b) => {
+    if (Number(b.winCount || 0) !== Number(a.winCount || 0)) {
+      return Number(b.winCount || 0) - Number(a.winCount || 0)
+    }
+
+    return Number(a.remainStock || 0) - Number(b.remainStock || 0)
+  })
+}
+
+router.get('/reports/prize-performance', async (req, res) => {
+  try {
+    const rows = await getPrizePerformanceRows(req, req.query)
+
+    return res.json({
+      success: true,
+      data: rows
+    })
+  } catch (error) {
+    console.error('取得獎項成效統計失敗:', error)
+    return res.status(500).json({
+      success: false,
+      message: '取得獎項成效統計失敗',
+      error: String(error)
+    })
+  }
+})
+
+router.get('/reports/prize-performance/csv', async (req, res) => {
+  try {
+    const rows = await getPrizePerformanceRows(req, req.query)
+    return sendCsv(res, 'prize-performance.csv', rows)
+  } catch (error) {
+    console.error('匯出 prize performance csv 失敗:', error)
+    return res.status(500).json({
+      success: false,
+      message: '匯出 prize performance csv 失敗',
+      error: String(error)
+    })
+  }
+})
+
+router.get('/reports/prize-performance/xlsx', async (req, res) => {
+  try {
+    const rows = await getPrizePerformanceRows(req, req.query)
+    return sendRealXlsx(res, 'prize-performance.xlsx', 'Prize Performance', rows)
+  } catch (error) {
+    console.error('匯出 prize performance xlsx 失敗:', error)
+    return res.status(500).json({
+      success: false,
+      message: '匯出 prize performance xlsx 失敗',
+      error: String(error)
+    })
+  }
+})
+
 router.get('/reports/play-records/csv', async (req, res) => {
   try {
     const rows = await getPlayExportRows(req, req.query)

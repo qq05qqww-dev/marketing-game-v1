@@ -11,6 +11,8 @@ import {
 } from '../../api/campaign'
 import http from '../../api/http'
 
+const API_BASE = http?.defaults?.baseURL || 'http://localhost:3000/api'
+
 const loading = ref(true)
 const exporting = ref(false)
 
@@ -38,6 +40,7 @@ const summary = ref(emptySummary())
 const tenantOptions = ref([])
 const dailyRows = ref([])
 const rewardRows = ref([])
+const prizePerformanceRows = ref([])
 
 const pagination = ref({
   page: 1,
@@ -229,6 +232,28 @@ const hasChartData = computed(() => {
     sourceStats.value.some((item) => Number(item.count || 0) > 0)
 })
 
+
+const topPrizePerformanceRows = computed(() => {
+  return safeArray(prizePerformanceRows.value)
+    .slice()
+    .sort((a, b) => Number(b.winCount || 0) - Number(a.winCount || 0))
+    .slice(0, 8)
+})
+
+const maxPrizeWinCount = computed(() => {
+  return Math.max(1, ...topPrizePerformanceRows.value.map((row) => Number(row.winCount || 0)))
+})
+
+const hasPrizePerformanceData = computed(() => {
+  return safeArray(prizePerformanceRows.value).some((row) => {
+    return Number(row.winCount || 0) > 0 || Number(row.rewardCount || 0) > 0 || Number(row.remainStock || 0) > 0
+  })
+})
+
+const getPrizeBarWidth = (count) => {
+  return `${Math.max(3, Math.round((Number(count || 0) / maxPrizeWinCount.value) * 100))}%`
+}
+
 const getPlayBarHeight = (count) => {
   return `${Math.max(6, Math.round((Number(count || 0) / maxDailyPlayCount.value) * 100))}%`
 }
@@ -249,7 +274,7 @@ const fetchReports = async () => {
   loading.value = true
 
   try {
-    const [summaryRes, dailyRes, rewardRes] = await Promise.all([
+    const [summaryRes, dailyRes, rewardRes, prizePerformanceRes] = await Promise.all([
       getReportSummaryApi({
         startDate: filters.value.startDate,
         endDate: filters.value.endDate,
@@ -271,6 +296,14 @@ const fetchReports = async () => {
         endDate: filters.value.endDate,
         page: filters.value.page,
         pageSize: filters.value.pageSize
+      }),
+      http.get('/admin/reports/prize-performance', {
+        params: {
+          startDate: filters.value.startDate,
+          endDate: filters.value.endDate,
+          campaignId: filters.value.campaignId,
+          tenantId: filters.value.tenantId
+        }
       })
     ])
 
@@ -281,6 +314,7 @@ const fetchReports = async () => {
 
     dailyRows.value = safeArray(apiData(dailyRes, []))
     rewardRows.value = safeArray(apiData(rewardRes, []))
+    prizePerformanceRows.value = safeArray(apiData(prizePerformanceRes, []))
 
     const p = rewardRes?.data?.pagination || {}
     pagination.value = {
@@ -295,6 +329,7 @@ const fetchReports = async () => {
     summary.value = emptySummary()
     dailyRows.value = []
     rewardRows.value = []
+    prizePerformanceRows.value = []
     pagination.value = {
       page: 1,
       pageSize: filters.value.pageSize,
@@ -308,6 +343,7 @@ const fetchReports = async () => {
 
 const totalDailyRows = computed(() => dailyRows.value.length)
 const totalRewardRows = computed(() => pagination.value.total)
+const totalPrizePerformanceRows = computed(() => prizePerformanceRows.value.length)
 
 const currentPageStart = computed(() => {
   if (pagination.value.total === 0) return 0
@@ -385,6 +421,25 @@ const getRewardSource = (row) => {
   return sourceLabelMap[source] || '一般 / 直接'
 }
 
+const getStockWarningText = (row) => {
+  const remainStock = Number(row?.remainStock || 0)
+  const status = String(row?.prizeStatus || '').toUpperCase()
+
+  if (status !== 'ACTIVE') return '未啟用'
+  if (remainStock <= 0 && String(row?.prizeType || '').toUpperCase() !== 'LOSE') return '庫存已空'
+  if (remainStock <= 5 && String(row?.prizeType || '').toUpperCase() !== 'LOSE') return '庫存偏低'
+  return '正常'
+}
+
+const getStockWarningClass = (row) => {
+  const text = getStockWarningText(row)
+
+  if (text === '庫存已空') return 'bg-rose-100 text-rose-700'
+  if (text === '庫存偏低') return 'bg-amber-100 text-amber-700'
+  if (text === '未啟用') return 'bg-slate-100 text-slate-500'
+  return 'bg-emerald-100 text-emerald-700'
+}
+
 const buildExportParams = () => ({
   startDate: filters.value.startDate,
   endDate: filters.value.endDate,
@@ -393,6 +448,14 @@ const buildExportParams = () => ({
   campaignId: filters.value.campaignId,
   tenantId: filters.value.tenantId
 })
+
+const buildDownloadUrl = (path, params = {}) => {
+  const search = new URLSearchParams(params).toString()
+  return `${API_BASE}${path}${search ? `?${search}` : ''}`
+}
+
+const downloadPrizePerformanceCsvUrl = (params = {}) => buildDownloadUrl('/admin/reports/prize-performance/csv', params)
+const downloadPrizePerformanceXlsxUrl = (params = {}) => buildDownloadUrl('/admin/reports/prize-performance/xlsx', params)
 
 const downloadByFetch = async (url, fallbackFilename) => {
   exporting.value = true
@@ -445,6 +508,14 @@ const exportPlayCsv = () => {
 
 const exportPlayXlsx = () => {
   downloadByFetch(downloadPlayRecordsXlsxUrl(buildExportParams()), 'play-records.xlsx')
+}
+
+const exportPrizePerformanceCsv = () => {
+  downloadByFetch(downloadPrizePerformanceCsvUrl(buildExportParams()), 'prize-performance.csv')
+}
+
+const exportPrizePerformanceXlsx = () => {
+  downloadByFetch(downloadPrizePerformanceXlsxUrl(buildExportParams()), 'prize-performance.xlsx')
 }
 
 const applyFilters = async () => {
@@ -726,6 +797,20 @@ onMounted(async () => {
           >
             匯出發獎 XLSX
           </button>
+          <button
+            @click="exportPrizePerformanceCsv"
+            :disabled="exporting"
+            class="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-3 font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+          >
+            匯出獎項 CSV
+          </button>
+          <button
+            @click="exportPrizePerformanceXlsx"
+            :disabled="exporting"
+            class="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-3 font-bold text-violet-700 hover:bg-violet-100 disabled:opacity-50"
+          >
+            匯出獎項 XLSX
+          </button>
         </div>
       </div>
 
@@ -854,6 +939,92 @@ onMounted(async () => {
           >
             清除
           </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-[32px] border border-violet-100 bg-white p-8 shadow-sm">
+      <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.35em] text-violet-500">Prize Performance</p>
+          <h3 class="mt-2 text-2xl font-black text-slate-900">獎項成效統計</h3>
+          <p class="mt-2 text-slate-500">
+            依目前商家與日期篩選統計各獎項的中獎、發放、核銷與庫存狀態。
+          </p>
+        </div>
+        <div class="rounded-2xl bg-violet-50 px-5 py-3 text-sm font-black text-violet-700">
+          獎項數：{{ totalPrizePerformanceRows }}
+        </div>
+      </div>
+
+      <div v-if="!hasPrizePerformanceData && !loading" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
+        目前篩選條件下沒有獎項成效資料。
+      </div>
+
+      <div v-else class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+        <div class="rounded-3xl border border-slate-200 bg-slate-50 p-6 xl:col-span-1">
+          <h4 class="text-lg font-black text-slate-900">中獎排行</h4>
+          <p class="mt-1 text-xs text-slate-500">依中獎次數排序，最多顯示前 8 名。</p>
+
+          <div class="mt-5 space-y-4 rounded-2xl bg-white p-4">
+            <div v-for="row in topPrizePerformanceRows" :key="`prize-rank-${row.id}`" class="space-y-2">
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <span class="font-black text-slate-700">{{ row.prizeTitle || '未命名獎項' }}</span>
+                <span class="font-black text-violet-700">{{ row.winCount || 0 }} 次</span>
+              </div>
+              <div class="h-4 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  class="h-full rounded-full bg-violet-500 transition-all"
+                  :style="{ width: getPrizeBarWidth(row.winCount) }"
+                ></div>
+              </div>
+              <div class="flex justify-between text-xs text-slate-400">
+                <span>{{ row.campaignTitle || '—' }}</span>
+                <span>剩餘 {{ row.remainStock ?? 0 }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-3xl border border-slate-200 xl:col-span-2">
+          <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+              <tr>
+                <th class="px-5 py-4">獎項</th>
+                <th class="px-5 py-4">活動</th>
+                <th class="px-5 py-4">中獎</th>
+                <th class="px-5 py-4">發放</th>
+                <th class="px-5 py-4">已核銷</th>
+                <th class="px-5 py-4">待發獎</th>
+                <th class="px-5 py-4">剩餘庫存</th>
+                <th class="px-5 py-4">中獎率</th>
+                <th class="px-5 py-4">庫存狀態</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 bg-white">
+              <tr v-if="loading">
+                <td colspan="9" class="px-5 py-10 text-center text-slate-500">讀取中...</td>
+              </tr>
+              <tr v-else-if="prizePerformanceRows.length === 0">
+                <td colspan="9" class="px-5 py-10 text-center text-slate-500">目前沒有獎項成效資料。</td>
+              </tr>
+              <tr v-for="row in prizePerformanceRows" v-else :key="row.id" class="hover:bg-slate-50">
+                <td class="px-5 py-4 font-black text-slate-900">{{ row.prizeTitle || '—' }}</td>
+                <td class="px-5 py-4 text-slate-600">{{ row.campaignTitle || '—' }}</td>
+                <td class="px-5 py-4 font-bold text-emerald-700">{{ row.winCount || 0 }}</td>
+                <td class="px-5 py-4">{{ row.rewardCount || 0 }}</td>
+                <td class="px-5 py-4">{{ row.claimedCount || 0 }}</td>
+                <td class="px-5 py-4">{{ row.pendingCount || 0 }}</td>
+                <td class="px-5 py-4 font-bold">{{ row.remainStock ?? 0 }}</td>
+                <td class="px-5 py-4">{{ row.winRate || 0 }}%</td>
+                <td class="px-5 py-4">
+                  <span class="rounded-full px-3 py-1 text-xs font-black" :class="getStockWarningClass(row)">
+                    {{ getStockWarningText(row) }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </section>
