@@ -625,7 +625,22 @@ const adminSections = [
 ]
 
 const previewUrl = computed(() => {
-  return `/games/golden-egg?preview=${previewRefreshKey.value}`
+  const params = new URLSearchParams()
+  params.set('preview', String(previewRefreshKey.value))
+  params.set('adminPreview', '1')
+
+  const campaignId = Number(databaseCampaignId.value || databaseCampaign.value?.id || 0)
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || user?.tenantSlug || '').trim()
+
+  // 第 19 批修正：右側 iframe 預覽必須帶 campaignId / tenantSlug，
+  // 才會走正式 DrawEngine verify-serial API，而不是舊 localStorage 序號池。
+  if (Number.isInteger(campaignId) && campaignId > 0) {
+    params.set('campaignId', String(campaignId))
+  } else if (tenantSlug) {
+    params.set('tenantSlug', tenantSlug)
+  }
+
+  return `/games/golden-egg?${params.toString()}`
 })
 
 const previewDeviceOptions = [

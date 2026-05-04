@@ -1852,11 +1852,23 @@ const closeResultModal = () => {
 }
 
 onMounted(async () => {
-  loadGoldenEggAdminState()
+  const isAdminPreviewMode = route.query?.preview !== undefined || route.query?.adminPreview !== undefined
+
+  // 第 19 批修正：
+  // 後台右側 iframe 預覽要先進入正式資料庫模式，讓序號驗證走
+  // /api/draw-engine/campaigns/:campaignId/verify-serial；
+  // 再套用後台 localStorage 視覺設定，保留即時預覽效果。
+  if (isAdminPreviewMode) {
+    await loadGoldenEggRemoteState()
+    loadGoldenEggAdminState()
+  } else {
+    loadGoldenEggAdminState()
+    await loadGoldenEggRemoteState()
+  }
+
   syncSectionOpenStateFromCampaign()
   updateChanceText()
   loadHistory()
-  await loadGoldenEggRemoteState()
 
   if (!activityCountdownTimer.value) {
     activityCountdownTimer.value = window.setInterval(() => {
