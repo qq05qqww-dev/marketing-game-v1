@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 38001～38400 批：模板預覽與商家正式玩家頁對齊修正版
+// 第 37201～37600 批：正式三遊戲模板對齊與錯誤路由修正版
 //
 // 建議放置位置：
 // frontend/src/views/admin/AdminMerchantGameCenterView.vue

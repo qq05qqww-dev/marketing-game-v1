@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 38001～38400 批：模板預覽與商家正式玩家頁對齊修正版
+// 第 38401～38800 批：平台模板中心正式商家玩家頁連結同步版
 //
 // 覆蓋位置：
 // frontend/src/composables/useAdminGameSettings.js

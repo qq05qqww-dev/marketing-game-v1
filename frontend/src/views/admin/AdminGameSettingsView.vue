@@ -1,4 +1,4 @@
-// 第 38001～38400 批：模板預覽與商家正式玩家頁對齊修正版
+// 第 37601～38000 批：遊戲模板中心正式三遊戲資料源清理與錯誤路由根修正版
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -88,11 +88,7 @@ const MERCHANT_OFFICIAL_GAME_IDS = new Set([
 
 const LEGACY_TEMPLATE_ALIAS_MAP = {
   'golden-egg': 'golden-egg',
-  'egg-smash': 'golden-egg',
-  'grid-lottery': 'premium-grid',
-  'premium-nine-grid': 'premium-grid',
-  'nine-golden-egg': 'golden-egg',
-  'golden-egg-deluxe': 'golden-egg'
+  'grid-lottery': 'premium-grid'
 }
 
 const normalizeGameTemplateId = (value = '') => {
@@ -151,6 +147,45 @@ const isOfficialMerchantGame = (game = {}) => {
   return MERCHANT_OFFICIAL_GAME_IDS.has(normalizeGameTemplateId(game.id))
 }
 
+
+const OFFICIAL_MERCHANT_PLAYER_ROUTES = {
+  'premium-grid': '/play/a-shop/premium-grid?campaignId=4',
+  wheel: '/play/a-shop/wheel?campaignId=3',
+  'golden-egg': '/play/a-shop/golden-egg?campaignId=5'
+}
+
+const OFFICIAL_MERCHANT_ADMIN_ROUTES = {
+  'premium-grid': '/admin/my-games?game=premium-grid&campaignId=4',
+  wheel: '/admin/my-games?game=wheel&campaignId=3',
+  'golden-egg': '/admin/my-games?game=golden-egg&campaignId=5'
+}
+
+const getOfficialMerchantPlayerRoute = (game = {}) => {
+  const normalizedTemplateId = normalizeGameTemplateId(game.templateId || game.id)
+
+  return OFFICIAL_MERCHANT_PLAYER_ROUTES[normalizedTemplateId] || getSafeTemplatePlayerRoute(game)
+}
+
+const getOfficialMerchantAdminRoute = (game = {}) => {
+  const normalizedTemplateId = normalizeGameTemplateId(game.templateId || game.id)
+
+  return OFFICIAL_MERCHANT_ADMIN_ROUTES[normalizedTemplateId] || '/admin/my-games'
+}
+
+const isOfficialMerchantLinkAvailable = (game = {}) => {
+  const normalizedTemplateId = normalizeGameTemplateId(game.templateId || game.id)
+
+  return Boolean(OFFICIAL_MERCHANT_PLAYER_ROUTES[normalizedTemplateId])
+}
+
+const openOfficialMerchantPlayer = (game = {}) => {
+  router.push(getOfficialMerchantPlayerRoute(game))
+}
+
+const openOfficialMerchantAdmin = (game = {}) => {
+  router.push(getOfficialMerchantAdminRoute(game))
+}
+
 const getTemplateVisibilityText = (game = {}) => {
   return isOfficialMerchantGame(game) ? '正式開放' : '平台預留'
 }
@@ -194,25 +229,12 @@ const getSafeTemplatePlayerRoute = (game = {}) => {
   }
 
   const rawRoute = String(game.route || '').trim()
-  const normalizedTemplateId = normalizeGameTemplateId(game.templateId || game.id)
 
-  if (rawRoute.startsWith('/games/grid-lottery')) {
-    return rawRoute.replace('/games/grid-lottery', '/games/premium-grid')
-  }
-
-  if (rawRoute.startsWith('/games/egg-smash')) {
-    return rawRoute.replace('/games/egg-smash', '/games/golden-egg')
-  }
-
-  if (/^\/games\/\d+/.test(rawRoute)) {
-    return `${getSafeTemplateRoute(normalizedTemplateId)}?gameId=${game.id}`
-  }
-
-  if (/^\/games\/(premium-grid|wheel|golden-egg|scratch-card|flip-card|slot-machine|ring-toss|claw-machine|referral-task)(\?.*)?$/.test(rawRoute)) {
+  if (/^\/games\/(premium-grid|wheel|golden-egg|scratch-card|flip-card|slot-machine|ring-toss|claw-machine|referral-task)$/.test(rawRoute)) {
     return rawRoute
   }
 
-  return getSafeTemplateRoute(normalizedTemplateId)
+  return getSafeTemplateRoute(game.id)
 }
 
 
@@ -543,7 +565,7 @@ const normalizeRoute = (route = '') => {
 
 const templateRouteMap = {
   'premium-grid': '/games/premium-grid',
-  'grid-lottery': '/games/premium-grid',
+  'grid-lottery': '/games/grid-lottery',
   'scratch-card': '/games/scratch-card',
   wheel: '/games/wheel',
   'flip-card': '/games/flip-card',
@@ -567,6 +589,10 @@ const getGameWebsiteHint = (game) => {
 }
 
 const getPlayerPreviewRoute = (game) => {
+  if (isOfficialMerchantLinkAvailable(game)) {
+    return normalizeRoute(getOfficialMerchantPlayerRoute(game))
+  }
+
   if (isSingleGameMode.value) {
     return normalizeRoute(getSingleActivityPlayerRoute(game))
   }
@@ -839,7 +865,7 @@ const summary = computed(() => {
 })
 
 const checkFrontendRoute = (game) => {
-  const route = String(getSafeTemplatePlayerRoute(game) || game?.route || '').trim()
+  const route = String(game?.route || '').trim()
 
   if (!route) {
     return {
@@ -1636,11 +1662,8 @@ const exportFilteredGamesCsv = () => {
       game.name,
       game.description,
       game.icon,
-      getSafeTemplatePlayerRoute(game),
-      getFrontendUrl({
-        ...game,
-        route: getSafeTemplatePlayerRoute(game)
-      }),
+      game.route,
+      getFrontendUrl(game),
       typeTextMap[game.type] || game.type,
       statusTextMap[game.status] || game.status,
       game.playLimit,
@@ -2390,6 +2413,11 @@ const saveNewGame = () => {
 }
 
 const previewGame = (game) => {
+  if (isOfficialMerchantLinkAvailable(game)) {
+    router.push(getOfficialMerchantPlayerRoute(game))
+    return
+  }
+
   router.push(getPlayerPreviewRoute(game))
 }
 
@@ -2531,7 +2559,7 @@ loadReportExportLogsFromStorage()
 
           <p class="mt-3 text-sm font-bold leading-7 text-white/75">
             商家真正要操作活動、複製玩家網址、管理序號與查看報表，請到「商家遊戲中心」。
-            本頁只用來整理平台支援哪些遊戲模組，避免把未開放模板誤交付給商家。
+            本頁只用來整理平台支援哪些遊戲模組，避免把未開放模板誤交付給商家。本頁的「玩家版」會直接開商家正式活動網址，方便你確認商家與客人看到的是同一個版本。
           </p>
 
           <div class="mt-5 flex flex-wrap gap-3">
@@ -3840,6 +3868,14 @@ loadReportExportLogsFromStorage()
                   {{ getMerchantOfficialGameInfo(game)?.note }}
                 </div>
 
+                <div
+                  v-if="isOfficialMerchantLinkAvailable(game)"
+                  class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-black leading-5 text-emerald-700"
+                >
+                  商家正式玩家頁：{{ getOfficialMerchantPlayerRoute(game) }}
+                </div>
+
+
                 <p
                   v-if="game.templateId"
                   class="mt-2 text-xs font-black text-blue-500"
@@ -4120,7 +4156,7 @@ loadReportExportLogsFromStorage()
 
               <p class="mt-2 break-all">
                 <span class="font-black text-blue-900">玩家版路徑：</span>
-                {{ getPlayerPreviewRoute(game) }}
+                {{ isOfficialMerchantLinkAvailable(game) ? getOfficialMerchantPlayerRoute(game) : getPlayerPreviewRoute(game) }}
               </p>
 
               <button
