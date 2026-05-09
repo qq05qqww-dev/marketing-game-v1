@@ -1,14 +1,14 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 25501～25900 批：三遊戲正式遠端玩家連結與資料庫活動入口統一版
+// 第 33201～33600 批：正式商家交付中心與玩家網址管理版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminCampaignsView.vue
 //
 // 本批重點：
-// 1. 移除前面混入的舊版 / 新版 quick serial 重複邏輯。
-// 2. 把九宮格活動建立、活動選擇、序號產生、CSV 匯出、玩家連結、進入遊戲設定集中到同一個區塊。
-// 3. 活動列表只保留查看與選擇，不再分散三個地方操作。
+// 1. 保留既有活動建立 / 序號 / 設定入口。
+// 2. 新增正式商家交付中心：三遊戲正式玩家網址、一鍵複製、一鍵開啟。
+// 3. 新增客服可直接複製的活動文案。
 // 4. 不改 router / DB schema / draw-core。
 
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -710,14 +710,14 @@ const downloadTextFile = (content, filename, mimeType = 'text/csv;charset=utf-8;
 const merchantTodaySteps = computed(() => [
   {
     step: '01',
-    title: '選九宮格活動',
-    description: selectedCampaign.value ? `目前選用：${selectedCampaign.value.title || selectedCampaign.value.name}` : '先從下拉選單或活動列表選一個九宮格活動',
+    title: '選遊戲活動',
+    description: selectedCampaign.value ? `目前選用：${selectedCampaign.value.title || selectedCampaign.value.name}` : '先從下拉選單或活動列表選一個遊戲活動',
     done: Boolean(selectedCampaign.value)
   },
   {
     step: '02',
     title: '設定活動畫面',
-    description: '文字、顏色、獎品、官方連結都到九宮格設定中心調整',
+    description: '文字、顏色、獎品、官方連結都到對應遊戲設定中心調整',
     done: Boolean(selectedCampaign.value)
   },
   {
@@ -1298,7 +1298,7 @@ const exportSerialCsv = () => {
   resetMessages()
 
   if (!selectedCampaignId.value) {
-    errorMessage.value = '請先選擇九宮格活動。'
+    errorMessage.value = '請先選擇遊戲活動。'
     return
   }
 
@@ -1605,6 +1605,176 @@ const getPlayerUrl = (campaign) => {
 }
 
 
+const officialGameDefinitions = [
+  {
+    type: 'WHEEL',
+    label: '幸運輪盤',
+    slug: 'wheel',
+    emoji: '🎡',
+    description: '適合折扣券、再玩一次、活動現場抽獎。'
+  },
+  {
+    type: 'GRID',
+    label: '九宮格',
+    slug: 'premium-grid',
+    emoji: '🎯',
+    description: '適合九格獎項、序號抽獎、品牌活動。'
+  },
+  {
+    type: 'GOLDEN_EGG',
+    label: '砸金蛋',
+    slug: 'golden-egg',
+    emoji: '🥚',
+    description: '適合高互動視覺活動、敲蛋中獎。'
+  }
+]
+
+const officialTenantSlug = computed(() => {
+  const selectedSlug = getCampaignTenantSlug(selectedCampaign.value)
+  const currentSlug = normalizeTenantSlug(getCurrentTenantSlug())
+
+  return selectedSlug || currentSlug || 'a-shop'
+})
+
+const getOfficialPlayerUrlByType = (gameType, tenantSlug = officialTenantSlug.value) => {
+  const definition = officialGameDefinitions.find((item) => item.type === String(gameType || '').toUpperCase())
+  const safeSlug = normalizeTenantSlug(tenantSlug) || 'a-shop'
+
+  if (!definition) return `${frontOrigin.value}/play/${safeSlug}`
+
+  return `${frontOrigin.value}/play/${safeSlug}/${definition.slug}`
+}
+
+const findCampaignByGameType = (gameType) => {
+  const normalizedType = String(gameType || '').toUpperCase()
+  const tenantSlug = normalizeTenantSlug(officialTenantSlug.value)
+
+  return merchantGameCampaigns.value.find((campaign) => {
+    const sameType = String(campaign?.gameType || '').toUpperCase() === normalizedType
+    const sameTenant = !tenantSlug || getCampaignTenantSlug(campaign) === tenantSlug || isPlatformScopeUser()
+
+    return sameType && sameTenant
+  }) || null
+}
+
+const officialDeliveryLinks = computed(() => {
+  return officialGameDefinitions.map((definition) => {
+    const campaign = findCampaignByGameType(definition.type)
+    const url = campaign ? getPlayerUrl(campaign) : getOfficialPlayerUrlByType(definition.type)
+
+    return {
+      ...definition,
+      campaign,
+      url,
+      status: campaign ? getCampaignStatusText(campaign) : '尚未建立活動',
+      isActive: campaign ? isCampaignActive(campaign) : false,
+      hasCampaign: Boolean(campaign)
+    }
+  })
+})
+
+const officialDeliverySummaryCards = computed(() => {
+  const total = officialDeliveryLinks.value.length
+  const created = officialDeliveryLinks.value.filter((item) => item.hasCampaign).length
+  const active = officialDeliveryLinks.value.filter((item) => item.isActive).length
+
+  return [
+    {
+      label: '正式商家',
+      value: officialTenantSlug.value,
+      note: '玩家網址使用這個 tenantSlug'
+    },
+    {
+      label: '三遊戲活動',
+      value: `${created}/${total}`,
+      note: created === total ? '三個活動都有資料' : '尚有遊戲未建立活動'
+    },
+    {
+      label: '可對客狀態',
+      value: `${active}/${total}`,
+      note: active === total ? '三個遊戲皆啟用' : '請確認活動狀態'
+    },
+    {
+      label: '目前序號',
+      value: serialStats.value.total,
+      note: `未使用 ${serialStats.value.unused}｜已使用 ${serialStats.value.used}`
+    }
+  ]
+})
+
+const officialCustomerServiceText = computed(() => {
+  const lines = [
+    '您好，這是本次活動抽獎網址：',
+    '',
+    ...officialDeliveryLinks.value.flatMap((item) => [
+      `${item.label}抽獎：`,
+      item.url,
+      ''
+    ]),
+    '請輸入店家提供的活動序號後即可參加抽獎。'
+  ]
+
+  return lines.join('\n')
+})
+
+const copyTextToClipboard = async (text, successText = '已複製。') => {
+  const value = String(text || '').trim()
+
+  if (!value) {
+    errorMessage.value = '目前沒有可複製的內容。'
+    return
+  }
+
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      textarea.setAttribute('readonly', 'readonly')
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+
+    message.value = successText
+    errorMessage.value = ''
+  } catch (error) {
+    console.error('複製失敗:', error)
+    errorMessage.value = '複製失敗，請手動反白複製。'
+  }
+}
+
+const copyOfficialPlayerUrl = (item) => {
+  return copyTextToClipboard(item?.url, `已複製${item?.label || '遊戲'}正式玩家網址。`)
+}
+
+const copyOfficialCustomerServiceText = () => {
+  return copyTextToClipboard(officialCustomerServiceText.value, '已複製商家客服活動文字。')
+}
+
+const openOfficialPlayerUrl = (item) => {
+  if (!item?.url) {
+    errorMessage.value = '目前沒有可開啟的正式玩家網址。'
+    return
+  }
+
+  window.open(item.url, '_blank', 'noopener,noreferrer')
+}
+
+const copyPlayerUrl = () => {
+  if (!selectedPlayerUrl.value) {
+    errorMessage.value = '請先選擇遊戲活動。'
+    return
+  }
+
+  return copyTextToClipboard(selectedPlayerUrl.value, '已複製目前活動玩家連結。')
+}
+
+
 const goGameSettings = (campaign = selectedCampaign.value) => {
   if (!campaign?.id) {
     errorMessage.value = '請先選擇遊戲活動。'
@@ -1842,6 +2012,136 @@ onMounted(() => {
         </div>
       </header>
 
+      <section class="rounded-[32px] border border-emerald-200 bg-white p-6 shadow-sm">
+        <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div>
+            <p class="text-sm font-black text-emerald-600">
+              正式商家交付中心｜第 33201～33600 批
+            </p>
+            <h2 class="mt-1 text-2xl font-black text-slate-950">
+              三遊戲正式玩家網址、客服文字與營運狀態
+            </h2>
+            <p class="mt-2 max-w-4xl text-sm font-bold leading-7 text-slate-500">
+              這裡整理輪盤、九宮格、砸金蛋三個正式網址。商家可以一鍵複製網址、一鍵開啟玩家頁，也可以直接複製客服發送文字。
+            </p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+              @click="copyOfficialCustomerServiceText"
+            >
+              複製客服文字
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              @click="loadCampaigns"
+            >
+              重新整理活動
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div
+            v-for="card in officialDeliverySummaryCards"
+            :key="card.label"
+            class="rounded-3xl border border-slate-200 bg-slate-50 px-5 py-4"
+          >
+            <p class="text-xs font-black text-slate-400">
+              {{ card.label }}
+            </p>
+            <p class="mt-2 truncate text-2xl font-black text-slate-950">
+              {{ card.value }}
+            </p>
+            <p class="mt-1 truncate text-xs font-bold text-slate-500">
+              {{ card.note }}
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-5 grid gap-4 lg:grid-cols-3">
+          <article
+            v-for="item in officialDeliveryLinks"
+            :key="item.type"
+            class="rounded-3xl border border-slate-200 bg-slate-50 p-5 shadow-sm"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-3xl">{{ item.emoji }}</p>
+                <h3 class="mt-2 text-xl font-black text-slate-950">
+                  {{ item.label }}
+                </h3>
+                <p class="mt-2 text-sm font-bold leading-6 text-slate-500">
+                  {{ item.description }}
+                </p>
+              </div>
+              <span
+                :class="[
+                  'rounded-full px-3 py-1 text-xs font-black',
+                  item.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                ]"
+              >
+                {{ item.status }}
+              </span>
+            </div>
+
+            <div class="mt-4 rounded-2xl bg-white px-4 py-3 text-xs font-bold leading-6 text-slate-600">
+              <p class="font-black text-slate-900">正式玩家網址</p>
+              <p class="break-all font-mono text-[11px] text-slate-500">
+                {{ item.url }}
+              </p>
+            </div>
+
+            <div class="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                class="rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-50"
+                @click="copyOfficialPlayerUrl(item)"
+              >
+                複製網址
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+                @click="openOfficialPlayerUrl(item)"
+              >
+                開啟玩家頁
+              </button>
+            </div>
+
+            <p
+              v-if="!item.hasCampaign"
+              class="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-700"
+            >
+              目前尚未在活動列表找到這個遊戲的正式活動，請先建立並啟用活動後再交付商家。
+            </p>
+          </article>
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-emerald-100 bg-emerald-50 p-5">
+          <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p class="text-sm font-black text-emerald-700">
+                商家客服可複製文字
+              </p>
+              <p class="mt-1 text-xs font-bold text-emerald-600">
+                可以直接貼到 LINE、簡訊、社群或客服對話。
+              </p>
+            </div>
+            <button
+              type="button"
+              class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+              @click="copyOfficialCustomerServiceText"
+            >
+              複製整段文字
+            </button>
+          </div>
+          <pre class="mt-4 whitespace-pre-wrap rounded-2xl bg-white p-4 text-sm font-bold leading-7 text-slate-700">{{ officialCustomerServiceText }}</pre>
+        </div>
+      </section>
+
       <section class="rounded-[32px] border border-violet-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div>
@@ -1919,7 +2219,7 @@ onMounted(() => {
               商家今日操作流程
             </p>
             <h2 class="mt-1 text-2xl font-black text-slate-950">
-              只要照這 4 步驟，就能把九宮格活動發給客人
+              只要照這 4 步驟，就能把遊戲活動發給客人
             </h2>
           </div>
           <button

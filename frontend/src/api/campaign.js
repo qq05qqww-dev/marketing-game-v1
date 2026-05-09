@@ -122,11 +122,30 @@ export const playDrawEngineCampaignApi = (campaignId, data = {}) => {
   return http.post(`/draw-engine/campaigns/${campaignId}/play`, data)
 }
 
+export const getTenantWheelCampaignApi = (tenantSlug) => {
+  return http.get('/campaigns', {
+    params: {
+      tenantSlug,
+      gameType: 'WHEEL',
+      status: 'ACTIVE'
+    }
+  })
+}
+
 export const getTenantGoldenEggCampaignApi = (tenantSlug) => {
   return http.get('/campaigns', {
     params: {
       tenantSlug,
       gameType: 'GOLDEN_EGG',
+      status: 'ACTIVE'
+    }
+  })
+}
+
+export const getTenantOfficialGameCampaignsApi = (tenantSlug) => {
+  return http.get('/campaigns', {
+    params: {
+      tenantSlug,
       status: 'ACTIVE'
     }
   })
