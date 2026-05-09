@@ -61,12 +61,10 @@ import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonGamePlayBoard from '../../../components/common-game/CommonGamePlayBoard.vue'
 import {
-  getGoldenEggCampaign,
-  playGoldenEggDraw,
-  verifyGoldenEggSerialCode
-} from '../../../api/goldenEggApi.js'
-import {
-  getTenantGoldenEggCampaignApi
+  getCampaignDetailApi,
+  getTenantGoldenEggCampaignApi,
+  playDrawEngineCampaignApi,
+  verifyDrawEngineSerialApi
 } from '../../../api/campaign.js'
 
 const router = useRouter()
@@ -1092,7 +1090,7 @@ const loadGoldenEggRemoteState = async () => {
     }
 
     if (!apiCampaign) {
-      apiCampaign = await getGoldenEggCampaign(campaignId)
+      apiCampaign = unwrapApiPayload(await getCampaignDetailApi(campaignId))
     }
 
     onlineCampaignId.value = campaignId
@@ -2219,7 +2217,7 @@ const crackEggWithRemoteApi = async (egg) => {
   await playAudio(hammerAudio, campaign.enableHammerSound, campaign.hammerSoundVolume)
 
   try {
-    const rawDrawResult = await playGoldenEggDraw(onlineCampaignId.value, {
+    const rawDrawResult = await playDrawEngineCampaignApi(onlineCampaignId.value, {
       gameType: 'GOLDEN_EGG',
       serialCode: remoteVerifiedSerialCode.value,
       playerName: '',
@@ -2392,10 +2390,10 @@ const getSystemShareUrl = () => {
   const tenantSlug = getRouteTenantSlug()
 
   if (tenantSlug) {
-    return `https://marketing-game-v1-em29.vercel.app/play/${tenantSlug}/golden-egg`
+    return `https://marketing-game-v1.vercel.app/play/${tenantSlug}/golden-egg`
   }
 
-  return `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${onlineCampaignId.value || getRouteCampaignId() || 1}`
+  return `https://marketing-game-v1.vercel.app/games/golden-egg?campaignId=${onlineCampaignId.value || getRouteCampaignId() || 1}`
 }
 
 const getSystemShareTitle = () => {
@@ -2483,7 +2481,15 @@ const redeemSerialCode = async () => {
 
   try {
     if (isOnlineMode.value && onlineCampaignId.value) {
-      const rawVerifyResult = await verifyGoldenEggSerialCode(onlineCampaignId.value, code)
+      const rawVerifyResult = await verifyDrawEngineSerialApi(onlineCampaignId.value, {
+        code,
+        serialCode: code,
+        gameType: 'GOLDEN_EGG',
+        tenantSlug: getRouteTenantSlug(),
+        frontUrl: getCurrentFrontUrlForTracking(),
+        source: trafficSource.value,
+        trafficSource: trafficSource.value
+      })
       const result = unwrapApiPayload(rawVerifyResult)
 
       if (!result?.valid) {
@@ -2491,7 +2497,7 @@ const redeemSerialCode = async () => {
         remoteVerifiedSerialCode.value = ''
         player.chances = 0
         updateChanceText()
-        serialRedeemMessage.value = getSerialVerifyStatusMessage(result)
+        serialRedeemMessage.value = `${getSerialVerifyStatusMessage(result)}（目前活動 ID：${onlineCampaignId.value}，請確認此序號是否建立在同一個砸金蛋活動。）`
         return
       }
 

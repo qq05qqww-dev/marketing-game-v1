@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 33201～33600 批：正式商家交付中心與玩家網址管理版
+// 第 33601～34000 批：正式網址與序號活動綁定檢查修正版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminCampaignsView.vue
@@ -499,18 +499,29 @@ const apiBaseUrl = computed(() => {
   return String(http?.defaults?.baseURL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '')
 })
 
+const OFFICIAL_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
+
+const isLocalFrontHost = () => {
+  if (typeof window === 'undefined') return false
+
+  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+}
+
 const frontOrigin = computed(() => {
-  // 第 25501～25900 批：
-  // 正式上線時請在 Render / Vercel / Netlify 設定 VITE_PUBLIC_FRONTEND_URL。
-  // 例如：https://your-domain.com
-  // 沒設定時才使用目前瀏覽器 origin，方便本機開發。
+  // 第 33601～34000 批：
+  // 後台交付中心一律產生「正式可給玩家」網址。
+  // 本機 / 手機測試時不要把 localhost 給客人，否則手機會連到自己的 localhost。
   const publicFrontendUrl = String(import.meta.env.VITE_PUBLIC_FRONTEND_URL || '').trim().replace(/\/$/, '')
 
   if (publicFrontendUrl) {
     return publicFrontendUrl
   }
 
-  if (typeof window === 'undefined') return 'http://localhost:5173'
+  if (isLocalFrontHost()) {
+    return OFFICIAL_FRONTEND_URL
+  }
+
+  if (typeof window === 'undefined') return OFFICIAL_FRONTEND_URL
 
   return window.location.origin
 })
@@ -1571,34 +1582,46 @@ const getTenantSlug = (campaign) => {
   return campaign?.tenant?.slug || campaign?.tenantSlug || campaign?.slug || 'demo-shop'
 }
 
+const appendCampaignIdQuery = (url, campaign) => {
+  const campaignId = campaign?.id
+
+  if (!campaignId) return url
+
+  const connector = String(url).includes('?') ? '&' : '?'
+
+  return `${url}${connector}campaignId=${encodeURIComponent(campaignId)}`
+}
+
 const getPlayerUrl = (campaign) => {
   const type = String(campaign?.gameType || '').toUpperCase()
   const tenantSlug = getCampaignTenantSlug(campaign) || normalizeTenantSlug(getCurrentTenantSlug())
 
-  // 三個正式對客玩家網址都固定使用 /play/:tenantSlug/...。
-  // 這些網址可以直接給客人遠端開啟，並由前台依 tenantSlug / campaignId 從資料庫讀活動。
+  // 第 33601～34000 批：
+  // 1. 三個正式對客玩家網址都固定使用 /play/:tenantSlug/...。
+  // 2. 一律帶 campaignId，避免同一商家有多個 ACTIVE 活動時，前台抓到別的活動，造成「後台有序號但前台找不到序號」。
+  // 3. 序號仍維持正式規則：只屬於自己的 campaign，不跨遊戲共用。
   if (type === 'GRID') {
-    if (tenantSlug) {
-      return `${frontOrigin.value}/play/${tenantSlug}/premium-grid`
-    }
+    const url = tenantSlug
+      ? `${frontOrigin.value}/play/${tenantSlug}/premium-grid`
+      : `${frontOrigin.value}/games/premium-grid`
 
-    return `${frontOrigin.value}/games/premium-grid`
+    return appendCampaignIdQuery(url, campaign)
   }
 
   if (type === 'WHEEL') {
-    if (tenantSlug) {
-      return `${frontOrigin.value}/play/${tenantSlug}/wheel`
-    }
+    const url = tenantSlug
+      ? `${frontOrigin.value}/play/${tenantSlug}/wheel`
+      : `${frontOrigin.value}/games/wheel`
 
-    return `${frontOrigin.value}/games/wheel`
+    return appendCampaignIdQuery(url, campaign)
   }
 
   if (type === 'GOLDEN_EGG') {
-    if (tenantSlug) {
-      return `${frontOrigin.value}/play/${tenantSlug}/golden-egg`
-    }
+    const url = tenantSlug
+      ? `${frontOrigin.value}/play/${tenantSlug}/golden-egg`
+      : `${frontOrigin.value}/games/golden-egg`
 
-    return `${frontOrigin.value}/games/golden-egg`
+    return appendCampaignIdQuery(url, campaign)
   }
 
   return campaign?.shareUrl || campaign?.playerUrl || `${frontOrigin.value}/games`
@@ -1711,7 +1734,9 @@ const officialCustomerServiceText = computed(() => {
       item.url,
       ''
     ]),
-    '請輸入店家提供的活動序號後即可參加抽獎。'
+    '請輸入店家提供的活動序號後即可參加抽獎。',
+    '',
+    '提醒：序號綁定活動，不同遊戲 / 不同活動的序號不能互相共用。'
   ]
 
   return lines.join('\n')

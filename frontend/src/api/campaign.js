@@ -118,6 +118,10 @@ export const getTenantPremiumGridCampaignsApi = (tenantSlug) => {
   })
 }
 
+export const verifyDrawEngineSerialApi = (campaignId, data = {}) => {
+  return http.post(`/draw-engine/campaigns/${campaignId}/verify-serial`, data)
+}
+
 export const playDrawEngineCampaignApi = (campaignId, data = {}) => {
   return http.post(`/draw-engine/campaigns/${campaignId}/play`, data)
 }
@@ -170,6 +174,35 @@ export const updateCampaignApi = (id, data) => {
 
 export const deleteCampaignApi = (id) => {
   return http.delete(`/campaigns/${id}`)
+}
+
+
+// ===== Serial Codes =====
+
+export const getCampaignSerialCodesApi = (campaignId, params = {}) => {
+  return http.get(`/serial-codes/campaigns/${campaignId}`, {
+    params
+  })
+}
+
+export const getCampaignSerialCodeStatsApi = (campaignId) => {
+  return http.get(`/serial-codes/campaigns/${campaignId}/stats`)
+}
+
+export const createCampaignSerialCodeApi = (campaignId, data = {}) => {
+  return http.post(`/serial-codes/campaigns/${campaignId}/manual`, data)
+}
+
+export const generateCampaignSerialCodesApi = (campaignId, data = {}) => {
+  return http.post(`/serial-codes/campaigns/${campaignId}/generate`, data)
+}
+
+export const updateSerialCodeApi = (id, data = {}) => {
+  return http.patch(`/serial-codes/${id}`, data)
+}
+
+export const deleteSerialCodeApi = (id) => {
+  return http.delete(`/serial-codes/${id}`)
 }
 
 // ===== Prize =====
