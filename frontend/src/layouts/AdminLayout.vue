@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-// 第 25501～25900 批：商家我的活動統一管理三遊戲遠端入口版
+// 第 36401～36800 批：商家遊戲中心精簡操作版
 
 const route = useRoute()
 const router = useRouter()
@@ -54,8 +54,15 @@ const menuItems = computed(() => {
       roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
     },
     {
-      label: '遊戲設定',
-      description: '遊戲模組',
+      label: isPlatformAdmin.value ? '商家遊戲中心' : '我的遊戲中心',
+      description: isPlatformAdmin.value ? '商家交付入口' : '網址 / 序號 / 報表',
+      to: '/admin/my-games',
+      icon: '🎯',
+      roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
+    },
+    {
+      label: '遊戲模板中心',
+      description: '平台模板 / 模組',
       to: '/admin/game-settings',
       icon: '🎮',
       roles: ['ADMIN', 'SUPER_ADMIN']

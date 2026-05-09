@@ -29,6 +29,7 @@ import AdminTenantsView from '../views/admin/AdminTenantsView.vue'
 import AdminCampaignsView from '../views/admin/AdminCampaignsView.vue'
 import AdminPrizesView from '../views/admin/AdminPrizesView.vue'
 import AdminGameSettingsView from '../views/admin/AdminGameSettingsView.vue'
+import AdminMerchantGameCenterView from '../views/admin/AdminMerchantGameCenterView.vue'
 import AdminCommonGameEditorView from '../views/admin/AdminCommonGameEditorView.vue'
 import AdminGamePrizesView from '../views/admin/AdminGamePrizesView.vue'
 import AdminGameProbabilityView from '../views/admin/AdminGameProbabilityView.vue'
@@ -334,6 +335,16 @@ const router = createRouter({
           }
         },
         {
+          path: 'my-games',
+          name: 'admin-my-games',
+          component: AdminMerchantGameCenterView,
+          meta: {
+            title: '商家遊戲中心',
+            requiresAuth: true,
+            requiresAdmin: true
+          }
+        },
+        {
           path: 'common-game-editor',
           name: 'admin-common-game-editor',
           component: AdminCommonGameEditorView,
@@ -350,7 +361,7 @@ const router = createRouter({
           name: 'admin-game-settings',
           component: AdminGameSettingsView,
           meta: {
-            title: '遊戲設定管理',
+            title: '遊戲模板中心',
             requiresAuth: true,
             requiresAdmin: true
           }
