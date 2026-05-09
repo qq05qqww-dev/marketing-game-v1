@@ -1,4 +1,4 @@
-// 第 37601～38000 批：遊戲模板中心正式三遊戲資料源清理與錯誤路由根修正版
+// 第 38001～38400 批：模板預覽與商家正式玩家頁對齊修正版
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -88,7 +88,11 @@ const MERCHANT_OFFICIAL_GAME_IDS = new Set([
 
 const LEGACY_TEMPLATE_ALIAS_MAP = {
   'golden-egg': 'golden-egg',
-  'grid-lottery': 'premium-grid'
+  'egg-smash': 'golden-egg',
+  'grid-lottery': 'premium-grid',
+  'premium-nine-grid': 'premium-grid',
+  'nine-golden-egg': 'golden-egg',
+  'golden-egg-deluxe': 'golden-egg'
 }
 
 const normalizeGameTemplateId = (value = '') => {
@@ -190,12 +194,25 @@ const getSafeTemplatePlayerRoute = (game = {}) => {
   }
 
   const rawRoute = String(game.route || '').trim()
+  const normalizedTemplateId = normalizeGameTemplateId(game.templateId || game.id)
 
-  if (/^\/games\/(premium-grid|wheel|golden-egg|scratch-card|flip-card|slot-machine|ring-toss|claw-machine|referral-task)$/.test(rawRoute)) {
+  if (rawRoute.startsWith('/games/grid-lottery')) {
+    return rawRoute.replace('/games/grid-lottery', '/games/premium-grid')
+  }
+
+  if (rawRoute.startsWith('/games/egg-smash')) {
+    return rawRoute.replace('/games/egg-smash', '/games/golden-egg')
+  }
+
+  if (/^\/games\/\d+/.test(rawRoute)) {
+    return `${getSafeTemplateRoute(normalizedTemplateId)}?gameId=${game.id}`
+  }
+
+  if (/^\/games\/(premium-grid|wheel|golden-egg|scratch-card|flip-card|slot-machine|ring-toss|claw-machine|referral-task)(\?.*)?$/.test(rawRoute)) {
     return rawRoute
   }
 
-  return getSafeTemplateRoute(game.id)
+  return getSafeTemplateRoute(normalizedTemplateId)
 }
 
 
@@ -526,7 +543,7 @@ const normalizeRoute = (route = '') => {
 
 const templateRouteMap = {
   'premium-grid': '/games/premium-grid',
-  'grid-lottery': '/games/grid-lottery',
+  'grid-lottery': '/games/premium-grid',
   'scratch-card': '/games/scratch-card',
   wheel: '/games/wheel',
   'flip-card': '/games/flip-card',
@@ -554,7 +571,7 @@ const getPlayerPreviewRoute = (game) => {
     return normalizeRoute(getSingleActivityPlayerRoute(game))
   }
 
-  return normalizeRoute(game?.route || '/games')
+  return normalizeRoute(getSafeTemplatePlayerRoute(game) || game?.route || '/games')
 }
 
 const getAdminPreviewRoute = (game) => {
@@ -822,7 +839,7 @@ const summary = computed(() => {
 })
 
 const checkFrontendRoute = (game) => {
-  const route = String(game?.route || '').trim()
+  const route = String(getSafeTemplatePlayerRoute(game) || game?.route || '').trim()
 
   if (!route) {
     return {
@@ -1619,8 +1636,11 @@ const exportFilteredGamesCsv = () => {
       game.name,
       game.description,
       game.icon,
-      game.route,
-      getFrontendUrl(game),
+      getSafeTemplatePlayerRoute(game),
+      getFrontendUrl({
+        ...game,
+        route: getSafeTemplatePlayerRoute(game)
+      }),
       typeTextMap[game.type] || game.type,
       statusTextMap[game.status] || game.status,
       game.playLimit,
@@ -2370,7 +2390,7 @@ const saveNewGame = () => {
 }
 
 const previewGame = (game) => {
-  router.push(normalizeRoute(game.route))
+  router.push(getPlayerPreviewRoute(game))
 }
 
 const goPrizeSettings = (game) => {

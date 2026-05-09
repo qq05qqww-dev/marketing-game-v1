@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 37601～38000 批：遊戲模板中心正式三遊戲資料源清理與錯誤路由根修正版
+// 第 38001～38400 批：模板預覽與商家正式玩家頁對齊修正版
 //
 // 覆蓋位置：
 // frontend/src/composables/useAdminGameSettings.js
