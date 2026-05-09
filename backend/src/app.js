@@ -1,8 +1,15 @@
-// Multi Game Platform V2.2 Stable
-// 第 338 批：正式上線前 app.js 安全掛載版
+// Multi Game Platform V2.3 Tenant Edition
+// 第 34001～34400 批：正式後端 CORS 修正版
 //
-// 建議放置位置：
+// 覆蓋位置：
 // backend/src/app.js
+//
+// 修正重點：
+// 1. 正式允許 Vercel 前端 https://marketing-game-v1.vercel.app 呼叫 Render 後端。
+// 2. 支援 FRONTEND_URL / CORS_ORIGINS 環境變數。
+// 3. CORS 掛載在所有 /api routes 之前。
+// 4. 加入 OPTIONS preflight 支援，修正 verify-serial / play 被瀏覽器擋下的問題。
+// 5. 保留 localhost 開發環境。
 
 import express from 'express'
 import cors from 'cors'
@@ -28,34 +35,81 @@ import {
 
 const app = express()
 
+const splitOrigins = (value = '') => {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean)
+}
+
+const normalizeOrigin = (value = '') => {
+  return String(value || '').trim().replace(/\/$/, '')
+}
+
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:5173',
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  'http://127.0.0.1:5173',
+  'http://localhost:4173',
+  'http://127.0.0.1:4173',
+  'https://marketing-game-v1.vercel.app',
+  process.env.FRONTEND_URL,
+  ...splitOrigins(process.env.CORS_ORIGINS)
 ]
+  .map(normalizeOrigin)
+  .filter(Boolean)
+
+const isAllowedVercelPreviewOrigin = (origin = '') => {
+  const normalizedOrigin = normalizeOrigin(origin)
+
+  return (
+    normalizedOrigin.endsWith('.vercel.app') &&
+    (
+      normalizedOrigin.includes('marketing-game-v1') ||
+      normalizedOrigin.includes('qq05qqww') ||
+      normalizedOrigin.includes('qq05qqww-dev')
+    )
+  )
+}
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin) {
+      return callback(null, true)
+    }
+
+    const normalizedOrigin = normalizeOrigin(origin)
+
+    if (allowedOrigins.includes(normalizedOrigin)) {
+      return callback(null, true)
+    }
+
+    if (isAllowedVercelPreviewOrigin(normalizedOrigin)) {
+      return callback(null, true)
+    }
+
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true)
+    }
+
+    return callback(new Error(`CORS blocked origin: ${origin}`))
+  },
+  credentials: true,
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin'
+  ],
+  optionsSuccessStatus: 204
+}
+
+// CORS 必須放在所有 /api routes 之前，否則 Vercel 前端會被瀏覽器擋下。
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 
 app.use(securityHeaders)
-
-app.use(
-  cors({
-    origin(origin, callback) {
-      if (!origin) {
-        return callback(null, true)
-      }
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true)
-      }
-
-      if (process.env.NODE_ENV !== 'production') {
-        return callback(null, true)
-      }
-
-      return callback(new Error(`CORS blocked origin: ${origin}`))
-    }
-  })
-)
-
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'))
 app.use(express.json({ limit: '10mb' }))
 
@@ -65,8 +119,12 @@ app.get('/', (req, res) => {
     message: 'Marketing Game API running',
     data: {
       service: 'multi-game-platform-backend',
-      version: 'v2.2-stable',
-      batch: 366
+      version: 'v2.3-tenant-edition',
+      batch: '34001-34400',
+      cors: {
+        productionFrontend: 'https://marketing-game-v1.vercel.app',
+        allowedOrigins
+      }
     }
   })
 })
