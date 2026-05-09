@@ -1,4 +1,4 @@
-// 第 36801～37200 批：商家可用遊戲精簡與平台模板中心分流版
+// 第 37201～37600 批：正式三遊戲模板對齊與錯誤路由修正版
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -83,24 +83,38 @@ const REPORT_EXPORT_LOG_LIMIT = 10
 const MERCHANT_OFFICIAL_GAME_IDS = new Set([
   'premium-grid',
   'wheel',
-  'egg-smash'
+  'golden-egg'
 ])
+
+const LEGACY_TEMPLATE_ALIAS_MAP = {
+  'golden-egg': 'golden-egg',
+  'grid-lottery': 'premium-grid'
+}
+
+const normalizeGameTemplateId = (value = '') => {
+  const id = String(value || '').trim()
+
+  return LEGACY_TEMPLATE_ALIAS_MAP[id] || id
+}
 
 const MERCHANT_OFFICIAL_GAME_ALIASES = {
   'premium-grid': {
     merchantTitle: '精緻九宮格',
     officialPath: '/play/a-shop/premium-grid',
+    templatePath: '/games/premium-grid',
     note: '正式商家可用：九宮格玩家頁'
   },
   wheel: {
     merchantTitle: '幸運輪盤',
     officialPath: '/play/a-shop/wheel',
+    templatePath: '/games/wheel',
     note: '正式商家可用：輪盤玩家頁'
   },
-  'egg-smash': {
+  'golden-egg': {
     merchantTitle: '砸金蛋',
     officialPath: '/play/a-shop/golden-egg',
-    note: '正式商家可用：砸金蛋玩家頁'
+    templatePath: '/games/golden-egg',
+    note: '正式商家可用：砸金蛋最新正式玩家頁，不再使用舊 egg-smash 模板'
   }
 }
 
@@ -126,7 +140,7 @@ const templateVisibilityTabs = [
 ]
 
 const isOfficialMerchantGame = (game = {}) => {
-  return MERCHANT_OFFICIAL_GAME_IDS.has(String(game.id || ''))
+  return MERCHANT_OFFICIAL_GAME_IDS.has(normalizeGameTemplateId(game.id))
 }
 
 const getTemplateVisibilityText = (game = {}) => {
@@ -140,11 +154,40 @@ const getTemplateVisibilityClass = (game = {}) => {
 }
 
 const getMerchantOfficialGameInfo = (game = {}) => {
-  return MERCHANT_OFFICIAL_GAME_ALIASES[String(game.id || '')] || null
+  return MERCHANT_OFFICIAL_GAME_ALIASES[normalizeGameTemplateId(game.id)] || null
 }
 
 const goMerchantGameCenter = () => {
   router.push('/admin/my-games')
+}
+
+
+const OFFICIAL_TEMPLATE_ROUTE_MAP = {
+  'premium-grid': '/games/premium-grid',
+  wheel: '/games/wheel',
+  'golden-egg': '/games/golden-egg'
+}
+
+const getSafeTemplateRoute = (templateId = '') => {
+  const normalizedId = normalizeGameTemplateId(templateId)
+
+  return OFFICIAL_TEMPLATE_ROUTE_MAP[normalizedId] || `/games/${normalizedId}`
+}
+
+const getSafeTemplatePlayerRoute = (game = {}) => {
+  const officialInfo = getMerchantOfficialGameInfo(game)
+
+  if (officialInfo?.templatePath) {
+    return officialInfo.templatePath
+  }
+
+  const rawRoute = String(game.route || '').trim()
+
+  if (/^\/games\/(premium-grid|wheel|golden-egg|scratch-card|flip-card|slot-machine|ring-toss|claw-machine|referral-task)$/.test(rawRoute)) {
+    return rawRoute
+  }
+
+  return getSafeTemplateRoute(game.id)
 }
 
 
@@ -212,9 +255,9 @@ const templateOptions = [
     icon: '🃏'
   },
   {
-    id: 'egg-smash',
-    name: '敲金蛋模板',
-    description: '使用敲金蛋前台頁面',
+    id: 'golden-egg',
+    name: '砸金蛋模板',
+    description: '使用砸金蛋前台頁面',
     icon: '🥚'
   },
   {
@@ -479,7 +522,7 @@ const templateRouteMap = {
   'scratch-card': '/games/scratch-card',
   wheel: '/games/wheel',
   'flip-card': '/games/flip-card',
-  'egg-smash': '/games/egg-smash',
+  'golden-egg': '/games/golden-egg',
   'slot-machine': '/games/slot-machine',
   'ring-toss': '/games/ring-toss',
   'claw-machine': '/games/claw-machine',
@@ -926,7 +969,7 @@ const isSingleGameMode = computed(() => {
 const queryGameTypeToGameIdMap = {
   GRID: 'premium-grid',
   WHEEL: 'wheel',
-  GOLDEN_EGG: 'egg-smash',
+  GOLDEN_EGG: 'golden-egg',
   SCRATCH: 'scratch-card',
   FLIP: 'flip-card'
 }
@@ -958,7 +1001,7 @@ const singleGameModeTitle = computed(() => {
 
 const singleGameModeDescription = computed(() => {
   if (!isSingleGameMode.value) {
-    return '管理前台九宮格、刮刮卡、輪盤、翻牌、敲金蛋、拉霸機、套圈圈、夾娃娃與推薦任務等遊戲設定。'
+    return '管理前台九宮格、刮刮卡、輪盤、翻牌、砸金蛋、拉霸機、套圈圈、夾娃娃與推薦任務等遊戲設定。'
   }
 
   if (routeQueryCampaignId.value) {
@@ -3664,7 +3707,7 @@ loadReportExportLogsFromStorage()
                 class="px-5 py-4"
               >
                 <p class="max-w-[260px] break-all text-xs font-black text-slate-600">
-                  {{ game.route }}
+                  {{ getSafeTemplatePlayerRoute(game) }}
                 </p>
               </td>
 

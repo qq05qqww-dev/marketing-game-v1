@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-// 第 36801～37200 批：商家可用遊戲精簡與平台模板中心分流版
+// 第 37201～37600 批：正式三遊戲模板對齊與錯誤路由修正版
 
 const route = useRoute()
 const router = useRouter()
