@@ -1,0 +1,302 @@
+# Multi Game Platform V2.3 第 50 批
+# 前台遊戲共用核心整理規劃版
+
+## 目前狀態
+
+目前系統已經支援多商家、多活動、多遊戲方向，並且已完成精緻九宮格前台大量功能：
+
+- 商家專屬網址：/play/:tenantSlug/premium-grid
+- GRID 活動讀取
+- 後台獎品管理接入
+- 前台九宮格抽獎
+- 結果彈窗
+- 抽獎紀錄
+- 獎品展示
+- 活動規則
+- 分享提示
+- 領獎提醒
+- 活動資訊
+- 快速導覽
+- 抽獎結果複製
+- 手機版彈窗捲動修正
+
+目前問題是：
+如果每新增一個遊戲，就把以上功能全部重做一次，後續會非常難維護。
+
+所以接下來要開始整理成：
+
+共用功能統一做一次；
+每個遊戲只保留自己的玩法畫面與特殊設定。
+
+---
+
+## 目標架構
+
+建議建立前台共用元件資料夾：
+
+frontend/src/components/game-common/
+
+建議未來共用元件：
+
+1. GameActivityHeader.vue
+   - 活動主視覺
+   - 商家名稱
+   - 活動標題
+   - 活動狀態
+   - 統計卡
+
+2. GameStatusNotice.vue
+   - 載入中
+   - 活動尚未開放
+   - 活動未開始
+   - 活動已結束
+   - 載入失敗
+   - 重新載入活動資料
+
+3. GamePrizeShowcase.vue
+   - 獎品展示
+   - 今日亮點獎項
+   - 庫存標籤
+   - 權重比例
+   - 展開 / 收合
+
+4. GameRulesPanel.vue
+   - 活動規則
+   - 獎品說明
+   - STEP / NOTE 卡片
+
+5. GameChanceCard.vue
+   - 抽獎機會
+   - 分享次數
+   - 分享增加機會
+   - 進度條
+
+6. GameResultModal.vue
+   - 中獎結果
+   - 未中獎結果
+   - 領獎提醒
+   - 下一步流程
+   - 複製本次抽獎結果
+   - 手機版可捲動
+   - 固定底部操作列
+
+7. GameDrawLogs.vue
+   - 最新抽獎紀錄
+   - 最新紀錄高亮
+   - 來源顯示
+   - 清空畫面暫存紀錄
+
+8. GameClaimInfo.vue
+   - 領獎提醒
+   - 保留結果
+   - 查看紀錄
+   - 聯絡確認
+
+9. GameQuickNav.vue
+   - 頂部
+   - 獎品
+   - 規則
+   - 紀錄
+   - 回到頂部
+
+10. GameFooterInfo.vue
+    - 活動商家
+    - 活動狀態
+    - 活動來源
+    - 同步時間
+
+---
+
+## 每個遊戲保留自己的玩法元件
+
+建議建立：
+
+frontend/src/views/games/playboards/
+
+每個遊戲只保留自己的核心玩法畫面：
+
+1. PremiumGridPlayBoard.vue
+   - 九宮格 3x3
+   - 跑燈路徑
+   - 中間抽獎按鈕
+   - 跑燈動畫
+
+2. GoldenEggPlayBoard.vue
+   - 金蛋排列
+   - 砸蛋動畫
+   - 錘子 / 破裂效果
+
+3. LuckyWheelPlayBoard.vue
+   - 輪盤
+   - 指針
+   - 旋轉動畫
+   - 指針抖動
+
+4. ScratchCardPlayBoard.vue
+   - 刮除畫布
+   - 刮開比例
+   - 刮開完成判斷
+
+5. FlipCardPlayBoard.vue
+   - 翻牌
+   - 卡片背面 / 正面
+   - 翻牌動畫
+
+---
+
+## 共用資料流程
+
+未來所有遊戲都走同一套資料流程：
+
+Tenant 商家
+  ↓
+Campaign 活動
+  ↓
+GameConfig 遊戲設定
+  ↓
+Prize 獎品
+  ↓
+DrawEngine 抽獎引擎
+  ↓
+PlayRecord 遊玩紀錄
+  ↓
+RewardRecord 發獎紀錄
+  ↓
+Reports 報表中心
+
+遊戲差異只靠：
+
+gameType
+
+例如：
+
+- GRID
+- GOLDEN_EGG
+- WHEEL
+- SCRATCH_CARD
+- FLIP_CARD
+
+---
+
+## 共用 API 方向
+
+前台共用 API 應該統一成：
+
+1. 讀取商家活動
+   GET /api/front/:tenantSlug/campaigns?gameType=GRID
+
+2. 讀取活動詳情
+   GET /api/front/campaigns/:campaignId
+
+3. 執行抽獎
+   POST /api/draw-engine/campaigns/:campaignId/play
+
+4. 讀取我的紀錄
+   GET /api/front/play-records
+
+5. 分享來源追蹤
+   ?from=line
+   ?from=facebook
+   ?from=instagram
+   ?from=direct
+
+---
+
+## 後台共用方向
+
+後台也不應該每個遊戲做一套。
+
+建議統一：
+
+1. AdminCampaignsView.vue
+   - 建立活動
+   - 選擇遊戲類型
+   - 上架 / 下架
+   - 活動時間
+   - 商家篩選
+
+2. AdminPrizesView.vue
+   - 依活動管理獎品
+   - 依 gameType 篩選
+   - 庫存
+   - 權重 / 機率
+   - 啟用 / 停用
+
+3. AdminGameConfigView.vue
+   - 共用設定
+   - 遊戲專屬設定
+   - share copy
+   - 領獎提醒
+   - 主視覺設定
+
+4. AdminReportsView.vue
+   - 依商家
+   - 依活動
+   - 依遊戲類型
+   - 依日期
+   - 來源統計
+   - 獎項成效
+
+---
+
+## 建議拆分順序
+
+為了穩定，不要一次全部拆。
+
+建議批次：
+
+第 50 批：前台遊戲共用核心整理規劃版
+- 建立共用化方向
+- 不改現有功能
+- 不動九宮格穩定功能
+
+第 51 批：建立 game-common 資料夾與第一個共用元件 GameResultModal.vue
+- 先把結果彈窗抽成元件
+- 九宮格先暫時不接入，只建立元件檔
+
+第 52 批：九宮格結果彈窗接入 GameResultModal.vue
+- 確認原本功能不壞
+- 測試中獎 / 未中獎 / 複製結果 / 手機捲動
+
+第 53 批：建立 GamePrizeShowcase.vue
+- 把獎品展示抽成共用元件
+- 先不接其他遊戲
+
+第 54 批：九宮格獎品展示接入 GamePrizeShowcase.vue
+
+第 55 批：建立 GameRulesPanel.vue
+
+第 56 批：建立 GameChanceCard.vue
+
+第 57 批：建立 GameDrawLogs.vue
+
+第 58 批：建立 GameShell.vue 共用頁面外框
+
+第 59 批：九宮格改接 GameShell.vue
+
+第 60 批：砸金蛋開始接入共用核心
+
+---
+
+## 注意事項
+
+1. 每一批都只能小步修改
+2. 每一批都要保留可回復的穩定基準
+3. 不要一次把 PremiumGridLotteryView.vue 拆光
+4. 先建立元件，再逐步接入
+5. 每接入一個共用元件，都要先確認九宮格仍可正常抽獎
+6. 砸金蛋功能暫時不要動，等九宮格共用化穩定後再接
+
+---
+
+## 第 50 批結論
+
+從現在開始，Multi Game Platform 的開發方向應改成：
+
+新增遊戲 = 新增玩法元件 + 使用共用平台功能
+
+而不是：
+
+新增遊戲 = 重做前台 + 重做後台 + 重做報表 + 重做抽獎紀錄
+
+這樣才會真正變成多遊戲互動活動平台。

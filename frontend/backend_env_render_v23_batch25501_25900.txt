@@ -1,0 +1,14 @@
+# backend/.env
+# Multi Game Platform V2.3｜第 25501～25900 批
+# PostgreSQL 正式資料庫
+DATABASE_URL=postgresql://USER:PASSWORD@HOST:PORT/DATABASE?schema=public
+
+# JWT
+JWT_SECRET=請換成一組很長的正式密鑰
+
+# CORS 允許前台網域
+FRONTEND_URL=https://你的前台網域.com
+
+# Server
+PORT=3000
+NODE_ENV=production

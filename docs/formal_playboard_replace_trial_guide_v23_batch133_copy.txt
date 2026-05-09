@@ -1,0 +1,320 @@
+# Multi Game Platform V2.3 第 133 批
+# 正式替換試驗啟動前說明文件版
+
+## 一、這批目標
+
+這批不改任何程式。
+
+這批只新增一份正式替換試驗啟動前說明文件。
+
+目的：
+
+1. 整理目前 PlayBoard 替換試驗的所有安全開關
+2. 整理目前可用的測試網址
+3. 整理目前已建立的備份點
+4. 整理如果出問題要怎麼回復
+5. 整理下一階段正式替換試驗前要注意什麼
+
+---
+
+## 二、目前正式頁仍然安全
+
+目前正式網址：
+
+/play/:tenantSlug/premium-grid
+
+例如：
+
+http://localhost:5173/play/a-shop/premium-grid
+
+目前正式網址不帶任何測試參數時：
+
+- 不顯示 PlayBoard 測試區塊
+- 不顯示替換試驗區塊
+- 不啟用準正式替換試驗
+- 不影響正式抽獎流程
+- 不影響正式結果彈窗
+- 不影響正式抽獎紀錄
+- 不影響正式剩餘次數
+
+---
+
+## 三、目前已建立的測試模式
+
+### 1. 正式模式
+
+網址：
+
+/play/a-shop/premium-grid
+
+用途：
+
+正式玩家頁。
+
+狀態：
+
+- 不顯示任何測試區塊
+- 使用原本正式九宮格玩法區
+- 正式流程不受影響
+
+---
+
+### 2. 並排測試模式
+
+網址：
+
+/play/a-shop/premium-grid?playboard=1
+
+用途：
+
+同時顯示：
+
+- 共用 PremiumGridPlayBoard 測試區塊
+- 原本正式九宮格玩法區
+
+目的：
+
+確認 PlayBoard 可以吃正式資料，但不影響原本玩法區。
+
+---
+
+### 3. Only 測試模式
+
+網址：
+
+/play/a-shop/premium-grid?playboard=1&playboardOnly=1
+
+用途：
+
+只顯示共用 PremiumGridPlayBoard 測試區塊。
+
+狀態：
+
+- 原本正式九宮格玩法區只是暫時隱藏
+- 原本程式碼沒有刪除
+- 關閉 playboardOnly=1 後會恢復
+
+---
+
+### 4. 替換試驗模式
+
+網址：
+
+/play/a-shop/premium-grid?playboard=1&playboardReplace=1
+
+用途：
+
+模擬未來正式替換後的狀態。
+
+狀態：
+
+- 顯示共用 PremiumGridPlayBoard
+- 隱藏原本正式九宮格玩法區
+- 仍使用正式 startDraw()
+- 仍使用正式結果彈窗
+- 仍使用正式抽獎紀錄
+
+---
+
+### 5. 準正式替換試驗模式
+
+網址：
+
+/play/a-shop/premium-grid?playboard=1&playboardReplace=1&formalReplace=1
+
+用途：
+
+正式替換前的最高階測試模式。
+
+狀態：
+
+- 顯示準正式替換試驗開關
+- 顯示安全確認面板
+- 顯示操作紀錄提示
+- 顯示完成條件鎖定
+- 顯示人工核准提示
+- 不會自動正式替換
+- 不會刪除原本九宮格
+- 不會改後端 API
+- 不會影響正式網址
+
+---
+
+## 四、目前已建立的安全備份點
+
+### 第 120 批備份
+
+檔案：
+
+PremiumGridLotteryView_v23_batch120_before_playboard_replace_backup_copy.txt
+
+用途：
+
+PlayBoard 正式替換前早期穩定備份。
+
+---
+
+### 第 126 批備份
+
+檔案：
+
+PremiumGridLotteryView_v23_batch126_before_formal_playboard_replace_backup_copy.txt
+
+用途：
+
+正式替換試驗前最後備份。
+
+---
+
+### 第 130 批備份
+
+檔案：
+
+PremiumGridLotteryView_v23_batch130_formal_replace_trial_stable_backup_copy.txt
+
+用途：
+
+準正式替換試驗階段穩定備份。
+
+---
+
+## 五、目前已完成的測試輔助區塊
+
+目前 PremiumGridLotteryView.vue 已包含以下測試輔助區塊：
+
+1. PlayBoard 測試提示卡
+2. PremiumGridPlayBoard 測試區塊
+3. PlayBoard 測試區塊狀態檢查卡
+4. 共用 PlayBoard 抽獎流程對照
+5. PlayBoard 測試區塊收合 / 展開
+6. PlayBoard Only 模式保護提醒
+7. PlayBoard 正式替換前檢查清單
+8. PlayBoard 正式替換前備份提醒
+9. PremiumGridPlayBoard 正式替換試驗模式
+10. PlayBoard 替換試驗結果穩定檢查
+11. PlayBoard 替換試驗連續測試指引
+12. PlayBoard 替換試驗完成度摘要
+13. PlayBoard 正式替換前最終確認
+14. 準正式替換試驗安全確認面板
+15. 準正式替換試驗操作紀錄提示
+16. 準正式替換試驗完成條件鎖定
+17. 準正式替換試驗人工核准提示
+
+---
+
+## 六、目前仍然沒有做的事情
+
+目前尚未做：
+
+1. 尚未刪除原本九宮格玩法區
+2. 尚未把正式網址預設改成 PremiumGridPlayBoard
+3. 尚未移除舊九宮格 UI
+4. 尚未改後端抽獎 API
+5. 尚未改正式 startDraw()
+6. 尚未改正式結果彈窗
+7. 尚未改正式抽獎紀錄
+8. 尚未改資料庫
+9. 尚未改商家設定
+10. 尚未把 GenericGamePlayView 當正式頁
+
+---
+
+## 七、下一階段正式替換試驗建議
+
+下一階段如果要真的進入正式替換試驗，建議仍然採取低風險方式。
+
+### 建議第 134 批
+
+建立：
+
+PremiumGridPlayBoard 正式替換試驗模式說明卡加強版
+
+目的：
+
+在正式進入替換前，再把「目前還沒有真的替換」與「下一批才可能開始切換正式玩法區」標示更清楚。
+
+---
+
+### 建議第 135 批
+
+建立：
+
+正式玩法區切換 computed 版
+
+目的：
+
+新增一個 computed，例如：
+
+usePremiumGridPlayBoardAsMainBoard
+
+但還不直接改 template。
+
+---
+
+### 建議第 136 批
+
+建立：
+
+正式玩法區雙模板安全切換版
+
+目的：
+
+在同一個位置用 v-if / v-else 控制：
+
+- 舊九宮格玩法區
+- PremiumGridPlayBoard 玩法區
+
+但仍然只在 formalReplace=1 模式生效。
+
+---
+
+## 八、正式替換試驗原則
+
+正式替換試驗必須遵守：
+
+1. 任何不帶參數的正式網址都不可受影響
+2. 原本九宮格程式碼不可立刻刪除
+3. 一定要有回正式模式按鈕
+4. 一定要保留第 130 批備份
+5. 每一步都要能單獨測試
+6. 每一步都要能回復
+7. 不要一次改太多
+8. 不要同時改前端與後端
+9. 不要同時改資料格式與 UI
+10. 不要在沒有備份的情況下替換正式玩法區
+
+---
+
+## 九、如果後續出問題怎麼回復
+
+若準正式替換試驗後出現問題，優先回復：
+
+PremiumGridLotteryView_v23_batch130_formal_replace_trial_stable_backup_copy.txt
+
+覆蓋到：
+
+frontend/src/views/games/PremiumGridLotteryView.vue
+
+如果第 130 批備份也不適合，可以回復：
+
+PremiumGridLotteryView_v23_batch126_before_formal_playboard_replace_backup_copy.txt
+
+或更早：
+
+PremiumGridLotteryView_v23_batch120_before_playboard_replace_backup_copy.txt
+
+---
+
+## 十、目前結論
+
+目前已經非常接近可以進入正式替換試驗。
+
+但截至第 133 批為止：
+
+- 仍然沒有真正替換正式網址
+- 仍然沒有刪除舊九宮格
+- 仍然沒有改後端
+- 仍然沒有改正式 startDraw
+- 仍然只是安全地建立測試模式與確認面板
+
+下一步可以繼續往正式替換試驗前進，但仍建議每一步都保持可回復。

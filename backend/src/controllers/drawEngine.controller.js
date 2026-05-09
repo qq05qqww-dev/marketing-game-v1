@@ -1,5 +1,5 @@
 // Multi Game Platform V2.2 Stable
-// 第 339 批：Draw Engine Controller 正式安全補強版
+// 第 28701～29100 批：Draw Engine Controller 保留正式安全補強版
 //
 // 建議放置位置：
 // backend/src/controllers/drawEngine.controller.js

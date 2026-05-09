@@ -1,5 +1,5 @@
 // Multi Game Platform V2.2 Stable
-// 第 312 批：序號兌換 + 正式抽獎 Draw Engine Routes
+// 第 28701～29100 批：Draw Engine Routes 保留正式抽獎 API
 //
 // 建議放置位置：
 // backend/src/routes/drawEngine.routes.js

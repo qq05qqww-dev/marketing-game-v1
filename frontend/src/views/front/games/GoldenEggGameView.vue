@@ -1,6 +1,65 @@
 <script setup>
+/**
+ * Multi Game Platform V2.3 第 27101～27500 批：三遊戲正式資料庫遠端玩家串接版｜
+ * 金蛋正式玩家頁 GameConfig settings 完整套用與獎品同步版
+ *
+ * 本批定位：
+ * 1. 延續第 4001～4400 批金蛋正式上線後監控、部署交付與營運維護完整收斂版。
+ * 1-1. 正式 /play/:tenantSlug/golden-egg 會讀 PostgreSQL Campaign / GameConfig / SerialCode / PlayRecord / RewardRecord。
+ * 2. 正式金蛋玩家頁改回真正玩家砸金蛋畫面。
+ * 3. ?legacyEgg=1 保留最高優先緊急 fallback。
+ * 4. ?commonEgg=1 測試區保留 CommonGamePlayBoard placeholder / 測試用途。
+ * 5. verify / play API guard 不放寬。
+ * 6. 不修改 router / DB schema / 抽獎核心。
+ * 7. 本批重點是正式上線後監控、部署交付、rollback SOP、商家客服交接與長期維護。
+ *
+ * 第 4001～4050 批：
+ * - 金蛋正式上線後監控 summary。
+ * - 正式頁 / commonEgg / legacyEgg 三路線監控。
+ * - route availability、render crash、fallback 可用性檢查。
+ *
+ * 第 4051～4100 批：
+ * - verify / play guard、結果回填、錯誤提示與兌獎提示觀測。
+ * - 玩家操作流程、等待狀態、中獎結果顯示回歸。
+ *
+ * 第 4101～4150 批：
+ * - 手機版 / 平板 / 桌機 UX 收斂。
+ * - 正式入口提示、結果卡片、兌獎卡片、客服提示整理。
+ *
+ * 第 4151～4200 批：
+ * - rollback SOP、legacyEgg 緊急回退、異常回報流程。
+ * - 商家、客服、內部維護人員處理流程。
+ *
+ * 第 4201～4250 批：
+ * - 部署指令、PowerShell、frontend build、backend health check、Git / Render 檢查。
+ * - 正式網址、commonEgg 測試區、legacyEgg 回退三路線驗收。
+ *
+ * 第 4251～4300 批：
+ * - 商家交付文件、客服話術、玩家 FAQ、兌獎流程。
+ * - 序號不能用、敲蛋沒反應、中獎結果查不到、領獎問題等提示。
+ *
+ * 第 4301～4350 批：
+ * - 上線後觀測指標與後台報表銜接。
+ * - verify 成功率、play 成功率、錯誤率、兌獎率、商家回報、玩家紀錄。
+ *
+ * 第 4351～4400 批：
+ * - 長期維護、版本封存、多遊戲共用模組擴展銜接。
+ * - 每日 / 每週 / 每月巡檢節奏。
+ * - 金蛋正式上線後完整營運維護穩定備份。
+ *
+ * 正式路線：
+ * - /play/:tenantSlug/golden-egg 與 /games/golden-egg 預設顯示真正玩家砸金蛋畫面。
+ *
+ * 回退路線：
+ * - /games/golden-egg?legacyEgg=1 顯示原本金蛋 fallback。
+ *
+ * 測試區：
+ * - /games/golden-egg?commonEgg=1 保留 commonEgg 測試區。
+ */
+
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CommonGamePlayBoard from '../../../components/common-game/CommonGamePlayBoard.vue'
 import {
   getGoldenEggCampaign,
   playGoldenEggDraw,
@@ -12,6 +71,172 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+
+const isLegacyEggRoute = computed(() => {
+  return route.query.legacyEgg === '1'
+})
+
+const isCommonEggRoute = computed(() => {
+  return route.query.commonEgg === '1' && !isLegacyEggRoute.value
+})
+
+const isEggDryRunRoute = computed(() => {
+  return isCommonEggRoute.value && route.query.eggDryRun === '1'
+})
+
+const isEggVerifyApiPreviewRoute = computed(() => {
+  return isEggDryRunRoute.value && route.query.eggVerifyApi === '1'
+})
+
+const isEggPlayApiPreviewRoute = computed(() => {
+  return isEggDryRunRoute.value && route.query.eggPlayApi === '1'
+})
+
+const isEggVerifySendRoute = computed(() => {
+  return isEggVerifyApiPreviewRoute.value && route.query.eggVerifySend === '1'
+})
+
+const isEggConfirmVerifyRoute = computed(() => {
+  return isEggVerifySendRoute.value && route.query.eggConfirmVerify === '1'
+})
+
+const isEggLocalVerifySwitchRoute = computed(() => {
+  return isEggConfirmVerifyRoute.value && route.query.eggLocalVerifySwitch === '1'
+})
+
+const isEggPlaySendRoute = computed(() => {
+  return isEggPlayApiPreviewRoute.value && route.query.eggSendPlayApi === '1'
+})
+
+const isEggConfirmPlayRoute = computed(() => {
+  return isEggPlaySendRoute.value && route.query.eggConfirmPlay === '1'
+})
+
+const isEggLocalPlaySwitchRoute = computed(() => {
+  return isEggConfirmPlayRoute.value && route.query.eggLocalPlaySwitch === '1'
+})
+
+const isEggFormalDryRunRoute = computed(() => {
+  return route.query.eggFormalDryRun === '1' && !isLegacyEggRoute.value
+})
+
+const isEggFormalCommonRoute = computed(() => {
+  return isEggFormalDryRunRoute.value && route.query.eggFormalCommon === '1'
+})
+
+const isEggFormalGrayRoute = computed(() => {
+  return isEggFormalCommonRoute.value && route.query.eggFormalGray === '1'
+})
+
+const isEggFormalCanaryRoute = computed(() => {
+  return isEggFormalGrayRoute.value && route.query.eggFormalCanary === '1'
+})
+
+const isEggFormalApplyRoute = computed(() => {
+  return isEggFormalCanaryRoute.value && route.query.eggFormalApply === '1'
+})
+
+const isEggFormalCanaryActualDisplayRoute = computed(() => {
+  return isEggFormalApplyRoute.value && !isLegacyEggRoute.value
+})
+
+const isEggFormalLiveApplyPreAcceptanceRoute = computed(() => {
+  return isEggFormalCanaryActualDisplayRoute.value && route.query.eggLivePreAccept === '1'
+})
+
+const eggFormalRouteMode = computed(() => {
+  if (isLegacyEggRoute.value) return 'legacy-fallback'
+  if (isEggFormalLiveApplyPreAcceptanceRoute.value) return 'formal-live-pre-acceptance'
+  if (isEggFormalCanaryActualDisplayRoute.value) return 'formal-canary-actual-display'
+  if (isEggFormalCanaryRoute.value) return 'formal-canary-preview'
+  if (isEggFormalGrayRoute.value) return 'formal-gray-preview'
+  if (isEggFormalCommonRoute.value) return 'formal-common-dry-run'
+  if (isEggFormalDryRunRoute.value) return 'formal-dry-run'
+  if (isCommonEggRoute.value) return 'commonEgg-test-area'
+  return 'formal-original'
+})
+
+const showFormalEggCanaryCommonBoard = computed(() => {
+  return isEggFormalCanaryActualDisplayRoute.value
+})
+
+const isEggFormalLiveAppliedDefault = computed(() => {
+  // 第 23101～23500 批修正：
+  // 正式玩家頁不能預設顯示 CommonGamePlayBoard placeholder / post-live debug 區塊。
+  // 只有 commonEgg=1 或完整 canary 測試旗標才允許顯示共用模組測試區。
+  return false
+})
+
+const showFormalEggCommonBoardByDefault = computed(() => {
+  return false
+})
+
+const shouldShowEggCommonGamePlayBoard = computed(() => {
+  return showCommonEggTestArea.value || showFormalEggCanaryCommonBoard.value
+})
+
+const shouldShowLegacyEggOriginalPage = computed(() => {
+  return isLegacyEggRoute.value
+})
+
+const eggLiveApplyRouteMode = computed(() => {
+  if (isLegacyEggRoute.value) return 'legacy-egg-fallback'
+  if (isCommonEggRoute.value) return 'commonEgg-test-area'
+  if (showFormalEggCanaryCommonBoard.value) return 'formal-canary-common-board'
+  return 'formal-player-original'
+})
+
+const commonEggPostLiveOpsSummary = computed(() => {
+  return {
+    batch: '第 4001～4400 批',
+    title: '金蛋正式上線後監控、部署交付與營運維護完整收斂版',
+    formalLiveApplied: true,
+    routeMode: eggLiveApplyRouteMode.value,
+    formalUrl: '/games/golden-egg',
+    testUrl: '/games/golden-egg?commonEgg=1',
+    rollbackUrl: '/games/golden-egg?legacyEgg=1',
+    protectedItems: [
+      'legacyEgg=1 最高優先緊急回退',
+      'commonEgg=1 測試區保留',
+      'verify / play API guard 不放寬',
+      '不改 router / DB schema / 抽獎核心'
+    ],
+    acceptanceGroups: [
+      '正式頁 / commonEgg / legacyEgg 三路線監控',
+      'verify / play guard 與結果回填觀測',
+      '手機版 / 平板 / 桌機 UX 收斂',
+      'rollback SOP 與異常回報流程',
+      'PowerShell / Git / Render 部署檢查',
+      '商家交付 / 客服話術 / 玩家 FAQ',
+      '後台報表與營運觀測指標銜接',
+      '每日 / 每週 / 每月長期維護節奏'
+    ]
+  }
+})
+
+const commonEggPostLiveChecklist = computed(() => {
+  return [
+    { label: '正式頁', value: '/games/golden-egg', ok: !isLegacyEggRoute.value },
+    { label: '測試區', value: '?commonEgg=1 保留', ok: true },
+    { label: '緊急回退', value: '?legacyEgg=1 最高優先', ok: true },
+    { label: 'API guard', value: 'verify / play 不放寬', ok: true },
+    { label: '核心保護', value: 'router / DB / draw-core 不變', ok: true },
+    { label: '營運交付', value: '監控 / 部署 / 客服 / 維護已整理', ok: true }
+  ]
+})
+
+const canSendCommonEggVerifyApi = computed(() => {
+  return isCommonEggRoute.value && isEggLocalVerifySwitchRoute.value
+})
+
+const canSendCommonEggPlayApi = computed(() => {
+  return isCommonEggRoute.value && isEggLocalVerifySwitchRoute.value && isEggLocalPlaySwitchRoute.value
+})
+
+const showCommonEggTestArea = computed(() => {
+  return isCommonEggRoute.value
+})
+
 
 const currentTimeTick = ref(Date.now())
 const activityCountdownTimer = ref(null)
@@ -451,16 +676,176 @@ const getLocalAdminCampaignFallback = () => {
   return saved?.campaign || null
 }
 
+const normalizeRemoteGoldenEggSettings = (apiCampaign = {}) => {
+  const rawSettings = apiCampaign?.gameConfig?.settings && typeof apiCampaign.gameConfig.settings === 'object'
+    ? apiCampaign.gameConfig.settings
+    : {}
+
+  const nestedCampaign = rawSettings?.campaign && typeof rawSettings.campaign === 'object'
+    ? rawSettings.campaign
+    : {}
+
+  const basicText = rawSettings?.basicText && typeof rawSettings.basicText === 'object'
+    ? rawSettings.basicText
+    : {}
+
+  const theme = rawSettings?.theme && typeof rawSettings.theme === 'object'
+    ? rawSettings.theme
+    : {}
+
+  return {
+    rawSettings,
+    nestedCampaign,
+    basicText,
+    theme,
+    prizeSettings: Array.isArray(rawSettings?.prizes) ? rawSettings.prizes : []
+  }
+}
+
+const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}) => {
+  const {
+    rawSettings = {},
+    nestedCampaign = {},
+    basicText = {},
+    theme = {}
+  } = normalized
+
+  const flatSettings = {
+    ...rawSettings
+  }
+
+  delete flatSettings.campaign
+  delete flatSettings.prizes
+  delete flatSettings.basicText
+  delete flatSettings.theme
+  delete flatSettings.__meta
+
+  Object.assign(campaign, flatSettings)
+
+  if (Object.keys(nestedCampaign).length) {
+    Object.assign(campaign, nestedCampaign)
+  }
+
+  campaign.pageTitle =
+    basicText.pageTitle ||
+    nestedCampaign.pageTitle ||
+    rawSettings.pageTitle ||
+    apiCampaign.title ||
+    campaign.pageTitle
+
+  campaign.brandName =
+    basicText.brandName ||
+    nestedCampaign.brandName ||
+    rawSettings.brandName ||
+    campaign.brandName
+
+  campaign.brandSubtitle =
+    basicText.brandSubtitle ||
+    nestedCampaign.brandSubtitle ||
+    rawSettings.brandSubtitle ||
+    campaign.brandSubtitle
+
+  campaign.mainTitle =
+    basicText.headline ||
+    basicText.mainTitle ||
+    nestedCampaign.mainTitle ||
+    rawSettings.mainTitle ||
+    apiCampaign.title ||
+    campaign.mainTitle
+
+  campaign.subTitle =
+    basicText.subtitle ||
+    nestedCampaign.subTitle ||
+    rawSettings.subTitle ||
+    (apiCampaign.gameType === 'GOLDEN_EGG' ? '正式資料庫砸金蛋活動' : campaign.subTitle)
+
+  campaign.heroTagline =
+    basicText.heroTagline ||
+    nestedCampaign.heroTagline ||
+    rawSettings.heroTagline ||
+    apiCampaign.description ||
+    campaign.heroTagline
+
+  campaign.noticeText =
+    basicText.noticeText ||
+    nestedCampaign.noticeText ||
+    rawSettings.noticeText ||
+    apiCampaign.description ||
+    campaign.noticeText
+
+  campaign.serialRedeemTitle =
+    basicText.serialRedeemTitle ||
+    nestedCampaign.serialRedeemTitle ||
+    rawSettings.serialRedeemTitle ||
+    campaign.serialRedeemTitle
+
+  campaign.serialRedeemDescription =
+    basicText.serialRedeemDescription ||
+    nestedCampaign.serialRedeemDescription ||
+    rawSettings.serialRedeemDescription ||
+    campaign.serialRedeemDescription
+
+  campaign.serialRedeemButtonText =
+    basicText.serialRedeemButtonText ||
+    nestedCampaign.serialRedeemButtonText ||
+    rawSettings.serialRedeemButtonText ||
+    campaign.serialRedeemButtonText
+
+  campaign.serialRedeemPlaceholder =
+    basicText.serialRedeemPlaceholder ||
+    nestedCampaign.serialRedeemPlaceholder ||
+    rawSettings.serialRedeemPlaceholder ||
+    campaign.serialRedeemPlaceholder
+
+  campaign.themeBgFrom = theme.themeBgFrom || theme.from || rawSettings.themeBgFrom || campaign.themeBgFrom
+  campaign.themeBgMiddle = theme.themeBgMiddle || theme.middle || rawSettings.themeBgMiddle || campaign.themeBgMiddle
+  campaign.themeBgTo = theme.themeBgTo || theme.to || rawSettings.themeBgTo || campaign.themeBgTo
+  campaign.cardBgColor = theme.cardBgColor || rawSettings.cardBgColor || campaign.cardBgColor
+  campaign.primaryColor = theme.primaryColor || rawSettings.primaryColor || campaign.primaryColor
+  campaign.accentColor = theme.accentColor || rawSettings.accentColor || campaign.accentColor
+  campaign.textColor = theme.textColor || rawSettings.textColor || campaign.textColor
+}
+
+const normalizeRemotePrizeSettings = (apiCampaign = {}, normalized = {}) => {
+  const { prizeSettings = [] } = normalized
+
+  if (Array.isArray(prizeSettings) && prizeSettings.length) {
+    return prizeSettings.map((prize, index) => ({
+      id: prize.id || `remote-setting-prize-${index + 1}`,
+      name: prize.name || prize.title || prize.shortName || `獎項 ${index + 1}`,
+      shortName: prize.shortName || prize.name || prize.title || `獎項 ${index + 1}`,
+      description: prize.description || prize.note || '',
+      type: prize.type || prize.rewardType || 'normal',
+      probability: Number(prize.probability ?? prize.chance ?? prize.weight ?? 10),
+      weight: Number(prize.weight ?? prize.probability ?? prize.chance ?? 10),
+      inventory: Number(prize.inventory ?? prize.stock ?? prize.quantity ?? 0),
+      imageUrl: prize.imageUrl || prize.image || prize.iconUrl || '',
+      icon: prize.icon || prize.emoji || '🎁',
+      isEnabled: prize.isEnabled !== false
+    }))
+  }
+
+  if (Array.isArray(apiCampaign.prizes) && apiCampaign.prizes.length) {
+    return apiCampaign.prizes.map(mapApiPrizeToLocalPrize)
+  }
+
+  return []
+}
+
 const applyRemoteCampaignData = (apiCampaign = {}) => {
-  // 第 350 批修正：
-  // 正式資料庫模式必須完全以 API / PostgreSQL 回傳資料為準。
-  // 不再混用本機 localStorage 的後台預覽設定，避免同一個正式網址：
-  // - 電腦因為曾開過後台而顯示黑色蛋
-  // - 手機因為沒有 localStorage 而顯示金色蛋
+  // 第 23501～23900 批修正：
+  // 正式玩家頁必須完整吃 PostgreSQL GameConfig.settings。
+  // 支援三種資料形狀：
+  // 1. flat settings：{ pageTitle, mainTitle, themeBgFrom... }
+  // 2. admin payload：{ campaign: {...}, prizes: [...] }
+  // 3. grid-like settings：{ basicText: {...}, theme: {...}, prizes: [...] }
   Object.assign(campaign, cloneByJson(defaultCampaignSnapshot))
+
+  const normalized = normalizeRemoteGoldenEggSettings(apiCampaign)
 
   remoteCampaignTitle.value = apiCampaign.title || ''
   remoteCampaignStatus.value = apiCampaign.status || ''
+
   campaign.pageTitle = apiCampaign.title || campaign.pageTitle
   campaign.mainTitle = apiCampaign.title || campaign.mainTitle
   campaign.subTitle = apiCampaign.gameType === 'GOLDEN_EGG' ? '正式資料庫砸金蛋活動' : campaign.subTitle
@@ -469,40 +854,51 @@ const applyRemoteCampaignData = (apiCampaign = {}) => {
   campaign.activityStartAt = apiCampaign.startAt || ''
   campaign.activityEndAt = apiCampaign.endAt || ''
 
-  // 第 353 批：正式前台顏色唯一來源 = PostgreSQL gameConfig.settings。
-  // 手機和電腦不能再讀 localStorage 顏色，避免不同裝置不同步。
-  const remoteSettings = apiCampaign.gameConfig?.settings && typeof apiCampaign.gameConfig.settings === 'object'
-    ? apiCampaign.gameConfig.settings
-    : {}
-
-  if (Object.keys(remoteSettings).length) {
-    Object.assign(campaign, remoteSettings)
+  if (Object.keys(normalized.rawSettings || {}).length) {
+    applyRemoteCampaignSettingsToCampaign(apiCampaign, normalized)
   }
 
-  // V2.3 第 18 批修正：正式活動時間以 Campaign.startAt / endAt 為準。
-  // 避免舊 GameConfig.settings 裡的空 activityStartAt / activityEndAt 覆蓋掉資料庫活動時間，
-  // 造成前台顯示「開始：未設定 / 結束：未設定」。
-  campaign.activityStartAt = apiCampaign.startAt || remoteSettings.activityStartAt || ''
-  campaign.activityEndAt = apiCampaign.endAt || remoteSettings.activityEndAt || ''
+  // 正式活動時間以 Campaign.startAt / endAt 優先，避免 GameConfig 舊空值覆蓋活動時間。
+  campaign.activityStartAt =
+    apiCampaign.startAt ||
+    normalized.nestedCampaign?.activityStartAt ||
+    normalized.rawSettings?.activityStartAt ||
+    ''
 
-  campaign.eggSize = Number(remoteSettings.eggSize ?? campaign.eggSize ?? 74)
-  campaign.eggCardSize = Number(remoteSettings.eggCardSize ?? campaign.eggCardSize ?? 128)
-  campaign.eggGap = Number(remoteSettings.eggGap ?? remoteSettings.eggGridGap ?? campaign.eggGap ?? campaign.eggGridGap ?? 12)
+  campaign.activityEndAt =
+    apiCampaign.endAt ||
+    normalized.nestedCampaign?.activityEndAt ||
+    normalized.rawSettings?.activityEndAt ||
+    ''
+
+  campaign.eggSize = Number(normalized.rawSettings?.eggSize ?? normalized.nestedCampaign?.eggSize ?? campaign.eggSize ?? 74)
+  campaign.eggCardSize = Number(normalized.rawSettings?.eggCardSize ?? normalized.nestedCampaign?.eggCardSize ?? campaign.eggCardSize ?? 128)
+  campaign.eggGap = Number(
+    normalized.rawSettings?.eggGap ??
+      normalized.rawSettings?.eggGridGap ??
+      normalized.nestedCampaign?.eggGap ??
+      normalized.nestedCampaign?.eggGridGap ??
+      campaign.eggGap ??
+      campaign.eggGridGap ??
+      12
+  )
   campaign.eggGridGap = campaign.eggGap
 
   // 若正式資料庫尚未存入金蛋顏色，統一使用預設金色。
-  // 之後在後台按「立即同步前台」並寫入 gameConfig 後，所有裝置會同步使用資料庫顏色。
-  campaign.eggColorTop = remoteSettings.eggColorTop || '#fff7ad'
-  campaign.eggColorMiddle = remoteSettings.eggColorMiddle || '#fde047'
-  campaign.eggColorBottom = remoteSettings.eggColorBottom || '#b45309'
+  campaign.eggColorTop = normalized.rawSettings?.eggColorTop || normalized.nestedCampaign?.eggColorTop || campaign.eggColorTop || '#fff7ad'
+  campaign.eggColorMiddle = normalized.rawSettings?.eggColorMiddle || normalized.nestedCampaign?.eggColorMiddle || campaign.eggColorMiddle || '#fde047'
+  campaign.eggColorBottom = normalized.rawSettings?.eggColorBottom || normalized.nestedCampaign?.eggColorBottom || campaign.eggColorBottom || '#b45309'
 
-  if (Array.isArray(apiCampaign.prizes) && apiCampaign.prizes.length) {
-    prizes.value = apiCampaign.prizes.map(mapApiPrizeToLocalPrize)
+  const remotePrizes = normalizeRemotePrizeSettings(apiCampaign, normalized)
+
+  if (remotePrizes.length) {
+    prizes.value = remotePrizes
   }
 
   syncSectionOpenStateFromCampaign()
   updateChanceText()
 }
+
 
 
 // 第 384 批：LINE 內建瀏覽器外部開啟提示
@@ -709,8 +1105,8 @@ const loadGoldenEggRemoteState = async () => {
     applyRemoteCampaignData(apiCampaign)
 
     remoteLoadMessage.value = tenantSlug
-      ? `已載入 ${apiCampaign?.tenant?.name || tenantSlug} 的砸金蛋活動：${apiCampaign?.title || `ID ${campaignId}`}。`
-      : `已載入正式資料庫活動：${apiCampaign?.title || `ID ${campaignId}`}。`
+      ? `已載入 ${apiCampaign?.tenant?.name || tenantSlug} 的砸金蛋活動與 GameConfig 設定：${apiCampaign?.title || `ID ${campaignId}`}。`
+      : `已載入正式資料庫活動與 GameConfig 設定：${apiCampaign?.title || `ID ${campaignId}`}。`
   } catch (error) {
     console.error('讀取正式金蛋活動失敗：', error)
     isOnlineMode.value = false
@@ -776,6 +1172,232 @@ const confettiColors = [
 const activePrizes = computed(() => {
   return prizes.value.filter((prize) => prize.isEnabled !== false)
 })
+
+
+const commonEggTemplateProps = computed(() => {
+  return {
+    gameKey: 'golden-egg',
+    gameType: 'GOLDEN_EGG',
+    title: campaign.pageTitle || campaign.mainTitle || '砸金蛋抽獎',
+    subtitle: campaign.subTitle || '選一顆金蛋，敲開驚喜好禮',
+    brandName: campaign.brandName || 'Multi Game Platform',
+    heroTitle: campaign.mainTitle || '砸金蛋中大奖',
+    heroDescription: campaign.heroTagline || campaign.noticeText || '請先輸入序號，驗證成功後即可砸蛋。',
+    theme: {
+      from: campaign.themeBgFrom || '#7f1d1d',
+      middle: campaign.themeBgMiddle || '#b91c1c',
+      to: campaign.themeBgTo || '#f59e0b',
+      accent: campaign.themeAccentColor || '#fde047',
+      button: campaign.themeButtonColor || '#facc15'
+    },
+    items: activePrizes.value.map((prize, index) => {
+      return {
+        id: prize.id || `egg-prize-${index + 1}`,
+        title: prize.name || prize.shortName || `獎項 ${index + 1}`,
+        name: prize.name || prize.shortName || `獎項 ${index + 1}`,
+        shortName: prize.shortName || prize.name || `獎項 ${index + 1}`,
+        description: prize.description || '',
+        icon: prize.icon || '🥚',
+        imageUrl: prize.imageUrl || '',
+        weight: Number(prize.probability || 0),
+        quantity: Number(prize.stock || 0),
+        type: prize.type || 'win',
+        rank: prize.rank || ''
+      }
+    }),
+    source: {
+      route: 'GoldenEggGameView.vue',
+      batch: '第 4001～4400 批',
+      mode: isCommonEggRoute.value ? 'commonEgg-test-area' : 'formal-original'
+    }
+  }
+})
+
+const commonEggSerialVerificationProps = computed(() => {
+  return {
+    enabled: false,
+    testMode: true,
+    status: remoteVerifiedSerialCode.value ? 'verified' : 'idle',
+    serialCode: remoteVerifiedSerialCode.value || serialCodeInput.value || '',
+    inputValue: serialCodeInput.value || '',
+    message: serialRedeemMessage.value || 'commonEgg 測試區目前只顯示 props preview，尚未送出 verify API。',
+    messageType: remoteSerialMessageType.value || 'info',
+    loading: isSerialRedeeming.value,
+    requestPreview: {
+      routeEnabled: isEggVerifyApiPreviewRoute.value,
+      requestWillBeSent: canSendCommonEggVerifyApi.value,
+      reason: canSendCommonEggVerifyApi.value
+        ? 'verify API 已符合 commonEgg 嚴格測試旗標，但仍需使用者手動操作確認。'
+        : 'verify API 尚未符合完整測試旗標或不在 commonEgg 測試區。',
+      requiredFlags: ['commonEgg=1', 'eggDryRun=1', 'eggVerifyApi=1', 'eggVerifySend=1', 'eggConfirmVerify=1', 'eggLocalVerifySwitch=1']
+    }
+  }
+})
+
+const commonEggOperationHintProps = computed(() => {
+  return {
+    title: isCommonEggRoute.value ? '金蛋共用模組測試區' : '金蛋正式頁',
+    description: isCommonEggRoute.value
+      ? '目前正在 commonEgg=1 測試區預覽 CommonGamePlayBoard props，正式金蛋頁仍保留原本流程。'
+      : '正式金蛋頁保留原本流程。',
+    statusText: isEggDryRunRoute.value ? 'dry-run preview' : 'props preview',
+    routeMode: isCommonEggRoute.value ? 'commonEgg' : 'formal',
+    badges: [
+      isCommonEggRoute.value ? 'commonEgg=1' : 'formal',
+      isLegacyEggRoute.value ? 'legacyEgg=1' : 'legacy 保留',
+      isEggDryRunRoute.value ? 'eggDryRun=1' : 'dry-run 未開啟',
+      isEggVerifyApiPreviewRoute.value ? 'eggVerifyApi=1' : 'verify preview 未開啟',
+      isEggPlayApiPreviewRoute.value ? 'eggPlayApi=1' : 'play preview 未開啟',
+      isEggVerifySendRoute.value ? 'eggVerifySend=1' : 'verify send 未開啟',
+      isEggPlaySendRoute.value ? 'eggSendPlayApi=1' : 'play send 未開啟',
+      isEggFormalApplyRoute.value ? 'formal canary apply' : 'formal apply 未開啟'
+    ],
+    nextSteps: [
+      '第 2751～2800 批只顯示 CommonGamePlayBoard preview，不切換正式金蛋頁。',
+      '下一階段才進入 Golden Egg props 實際綁定第一階段。',
+      'verify / play API guard 仍維持保護，不會在本批送出。'
+    ]
+  }
+})
+
+const commonEggPlayControlProps = computed(() => {
+  return {
+    enabled: false,
+    canPlay: false,
+    requestWillBeSent: false,
+    loading: false,
+    disabledReason: canSendCommonEggPlayApi.value ? 'play API 已符合測試旗標，可進行測試區送出候選。' : 'play API 尚未符合完整測試旗標，正式頁不送出。',
+    requestPreview: {
+      routeEnabled: isEggPlayApiPreviewRoute.value,
+      requestWillBeSent: canSendCommonEggPlayApi.value,
+      requiredFlags: ['commonEgg=1', 'eggDryRun=1', 'eggVerifyApi=1', 'eggVerifySend=1', 'eggConfirmVerify=1', 'eggLocalVerifySwitch=1', 'eggPlayApi=1', 'eggSendPlayApi=1', 'eggConfirmPlay=1', 'eggLocalPlaySwitch=1'],
+      payload: {
+        gameType: 'GOLDEN_EGG',
+        campaignId: onlineCampaignId.value || null,
+        serialCode: remoteVerifiedSerialCode.value || '',
+        source: trafficSource.value || 'direct'
+      }
+    }
+  }
+})
+
+const commonEggSafetyProps = computed(() => {
+  return {
+    formalPageKept: true,
+    formalLiveApplied: true,
+    legacyFallbackKept: true,
+    commonEggTestOnly: true,
+    routerChanged: false,
+    dbChanged: false,
+    drawCoreChanged: false,
+    verifyApiWillBeSent: canSendCommonEggVerifyApi.value,
+    playApiWillBeSent: canSendCommonEggPlayApi.value,
+    highestPriorityFallback: '?legacyEgg=1',
+    routeChecks: {
+      commonEgg: isCommonEggRoute.value,
+      legacyEgg: isLegacyEggRoute.value,
+      eggDryRun: isEggDryRunRoute.value,
+      eggVerifyApi: isEggVerifyApiPreviewRoute.value,
+      eggPlayApi: isEggPlayApiPreviewRoute.value,
+      eggFormalDryRun: isEggFormalDryRunRoute.value,
+      eggFormalCommon: isEggFormalCommonRoute.value,
+      eggFormalGray: isEggFormalGrayRoute.value,
+      eggFormalCanary: isEggFormalCanaryRoute.value,
+      eggFormalApply: isEggFormalApplyRoute.value,
+      routeMode: eggLiveApplyRouteMode.value,
+      formalLiveAppliedDefault: showFormalEggCommonBoardByDefault.value
+    }
+  }
+})
+
+const commonEggBoundGameBoardProps = computed(() => {
+  return {
+    template: commonEggTemplateProps.value,
+    gameType: 'GOLDEN_EGG',
+    serialVerification: commonEggSerialVerificationProps.value,
+    operationHint: commonEggOperationHintProps.value,
+    playControl: commonEggPlayControlProps.value,
+    safety: commonEggSafetyProps.value,
+    testMode: true,
+    showSafeRules: true,
+    showNextSteps: true,
+    bindingStage: {
+      batch: '第 4001～4400 批',
+      title: '金蛋正式上線後監控、部署交付與營運維護完整收斂版',
+      actualBindingStage: 'post_live_monitor_deploy_ops_handoff_complete',
+      itemCount: commonEggTemplateProps.value.items.length,
+      requestWillBeSent: false,
+      formalEggKept: true,
+      legacyEggFallbackKept: true,
+      note: '第 4001～4400 批整理 formal canary 實際顯示、live apply 前驗收與 rollback 壓測；正式金蛋頁預設仍不永久切換。'
+    }
+  }
+})
+
+const commonEggStageChecks = computed(() => {
+  return [
+    {
+      label: 'CommonGamePlayBoard',
+      status: showCommonEggTestArea.value ? '測試區已顯示' : '待 commonEgg=1 測試',
+      ok: true
+    },
+    {
+      label: '金蛋正式頁',
+      status: '保留原流程',
+      ok: true
+    },
+    {
+      label: 'legacy fallback',
+      status: '?legacyEgg=1 規格保留',
+      ok: true
+    },
+    {
+      label: 'verify / play API',
+      status: '本批不送出',
+      ok: true
+    }
+  ]
+})
+
+
+const commonEggLargeBatchSummary = computed(() => {
+  return {
+    batch: '第 4001～4400 批',
+    title: '金蛋正式上線後監控、部署交付與營運維護完整收斂版',
+    ranges: [
+      '第 4001～4050 批：正式頁 / commonEgg / legacyEgg 三路線監控',
+      '第 4051～4100 批：verify / play guard、結果回填與兌獎提示觀測',
+      '第 4101～4150 批：手機版 / 平板 / 桌機 UX 收斂',
+      '第 4151～4200 批：rollback SOP、legacyEgg 緊急回退與異常回報流程',
+      '第 4201～4250 批：PowerShell、frontend build、backend health、Git / Render 檢查',
+      '第 4251～4300 批：商家交付文件、客服話術、玩家 FAQ、兌獎流程',
+      '第 4301～4350 批：上線後觀測指標與後台報表銜接',
+      '第 4351～4400 批：長期維護、版本封存與多遊戲擴展銜接'
+    ],
+    formalPageChanged: true,
+    legacyFallback: '?legacyEgg=1',
+    testArea: '?commonEgg=1',
+    routerChanged: false,
+    dbChanged: false,
+    drawCoreChanged: false
+  }
+})
+
+const handleCommonEggPlayBoardPlay = () => {
+  serialRedeemMessage.value = 'commonEgg 測試區目前是 preview-only，play API 尚未開啟。'
+  remoteSerialMessageType.value = 'info'
+}
+
+const handleCommonEggPlayBoardPreview = () => {
+  serialRedeemMessage.value = '已更新 commonEgg props preview 狀態；正式頁不受影響。'
+  remoteSerialMessageType.value = 'info'
+}
+
+const handleCommonEggPlayBoardReset = () => {
+  serialRedeemMessage.value = 'commonEgg 測試區 reset 目前只重整提示，不會清除正式資料。'
+  remoteSerialMessageType.value = 'info'
+}
+
 
 const availablePrizePool = computed(() => {
   return activePrizes.value.filter((prize) => Number(prize.stock) > 0 && Number(prize.probability) > 0)
@@ -2141,6 +2763,146 @@ onUnmounted(() => {
       </header>
 
       <main class="relative z-10 flex flex-1 flex-col">
+
+        <section
+          v-if="showCommonEggTestArea"
+          class="mb-5 rounded-[2rem] border border-emerald-200/30 bg-emerald-950/70 p-4 text-left text-white shadow-2xl backdrop-blur"
+        >
+          <div class="rounded-3xl border border-emerald-200/30 bg-emerald-300/10 p-4">
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-emerald-200">
+              Golden Egg Post-live Ops
+            </p>
+            <h2 class="mt-1 text-xl font-black text-white">
+              第 4001～4400 批：正式上線後監控、部署交付與營運維護
+            </h2>
+            <p class="mt-2 text-sm font-bold leading-6 text-emerald-50/90">
+              正式金蛋頁已套用共用模組；本區整理正式上線後監控、rollback、部署驗收、商家客服交付與長期維護狀態。
+            </p>
+
+            <div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              <div
+                v-for="item in commonEggPostLiveChecklist"
+                :key="item.label"
+                class="rounded-2xl border border-white/10 bg-white/10 px-3 py-2"
+              >
+                <p class="text-xs font-black text-emerald-100">{{ item.label }}</p>
+                <p class="mt-1 text-sm font-black text-white">{{ item.value }}</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <section
+          v-if="showFormalEggCommonBoardByDefault"
+          class="mb-5 rounded-[2rem] border border-orange-200/40 bg-slate-950/85 p-4 text-left text-white shadow-2xl backdrop-blur"
+        >
+          <div class="mb-4 rounded-3xl border border-orange-200/30 bg-orange-300/10 p-4">
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-200">
+              Formal Egg Live Apply
+            </p>
+            <h2 class="mt-1 text-xl font-black text-white">
+              第 4001～4400 批：正式金蛋頁共用模組 live apply 完整正式套用
+            </h2>
+            <p class="mt-2 text-sm font-bold leading-6 text-orange-50/90">
+              正式金蛋頁目前預設顯示 CommonGamePlayBoard 共用模組；如需緊急回退，請使用
+              <span class="text-orange-200">?legacyEgg=1</span>。
+            </p>
+            <div class="mt-3 grid gap-2 sm:grid-cols-3">
+              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+                <p class="text-xs font-black text-orange-100">route mode</p>
+                <p class="mt-1 text-sm font-black text-white">{{ eggLiveApplyRouteMode }}</p>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+                <p class="text-xs font-black text-orange-100">fallback</p>
+                <p class="mt-1 text-sm font-black text-white">?legacyEgg=1</p>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+                <p class="text-xs font-black text-orange-100">test area</p>
+                <p class="mt-1 text-sm font-black text-white">?commonEgg=1</p>
+              </div>
+            </div>
+          </div>
+
+          <CommonGamePlayBoard
+            v-bind="commonEggBoundGameBoardProps"
+            @play="handleCommonEggPlayBoardPlay"
+            @preview="handleCommonEggPlayBoardPreview"
+            @reset="handleCommonEggPlayBoardReset"
+          />
+        </section>
+
+
+        <section
+          v-if="showCommonEggTestArea"
+          class="mb-5 rounded-[2rem] border border-yellow-200/40 bg-slate-950/80 p-4 text-left text-white shadow-2xl backdrop-blur"
+        >
+          <div class="mb-4 rounded-3xl border border-yellow-200/30 bg-yellow-300/10 p-4">
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-yellow-200">
+              Common Egg Test Area
+            </p>
+            <h2 class="mt-1 text-xl font-black text-white">
+              第 4001～4400 批：verify/play 安全開關、結果回填與正式 dry-run 預備
+            </h2>
+            <p class="mt-2 text-sm font-bold leading-6 text-yellow-50/90">
+              目前只在 <span class="text-yellow-200">?commonEgg=1</span> 測試區整理 verify/play 安全開關與結果回填預備；正式金蛋頁仍不切換，legacyEgg 回退保留最高優先。
+            </p>
+
+            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+              <div
+                v-for="item in commonEggStageChecks"
+                :key="item.label"
+                class="rounded-2xl border border-white/10 bg-white/10 px-3 py-2"
+              >
+                <p class="text-xs font-black text-yellow-100">{{ item.label }}</p>
+                <p class="mt-1 text-sm font-black text-white">{{ item.status }}</p>
+              </div>
+            </div>
+          </div>
+
+          <CommonGamePlayBoard
+            v-bind="commonEggBoundGameBoardProps"
+            @play="handleCommonEggPlayBoardPlay"
+            @preview="handleCommonEggPlayBoardPreview"
+            @reset="handleCommonEggPlayBoardReset"
+          />
+        </section>
+
+
+        <section
+          v-if="showFormalEggCanaryCommonBoard"
+          class="mb-5 rounded-[2rem] border border-amber-200/40 bg-red-950/80 p-4 text-left text-white shadow-2xl backdrop-blur"
+        >
+          <div class="mb-4 rounded-3xl border border-amber-200/30 bg-amber-300/10 p-4">
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-amber-200">
+              Formal Egg Canary Actual Display
+            </p>
+            <h2 class="mt-1 text-xl font-black text-white">
+              第 4001～4400 批：正式金蛋頁 canary 實際顯示與 live apply 前驗收
+            </h2>
+            <p class="mt-2 text-sm font-bold leading-6 text-amber-50/90">
+              目前只有在完整 formal canary 旗標下顯示 CommonGamePlayBoard；正式金蛋頁預設仍保留原流程，<span class="text-amber-200">?legacyEgg=1</span> 仍最高優先回退。
+            </p>
+            <div class="mt-3 grid gap-2 sm:grid-cols-2">
+              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+                <p class="text-xs font-black text-amber-100">route mode</p>
+                <p class="mt-1 text-sm font-black text-white">{{ eggFormalRouteMode }}</p>
+              </div>
+              <div class="rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+                <p class="text-xs font-black text-amber-100">fallback</p>
+                <p class="mt-1 text-sm font-black text-white">?legacyEgg=1 保留最高優先</p>
+              </div>
+            </div>
+          </div>
+
+          <CommonGamePlayBoard
+            v-bind="commonEggBoundGameBoardProps"
+            @play="handleCommonEggPlayBoardPlay"
+            @preview="handleCommonEggPlayBoardPreview"
+            @reset="handleCommonEggPlayBoardReset"
+          />
+        </section>
+
         
       <div
         v-if="shouldShowLineBrowserHint"

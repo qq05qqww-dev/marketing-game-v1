@@ -1,0 +1,506 @@
+# Multi Game Platform V2.3 第 98 批
+# 多遊戲共用化階段總結與正式接入規劃版
+
+## 一、這批目標
+
+第 50 批到第 97 批，已經完成一大段「多遊戲共用化」基礎建設。
+
+目前已經不是單純做九宮格或金蛋，而是逐步把平台整理成：
+
+共用平台核心 + 多種玩法 PlayBoard + 共用前台元件 + 共用預覽頁
+
+這份文件用來整理：
+
+1. 目前已完成什麼
+2. 哪些檔案已經可以當共用基礎
+3. 哪些功能還只是草案預覽
+4. 哪些不能急著正式接入
+5. 下一階段要怎麼安全地接到正式遊戲
+
+---
+
+## 二、目前確認正常的正式基準
+
+### 1. 正式九宮格
+
+目前正式九宮格仍然是：
+
+frontend/src/views/games/PremiumGridLotteryView.vue
+
+目前穩定基準：
+
+PremiumGridLotteryView_v23_batch74_use_common_footer_info_copy.txt
+
+已接入共用元件：
+
+- GameResultModal.vue
+- GamePrizeShowcase.vue
+- GameRulesPanel.vue
+- GameChanceCard.vue
+- GameDrawLogs.vue
+- GameClaimInfo.vue
+- GameActivityHeader.vue
+- GameStatusNotice.vue
+- GameQuickNav.vue
+- GameFooterInfo.vue
+
+正式網址：
+
+/play/:tenantSlug/premium-grid
+
+例如：
+
+http://localhost:5173/play/a-shop/premium-grid
+
+---
+
+### 2. 正式金蛋
+
+正式金蛋仍然維持原本穩定流程。
+
+正式網址：
+
+/play/:tenantSlug/golden-egg
+
+例如：
+
+http://localhost:5173/play/a-shop/golden-egg
+
+注意：
+
+目前金蛋尚未正式改接 PlayBoard / GameShell；
+不要直接動正式金蛋頁。
+
+---
+
+### 3. 共用預覽頁
+
+目前共用預覽頁是：
+
+frontend/src/views/games/GenericGamePlayView.vue
+
+目前穩定基準：
+
+GenericGamePlayView_v23_batch97_add_slot_machine_preview_copy.txt
+
+測試路由：
+
+/games/generic-preview
+
+例如：
+
+http://localhost:5173/games/generic-preview
+
+目前可切換預覽：
+
+- GOLDEN_EGG：金蛋
+- GRID：九宮格
+- WHEEL：輪盤
+- SCRATCH_CARD：刮刮卡
+- FLIP_CARD：翻牌
+- RED_PACKET：紅包雨
+- SLOT_MACHINE：拉霸機
+
+---
+
+## 三、目前已完成的共用元件
+
+資料夾：
+
+frontend/src/components/game-common/
+
+目前已完成：
+
+1. GameResultModal.vue
+   - 結果彈窗
+   - 中獎 / 未中獎
+   - 領獎提醒
+   - 分享
+   - 查看紀錄
+
+2. GamePrizeShowcase.vue
+   - 獎品展示
+   - 亮點獎項
+   - 庫存
+   - 權重
+   - 展開 / 收合
+
+3. GameRulesPanel.vue
+   - 活動規則
+   - 獎品說明
+   - 展開 / 收合
+
+4. GameChanceCard.vue
+   - 抽獎機會
+   - 分享次數
+   - 抽選狀態
+   - 主按鈕
+   - 分享按鈕
+
+5. GameDrawLogs.vue
+   - 最新抽獎紀錄
+   - 最新高亮
+   - 分享來源
+   - 清空暫存紀錄
+
+6. GameClaimInfo.vue
+   - 領獎提醒
+   - 保留結果
+   - 查看紀錄
+   - 聯絡確認
+
+7. GameActivityHeader.vue
+   - 活動主視覺
+   - 商家名稱
+   - 狀態
+   - 統計卡
+
+8. GameStatusNotice.vue
+   - 載入中
+   - 載入失敗
+   - 尚未開放
+   - 同步時間
+   - 重新載入
+
+9. GameQuickNav.vue
+   - 快速導覽
+   - 回到頂部
+   - 已修正單一根節點問題
+
+10. GameFooterInfo.vue
+    - 底部活動資訊
+    - 活動商家
+    - 活動狀態
+    - 活動來源
+    - 同步時間
+
+11. GameShell.vue
+    - 共用活動頁外框
+    - 手機框
+    - 管理模式側欄
+    - slot 架構
+
+12. GamePreviewSwitcher.vue
+    - 多玩法切換器
+    - 已接入 GenericGamePlayView
+
+13. gameCommonIndex.js
+    - 共用元件集中匯出
+    - 已補入 GamePreviewSwitcher.vue
+
+---
+
+## 四、目前已完成的 PlayBoard 玩法元件
+
+資料夾：
+
+frontend/src/views/games/playboards/
+
+目前已完成：
+
+1. PremiumGridPlayBoard.vue
+   - 九宮格玩法骨架
+
+2. GoldenEggPlayBoard.vue
+   - 金蛋玩法骨架
+
+3. LuckyWheelPlayBoard.vue
+   - 輪盤玩法骨架
+
+4. ScratchCardPlayBoard.vue
+   - 刮刮卡玩法骨架
+
+5. FlipCardPlayBoard.vue
+   - 翻牌玩法骨架
+
+6. RedPacketPlayBoard.vue
+   - 紅包雨玩法骨架
+
+7. SlotMachinePlayBoard.vue
+   - 拉霸機玩法骨架
+
+8. playboardsIndex.js
+   - 玩法元件集中匯出
+   - 已補入 RedPacketPlayBoard
+   - 已補入 SlotMachinePlayBoard
+
+---
+
+## 五、目前已完成的共用核心檔案
+
+### 1. gameRegistry.js
+
+位置：
+
+frontend/src/games/gameRegistry.js
+
+用途：
+
+- 統一 gameType
+- 統一遊戲名稱
+- 統一前台路徑
+- 統一遊戲狀態
+- 統一預設設定
+- 統一支援功能
+
+目前包含：
+
+- GOLDEN_EGG
+- GRID
+- WHEEL
+- SCRATCH_CARD
+- FLIP_CARD
+- RED_PACKET
+- SLOT_MACHINE
+
+---
+
+### 2. useGameActivityCore.js
+
+位置：
+
+frontend/src/composables/useGameActivityCore.js
+
+用途：
+
+- 活動資料
+- 商家資料
+- 狀態判斷
+- 獎品資料標準化
+- 來源追蹤
+- 活動摘要
+
+目前尚未正式接入九宮格或金蛋，只是先建立。
+
+---
+
+### 3. useGameDrawEngine.js
+
+位置：
+
+frontend/src/composables/useGameDrawEngine.js
+
+用途：
+
+- 抽獎狀態
+- 抽獎錯誤
+- 結果標準化
+- 中獎 / 未中獎 / 加碼判斷
+- 剩餘次數
+
+目前尚未正式接入九宮格或金蛋，只是先建立。
+
+---
+
+## 六、目前已完成的說明文件
+
+建議放在：
+
+docs/
+
+目前文件：
+
+1. Multi_Game_Platform_v23_batch57_golden_egg_based_common_core_plan.txt
+   - 以金蛋為基礎的多遊戲共用核心規劃
+
+2. game_template_guide_v23_batch77.txt
+   - 新增多遊戲模板流程
+
+3. playboard_development_guide_v23_batch91.txt
+   - PlayBoard 開發規範
+
+4. multi_game_common_stage_summary_v23_batch98.txt
+   - 本文件，多遊戲共用化階段總結與正式接入規劃
+
+---
+
+## 七、目前哪些是正式功能，哪些是草案功能
+
+### 正式功能
+
+可以視為正式穩定：
+
+- /play/:tenantSlug/premium-grid
+- /play/:tenantSlug/golden-egg
+- 後台金蛋管理
+- 報表中心
+- 商家多租戶
+- 九宮格正式前台
+- 金蛋正式前台
+
+---
+
+### 草案功能
+
+目前仍是草案 / 預覽：
+
+- /games/generic-preview
+- GenericGamePlayView.vue
+- 各 PlayBoard 骨架
+- useGameActivityCore.js
+- useGameDrawEngine.js
+- GameShell.vue
+
+這些目前可以測畫面與共用方向，但還不能直接取代正式頁。
+
+---
+
+## 八、下一階段正式接入策略
+
+接下來不能直接把正式金蛋或九宮格全部換成 GenericGamePlayView。
+
+安全順序應該是：
+
+### 第一步：繼續讓 GenericGamePlayView 變成熟
+
+目標：
+
+- 預覽頁切換穩定
+- 各玩法元件不報錯
+- 手機版畫面不破
+- 事件流程統一
+
+---
+
+### 第二步：先讓九宮格玩法區抽成 PremiumGridPlayBoard
+
+原因：
+
+九宮格目前已經大量接入共用元件，最適合先進一步拆玩法區。
+
+但注意：
+
+一開始不能直接刪掉原本九宮格玩法區。
+
+應該先做：
+
+1. 建立可切換模式
+2. admin/debug 模式用 PlayBoard
+3. 正式玩家頁保留原本九宮格
+4. 確認穩定後再正式替換
+
+---
+
+### 第三步：金蛋先只接共用顯示元件，不急著接 GameShell
+
+金蛋是正式商家功能基礎，不能冒險大拆。
+
+建議先從小元件開始：
+
+- GameResultModal
+- GamePrizeShowcase
+- GameDrawLogs
+- GameClaimInfo
+
+不要一開始就改：
+
+- GameShell
+- useGameActivityCore
+- useGameDrawEngine
+- GoldenEggPlayBoard
+
+---
+
+### 第四步：新增新遊戲時，先走 GenericGamePlayView
+
+例如：
+
+- 輪盤
+- 刮刮卡
+- 翻牌
+- 紅包雨
+- 拉霸機
+
+先在 /games/generic-preview 測完玩法；
+再建立正式路由；
+最後再接後台活動與抽獎 API。
+
+---
+
+## 九、下一階段建議批次
+
+第 98 批：
+多遊戲共用化階段總結與正式接入規劃版
+
+第 99 批：
+建立 GenericGamePlayView 預覽頁操作說明區塊版
+
+第 100 批：
+建立 GenericGamePlayView 預覽狀態檢查卡版
+
+第 101 批：
+建立 useGenericPreviewState.js 草案預覽狀態 composable 版
+
+第 102 批：
+GenericGamePlayView 抽離本機示範資料 demoPrizes 版
+
+第 103 批：
+建立 demoGameData.js 多玩法預覽資料檔版
+
+第 104 批：
+GenericGamePlayView 改用 demoGameData.js 版
+
+第 105 批：
+PremiumGridPlayBoard 與正式九宮格資料格式比對版
+
+第 106 批：
+九宮格正式頁加入 PlayBoard 測試開關版
+
+---
+
+## 十、目前不要做的事情
+
+暫時不要做：
+
+1. 不要直接把正式九宮格換成 GenericGamePlayView
+2. 不要直接把正式金蛋換成 GenericGamePlayView
+3. 不要直接刪掉 PremiumGridLotteryView 內原本玩法邏輯
+4. 不要直接改後端抽獎 API 結構
+5. 不要一次接 useGameActivityCore + useGameDrawEngine 到正式頁
+6. 不要把草案預覽路由當正式商家路由
+
+原因：
+
+目前草案功能是為了驗證架構，不是正式活動頁。
+
+---
+
+## 十一、目前最安全的下一步
+
+建議下一步不要急著動正式頁。
+
+最安全下一步是：
+
+第 99 批：
+建立 GenericGamePlayView 預覽頁操作說明區塊版
+
+目的：
+
+- 讓預覽頁清楚標示這是草案
+- 說明如何切換 gameType
+- 說明哪些是預覽資料
+- 說明不影響正式九宮格與金蛋
+- 方便之後自己測試與展示
+
+---
+
+## 十二、結論
+
+目前多遊戲平台已經完成很重要的一步：
+
+從「每個遊戲各做一套」
+進化成
+「共用元件 + 玩法元件 + 共用預覽頁」
+
+接下來的重點不是一直新增畫面，
+而是把草案頁整理穩定，再慢慢、安全地把正式頁接上共用核心。
+
+目前正式功能仍以：
+
+- PremiumGridLotteryView.vue
+- GoldenEggGameView.vue
+- AdminGoldenEggView.vue
+
+為穩定基礎。
+
+GenericGamePlayView.vue 則是未來多遊戲正式共用頁的草案基礎。

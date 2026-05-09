@@ -1,0 +1,574 @@
+# Multi Game Platform V2.3 第 106 批
+# PremiumGridPlayBoard 與正式九宮格資料格式比對版
+
+## 一、這批目標
+
+這批不改程式，只做正式接入前的資料格式比對。
+
+目前正式九宮格頁面：
+
+frontend/src/views/games/PremiumGridLotteryView.vue
+
+目前玩法骨架元件：
+
+frontend/src/views/games/playboards/PremiumGridPlayBoard.vue
+
+接下來如果要把正式九宮格的 3x3 玩法區逐步抽成 PlayBoard，不能直接硬換。
+
+必須先確認：
+
+1. 正式九宮格目前需要哪些資料
+2. PremiumGridPlayBoard 目前需要哪些 props
+3. 正式九宮格目前有哪些事件流程
+4. PremiumGridPlayBoard 目前有哪些 emit
+5. 哪些可以直接對應
+6. 哪些需要補強
+7. 下一步怎麼安全接入
+
+---
+
+## 二、目前正式九宮格穩定基準
+
+正式九宮格目前穩定基準：
+
+PremiumGridLotteryView_v23_batch74_use_common_footer_info_copy.txt
+
+正式網址：
+
+/play/:tenantSlug/premium-grid
+
+例如：
+
+http://localhost:5173/play/a-shop/premium-grid
+
+目前正式九宮格已接入共用元件：
+
+- GameResultModal.vue
+- GamePrizeShowcase.vue
+- GameRulesPanel.vue
+- GameChanceCard.vue
+- GameDrawLogs.vue
+- GameClaimInfo.vue
+- GameActivityHeader.vue
+- GameStatusNotice.vue
+- GameQuickNav.vue
+- GameFooterInfo.vue
+
+尚未正式接入：
+
+- PremiumGridPlayBoard.vue
+- GameShell.vue
+- useGameActivityCore.js
+- useGameDrawEngine.js
+
+---
+
+## 三、PremiumGridPlayBoard 目前 props
+
+目前 PremiumGridPlayBoard.vue 支援：
+
+### items
+
+用途：
+
+九宮格 3x3 顯示資料。
+
+目前格式建議：
+
+{
+  id: 1,
+  title: '品牌折價券',
+  shortName: '折價券',
+  icon: '🎟️',
+  imageUrl: '',
+  quantity: 10,
+  remainStock: 10,
+  isButton: false
+}
+
+中心抽獎按鈕格式：
+
+{
+  id: 'draw_button',
+  isButton: true,
+  title: '開始',
+  shortName: '開始',
+  icon: '🎯'
+}
+
+---
+
+### activeIndex
+
+用途：
+
+目前跑燈高亮的位置。
+
+格式：
+
+Number
+
+範例：
+
+0 到 8
+
+---
+
+### disabled
+
+用途：
+
+是否禁止點擊抽獎。
+
+格式：
+
+Boolean
+
+正式頁可由以下條件決定：
+
+- 活動尚未開放
+- 活動已結束
+- 沒有抽獎機會
+- 獎品已抽完
+- 正在抽選中
+- 載入中
+- API 錯誤
+
+---
+
+### isDrawing
+
+用途：
+
+是否正在抽獎動畫中。
+
+格式：
+
+Boolean
+
+正式頁目前應該已有類似：
+
+- isDrawing
+- drawing
+- running
+- isSpinning
+
+---
+
+### drawButtonText
+
+用途：
+
+中心按鈕文字。
+
+格式：
+
+String
+
+正式頁可使用：
+
+- 點擊抽選
+- 抽選中
+- 分享增加機會
+- 獎品已抽完
+- 尚未開放
+
+---
+
+### drawButtonIcon
+
+用途：
+
+中心按鈕 icon。
+
+格式：
+
+String
+
+範例：
+
+🎯
+
+---
+
+### emptyText
+
+用途：
+
+九宮格無資料時的提示文字。
+
+格式：
+
+String
+
+範例：
+
+尚未設定九宮格獎項
+
+---
+
+## 四、PremiumGridPlayBoard 目前 emit
+
+目前 PremiumGridPlayBoard.vue 支援：
+
+### draw
+
+用途：
+
+玩家點擊中心按鈕時通知外層開始抽獎。
+
+正式頁對應：
+
+startDraw()
+
+---
+
+### select-cell
+
+用途：
+
+玩家點擊非中心格子時通知外層。
+
+正式頁目前可先不使用。
+
+未來用途：
+
+- 後台預覽點擊格子
+- 查看獎品說明
+- 顯示獎項詳情
+
+---
+
+## 五、正式九宮格目前可能使用的資料
+
+正式 PremiumGridLotteryView.vue 目前大概會有：
+
+### 1. 獎品資料
+
+可能名稱：
+
+- prizes
+- campaign.prizes
+- displayPrizes
+- gridPrizes
+- prizeList
+
+需要轉成 PlayBoard items。
+
+---
+
+### 2. 九宮格格子資料
+
+可能名稱：
+
+- gridItems
+- displayGridItems
+- boardItems
+- lotteryItems
+
+如果正式頁已經有 9 格資料，最適合直接對接 items。
+
+---
+
+### 3. 跑燈狀態
+
+可能名稱：
+
+- activeIndex
+- currentIndex
+- highlightIndex
+- runningIndex
+- selectedIndex
+
+要對接到：
+
+PremiumGridPlayBoard activeIndex
+
+---
+
+### 4. 抽獎狀態
+
+可能名稱：
+
+- isDrawing
+- isRunning
+- isLoadingDraw
+- drawingStatus
+
+要對接到：
+
+PremiumGridPlayBoard isDrawing
+
+---
+
+### 5. 抽獎按鈕文字
+
+可能名稱：
+
+- drawButtonText
+- primaryButtonText
+- startButtonText
+
+要對接到：
+
+PremiumGridPlayBoard drawButtonText
+
+---
+
+### 6. 抽獎開始函式
+
+可能名稱：
+
+- startDraw
+- handleDraw
+- drawPrize
+- playGame
+
+要對接到：
+
+PremiumGridPlayBoard @draw
+
+---
+
+## 六、資料格式比對表
+
+| 正式九宮格資料 | PremiumGridPlayBoard props | 是否可直接對接 | 備註 |
+|---|---|---|---|
+| gridItems / displayGridItems | items | 可能可直接 | 需要確認欄位名稱 |
+| activeIndex / currentIndex | activeIndex | 可直接 | 只要是 0-8 數字 |
+| isDrawing | isDrawing | 可直接 | 名稱一致最好 |
+| hasTenantPremiumGridBlock | disabled | 需組合 | 要加上活動狀態判斷 |
+| player.chances <= 0 | disabled | 需組合 | 沒機會不能抽 |
+| availablePrizeCount <= 0 | disabled | 需組合 | 獎品抽完不能抽 |
+| drawButtonText | drawButtonText | 可直接 | 已有共用文字最好 |
+| startDraw | @draw | 可直接 | 中心按鈕觸發 |
+| prize.imageUrl | item.imageUrl | 可直接 | 若欄位一致 |
+| prize.icon | item.icon | 可直接 | 若欄位一致 |
+| prize.shortName | item.shortName | 可直接 | 若欄位一致 |
+| prize.quantity / remainStock | item.quantity | 需標準化 | 建議統一轉 quantity |
+
+---
+
+## 七、正式接入風險
+
+### 風險 1：跑燈動畫不一致
+
+正式九宮格目前已經確認抽獎動畫正常。
+
+如果 PlayBoard 的 activeIndex 動畫和正式頁原本動畫不一致，可能造成：
+
+- 跑燈位置錯
+- 中途消失
+- 沒有停在結果格
+- 結果彈窗時機錯
+
+解法：
+
+第一階段只接 UI，不改動畫邏輯。
+
+---
+
+### 風險 2：中心按鈕重複觸發
+
+如果正式頁原本中心按鈕和 PlayBoard 內中心按鈕同時存在，可能會重複抽獎。
+
+解法：
+
+測試開關模式時，舊按鈕與新 PlayBoard 不可同時觸發。
+
+---
+
+### 風險 3：items 格式不完整
+
+如果正式獎品資料缺少：
+
+- shortName
+- icon
+- quantity
+- imageUrl
+
+PlayBoard 仍要有 fallback。
+
+目前 PlayBoard 已有 fallback：
+
+- getCellName()
+- getCellIcon()
+- quantity / remainStock 預設 0
+
+---
+
+### 風險 4：手機版高度變動
+
+PlayBoard 替換後高度如果和原本不同，可能造成：
+
+- 上方被擠掉
+- 下方看不到
+- 手機框內出現橫向捲動
+
+解法：
+
+先在 /games/generic-preview 和正式頁 debug 模式測手機尺寸。
+
+---
+
+### 風險 5：正式商家頁資料來源不同
+
+正式九宮格會從 API 載入：
+
+- tenant
+- campaign
+- gameConfig
+- prizes
+- serial / chances
+- drawLogs
+
+而 PlayBoard 只吃 items。
+
+解法：
+
+在正式頁中建立 computed：
+
+premiumGridPlayBoardItems
+
+專門轉資料給 PlayBoard。
+
+---
+
+## 八、建議正式頁新增 computed
+
+未來正式接入時，建議在 PremiumGridLotteryView.vue 新增：
+
+const premiumGridPlayBoardItems = computed(() => {
+  return gridItems.value.map((item, index) => ({
+    id: item.id || `grid_${index}`,
+    title: item.title || item.name || item.prizeName || `獎項 ${index + 1}`,
+    shortName: item.shortName || item.title || item.name || '獎項',
+    icon: item.icon || item.emoji || '🎁',
+    imageUrl: item.imageUrl || item.image || '',
+    quantity: Number(item.quantity ?? item.remainStock ?? item.stock ?? 0),
+    remainStock: Number(item.remainStock ?? item.quantity ?? item.stock ?? 0),
+    isButton: item.isButton || index === 4
+  }))
+})
+
+注意：
+
+這只是建議，不是本批要改。
+
+---
+
+## 九、建議正式頁新增測試開關
+
+不要直接替換正式玩法區。
+
+建議先加：
+
+const usePlayBoardPreview = ref(false)
+
+或：
+
+const useCommonPlayBoard = computed(() => {
+  return route.query.playboard === '1'
+})
+
+測試網址：
+
+/play/a-shop/premium-grid?playboard=1
+
+這樣可以：
+
+- 預設正式頁仍用舊玩法
+- 加 query 才用新 PlayBoard
+- 出問題可以立刻拔掉 query
+- 不影響商家正式活動
+
+---
+
+## 十、建議接入方式
+
+### 第一階段：只 import，不使用
+
+目的：
+
+確認 import 不報錯。
+
+import PremiumGridPlayBoard from './playboards/PremiumGridPlayBoard.vue'
+
+---
+
+### 第二階段：query 開關測試
+
+用：
+
+?playboard=1
+
+才顯示 PremiumGridPlayBoard。
+
+---
+
+### 第三階段：只替換玩法區 UI
+
+保留原本：
+
+- startDraw
+- activeIndex
+- isDrawing
+- drawButtonText
+- result modal
+- drawLogs
+- chance card
+
+只把 3x3 格子 UI 改成 PlayBoard。
+
+---
+
+### 第四階段：觀察正式流程
+
+測：
+
+1. 活動可開啟
+2. 跑燈正常
+3. 抽獎結果正常
+4. 結果彈窗正常
+5. 抽獎紀錄正常
+6. 分享增加機會正常
+7. 手機版不破
+8. console 無錯誤
+
+---
+
+### 第五階段：確認穩定後再正式替換
+
+等 query 模式測穩，才考慮移除舊玩法區。
+
+---
+
+## 十一、下一批建議
+
+第 107 批：
+
+PremiumGridLotteryView 加入 PremiumGridPlayBoard import 測試版
+
+特點：
+
+- 只 import
+- 不顯示
+- 不改畫面
+- 確認檔案路徑正確
+- 確認不報 Vite import 錯誤
+
+---
+
+## 十二、結論
+
+PremiumGridPlayBoard 可以作為正式九宮格玩法區的未來基礎。
+
+但正式接入必須分階段：
+
+1. 先比對資料
+2. 再 import 測試
+3. 再 query 開關
+4. 再小範圍替換 UI
+5. 最後才正式取代舊玩法區
+
+目前不要直接替換正式九宮格，避免破壞已確認正常的商家活動頁。

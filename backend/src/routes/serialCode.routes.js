@@ -1,5 +1,5 @@
 // Multi Game Platform V2.2 Stable
-// 第 333 批：SerialCode 序號 Routes ADMIN 權限鎖定版
+// 第 29101～29500 批：SerialCode 手動指定序號 API 對齊版
 //
 // 建議放置位置：
 // backend/src/routes/serialCode.routes.js
@@ -67,6 +67,13 @@ router.get('/campaigns/:campaignId/stats', adminReadOnly, serialCodeStatsHandler
 // 手動建立單組序號
 // POST /api/serial-codes/campaigns/:campaignId
 router.post('/campaigns/:campaignId', adminWriteOnly, createSerialCodeHandler)
+
+// 手動建立指定序號別名
+// POST /api/serial-codes/campaigns/:campaignId/manual
+//
+// 前端 AdminCampaignsView.vue 會優先呼叫這條 route。
+// 這條 route 與 /campaigns/:campaignId 使用同一個 handler，避免按鈕看起來沒有反應。
+router.post('/campaigns/:campaignId/manual', adminWriteOnly, createSerialCodeHandler)
 
 // 批次建立多組序號
 // POST /api/serial-codes/campaigns/:campaignId/bulk

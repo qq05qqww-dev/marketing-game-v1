@@ -1,4 +1,6 @@
 <script setup>
+// Multi Game Platform V2.3
+// 第 25501～25900 批：金蛋設定保留正式遠端玩家入口版
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
   getAdminGoldenEggCampaign,
@@ -23,9 +25,10 @@ import {
   getAdminGoldenEggPlayRecordExportUrl,
   getAdminGoldenEggDrawPool
 } from '../../api/goldenEggAdminApi.js'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 
 const GOLDEN_EGG_ADMIN_STATE_KEY = 'multi_game_platform_golden_egg_admin_state_v1'
 const GOLDEN_EGG_ADMIN_SYNC_KEY = 'multi_game_platform_golden_egg_admin_sync_ping_v1'
@@ -33,6 +36,7 @@ const GOLDEN_EGG_SERIAL_CODES_KEY = 'multi_game_platform_golden_egg_serial_codes
 const GOLDEN_EGG_SERIAL_REDEEM_LOG_KEY = 'multi_game_platform_golden_egg_serial_redeem_log_v1'
 const GOLDEN_EGG_HISTORY_KEY = 'multi_game_platform_golden_egg_history_v1'
 const GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY = 'multi_game_platform_golden_egg_game_config_operation_log_v1'
+const GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY = 'multi_game_platform_golden_egg_game_config_save_backup_v1'
 
 
 const cloneByJson = (value) => JSON.parse(JSON.stringify(value))
@@ -54,7 +58,65 @@ const operationMessage = ref('')
 const operationMessageType = ref('info')
 const activeSection = ref('databaseMode')
 const databaseCampaignId = ref(localStorage.getItem('golden_egg_admin_database_campaign_id') || '')
+const queryCampaignId = computed(() => {
+  const id = Number(route?.query?.campaignId || 0)
+
+  return Number.isInteger(id) && id > 0 ? id : null
+})
+
+const isSingleActivityMode = computed(() => {
+  return String(route?.query?.singleGame || '') === '1' || Boolean(queryCampaignId.value)
+})
+
+
+const shouldRedirectGoldenEggLegacyAdminEntry = computed(() => {
+  const hasCampaignContext = Boolean(
+    isSingleActivityMode.value ||
+      queryCampaignId.value ||
+      queryTenantSlug.value ||
+      queryPlayerUrl.value
+  )
+
+  return !hasCampaignContext
+})
+
+const redirectGoldenEggLegacyAdminEntry = () => {
+  if (!shouldRedirectGoldenEggLegacyAdminEntry.value) return
+
+  router.replace('/admin/campaigns')
+}
+
+const queryTenantSlug = computed(() => String(route?.query?.tenantSlug || '').trim())
+const queryPlayerUrl = computed(() => String(route?.query?.playerUrl || '').trim())
+
+const getSingleActivityPlayerUrl = () => {
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || queryTenantSlug.value || getStoredAdminUser()?.tenantSlug || '').trim()
+  const rawPlayerUrl = queryPlayerUrl.value
+
+  if (tenantSlug) {
+    return `/play/${tenantSlug}/golden-egg`
+  }
+
+  if (rawPlayerUrl) {
+    try {
+      const parsed = new URL(rawPlayerUrl, window.location.origin)
+      const legacyPath = String(parsed.pathname || '')
+
+      if (legacyPath.includes('/games/golden-egg')) {
+        return '/games/golden-egg'
+      }
+
+      return `${parsed.pathname}${parsed.search}`
+    } catch (error) {
+      return rawPlayerUrl
+    }
+  }
+
+  return '/games/golden-egg'
+}
+
 const isLoadingDatabaseCampaign = ref(false)
+const isDatabaseLoading = computed(() => isLoadingDatabaseCampaign.value)
 const databaseLoadMessage = ref('')
 const databaseCampaign = ref(null)
 const databasePrizes = ref([])
@@ -550,6 +612,330 @@ const prizes = ref([
 const defaultCampaignSnapshot = cloneByJson(campaign)
 const defaultPrizesSnapshot = cloneByJson(prizes.value)
 
+// 第 23901～24300 批：每個設定區塊都可以還原到「剛載入資料庫時」的狀態。
+const loadedCampaignSnapshot = ref(cloneByJson(campaign))
+const loadedPrizesSnapshot = ref(cloneByJson(prizes.value))
+const loadedDatabaseGameConfigFormSnapshot = ref({})
+const restoreNotice = ref('')
+
+const updateLoadedRestoreSnapshot = () => {
+  loadedCampaignSnapshot.value = cloneByJson(campaign)
+  loadedPrizesSnapshot.value = cloneByJson(prizes.value)
+  loadedDatabaseGameConfigFormSnapshot.value = cloneByJson(databaseGameConfigForm || {})
+}
+
+const sectionRestoreMap = {
+  basic: {
+    label: '基本文字',
+    campaignFields: [
+      'brandName', 'pageTitle', 'mainTitle', 'subTitle', 'heroTagline', 'noticeText',
+      'logoText', 'websiteUrl', 'websiteButtonText',
+      'headerTitleTextSize', 'headerTitleColor', 'headerSubTitleColor',
+      'headerLogoTextSize', 'headerLogoBgColor', 'headerLogoTextColor',
+      'headerWebsiteTextSize', 'headerWebsiteBgColor', 'headerWebsiteTextColor',
+      'headerSideBoxWidth', 'headerBoxHeight', 'headerBoxRadius', 'headerGap',
+      'headerPaddingX', 'headerPaddingY'
+    ],
+    databaseFields: ['pageTitle', 'mainTitle', 'subTitle', 'heroTagline', 'noticeText']
+  },
+  theme: {
+    label: '主題色彩',
+    campaignFields: [
+      'themeBgFrom', 'themeBgMiddle', 'themeBgTo', 'themePanelColor',
+      'themeAccentColor', 'themeButtonColor', 'themeButtonDarkColor',
+      'eggCardBgFrom', 'eggCardBgTo', 'eggNumberBgColor', 'eggNumberTextColor'
+    ],
+    databaseFields: [
+      'themeBgFrom', 'themeBgMiddle', 'themeBgTo', 'themePanelColor',
+      'themeAccentColor', 'themeButtonColor', 'themeButtonDarkColor',
+      'eggCardBgFrom', 'eggCardBgTo', 'eggNumberBgColor', 'eggNumberTextColor'
+    ]
+  },
+  activityTime: {
+    label: '活動時間',
+    campaignFields: [
+      'activityStartAt', 'activityEndAt', 'activityNotStartedText', 'activityEndedText',
+      'activityRunningText', 'showActivityTimeSection', 'showActivityCountdown',
+      'activityCountdownTitle', 'activityCountdownBgColor', 'activityCountdownTextColor',
+      'activityCountdownNumberColor', 'activityCountdownTitleTextSize',
+      'activityCountdownNumberTextSize', 'activityCountdownAlwaysShowSeconds',
+      'activityTimeBgColor', 'activityTimeBorderColor', 'activityTimeTitleColor',
+      'activityTimeCardBgColor', 'activityTimeTextColor', 'activityTimeRadius',
+      'activityTimePadding', 'activityTimeTitleTextSize', 'activityTimeTextSize',
+      'activityStatusBadgeTextSize'
+    ],
+    databaseFields: [
+      'activityRunningText', 'activityNotStartedText', 'activityEndedText',
+      'showActivityTimeSection', 'showActivityCountdown', 'activityCountdownAlwaysShowSeconds'
+    ]
+  },
+  background: {
+    label: '背景舞台',
+    campaignFields: [
+      'pageDotOpacity', 'pageGlowOpacity', 'stageBgOpacity', 'stageBorderColor',
+      'stageBorderOpacity', 'stageInnerBorderOpacity', 'stageRadius', 'stagePadding'
+    ]
+  },
+  eggStyle: {
+    label: '金蛋樣式',
+    campaignFields: [
+      'eggSize', 'eggCardSize', 'eggGridGap', 'showEggNumber',
+      'eggNumberBgColor', 'eggNumberTextColor',
+      'eggColorTop', 'eggColorMiddle', 'eggColorBottom'
+    ],
+    databaseFields: [
+      'eggSize', 'eggCardSize', 'eggGridGap',
+      'eggColorTop', 'eggColorMiddle', 'eggColorBottom',
+      'eggNumberBgColor', 'eggNumberTextColor'
+    ]
+  },
+  prizes: {
+    label: '獎項百分比',
+    restorePrizes: true
+  },
+  eggLogs: {
+    label: '砸蛋紀錄'
+  },
+  serial: {
+    label: '序號抽獎',
+    campaignFields: [
+      'serialRedeemTitle', 'serialRedeemPlaceholder', 'serialRedeemButtonText',
+      'serialRedeemSuccessText', 'serialRedeemErrorText', 'showSerialRedeemSection',
+      'serialRedeemBgColor', 'serialRedeemBorderColor', 'serialRedeemTextColor',
+      'serialRedeemHintColor', 'serialRedeemInputBgColor', 'serialRedeemInputTextColor',
+      'serialRedeemButtonBgColor', 'serialRedeemButtonTextColor',
+      'serialRedeemRadius', 'serialRedeemPadding', 'serialRedeemTitleTextSize',
+      'serialRedeemHintTextSize', 'serialRedeemInputTextSize', 'serialRedeemButtonTextSize',
+      'maxSerialRedeemErrors', 'serialRedeemLockSeconds',
+      'shareTitle', 'shareDescription', 'shareUrl', 'shareHashtags',
+      'showShareButtonSection', 'showSystemShareButton', 'showLineShareButton',
+      'showTelegramShareButton', 'systemShareButtonText', 'lineShareButtonText',
+      'telegramShareButtonText', 'systemShareButtonBgColor', 'systemShareButtonTextColor',
+      'lineShareButtonBgColor', 'lineShareButtonTextColor',
+      'telegramShareButtonBgColor', 'telegramShareButtonTextColor',
+      'shareButtonRadius', 'shareButtonTextSize', 'shareButtonGap', 'shareButtonPaddingY'
+    ],
+    databaseFields: [
+      'serialRedeemTitle', 'serialRedeemDescription', 'serialRedeemButtonText',
+      'serialRedeemSuccessText', 'serialRedeemErrorText',
+      'shareTitle', 'shareDescription', 'shareUrl', 'shareImageUrl',
+      'systemShareButtonText', 'systemShareButtonTextSize',
+      'systemShareButtonBgColor', 'systemShareButtonTextColor',
+      'systemShareButtonRadius', 'systemShareButtonPaddingY'
+    ]
+  },
+  bottomNav: {
+    label: '底部功能列',
+    campaignFields: [
+      'showBottomNav', 'bottomNavBgColor', 'bottomNavBorderColor',
+      'bottomNavButtonBgColor', 'bottomNavButtonTextColor',
+      'bottomNavRadius', 'bottomNavBottom',
+      'bottomNavEggIcon', 'bottomNavEggText',
+      'bottomNavShareIcon', 'bottomNavShareText',
+      'bottomNavResultIcon', 'bottomNavResultText',
+      'bottomNavWebsiteIcon', 'bottomNavWebsiteText',
+      'bottomNavPadding', 'bottomNavButtonGap', 'bottomNavButtonHeight',
+      'bottomNavButtonRadius', 'bottomNavIconSize', 'bottomNavTextSize'
+    ],
+    databaseFields: ['showBottomNav']
+  },
+  display: {
+    label: '展示區塊',
+    campaignFields: [
+      'showMarqueeSection', 'marqueeCustomText', 'marqueeBgColor',
+      'marqueeTextColor', 'marqueeSpeed',
+      'showPrizeShelfSection', 'prizeShelfTitle', 'prizeShelfSubTitle',
+      'prizeShelfBgColor', 'prizeShelfTextColor',
+      'prizeShelfItemBgTop', 'prizeShelfItemBgBottom',
+      'showRecentLogsSection', 'showRuleSection', 'showPrizeInfoSection',
+      'defaultRecentLogsOpen', 'defaultRuleOpen', 'defaultPrizeInfoOpen'
+    ]
+  },
+  result: {
+    label: '結果彈窗',
+    campaignFields: [
+      'resultModalBgFrom', 'resultModalBgTo', 'resultModalBorderColor',
+      'resultIconBgColor', 'resultIconTextColor', 'resultImageUrl',
+      'resultIconSize', 'resultIconTextSize', 'resultBadgeTextSize',
+      'resultTitleTextSize', 'resultTitleColor',
+      'resultDescriptionTextSize', 'resultDescriptionColor',
+      'resultPrimaryButtonText', 'resultPrimaryButtonTextSize',
+      'resultCopyButtonText', 'resultCopyButtonTextSize',
+      'showResultCopyButton', 'showResultShareButton'
+    ]
+  },
+  effects: {
+    label: '音效特效',
+    campaignFields: [
+      'enableWinConfetti', 'enableGoldRain', 'enableWinSound',
+      'winSoundUrl', 'winSoundVolume',
+      'enableHammerSound', 'hammerSoundUrl', 'hammerSoundVolume',
+      'winEffectDuration', 'confettiCount', 'goldRainCount'
+    ]
+  },
+  rules: {
+    label: '規則說明',
+    campaignFields: ['ruleTitle', 'ruleContent', 'prizeInfoTitle', 'prizeInfoContent']
+  }
+}
+
+const restoreFieldGroup = (target, source, fields = []) => {
+  fields.forEach((field) => {
+    if (Object.prototype.hasOwnProperty.call(source || {}, field)) {
+      target[field] = cloneByJson(source[field])
+    }
+  })
+}
+
+const restoreAdminSection = (sectionKey) => {
+  const config = sectionRestoreMap[sectionKey]
+
+  if (!config) {
+    showOperationInfo('這個功能區目前沒有可還原欄位。')
+    return
+  }
+
+  const hasRestorableContent =
+    (config.campaignFields?.length || 0) ||
+    (config.databaseFields?.length || 0) ||
+    config.restorePrizes
+
+  if (!hasRestorableContent) {
+    showOperationInfo(`「${config.label}」主要是紀錄查詢區，目前不需要還原。`)
+    return
+  }
+
+  const confirmed = window.confirm(`確定要還原「${config.label}」嗎？會回到剛載入資料庫時的內容。`)
+  if (!confirmed) return
+
+  restoreFieldGroup(campaign, loadedCampaignSnapshot.value, config.campaignFields || [])
+
+  if (config.databaseFields?.length && loadedDatabaseGameConfigFormSnapshot.value) {
+    restoreFieldGroup(databaseGameConfigForm, loadedDatabaseGameConfigFormSnapshot.value, config.databaseFields)
+  }
+
+  if (config.restorePrizes) {
+    prizes.value = cloneByJson(loadedPrizesSnapshot.value || defaultPrizesSnapshot)
+  }
+
+  previewRefreshKey.value = Date.now()
+  restoreNotice.value = `已還原「${config.label}」，尚未儲存到資料庫。確認右側預覽後，請再按「儲存設定」。`
+  showOperationInfo(restoreNotice.value)
+
+  if (typeof updateChanceText === 'function') {
+    updateChanceText()
+  }
+}
+
+const restoreCurrentAdminSection = () => {
+  restoreAdminSection(activeSection.value)
+}
+
+const getCurrentAdminSectionLabel = () => {
+  return sectionRestoreMap[activeSection.value]?.label || '目前功能'
+}
+
+const lastSaveBackup = ref(safeJsonParse(localStorage.getItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY), null))
+
+const hasLastSaveBackup = computed(() => {
+  return Boolean(lastSaveBackup.value?.settings && Number(lastSaveBackup.value?.campaignId) === Number(normalizedDatabaseCampaignId.value))
+})
+
+const persistLastSaveBackup = (backup = null) => {
+  lastSaveBackup.value = backup
+
+  if (!backup) {
+    localStorage.removeItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY)
+    return
+  }
+
+  localStorage.setItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY, JSON.stringify(backup))
+}
+
+const createBeforeSaveGameConfigBackup = () => {
+  const settings = cloneByJson(databaseCampaign.value?.gameConfig?.settings || buildDatabaseGameConfigPayload())
+
+  const backup = {
+    type: 'before-save-game-config-backup',
+    version: 'v2.3-batch24301-24700',
+    campaignId: normalizedDatabaseCampaignId.value,
+    campaignTitle: databaseCampaign.value?.title || '',
+    createdAt: new Date().toISOString(),
+    settings,
+    campaignSnapshot: cloneByJson(campaign),
+    prizesSnapshot: cloneByJson(prizes.value),
+    databaseFormSnapshot: cloneByJson(databaseGameConfigForm || {})
+  }
+
+  persistLastSaveBackup(backup)
+
+  return backup
+}
+
+const restoreLastSaveBackup = async () => {
+  if (!hasLastSaveBackup.value) {
+    showOperationInfo('目前沒有可回復的上次儲存前備份。')
+    return
+  }
+
+  const confirmed = window.confirm('確定要回復到「上次儲存前」的版本嗎？回復後會直接寫回資料庫。')
+  if (!confirmed) return
+
+  isSavingDatabaseGameConfig.value = true
+
+  try {
+    const backup = lastSaveBackup.value
+
+    await updateAdminGoldenEggGameConfig(
+      normalizedDatabaseCampaignId.value,
+      cloneByJson(backup.settings || {})
+    )
+
+    if (backup.campaignSnapshot) {
+      Object.assign(campaign, cloneByJson(backup.campaignSnapshot))
+    }
+
+    if (backup.prizesSnapshot) {
+      prizes.value = cloneByJson(backup.prizesSnapshot)
+    }
+
+    if (backup.databaseFormSnapshot) {
+      Object.assign(databaseGameConfigForm, cloneByJson(backup.databaseFormSnapshot))
+    }
+
+    previewRefreshKey.value = Date.now()
+    restoreNotice.value = '已回復到上次儲存前版本，並已寫回資料庫。'
+    showOperationSuccess('已回復到上次儲存前版本，資料庫已同步。')
+
+    addGameConfigOperationLog({
+      title: '回復上次儲存前版本',
+      description: `已將活動 #${normalizedDatabaseCampaignId.value} 的 GameConfig.settings 回復到 ${backup.createdAt || '上次儲存前'} 的備份。`,
+      type: 'success'
+    })
+
+    await loadDatabaseGoldenEggCampaign()
+  } catch (error) {
+    console.error('回復上次儲存前版本失敗：', error)
+    showOperationError(error.message || '回復上次儲存前版本失敗。')
+    addGameConfigOperationLog({
+      title: '回復上次儲存前版本失敗',
+      description: error.message || '回復 GameConfig.settings 失敗。',
+      type: 'error'
+    })
+  } finally {
+    isSavingDatabaseGameConfig.value = false
+  }
+}
+
+const clearLastSaveBackup = () => {
+  const confirmed = window.confirm('確定要清除上次儲存前備份嗎？清除後不能用這個備份回復。')
+  if (!confirmed) return
+
+  persistLastSaveBackup(null)
+  showOperationSuccess('已清除上次儲存前備份。')
+}
+
+
 const normalizePrizeProbability = (value) => {
   return Math.min(100, Math.max(0, Number(value || 0)))
 }
@@ -627,21 +1013,28 @@ const adminSections = [
 const previewUrl = computed(() => {
   const params = new URLSearchParams()
   params.set('preview', String(previewRefreshKey.value))
-  params.set('adminPreview', '1')
 
-  const campaignId = Number(databaseCampaignId.value || databaseCampaign.value?.id || 0)
+  const campaignId = Number(databaseCampaignId.value || databaseCampaign.value?.id || queryCampaignId.value || 0)
   const storedUser = getStoredAdminUser()
-  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || storedUser?.tenantSlug || '').trim()
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || queryTenantSlug.value || storedUser?.tenantSlug || '').trim()
 
-  // 第 19 批修正：右側 iframe 預覽必須帶 campaignId / tenantSlug，
-  // 才會走正式 DrawEngine verify-serial API，而不是舊 localStorage 序號池。
   if (Number.isInteger(campaignId) && campaignId > 0) {
     params.set('campaignId', String(campaignId))
-  } else if (tenantSlug) {
+  }
+
+  if (tenantSlug) {
     params.set('tenantSlug', tenantSlug)
   }
 
-  return `/games/golden-egg?${params.toString()}`
+  // 正式玩家預覽不能帶 commonEgg / adminPreview / formalPlayerPreview。
+  // 那些參數會讓 GoldenEggGameView 顯示 post-live/debug 說明頁，不是客人看到的砸金蛋畫面。
+  const basePath = isSingleActivityMode.value
+    ? getSingleActivityPlayerUrl()
+    : (tenantSlug ? `/play/${tenantSlug}/golden-egg` : '/games/golden-egg')
+
+  const joiner = basePath.includes('?') ? '&' : '?'
+
+  return `${basePath}${joiner}${params.toString()}`
 })
 
 const previewDeviceOptions = [
@@ -3314,10 +3707,14 @@ const databaseFrontUrl = computed(() => {
   if (!normalizedDatabaseCampaignId.value) return ''
 
   const user = getStoredAdminUser()
-  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || user?.tenantSlug || '').trim()
+  const tenantSlug = String(databaseCampaign.value?.tenant?.slug || queryTenantSlug.value || user?.tenantSlug || '').trim()
 
   if (tenantSlug) {
-    return `${window.location.origin}/play/${tenantSlug}/golden-egg`
+    return `${window.location.origin}/play/${tenantSlug}/golden-egg?campaignId=${normalizedDatabaseCampaignId.value}`
+  }
+
+  if (queryPlayerUrl.value) {
+    return queryPlayerUrl.value
   }
 
   return `${window.location.origin}/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value}`
@@ -3909,6 +4306,38 @@ const autoLoadMerchantDefaultCampaign = async () => {
   const role = String(user?.role || '').toUpperCase()
   const isMerchant = role === 'MERCHANT_ADMIN' || role === 'MERCHANT_STAFF'
 
+  if (queryCampaignId.value) {
+    tenantAutoLoading.value = true
+    tenantAutoLoadStatus.value = 'info'
+    tenantAutoLoadMessage.value = `正在載入從活動管理指定的砸金蛋活動 #${queryCampaignId.value}...`
+
+    try {
+      databaseCampaignId.value = String(queryCampaignId.value)
+      localStorage.setItem('golden_egg_admin_database_campaign_id', String(queryCampaignId.value))
+      activeSection.value = 'databaseMode'
+      databaseSectionOpen.summary = true
+      databaseSectionOpen.campaign = true
+      databaseSectionOpen.gameConfig = true
+      databaseSectionOpen.prizes = true
+      databaseSectionOpen.serials = true
+      databaseSectionOpen.records = false
+
+      await loadDatabaseGoldenEggCampaign()
+
+      tenantAutoLoadStatus.value = 'success'
+      tenantAutoLoadMessage.value = `已載入活動管理指定的砸金蛋活動 #${queryCampaignId.value}`
+      return
+    } catch (error) {
+      console.error('載入指定砸金蛋活動失敗：', error)
+      tenantAutoLoadStatus.value = 'error'
+      tenantAutoLoadMessage.value = error.message || '載入指定砸金蛋活動失敗。'
+      databaseLoadMessage.value = tenantAutoLoadMessage.value
+      return
+    } finally {
+      tenantAutoLoading.value = false
+    }
+  }
+
   if (!isMerchant) return
 
   tenantAutoLoading.value = true
@@ -3916,7 +4345,6 @@ const autoLoadMerchantDefaultCampaign = async () => {
   tenantAutoLoadMessage.value = '正在依商家身分自動載入預設砸金蛋活動...'
 
   try {
-    // 商家登入時不要沿用上一個帳號或平台管理員留下的 campaignId，避免畫面顯示舊資料。
     clearMerchantStaleDatabaseState()
 
     const campaigns = await fetchTenantGoldenEggCampaigns()
@@ -3925,7 +4353,7 @@ const autoLoadMerchantDefaultCampaign = async () => {
 
     if (!goldenEggCampaign?.id) {
       tenantAutoLoadStatus.value = 'warning'
-      tenantAutoLoadMessage.value = '目前商家尚未建立 GOLDEN_EGG 活動。請先用平台管理員在「商家管理」建立預設活動，或執行既有商家預設金蛋活動補建腳本。'
+      tenantAutoLoadMessage.value = '目前商家尚未建立 GOLDEN_EGG 活動。請先回「活動管理」建立砸金蛋活動。'
       databaseLoadMessage.value = tenantAutoLoadMessage.value
       return
     }
@@ -3994,6 +4422,7 @@ const loadDatabaseGoldenEggCampaign = async () => {
     databaseDrawPool.value = drawPoolResult
     loadDatabaseCampaignFormFromCampaign(campaignResult)
     loadDatabaseGameConfigFormFromCampaign(campaignResult)
+    updateLoadedRestoreSnapshot()
     syncDatabaseCampaignToLivePreview(campaignResult, '已同步資料庫活動時間到右側預覽。')
 
     databaseLoadMessage.value = `已載入正式資料庫活動：${campaignResult?.title || `ID ${id}`}`
@@ -5581,6 +6010,8 @@ const saveDatabaseGameConfig = async () => {
   )
 
   try {
+    const beforeSaveBackup = createBeforeSaveGameConfigBackup()
+
     await updateAdminGoldenEggGameConfig(
       normalizedDatabaseCampaignId.value,
       buildDatabaseGameConfigPayload()
@@ -5595,7 +6026,7 @@ const saveDatabaseGameConfig = async () => {
     addGameConfigOperationLog({
       title: '儲存前台設定',
       description: changedCountBeforeSave
-        ? `已同步 ${changedCountBeforeSave} 個欄位到 PostgreSQL GameConfig.settings。${changedLabelsBeforeSave ? `主要欄位：${changedLabelsBeforeSave}` : ''}`
+        ? `已同步 ${changedCountBeforeSave} 個欄位到 PostgreSQL GameConfig.settings，且已保留儲存前備份。${changedLabelsBeforeSave ? `主要欄位：${changedLabelsBeforeSave}` : ''}`
         : '已重新確認資料庫前台設定，沒有偵測到新的差異。',
       type: 'success',
       changedCount: changedCountBeforeSave
@@ -5982,7 +6413,22 @@ const copyDatabaseText = async (text) => {
 }
 
 
+
+watch(
+  shouldRedirectGoldenEggLegacyAdminEntry,
+  (shouldRedirect) => {
+    if (shouldRedirect) {
+      redirectGoldenEggLegacyAdminEntry()
+    }
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
+  redirectGoldenEggLegacyAdminEntry()
+
+  if (shouldRedirectGoldenEggLegacyAdminEntry.value) return
+
   loadState()
   loadSerialCodes()
   loadSerialRedeemLogs()
@@ -6182,10 +6628,10 @@ watch(
             Golden Egg Admin
           </p>
           <h1 class="text-2xl font-black text-slate-900">
-            砸金蛋後台管理
+            砸金蛋單一活動設定｜可還原與備份
           </h1>
           <p class="mt-1 text-sm font-medium text-slate-500">
-            左邊修改文字、色彩、獎項與特效；右邊即時顯示前台畫面。
+            從「我的活動」進入時，只載入目前這一筆砸金蛋活動；右側預覽改用正式玩家網址，且不再帶 commonEgg / adminPreview / formalPlayerPreview 測試參數。
           </p>
         </div>
 
@@ -6266,6 +6712,13 @@ watch(
             </span>
             <span class="text-sm font-black">
               {{ section.label }}
+            </span>
+            <span
+              v-if="sectionRestoreMap[section.key]"
+              class="mt-2 block rounded-full bg-white px-2 py-1 text-center text-[11px] font-black text-violet-600 shadow-sm"
+              @click.stop="restoreAdminSection(section.key)"
+            >
+              還原
             </span>
           </button>
         </div>
@@ -9335,6 +9788,77 @@ watch(
           </div>
 
         </section>
+
+        <div class="mb-4 rounded-3xl border border-violet-100 bg-violet-50/80 p-4 shadow-sm">
+          <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p class="text-xs font-black text-violet-500">單一功能還原</p>
+              <h2 class="mt-1 text-lg font-black text-slate-900">
+                目前區塊：{{ getCurrentAdminSectionLabel() }}
+              </h2>
+              <p class="mt-1 text-sm font-bold leading-6 text-slate-500">
+                做錯只還原目前這一區，不會影響其他設定；還原後需再按「儲存設定」才會寫入資料庫。
+              </p>
+            </div>
+            <button
+              type="button"
+              class="rounded-2xl border border-violet-200 bg-white px-5 py-3 text-sm font-black text-violet-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-violet-100"
+              @click="restoreCurrentAdminSection"
+            >
+              還原此區
+            </button>
+          </div>
+          <p
+            v-if="restoreNotice"
+            class="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-bold text-violet-700"
+          >
+            {{ restoreNotice }}
+          </p>
+        </div>
+
+        <div class="mb-4 rounded-3xl border border-sky-100 bg-sky-50/80 p-4 shadow-sm">
+          <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p class="text-xs font-black text-sky-500">儲存前安全備份</p>
+              <h2 class="mt-1 text-lg font-black text-slate-900">
+                上次儲存前版本
+              </h2>
+              <p class="mt-1 text-sm font-bold leading-6 text-slate-500">
+                每次按「儲存設定」前，系統會先備份原本資料庫設定；儲存後覺得不對，可以一鍵回復。
+              </p>
+              <p
+                v-if="hasLastSaveBackup"
+                class="mt-2 text-xs font-black text-sky-700"
+              >
+                備份時間：{{ lastSaveBackup.createdAt || '已建立備份' }}
+              </p>
+              <p
+                v-else
+                class="mt-2 text-xs font-black text-slate-400"
+              >
+                目前尚無儲存前備份。
+              </p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-2xl border border-sky-200 bg-white px-5 py-3 text-sm font-black text-sky-700 shadow-sm transition hover:-translate-y-0.5 hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!hasLastSaveBackup || isSavingDatabaseGameConfig"
+                @click="restoreLastSaveBackup"
+              >
+                回復上次儲存前
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="!hasLastSaveBackup || isSavingDatabaseGameConfig"
+                @click="clearLastSaveBackup"
+              >
+                清除備份
+              </button>
+            </div>
+          </div>
+        </div>
 
         <section
           v-if="activeSection === 'basic'"

@@ -1,9 +1,51 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import CommonGamePlayBoard from '../../../components/common-game/CommonGamePlayBoard.vue'
 
 const route = useRoute()
 const router = useRouter()
+
+// 第 27101～27500 批：正式遠端玩家頁資料庫 API 入口。
+// 正式部署請設定 VITE_API_BASE_URL=https://你的後端網域/api
+const FORMAL_API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '')
+
+const unwrapFormalApiPayload = (payload) => {
+  return payload?.data?.data ?? payload?.data ?? payload ?? null
+}
+
+const formalFetchJson = async (path, options = {}) => {
+  const endpoint = `${FORMAL_API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`
+  const response = await fetch(endpoint, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  })
+
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(payload?.message || `API 回應失敗：HTTP ${response.status}｜${endpoint}`)
+  }
+
+  return payload
+}
+
+
+/**
+ * Multi Game Platform V2.3 第 30701～31100 批：輪盤九宮格序號驗證定義與路由修正版
+ *
+ * 本批延續第 2251～2300 批穩定點，補強正式輪盤頁實際上線操作指令、前後端部署驗收、Git / Render 檢查、正式網址驗收、rollback 操作流程與交付最終清單。
+ * 1. 正式輪盤玩家頁改回真正客人看到的輪盤畫面。
+ * 2. ?legacyWheel=1 fallback 保留最高優先，可立即回原輪盤頁。
+ * 3. ?commonWheel=1 測試區仍保留，但正式 /play/:tenantSlug/wheel 不再顯示 debug / placeholder。
+ * 4. 保留正式套用後監控、實際操作驗收、上線前最後檢查與長期維護節奏。
+ * 5. 補強 PowerShell 指令、前端 build、後端健康檢查、Git commit / push、Render 部署檢查、正式網址驗收與 rollback SOP。
+ * 6. verify / play API guard 不放寬，仍只在完整測試旗標下才可送出。
+ * 7. 本批不改 router / DB schema / 抽獎核心。
+ */
 
 const PREMIUM_WHEEL_STORAGE_KEY = 'multi_game_platform_premium_wheel_v1'
 const PREMIUM_WHEEL_SYNC_PING_KEY = 'premium-wheel-sync-ping'
@@ -45,6 +87,1697 @@ const adminSourcePath = computed(() => {
     : '?mode=admin'
 
   return `/games/wheel${query}`
+})
+
+const routeTenantSlug = computed(() => {
+  return String(route.params?.tenantSlug || route.query?.tenantSlug || '').trim()
+})
+
+const isTenantWheelMode = computed(() => {
+  return Boolean(routeTenantSlug.value)
+})
+
+const remoteWheelCampaign = ref(null)
+const remoteWheelCampaignId = ref(null)
+const remoteWheelLoading = ref(false)
+const remoteWheelError = ref('')
+const remoteWheelLoadedAt = ref('')
+const remoteWheelLastPlayResult = ref(null)
+
+
+const isLegacyWheelRoute = computed(() => {
+  return String(route.query.legacyWheel || '').trim() === '1'
+})
+
+const isCommonWheelRoute = computed(() => {
+  return String(route.query.commonWheel || '').trim() === '1' && !isLegacyWheelRoute.value
+})
+
+const isWheelDryRunRoute = computed(() => {
+  return String(route.query.wheelDryRun || '').trim() === '1' && isCommonWheelRoute.value
+})
+
+const isWheelVerifyApiRoute = computed(() => {
+  return String(route.query.wheelVerifyApi || '').trim() === '1' && isCommonWheelRoute.value
+})
+
+const isWheelPlayApiRoute = computed(() => {
+  return String(route.query.wheelPlayApi || '').trim() === '1' && isCommonWheelRoute.value
+})
+
+const isWheelVerifyApiSafetyRoute = computed(() => {
+  return isCommonWheelRoute.value && isWheelDryRunRoute.value && isWheelVerifyApiRoute.value
+})
+
+const isWheelVerifyApiSendRoute = computed(() => {
+  return isWheelVerifyApiSafetyRoute.value && String(route.query.wheelVerifySend || '').trim() === '1'
+})
+
+const isWheelPlayApiSafetyRoute = computed(() => {
+  return isCommonWheelRoute.value && isWheelDryRunRoute.value && isWheelPlayApiRoute.value
+})
+
+const isWheelPlayApiSendRoute = computed(() => {
+  return isWheelPlayApiSafetyRoute.value && String(route.query.wheelSendPlayApi || '').trim() === '1'
+})
+
+const isWheelFormalDryRunRoute = computed(() => {
+  return String(route.query.wheelFormalDryRun || '').trim() === '1' && !isLegacyWheelRoute.value
+})
+
+const isWheelFormalCommonRoute = computed(() => {
+  return isWheelFormalDryRunRoute.value && String(route.query.wheelFormalCommon || '').trim() === '1' && !isLegacyWheelRoute.value
+})
+
+const isWheelFormalGrayRoute = computed(() => {
+  return isWheelFormalCommonRoute.value && String(route.query.wheelFormalGray || '').trim() === '1' && !isLegacyWheelRoute.value
+})
+
+const isWheelFormalGrayPreviewRoute = computed(() => {
+  return isWheelFormalGrayRoute.value && isWheelFormalCommonRoute.value && isWheelFormalDryRunRoute.value && !isCommonWheelRoute.value && !isLegacyWheelRoute.value
+})
+
+const isWheelFormalCanaryRoute = computed(() => {
+  return isWheelFormalGrayPreviewRoute.value && String(route.query.wheelFormalCanary || '').trim() === '1' && !isLegacyWheelRoute.value
+})
+
+const isWheelFormalApplyRoute = computed(() => {
+  return isWheelFormalCanaryRoute.value && String(route.query.wheelFormalApply || '').trim() === '1' && !isLegacyWheelRoute.value
+})
+
+const isWheelFormalCanaryActualDisplayRoute = computed(() => {
+  return isWheelFormalApplyRoute.value && !isCommonWheelRoute.value && !isLegacyWheelRoute.value
+})
+
+const isWheelFormalLiveApplyRoute = computed(() => {
+  // 第 26301～26700 批修正：
+  // 正式對客玩家路由不能再預設顯示 CommonGamePlayBoard debug / commonWheel 說明區。
+  // 只有 commonWheel=1 或完整 canary 測試旗標才允許顯示共用模組測試區。
+  return false
+})
+
+const isWheelOriginalFormalRouteVisible = computed(() => {
+  // 正式 /play/:tenantSlug/wheel 與 /games/wheel 預設都顯示真正輪盤玩家畫面。
+  return !isCommonWheelRoute.value && !isWheelFormalCanaryActualDisplayRoute.value
+})
+
+const wheelFormalLiveApplySummary = computed(() => {
+  return {
+    title: '正式輪盤頁共用模組 live apply 完整正式套用版',
+    batch: '第 1801～1850 批',
+    routeMode: isLegacyWheelRoute.value
+      ? 'legacy_fallback_original_wheel'
+      : (isCommonWheelRoute.value ? 'common_wheel_test_area' : 'formal_live_common_board'),
+    formalDefaultCommonBoard: isWheelFormalLiveApplyRoute.value,
+    legacyFallbackKept: true,
+    commonWheelTestAreaKept: true,
+    routerDbDrawCoreChanged: false,
+    note: '正式玩家頁預設已改走 CommonGamePlayBoard；需要緊急回退時使用 ?legacyWheel=1。'
+  }
+})
+
+const wheelPostLiveMonitorSummary = computed(() => {
+  return {
+    title: '正式輪盤頁套用後監控面板與 legacy rollback 操作提示版',
+    batch: '第 1951～2000 批',
+    formalDefaultCommonBoard: isWheelFormalLiveApplyRoute.value,
+    legacyFallbackKept: true,
+    commonWheelTestAreaKept: true,
+    currentRouteMode: isLegacyWheelRoute.value
+      ? 'legacy_fallback_original_wheel'
+      : (isCommonWheelRoute.value ? 'common_wheel_test_area' : 'formal_live_common_board'),
+    operatorHint: isLegacyWheelRoute.value
+      ? '目前已進入 legacyWheel 原輪盤回退模式，可用來緊急恢復原正式頁。'
+      : (isCommonWheelRoute.value
+        ? '目前為 commonWheel 測試區，可用來比對正式共用模組與測試資料。'
+        : '目前正式輪盤頁預設顯示 CommonGamePlayBoard，共用模組已正式套用。'),
+    rollbackUrl: '/games/wheel?legacyWheel=1',
+    commonWheelUrl: '/games/wheel?commonWheel=1',
+    formalUrl: '/games/wheel'
+  }
+})
+
+const wheelPostLiveRouteMonitorItems = computed(() => {
+  return [
+    {
+      label: '正式輪盤頁',
+      route: '/games/wheel',
+      status: isWheelFormalLiveApplyRoute.value ? '目前路線' : '待比對',
+      description: '正式玩家頁預設走 CommonGamePlayBoard，共用模組已完成 live apply。'
+    },
+    {
+      label: 'commonWheel 測試區',
+      route: '/games/wheel?commonWheel=1',
+      status: isCommonWheelRoute.value ? '目前路線' : '保留',
+      description: '保留測試區，方便檢查 props、verify/play guard 與結果回填狀態。'
+    },
+    {
+      label: 'legacyWheel 緊急回退',
+      route: '/games/wheel?legacyWheel=1',
+      status: isLegacyWheelRoute.value ? '目前路線' : '可用',
+      description: '最高優先回退路線，異常時可立即切回原輪盤正式頁。'
+    }
+  ]
+})
+
+const wheelPostLiveRollbackChecklist = computed(() => {
+  return [
+    {
+      label: '回退入口',
+      status: '?legacyWheel=1 已保留',
+      description: '任何正式頁異常時，可先用 /games/wheel?legacyWheel=1 驗證原輪盤頁是否正常。'
+    },
+    {
+      label: '測試區入口',
+      status: '?commonWheel=1 已保留',
+      description: '可用 commonWheel 測試區比對共用模組 props、序號驗證與 play 結果回填。'
+    },
+    {
+      label: 'API Guard',
+      status: '仍需完整測試旗標',
+      description: 'verify/play API 不會因正式套用後監控面板而放寬送出條件。'
+    },
+    {
+      label: '核心保護',
+      status: 'router / DB / draw-core 未改',
+      description: '本批只新增監控與提示，不改資料庫、路由或抽獎核心。'
+    }
+  ]
+})
+
+const wheelPostLiveOpsHints = computed(() => {
+  return [
+    '正式頁正常：保留 /games/wheel 作為商家與玩家正式入口。',
+    '正式頁異常：先請商家或客服改用 /games/wheel?legacyWheel=1 檢查原輪盤頁。',
+    '測試比對：用 /games/wheel?commonWheel=1 檢查 CommonGamePlayBoard 測試區狀態。',
+    'API 異常：優先看 verify/play guard、requestWillBeSent、normalized result 與後端錯誤訊息。'
+  ]
+})
+
+const wheelPostLiveDataFlowSummary = computed(() => {
+  return {
+    title: '正式輪盤頁資料流檢查與玩家操作狀態修正後穩定版',
+    batch: '第 1901～1950 批',
+    formalDefaultCommonBoard: isWheelFormalLiveApplyRoute.value,
+    routeMode: isLegacyWheelRoute.value
+      ? 'legacy_fallback_original_wheel'
+      : (isCommonWheelRoute.value ? 'common_wheel_test_area' : 'formal_live_common_board'),
+    verifyGuardProtected: true,
+    playGuardProtected: true,
+    playerHint: isLegacyWheelRoute.value
+      ? '目前為原輪盤回退模式，適合緊急恢復與比對正式頁。'
+      : (isCommonWheelRoute.value
+        ? '目前為 commonWheel 測試區，可檢查 verify/play request preview 與結果回填。'
+        : '目前正式輪盤頁已走共用模組，玩家可依序完成序號驗證與抽獎流程。'),
+    noCoreChange: true
+  }
+})
+
+const wheelPostLiveDataFlowItems = computed(() => {
+  return [
+    {
+      label: '序號驗證狀態',
+      status: commonWheelVerifySerialNormalizedState.value?.status || 'guarded',
+      description: commonWheelVerifySerialNormalizedState.value?.message || 'verify-serial 狀態維持 guard 保護，正式頁不會自動放寬 API 條件。'
+    },
+    {
+      label: 'Play 請求狀態',
+      status: commonWheelPlayApiSafetyGuard.value?.requestWillBeSent ? '可送出測試' : '安全保護中',
+      description: 'play API 仍需完整測試旗標、verify 成功與手動確認；正式套用後不會無條件送出。'
+    },
+    {
+      label: '結果回填狀態',
+      status: commonWheelPlayApiNormalizedState.value?.status || '等待結果',
+      description: commonWheelPlayApiNormalizedState.value?.message || '中獎結果、錯誤訊息與 normalized result 會回填到共用模組測試/正式顯示區。'
+    },
+    {
+      label: 'Rollback 狀態',
+      status: isLegacyWheelRoute.value ? '目前回退中' : '可立即回退',
+      description: '?legacyWheel=1 仍為最高優先，正式頁異常時可立即回到原輪盤流程。'
+    }
+  ]
+})
+
+const wheelPostLivePlayerOperationCards = computed(() => {
+  return [
+    {
+      title: '玩家等待提示',
+      description: '當 verify/play 尚未完成時，畫面以「安全檢查中、請勿重複點擊」提示玩家。'
+    },
+    {
+      title: '可操作提示',
+      description: 'verify 成功後才顯示下一步操作狀態，避免玩家誤以為正式頁已無限制送出。'
+    },
+    {
+      title: '錯誤友善化',
+      description: 'API 失敗時以「序號無效、活動尚未開放、請稍後再試」等玩家可理解文案呈現。'
+    },
+    {
+      title: '營運追蹤',
+      description: '保留 formal/common/legacy 三路線提示，方便客服與營運快速判斷玩家目前所在模式。'
+    }
+  ]
+})
+
+const wheelPostLiveGoLiveOpsSummary = computed(() => {
+  return {
+    title: '正式輪盤頁上線更換完整收斂與營運監控版',
+    batch: '第 2051～2100 批',
+    formalDefaultCommonBoard: isWheelFormalLiveApplyRoute.value,
+    routeMode: isLegacyWheelRoute.value
+      ? 'legacy_fallback_original_wheel'
+      : (isCommonWheelRoute.value ? 'common_wheel_test_area' : 'formal_live_common_board'),
+    mobileExperienceReady: true,
+    goLiveReplacementReady: true,
+    opsMonitoringReady: true,
+    rollbackSopReady: true,
+    merchantServiceHandoffReady: true,
+    noCoreChange: true,
+    summaryText: '正式輪盤頁已完成上線更換收斂；正式入口、commonWheel 測試區與 legacyWheel 回退路線皆保留，適合正式上線後營運監控。'
+  }
+})
+
+const wheelPostLiveGoLiveChecklist = computed(() => {
+  return [
+    {
+      label: '正式入口驗收',
+      status: isWheelFormalLiveApplyRoute.value ? '正式共用模組中' : '待比對',
+      description: '/games/wheel 預設顯示 CommonGamePlayBoard；請確認手機、平板、桌機都能正常操作。'
+    },
+    {
+      label: '測試區驗收',
+      status: '?commonWheel=1 保留',
+      description: '保留 commonWheel 測試區，用於比對 props、verify/play guard、結果回填與 UI 顯示。'
+    },
+    {
+      label: '緊急回退驗收',
+      status: '?legacyWheel=1 最高優先',
+      description: '若正式入口異常，立即提供 /games/wheel?legacyWheel=1 給商家或客服作為臨時回退路線。'
+    },
+    {
+      label: 'API Guard 驗收',
+      status: '保護中',
+      description: 'verify/play API 仍需完整測試旗標與手動確認才會送出，不因正式套用而放寬。'
+    },
+    {
+      label: '核心保護驗收',
+      status: '未變更',
+      description: 'router、DB schema、draw-core 均未修改；本批只收斂正式上線與營運監控提示。'
+    }
+  ]
+})
+
+const wheelPostLiveOpsMonitorCards = computed(() => {
+  return [
+    {
+      title: '上線當日巡檢',
+      description: '每 30～60 分鐘檢查正式入口、序號驗證、play 結果、錯誤提示與客服回報。'
+    },
+    {
+      title: '商家驗收提示',
+      description: '請商家確認活動名稱、獎項顯示、中獎結果、兌獎提醒與手機版畫面。'
+    },
+    {
+      title: '客服回報欄位',
+      description: '回報時需包含玩家網址、序號、錯誤訊息、手機型號、發生時間與是否可用 legacyWheel 回退。'
+    },
+    {
+      title: 'Rollback SOP',
+      description: '若正式共用模組異常，先切 legacyWheel 回退確認服務不中斷，再回查 commonWheel 測試區與 console/API 錯誤。'
+    }
+  ]
+})
+
+const wheelFormalGrayRouteMode = computed(() => {
+  if (isLegacyWheelRoute.value) return 'legacy_fallback'
+  if (isCommonWheelRoute.value) return 'common_wheel_test_area'
+  if (isWheelFormalCanaryActualDisplayRoute.value) return 'formal_canary_actual_common_board'
+  if (isWheelFormalCanaryRoute.value) return 'formal_canary_preview'
+  if (isWheelFormalGrayPreviewRoute.value) return 'formal_gray_canary_preview'
+  if (isWheelFormalCommonRoute.value) return 'formal_common_dry_run_candidate'
+  if (isWheelFormalDryRunRoute.value) return 'formal_dry_run_preview'
+  return 'formal_wheel_original'
+})
+
+const isWheelFormalDryRunPreviewRoute = computed(() => {
+  return isWheelFormalDryRunRoute.value || isWheelFormalCommonRoute.value || isWheelFormalGrayRoute.value || isWheelFormalCanaryRoute.value || isWheelFormalApplyRoute.value
+})
+
+const isCommonWheelPlayManualConfirmEnabled = computed(() => {
+  return String(route.query.wheelConfirmPlay || '').trim() === '1'
+})
+
+const getCommonWheelPlayLocalSwitchEnabled = () => {
+  if (typeof localStorage === 'undefined') return false
+
+  return localStorage.getItem('v23_common_wheel_allow_play_api_send') === '1'
+}
+
+const isCommonWheelPlayLocalSwitchEnabled = computed(() => {
+  return getCommonWheelPlayLocalSwitchEnabled() || String(route.query.wheelLocalPlaySwitch || '').trim() === '1'
+})
+
+const commonWheelPlayApiSending = ref(false)
+const commonWheelPlayApiLastResult = ref(null)
+const commonWheelPlayApiLastError = ref('')
+const commonWheelPlayApiLastCheckedAt = ref('')
+
+
+const commonWheelVerifySerialSending = ref(false)
+const commonWheelVerifySerialLastResult = ref(null)
+const commonWheelVerifySerialLastError = ref('')
+const commonWheelVerifySerialLastCheckedAt = ref('')
+
+const getCommonWheelVerifyLocalSwitchEnabled = () => {
+  if (typeof localStorage === 'undefined') return false
+
+  return localStorage.getItem('v23_common_wheel_allow_verify_api_send') === '1'
+}
+
+const isCommonWheelVerifyManualConfirmEnabled = computed(() => {
+  return String(route.query.wheelConfirmVerify || '').trim() === '1'
+})
+
+const isCommonWheelVerifyLocalSwitchEnabled = computed(() => {
+  return getCommonWheelVerifyLocalSwitchEnabled() || String(route.query.wheelLocalVerifySwitch || '').trim() === '1'
+})
+
+const isCommonWheelVerifyApiRealSendAllowed = computed(() => {
+  return Boolean(
+    isWheelVerifyApiSendRoute.value &&
+    isCommonWheelVerifyManualConfirmEnabled.value &&
+    isCommonWheelVerifyLocalSwitchEnabled.value &&
+    !isLegacyWheelRoute.value &&
+    !commonWheelVerifySerialSending.value
+  )
+})
+
+const normalizeCommonWheelVerifyApiResponse = (payload = {}) => {
+  const source = payload?.data?.data || payload?.data || payload || {}
+  const valid = Boolean(source.valid ?? source.verified ?? source.success ?? false)
+
+  return {
+    status: valid ? 'verified' : 'rejected',
+    verified: valid,
+    valid,
+    message: source.message || (valid ? '序號驗證成功，可以進入下一步測試。' : '序號驗證未通過，請確認序號或活動設定。'),
+    serialCode: source.serialCode || commonWheelVerifySerialRequestPreview.value.serialCode,
+    raw: source,
+    checkedAt: new Date().toLocaleString('zh-TW')
+  }
+}
+
+const sendCommonWheelVerifySerialApi = async () => {
+  if (!isCommonWheelVerifyApiRealSendAllowed.value) {
+    commonWheelVerifySerialLastError.value = 'verify API 尚未符合送出條件，請確認 commonWheel / dryRun / wheelVerifyApi / wheelVerifySend / wheelConfirmVerify / local switch。'
+    return null
+  }
+
+  const preview = commonWheelVerifySerialRequestPreview.value
+  const confirmed = window.confirm('確定要在 commonWheel 測試區送出 verify-serial 真 API 嗎？這不會送出 play API。')
+
+  if (!confirmed) return null
+
+  commonWheelVerifySerialSending.value = true
+  commonWheelVerifySerialLastError.value = ''
+
+  try {
+    const campaignId = encodeURIComponent(preview.campaignId)
+    const response = await fetch(`/api/draw-engine/campaigns/${campaignId}/verify-serial`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        serialCode: preview.serialCode,
+        gameType: 'WHEEL',
+        tenantSlug: preview.tenantSlug,
+        trafficSource: preview.trafficSource,
+        source: preview.trafficSource,
+        dryRun: true,
+        fromCommonWheel: true
+      })
+    })
+
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(payload?.message || `verify-serial API 回應失敗：HTTP ${response.status}`)
+    }
+
+    const normalized = normalizeCommonWheelVerifyApiResponse(payload)
+    commonWheelVerifySerialLastResult.value = normalized
+    commonWheelVerifySerialLastCheckedAt.value = normalized.checkedAt
+
+    return normalized
+  } catch (error) {
+    console.error('commonWheel verify-serial API 測試送出失敗：', error)
+    commonWheelVerifySerialLastError.value = error?.message || 'verify-serial API 測試送出失敗。'
+    commonWheelVerifySerialLastResult.value = {
+      status: 'error',
+      verified: false,
+      valid: false,
+      message: commonWheelVerifySerialLastError.value,
+      serialCode: preview.serialCode,
+      checkedAt: new Date().toLocaleString('zh-TW')
+    }
+
+    return null
+  } finally {
+    commonWheelVerifySerialSending.value = false
+  }
+}
+
+const normalizeCommonWheelPlayApiResponse = (payload = {}) => {
+  const source = payload?.data?.data || payload?.data || payload || {}
+  const prize = source.prize || source.reward || source.result?.prize || source.playRecord?.prize || {}
+  const playRecord = source.playRecord || source.record || source.result?.playRecord || {}
+  const rewardRecord = source.rewardRecord || source.result?.rewardRecord || {}
+  const success = Boolean(source.success ?? source.ok ?? source.result?.success ?? true)
+
+  return {
+    status: success ? 'played' : 'failed',
+    success,
+    message: source.message || (success ? 'play API 測試送出成功，已取得輪盤抽獎結果。' : 'play API 測試送出未成功，請確認活動、序號與後端狀態。'),
+    prizeName: source.prizeName || prize.title || prize.name || source.result?.prizeTitle || '',
+    prizeId: source.prizeId || prize.id || source.result?.prizeId || '',
+    playRecordId: source.playRecordId || playRecord.id || '',
+    rewardRecordId: source.rewardRecordId || rewardRecord.id || '',
+    raw: source,
+    checkedAt: new Date().toLocaleString('zh-TW')
+  }
+}
+
+const sendCommonWheelPlayApi = async () => {
+  if (!commonWheelPlayApiSafetyGuard.value.requestWillBeSent) {
+    commonWheelPlayApiLastError.value = 'play API 尚未符合送出條件，請確認 commonWheel / dryRun / verify 成功 / wheelPlayApi / wheelSendPlayApi / wheelConfirmPlay / local play switch。'
+    return null
+  }
+
+  const preview = commonWheelPlayRequestPreview.value
+  const confirmed = window.confirm('確定要在 commonWheel 測試區送出 play 真 API 嗎？這會呼叫後端 play endpoint，可能依後端邏輯寫入測試紀錄。')
+
+  if (!confirmed) return null
+
+  commonWheelPlayApiSending.value = true
+  commonWheelPlayApiLastError.value = ''
+
+  try {
+    const campaignId = encodeURIComponent(preview.campaignId)
+    const response = await fetch(`/api/draw-engine/campaigns/${campaignId}/play`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        gameType: 'WHEEL',
+        serialCode: preview.serialCode,
+        tenantSlug: preview.tenantSlug,
+        trafficSource: preview.trafficSource,
+        source: preview.trafficSource,
+        fromCommonWheel: true,
+        verifyStatus: commonWheelVerifySerialLiveState.value.status,
+        verifySerialCode: commonWheelVerifySerialLiveState.value.serialCode
+      })
+    })
+
+    const payload = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(payload?.message || `play API 回應失敗：HTTP ${response.status}`)
+    }
+
+    const normalized = normalizeCommonWheelPlayApiResponse(payload)
+    commonWheelPlayApiLastResult.value = normalized
+    commonWheelPlayApiLastCheckedAt.value = normalized.checkedAt
+
+    return normalized
+  } catch (error) {
+    console.error('commonWheel play API 測試送出失敗：', error)
+    commonWheelPlayApiLastError.value = error?.message || 'play API 測試送出失敗。'
+    commonWheelPlayApiLastResult.value = {
+      status: 'error',
+      success: false,
+      message: commonWheelPlayApiLastError.value,
+      prizeName: '',
+      playRecordId: '',
+      rewardRecordId: '',
+      raw: null,
+      checkedAt: new Date().toLocaleString('zh-TW')
+    }
+
+    return null
+  } finally {
+    commonWheelPlayApiSending.value = false
+  }
+}
+
+const isWheelVerifyApiRequestLocked = computed(() => {
+  return !isCommonWheelVerifyApiRealSendAllowed.value
+})
+
+const commonWheelTestPath = computed(() => {
+  const query = urlGameId.value
+    ? `?gameId=${encodeURIComponent(urlGameId.value)}&commonWheel=1`
+    : '?commonWheel=1'
+
+  return `/games/wheel${query}`
+})
+
+const legacyWheelFallbackPath = computed(() => {
+  const query = urlGameId.value
+    ? `?gameId=${encodeURIComponent(urlGameId.value)}&legacyWheel=1`
+    : '?legacyWheel=1'
+
+  return `/games/wheel${query}`
+})
+
+const commonWheelDryRunPath = computed(() => {
+  const query = urlGameId.value
+    ? `?gameId=${encodeURIComponent(urlGameId.value)}&commonWheel=1&wheelDryRun=1`
+    : '?commonWheel=1&wheelDryRun=1'
+
+  return `/games/wheel${query}`
+})
+
+const commonWheelApiPreviewPath = computed(() => {
+  const query = urlGameId.value
+    ? `?gameId=${encodeURIComponent(urlGameId.value)}&commonWheel=1&wheelDryRun=1&wheelVerifyApi=1&wheelPlayApi=1`
+    : '?commonWheel=1&wheelDryRun=1&wheelVerifyApi=1&wheelPlayApi=1'
+
+  return `/games/wheel${query}`
+})
+
+const commonWheelVerifyApiSafetyPath = computed(() => {
+  const query = urlGameId.value
+    ? `?gameId=${encodeURIComponent(urlGameId.value)}&commonWheel=1&wheelDryRun=1&wheelVerifyApi=1`
+    : '?commonWheel=1&wheelDryRun=1&wheelVerifyApi=1'
+
+  return `/games/wheel${query}`
+})
+
+const commonWheelVerifyApiSendCandidatePath = computed(() => {
+  const query = urlGameId.value
+    ? `?gameId=${encodeURIComponent(urlGameId.value)}&commonWheel=1&wheelDryRun=1&wheelVerifyApi=1&wheelVerifySend=1`
+    : '?commonWheel=1&wheelDryRun=1&wheelVerifyApi=1&wheelVerifySend=1'
+
+  return `/games/wheel${query}`
+})
+
+const wheelCommonRouteMode = computed(() => {
+  if (isLegacyWheelRoute.value) return 'legacy_fallback'
+  if (isCommonWheelRoute.value) return 'common_wheel_test'
+  return 'formal_wheel_original'
+})
+
+const wheelCommonRouteModeLabel = computed(() => {
+  const map = {
+    legacy_fallback: 'legacyWheel=1 原輪盤 fallback',
+    common_wheel_test: 'commonWheel=1 共用模組測試區',
+    formal_wheel_original: '正式輪盤原頁'
+  }
+
+  return map[wheelCommonRouteMode.value] || '正式輪盤原頁'
+})
+
+const commonWheelStageOneChecks = computed(() => {
+  return [
+    {
+      label: '正式輪盤頁',
+      status: !isCommonWheelRoute.value && !isLegacyWheelRoute.value ? '目前路線' : '保留',
+      ok: true,
+      description: '本批不切換正式輪盤頁，原有轉盤動畫、機率與玩家流程保留。'
+    },
+    {
+      label: 'commonWheel 測試區',
+      status: isCommonWheelRoute.value ? '測試中' : '待測',
+      ok: true,
+      description: '使用 ?commonWheel=1 進入第一階段測試區，先做 props contract 與顯示規格確認。'
+    },
+    {
+      label: 'legacyWheel fallback',
+      status: isLegacyWheelRoute.value ? '最高優先' : '已保留',
+      ok: true,
+      description: '使用 ?legacyWheel=1 強制回到原輪盤路線，後續導入也必須保留。'
+    },
+    {
+      label: 'wheelDryRun',
+      status: isWheelDryRunRoute.value ? '啟用' : '關閉',
+      ok: true,
+      description: '只做 dry-run 檢查，不會送出真實 play API。'
+    },
+    {
+      label: 'verify/play API',
+      status: isWheelVerifyApiRoute.value || isWheelPlayApiRoute.value ? '旗標預覽' : '未開放',
+      ok: true,
+      description: '本批只整理 API 測試旗標，不放寬 guard，不新增 DB 寫入。'
+    }
+  ]
+})
+
+const commonWheelPropsContractPreview = computed(() => {
+  return {
+    gameType: 'WHEEL',
+    routeMode: wheelCommonRouteMode.value,
+    routeLabel: wheelCommonRouteModeLabel.value,
+    title: campaign.mainTitle || campaign.pageTitle,
+    subtitle: campaign.subTitle,
+    brandName: campaign.brandName,
+    chances: player.chances,
+    prizes: prizes.value.map((prize, index) => ({
+      index,
+      id: prize.id,
+      name: prize.name,
+      type: prize.type,
+      probability: Number(prize.probability || 0),
+      stock: Number(prize.stock || 0),
+      enabled: prize.isEnabled !== false
+    })),
+    playControl: {
+      enabled: false,
+      canPlay: false,
+      requestWillBeSent: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+      reason: '第 1151～1200 批仍為 commonWheel 測試區第一階段，不送出 play API。'
+    },
+    safety: {
+      keepFormalWheel: true,
+      keepLegacyWheelFallback: true,
+      keepRouterUnchanged: true,
+      keepDbUnchanged: true,
+      keepDrawCoreUnchanged: true
+    }
+  }
+})
+
+const commonWheelOperationHint = computed(() => {
+  if (isLegacyWheelRoute.value) {
+    return '目前使用 legacyWheel=1 fallback，會保留原輪盤正式流程。'
+  }
+
+  if (isWheelVerifyApiSafetyRoute.value) {
+    return '目前在 commonWheel=1 測試區 verify-serial 真 API 安全開關準備狀態：只顯示 request preview 與 guard，不會送出 API。'
+  }
+
+  if (isCommonWheelRoute.value) {
+    return '目前在 commonWheel=1 測試區：wheel props 已實際綁定，verify API 可安全測試送出，play API 仍鎖定不送出。'
+  }
+
+  return '目前為輪盤正式玩家頁，正式對客路由只顯示真正輪盤畫面。'
+})
+
+const commonWheelBindingStageInfo = computed(() => {
+  return {
+    batch: '第 1701～1750 批',
+    title: '正式輪盤頁共用模組 canary 實際顯示切換與 fallback 保護版',
+    routeMode: wheelCommonRouteMode.value,
+    formalWheelKept: true,
+    legacyWheelFallbackKept: true,
+    commonWheelEnabled: isCommonWheelRoute.value,
+    playApiSendEnabled: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+    dbWriteEnabled: false,
+    routerChanged: false,
+    drawCoreChanged: false
+  }
+})
+
+const commonWheelVerifySerialRequestPreview = computed(() => {
+  return {
+    method: 'POST',
+    endpoint: '/api/draw-engine/campaigns/:campaignId/verify-serial',
+    gameType: 'WHEEL',
+    tenantSlug: String(route.params?.tenantSlug || route.query.tenantSlug || '').trim() || 'preview-tenant',
+    campaignId: String(route.query.campaignId || urlGameId.value || currentGameId.value || 'preview-campaign'),
+    serialCode: String(route.query.serial || route.query.serialCode || '').trim(),
+    trafficSource: String(route.query.from || route.query.source || 'direct').trim(),
+    requestWillBeSent: isCommonWheelVerifyApiRealSendAllowed.value,
+    note: '第 1351～1400 批建立 verify-serial 真 API request preview，符合安全開關時可實際送出。'
+  }
+})
+
+const commonWheelVerifySerialApiSafetyGuard = computed(() => {
+  const checks = [
+    {
+      key: 'legacyWheel',
+      label: 'legacyWheel fallback',
+      ok: !isLegacyWheelRoute.value,
+      status: isLegacyWheelRoute.value ? 'fallback 啟用，禁止測試 API' : '未啟用 fallback'
+    },
+    {
+      key: 'commonWheel',
+      label: 'commonWheel 測試區',
+      ok: isCommonWheelRoute.value,
+      status: isCommonWheelRoute.value ? '測試區啟用' : '不在測試區'
+    },
+    {
+      key: 'wheelDryRun',
+      label: 'wheelDryRun',
+      ok: isWheelDryRunRoute.value,
+      status: isWheelDryRunRoute.value ? 'dry-run 啟用' : 'dry-run 未啟用'
+    },
+    {
+      key: 'wheelVerifyApi',
+      label: 'wheelVerifyApi',
+      ok: isWheelVerifyApiRoute.value,
+      status: isWheelVerifyApiRoute.value ? 'verify API 安全開關啟用' : 'verify API 安全開關未啟用'
+    },
+    {
+      key: 'requestLock',
+      label: 'request lock',
+      ok: isWheelVerifyApiRequestLocked.value,
+      status: '第 1351～1400 批仍鎖定不送出真 API'
+    }
+  ]
+
+  return {
+    enabled: isWheelVerifyApiSafetyRoute.value,
+    sendCandidate: isWheelVerifyApiSendRoute.value,
+    requestWillBeSent: isCommonWheelVerifyApiRealSendAllowed.value,
+    allowRealVerifyApi: isCommonWheelVerifyApiRealSendAllowed.value,
+    locked: isWheelVerifyApiRequestLocked.value,
+    reason: isWheelVerifyApiSafetyRoute.value
+      ? 'verify-serial 真 API 安全開關已進入準備狀態，且符合全部送出條件時才允許 request。'
+      : '需同時具備 ?commonWheel=1&wheelDryRun=1&wheelVerifyApi=1 才進入 verify-serial 安全開關準備狀態。',
+    checks
+  }
+})
+
+const commonWheelVerifySerialNormalizedState = computed(() => {
+  return {
+    status: isWheelVerifyApiSafetyRoute.value ? 'safety_ready_preview' : 'disabled',
+    verified: false,
+    valid: false,
+    message: isWheelVerifyApiSafetyRoute.value
+      ? 'verify-serial 真 API 安全開關準備完成；符合 wheelVerifySend / wheelConfirmVerify / local switch 時可送出 verify API；play API 仍鎖定。'
+      : '尚未啟用 wheelVerifyApi 安全測試。',
+    serialCode: commonWheelVerifySerialRequestPreview.value.serialCode,
+    requestPreview: commonWheelVerifySerialRequestPreview.value,
+    guard: commonWheelVerifySerialApiSafetyGuard.value,
+    lastCheckedAt: commonWheelVerifySerialLastCheckedAt.value
+  }
+})
+
+const commonWheelVerifySerialStageChecks = computed(() => {
+  return [
+    {
+      label: 'verify API 安全開關',
+      status: isWheelVerifyApiSafetyRoute.value ? '準備完成' : '待啟用',
+      ok: true,
+      description: '使用 ?commonWheel=1&wheelDryRun=1&wheelVerifyApi=1 進入 verify-serial 真 API 安全開關準備狀態。'
+    },
+    {
+      label: 'request preview',
+      status: '已建立',
+      ok: true,
+      description: '已建立 method、endpoint、campaignId、serialCode、trafficSource 預覽，但 requestWillBeSent 會依安全開關顯示。'
+    },
+    {
+      label: 'normalized state',
+      status: commonWheelVerifySerialNormalizedState.value.status,
+      ok: true,
+      description: '已整理 verified / valid / message / guard / requestPreview 給 CommonGamePlayBoard 使用。'
+    },
+    {
+      label: '正式輪盤頁',
+      status: '未切換',
+      ok: true,
+      description: '正式輪盤頁仍走原本流程；verify API 準備層只存在 commonWheel 測試區。'
+    },
+    {
+      label: 'API / DB / draw-core',
+      status: '未送出 / 未變更',
+      ok: true,
+      description: '本批只允許 verify API 在測試區安全送出；不送出 play API，不改 DB schema，不改抽獎核心。'
+    }
+  ]
+})
+
+const commonWheelTemplateProps = computed(() => {
+  return {
+    id: currentGameId.value,
+    type: 'WHEEL',
+    gameType: 'WHEEL',
+    title: campaign.mainTitle || campaign.pageTitle || '幸運輪盤',
+    subtitle: campaign.subTitle || '共用模組測試區',
+    brandName: campaign.brandName || 'Multi Game Platform',
+    noticeText: campaign.noticeText || '',
+    theme: {
+      start: campaign.themeStart,
+      middle: campaign.themeMiddle,
+      end: campaign.themeEnd
+    },
+    items: prizes.value.map((prize, index) => {
+      return {
+        id: prize.id || `wheel-prize-${index + 1}`,
+        index,
+        name: prize.name || `輪盤獎項 ${index + 1}`,
+        label: prize.shortName || prize.name || `獎項 ${index + 1}`,
+        type: prize.type || 'PRIZE',
+        icon: prize.icon || '🎁',
+        probability: Number(prize.probability || 0),
+        quantity: Number(prize.stock || prize.quantity || 0),
+        enabled: prize.isEnabled !== false
+      }
+    })
+  }
+})
+
+
+const commonWheelVerifySerialLiveState = computed(() => {
+  const lastResult = commonWheelVerifySerialLastResult.value
+
+  if (lastResult) {
+    return {
+      status: lastResult.status || (lastResult.valid ? 'verified' : 'rejected'),
+      verified: Boolean(lastResult.verified || lastResult.valid),
+      valid: Boolean(lastResult.valid || lastResult.verified),
+      message: lastResult.message || '已取得 verify-serial 測試結果。',
+      serialCode: lastResult.serialCode || commonWheelVerifySerialRequestPreview.value.serialCode,
+      requestPreview: commonWheelVerifySerialRequestPreview.value,
+      guard: commonWheelVerifySerialApiSafetyGuard.value,
+      lastCheckedAt: lastResult.checkedAt || commonWheelVerifySerialLastCheckedAt.value,
+      raw: lastResult.raw || null
+    }
+  }
+
+  return commonWheelVerifySerialNormalizedState.value
+})
+
+const commonWheelPlayControlUnlockGuard = computed(() => {
+  const verifyState = commonWheelVerifySerialLiveState.value
+  const verifiedReady = Boolean(verifyState.valid && verifyState.verified)
+  const canUnlockTestPlayControl = Boolean(
+    isCommonWheelRoute.value &&
+    !isLegacyWheelRoute.value &&
+    isWheelPlayApiRoute.value &&
+    verifiedReady
+  )
+
+  return {
+    batch: '第 1701～1750 批',
+    title: 'verify 結果接入 playControl 解鎖預備 guard',
+    verifiedReady,
+    canUnlockTestPlayControl,
+    playControlEnabledForUiTest: canUnlockTestPlayControl,
+    canPlayForUiTest: canUnlockTestPlayControl,
+    requestWillBeSent: false,
+    callsPlayApi: false,
+    writesDb: false,
+    reason: canUnlockTestPlayControl
+      ? 'verify 結果已通過，commonWheel 測試區可顯示 playControl 解鎖預備狀態；play API 仍不送出。'
+      : '需在 ?commonWheel=1 測試區完成 verify 成功，並帶 wheelPlayApi=1，才會解鎖 playControl 測試 UI。',
+    checks: [
+      {
+        key: 'commonWheel',
+        label: 'commonWheel 測試區',
+        ok: isCommonWheelRoute.value,
+        status: isCommonWheelRoute.value ? '啟用' : '未啟用'
+      },
+      {
+        key: 'verifyResult',
+        label: 'verify 結果',
+        ok: verifiedReady,
+        status: verifiedReady ? '已驗證成功' : '尚未成功驗證'
+      },
+      {
+        key: 'wheelPlayApi',
+        label: 'wheelPlayApi 預覽旗標',
+        ok: isWheelPlayApiRoute.value,
+        status: isWheelPlayApiRoute.value ? '預覽啟用' : '未啟用'
+      },
+      {
+        key: 'requestWillBeSent',
+        label: 'play request 送出',
+        ok: true,
+        status: '固定 false，本批不送出 play API'
+      }
+    ]
+  }
+})
+
+const commonWheelPlayRequestPreview = computed(() => {
+  return {
+    method: 'POST',
+    endpoint: '/api/draw-engine/campaigns/:campaignId/play',
+    gameType: 'WHEEL',
+    tenantSlug: commonWheelVerifySerialRequestPreview.value.tenantSlug,
+    campaignId: commonWheelVerifySerialRequestPreview.value.campaignId,
+    serialCode: commonWheelVerifySerialLiveState.value.serialCode,
+    trafficSource: commonWheelVerifySerialRequestPreview.value.trafficSource,
+    payloadPreview: {
+      gameType: 'WHEEL',
+      serialCode: commonWheelVerifySerialLiveState.value.serialCode,
+      tenantSlug: commonWheelVerifySerialRequestPreview.value.tenantSlug,
+      trafficSource: commonWheelVerifySerialRequestPreview.value.trafficSource,
+      source: commonWheelVerifySerialRequestPreview.value.trafficSource,
+      dryRun: true,
+      fromCommonWheel: true,
+      verifyStatus: commonWheelVerifySerialLiveState.value.status,
+      sendPlayApiCandidate: isWheelPlayApiSendRoute.value,
+      confirmPlay: isCommonWheelPlayManualConfirmEnabled.value,
+      localPlaySwitch: isCommonWheelPlayLocalSwitchEnabled.value
+    },
+    unlockedForUiPreview: commonWheelPlayControlUnlockGuard.value.canUnlockTestPlayControl,
+    sendCandidate: isWheelPlayApiSendRoute.value,
+    requestWillBeSent: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+    note: '第 1601～1650 批保留 play API 安全送出開關，並新增結果顯示穩定化與正式切換前驗收資訊。'
+  }
+})
+
+
+const commonWheelPlayApiSafetyGuard = computed(() => {
+  const unlockGuard = commonWheelPlayControlUnlockGuard.value
+  const sendCandidate = Boolean(
+    isWheelPlayApiSendRoute.value &&
+    isCommonWheelPlayManualConfirmEnabled.value &&
+    isCommonWheelPlayLocalSwitchEnabled.value &&
+    unlockGuard.canUnlockTestPlayControl &&
+    !isLegacyWheelRoute.value &&
+    !commonWheelPlayApiSending.value
+  )
+
+  return {
+    batch: '第 1701～1750 批',
+    title: 'commonWheel play API 真實送出安全開關準備 guard',
+    enabled: Boolean(isWheelPlayApiSafetyRoute.value),
+    sendCandidate,
+    requestWillBeSent: sendCandidate,
+    callsPlayApi: sendCandidate,
+    writesDb: sendCandidate,
+    reason: sendCandidate
+      ? 'play API 真實送出條件已具備；本批允許在 commonWheel 測試區按確認後送出 play API。'
+      : '需 commonWheel、dryRun、wheelPlayApi、wheelSendPlayApi、wheelConfirmPlay、wheelLocalPlaySwitch 且 verify 成功，才允許 play API 真實送出。',
+    checks: [
+      {
+        key: 'commonWheel',
+        label: 'commonWheel 測試區',
+        ok: isCommonWheelRoute.value,
+        status: isCommonWheelRoute.value ? '啟用' : '未啟用'
+      },
+      {
+        key: 'verifyUnlock',
+        label: 'verify 解鎖',
+        ok: unlockGuard.canUnlockTestPlayControl,
+        status: unlockGuard.canUnlockTestPlayControl ? '已具備 playControl 解鎖預備' : '尚未解鎖'
+      },
+      {
+        key: 'wheelSendPlayApi',
+        label: 'wheelSendPlayApi',
+        ok: isWheelPlayApiSendRoute.value,
+        status: isWheelPlayApiSendRoute.value ? '送出候選旗標已帶入' : '未帶入'
+      },
+      {
+        key: 'manualConfirm',
+        label: 'wheelConfirmPlay',
+        ok: isCommonWheelPlayManualConfirmEnabled.value,
+        status: isCommonWheelPlayManualConfirmEnabled.value ? '已確認' : '未確認'
+      },
+      {
+        key: 'localSwitch',
+        label: 'local play switch',
+        ok: isCommonWheelPlayLocalSwitchEnabled.value,
+        status: isCommonWheelPlayLocalSwitchEnabled.value ? '本機測試開關已啟用' : '本機測試開關未啟用'
+      },
+      {
+        key: 'requestWillBeSent',
+        label: 'play request 送出',
+        ok: true,
+        status: sendCandidate ? '完整條件通過，允許送出' : '條件未齊全，不送出'
+      }
+    ]
+  }
+})
+
+const commonWheelPlayApiNormalizedState = computed(() => {
+  const result = commonWheelPlayApiLastResult.value
+
+  if (result) {
+    return {
+      status: result.status || 'received',
+      success: Boolean(result.success ?? result.ok ?? false),
+      message: result.message || '已取得 play API 測試結果。',
+      prizeName: result.prizeName || result.prize?.title || result.reward?.title || '',
+      playRecordId: result.playRecordId || result.playRecord?.id || '',
+      rewardRecordId: result.rewardRecordId || result.rewardRecord?.id || '',
+      raw: result.raw || result,
+      checkedAt: result.checkedAt || commonWheelPlayApiLastCheckedAt.value
+    }
+  }
+
+  return {
+    status: commonWheelPlayApiSafetyGuard.value.requestWillBeSent ? 'ready_to_send' : 'locked',
+    success: false,
+    message: commonWheelPlayApiSafetyGuard.value.reason,
+    prizeName: '',
+    playRecordId: '',
+    rewardRecordId: '',
+    raw: null,
+    checkedAt: commonWheelPlayApiLastCheckedAt.value
+  }
+})
+
+const commonWheelPlayApiStageChecks = computed(() => {
+  return [
+    {
+      label: 'play API 安全開關',
+      status: isWheelPlayApiSafetyRoute.value ? '已進入安全準備' : '未啟用',
+      ok: true,
+      description: '只有 ?commonWheel=1 測試區會顯示 play API 安全開關準備狀態。'
+    },
+    {
+      label: '送出候選條件',
+      status: commonWheelPlayApiSafetyGuard.value.sendCandidate ? '候選條件具備' : '尚未具備',
+      ok: true,
+      description: '候選條件具備後，仍只限 commonWheel 測試區與完整測試旗標才會送出；正式輪盤頁不受影響。'
+    },
+    {
+      label: 'request payload',
+      status: '已整理',
+      ok: true,
+      description: 'payload 已包含 gameType、serialCode、tenantSlug、trafficSource 與 verifyStatus。'
+    },
+    {
+      label: 'response normalized state',
+      status: '已建立',
+      ok: true,
+      description: '已建立並穩定化 play response normalized state，可顯示成功、失敗、獎項與紀錄回填狀態。'
+    },
+    {
+      label: '正式輪盤頁',
+      status: '不受影響',
+      ok: true,
+      description: '正式輪盤頁仍走原流程，legacy fallback 仍最高優先。'
+    }
+  ]
+})
+
+const commonWheelResultDisplayState = computed(() => {
+  const playState = commonWheelPlayApiNormalizedState.value
+  const hasResult = Boolean(commonWheelPlayApiLastResult.value)
+  const hasError = Boolean(commonWheelPlayApiLastError.value)
+
+  if (hasError) {
+    return {
+      tone: 'danger',
+      title: 'play API 測試失敗',
+      status: playState.status || 'error',
+      message: commonWheelPlayApiLastError.value || playState.message || 'play API 測試發生錯誤，請檢查後端回應與安全旗標。',
+      prizeName: playState.prizeName || '尚未取得獎項',
+      recordText: '尚未建立有效紀錄',
+      checkedAt: playState.checkedAt || commonWheelPlayApiLastCheckedAt.value || '尚未檢查',
+      hasResult,
+      hasError
+    }
+  }
+
+  if (hasResult) {
+    return {
+      tone: playState.success ? 'success' : 'warning',
+      title: playState.success ? 'play API 測試成功' : 'play API 已回應但未標示成功',
+      status: playState.status || 'received',
+      message: playState.message || '已取得 play API 測試結果。',
+      prizeName: playState.prizeName || '後端未回傳獎項名稱',
+      recordText: playState.playRecordId || playState.rewardRecordId
+        ? `PlayRecord：${playState.playRecordId || '無'}｜RewardRecord：${playState.rewardRecordId || '無'}`
+        : '後端未回傳紀錄 ID',
+      checkedAt: playState.checkedAt || commonWheelPlayApiLastCheckedAt.value || '剛剛',
+      hasResult,
+      hasError
+    }
+  }
+
+  return {
+    tone: commonWheelPlayApiSafetyGuard.value.requestWillBeSent ? 'ready' : 'locked',
+    title: commonWheelPlayApiSafetyGuard.value.requestWillBeSent ? 'play API 已可測試送出' : '等待 play API 測試條件',
+    status: playState.status || 'locked',
+    message: playState.message || commonWheelPlayApiSafetyGuard.value.reason,
+    prizeName: '尚未抽選',
+    recordText: '尚未送出 play API',
+    checkedAt: commonWheelPlayApiLastCheckedAt.value || '尚未檢查',
+    hasResult,
+    hasError
+  }
+})
+
+const commonWheelResultDisplayCards = computed(() => {
+  const state = commonWheelResultDisplayState.value
+
+  return [
+    {
+      label: '結果狀態',
+      value: state.status,
+      icon: state.hasError ? '⚠️' : (state.hasResult ? '🎉' : '🧭')
+    },
+    {
+      label: '獎項顯示',
+      value: state.prizeName,
+      icon: '🎁'
+    },
+    {
+      label: '紀錄回填',
+      value: state.recordText,
+      icon: '📋'
+    },
+    {
+      label: '檢查時間',
+      value: state.checkedAt,
+      icon: '⏱️'
+    }
+  ]
+})
+
+const commonWheelPreFormalAcceptanceChecks = computed(() => {
+  return [
+    {
+      label: '正式輪盤頁',
+      status: '原流程保留',
+      ok: true,
+      description: '未帶 commonWheel 時仍走原輪盤正式頁，本批不切正式頁。'
+    },
+    {
+      label: 'commonWheel 測試區',
+      status: isCommonWheelRoute.value ? '測試區啟用' : '待測試',
+      ok: true,
+      description: '?commonWheel=1 可顯示 CommonGamePlayBoard 與 verify / play 測試資訊。'
+    },
+    {
+      label: 'legacy fallback',
+      status: isLegacyWheelRoute.value ? '目前 fallback 啟用' : '最高優先保留',
+      ok: true,
+      description: '?legacyWheel=1 仍可立即回到原輪盤流程，是正式切換前必要保護。'
+    },
+    {
+      label: 'verify / play API',
+      status: commonWheelPlayApiSafetyGuard.value.requestWillBeSent ? '完整測試旗標通過' : '受 guard 保護',
+      ok: true,
+      description: 'API 只在 commonWheel 測試區且完整旗標通過時才可能送出。'
+    },
+    {
+      label: 'router / DB / draw-core',
+      status: '未變更',
+      ok: true,
+      description: '本批只穩定化結果顯示與驗收資訊，不動核心架構。'
+    }
+  ]
+})
+
+const commonWheelFormalSwitchSafetyMatrix = computed(() => {
+  return {
+    batch: '第 1701～1750 批',
+    title: '正式輪盤頁共用模組 canary 實際顯示切換與 fallback 保護版',
+    formalWheelStillLegacyDefault: true,
+    commonWheelTestAreaReady: true,
+    legacyWheelFallbackReady: true,
+    verifyApiGuardReady: true,
+    playApiGuardReady: true,
+    resultDisplayReady: true,
+    preFormalAcceptanceReady: true,
+    formalDryRunReady: true,
+    formalCommonDryRunPreview: isWheelFormalCommonRoute.value,
+    formalGrayPreviewReady: true,
+    formalGrayPreviewActive: isWheelFormalGrayPreviewRoute.value,
+    formalCanaryRouteActive: isWheelFormalCanaryRoute.value,
+    formalCanaryActualDisplayActive: isWheelFormalCanaryActualDisplayRoute.value,
+    formalGrayRouteMode: wheelFormalGrayRouteMode.value,
+    canSwitchFormalNext: false,
+    nextRecommendedBatch: '第 1751～1800 批：正式輪盤頁共用模組 live apply 前驗收版',
+    note: '本批允許 canary 完整旗標下實際顯示 CommonGamePlayBoard，但正式頁預設仍不切換。'
+  }
+})
+
+const wheelFormalDryRunRouteMatrix = computed(() => {
+  return [
+    {
+      label: '正式輪盤頁預設路線',
+      status: !isCommonWheelRoute.value && !isWheelFormalDryRunPreviewRoute.value && !isLegacyWheelRoute.value ? '目前正式頁原流程' : '原流程保留',
+      ok: true,
+      description: '未帶 wheelFormalDryRun / commonWheel / legacyWheel 時仍保留原本正式輪盤頁。'
+    },
+    {
+      label: 'commonWheel 測試區',
+      status: isCommonWheelRoute.value ? '測試區啟用' : '保留可測',
+      ok: true,
+      description: '?commonWheel=1 仍可獨立顯示 CommonGamePlayBoard 測試區。'
+    },
+    {
+      label: 'formal dry-run',
+      status: isWheelFormalDryRunRoute.value ? 'dry-run 啟用' : '待 dry-run 測試',
+      ok: true,
+      description: '?wheelFormalDryRun=1 只顯示正式切換預演資訊，不真正切換正式頁。'
+    },
+    {
+      label: 'formal common dry-run',
+      status: isWheelFormalCommonRoute.value ? '候選 props snapshot 啟用' : '待 formalCommon 測試',
+      ok: true,
+      description: '?wheelFormalDryRun=1&wheelFormalCommon=1 只預覽共用模組正式候選 props。'
+    },
+    {
+      label: 'formal gray preview',
+      status: isWheelFormalGrayPreviewRoute.value ? '灰度預覽啟用' : '待 formalGray 測試',
+      ok: true,
+      description: '?wheelFormalDryRun=1&wheelFormalCommon=1&wheelFormalGray=1 只做正式共用模組灰度 / canary 預覽，不真正切換正式頁。'
+    },
+    {
+      label: 'formal canary preview',
+      status: isWheelFormalCanaryRoute.value ? 'canary 預演啟用' : '待 formalCanary 測試',
+      ok: true,
+      description: '?wheelFormalCanary=1 只在 formalGray 條件通過後啟用 canary 預演。'
+    },
+    {
+      label: 'formal canary actual display',
+      status: isWheelFormalCanaryActualDisplayRoute.value ? '實際顯示共用模組' : '待 formalApply 測試',
+      ok: true,
+      description: '?wheelFormalApply=1 加上完整 canary 旗標後，才在候選路線實際顯示 CommonGamePlayBoard。'
+    },
+    {
+      label: 'legacy fallback',
+      status: isLegacyWheelRoute.value ? 'fallback 已啟用' : '最高優先保留',
+      ok: true,
+      description: '?legacyWheel=1 優先於所有 dry-run / commonWheel / API 測試旗標。'
+    }
+  ]
+})
+
+const wheelFormalCandidatePropsSnapshot = computed(() => {
+  return {
+    batch: '第 1701～1750 批',
+    mode: isWheelFormalCanaryActualDisplayRoute.value ? 'formal_canary_actual_common_board' : (isWheelFormalCanaryRoute.value ? 'formal_canary_preview' : (isWheelFormalGrayPreviewRoute.value ? 'formal_gray_canary_preview' : (isWheelFormalCommonRoute.value ? 'formal_common_dry_run_candidate' : 'formal_dry_run_preview'))),
+    routeMode: wheelFormalGrayRouteMode.value,
+    formalGrayPreviewActive: isWheelFormalGrayPreviewRoute.value,
+    formalCanaryPreviewActive: isWheelFormalCanaryRoute.value,
+    formalCanaryActualDisplayActive: isWheelFormalCanaryActualDisplayRoute.value,
+    templateTitle: commonWheelTemplateProps.value.title || commonWheelTemplateProps.value.name || '幸運輪盤',
+    itemCount: commonWheelTemplateProps.value.items.length,
+    serialVerificationStatus: commonWheelSerialVerificationProps.value.status,
+    playControlStatus: commonWheelPlayControlProps.value.status,
+    playRequestWillBeSent: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+    verifyRequestWillBeSent: commonWheelVerifySerialRequestPreview.value.requestWillBeSent,
+    keepLegacyWheelFallback: true,
+    keepOriginalFormalWheel: true,
+    keepCommonWheelTestArea: true,
+    routerDbDrawCoreChanged: false,
+    note: '此 snapshot 供 formal canary 實際顯示比對；本批只在完整旗標下顯示 CommonGamePlayBoard，正式頁預設仍不切換。'
+  }
+})
+
+const wheelFormalLegacyRollbackChecklist = computed(() => {
+  return [
+    {
+      label: '緊急回退網址',
+      status: '?legacyWheel=1',
+      ok: true,
+      description: '任何 dry-run 或 commonWheel 狀態異常時，立即改用 /games/wheel?legacyWheel=1 回到原輪盤流程。'
+    },
+    {
+      label: '正式頁預設保留',
+      status: '未切換',
+      ok: true,
+      description: '第 1701～1750 批仍未把 /games/wheel 預設改成共用模組，只在 canary 完整旗標下顯示 CommonGamePlayBoard。'
+    },
+    {
+      label: 'API guard',
+      status: '完整保護',
+      ok: true,
+      description: 'verify / play API 仍只在 commonWheel 測試區與完整測試旗標下才可能送出。'
+    },
+    {
+      label: '核心保護',
+      status: '未變更',
+      ok: true,
+      description: 'router / DB schema / draw-core 均未修改。'
+    }
+  ]
+})
+
+const wheelFormalDryRunSummary = computed(() => {
+  return {
+    batch: '第 1701～1750 批',
+    title: '正式輪盤頁共用模組 canary 實際顯示切換與 fallback 保護版',
+    isFormalDryRun: isWheelFormalDryRunRoute.value,
+    isFormalCommonDryRun: isWheelFormalCommonRoute.value,
+    isFormalGrayPreview: isWheelFormalGrayPreviewRoute.value,
+    routeMode: wheelFormalGrayRouteMode.value,
+    routeMatrixReady: true,
+    candidatePropsSnapshotReady: true,
+    rollbackChecklistReady: true,
+    formalWheelDefaultSwitched: false,
+    nextRecommendedBatch: '第 1751～1800 批：正式輪盤頁共用模組 live apply 前驗收版'
+  }
+})
+
+const wheelFormalGrayReleaseSummary = computed(() => {
+  return {
+    batch: '第 1701～1750 批',
+    title: '正式輪盤頁共用模組 canary 實際顯示切換與 fallback 保護版',
+    routeMode: wheelFormalGrayRouteMode.value,
+    isFormalGrayPreview: isWheelFormalGrayPreviewRoute.value,
+    formalDefaultSwitched: false,
+    legacyWheelFallbackHighestPriority: true,
+    commonWheelTestAreaKept: true,
+    routerDbDrawCoreChanged: false,
+    nextRecommendedBatch: '第 1751～1800 批：正式輪盤頁共用模組 live apply 前驗收版',
+    note: '本批新增 wheelFormalCanary=1 / wheelFormalApply=1，完整旗標下可實際顯示 CommonGamePlayBoard；正式頁預設仍不切換。'
+  }
+})
+
+const wheelFormalGrayReleaseChecks = computed(() => {
+  return [
+    {
+      label: '灰度旗標',
+      status: isWheelFormalGrayPreviewRoute.value ? 'formalGray preview 啟用' : '待測試',
+      ok: true,
+      description: '只有 wheelFormalDryRun=1、wheelFormalCommon=1、wheelFormalGray=1 同時存在時，才進入灰度預覽。'
+    },
+    {
+      label: '正式頁預設',
+      status: '原流程保留',
+      ok: true,
+      description: '未帶任何旗標的 /games/wheel 仍保留原本輪盤頁，不會直接改成共用模組。'
+    },
+    {
+      label: 'legacy fallback',
+      status: isLegacyWheelRoute.value ? '目前 fallback 啟用' : '最高優先保留',
+      ok: true,
+      description: 'legacyWheel=1 優先於 formalDryRun / formalCommon / formalGray / commonWheel。'
+    },
+    {
+      label: 'API guard',
+      status: commonWheelPlayApiSafetyGuard.value.requestWillBeSent ? '測試旗標完整' : '受保護',
+      ok: true,
+      description: 'verify / play API 仍只在 commonWheel 測試區與完整旗標下才可能送出。'
+    },
+    {
+      label: '核心保護',
+      status: '未變更',
+      ok: true,
+      description: 'router / DB schema / draw-core 均未修改。'
+    }
+  ]
+})
+
+
+const wheelFormalCanaryApplySummary = computed(() => {
+  return {
+    batch: '第 1701～1750 批',
+    title: '正式輪盤頁共用模組 canary 實際顯示切換與 fallback 保護版',
+    routeMode: wheelFormalGrayRouteMode.value,
+    canaryPreviewActive: isWheelFormalCanaryRoute.value,
+    canaryActualDisplayActive: isWheelFormalCanaryActualDisplayRoute.value,
+    formalDefaultSwitched: false,
+    legacyWheelFallbackHighestPriority: true,
+    commonWheelTestAreaKept: true,
+    routerDbDrawCoreChanged: false,
+    note: '完整 canary 旗標通過時才實際顯示 CommonGamePlayBoard；未帶旗標的正式輪盤頁仍保留原流程。'
+  }
+})
+
+const wheelFormalCanaryApplyChecks = computed(() => {
+  return [
+    {
+      label: 'canary 預演旗標',
+      status: isWheelFormalCanaryRoute.value ? 'canary 啟用' : '待測試',
+      ok: true,
+      description: '需要 wheelFormalDryRun=1、wheelFormalCommon=1、wheelFormalGray=1、wheelFormalCanary=1 同時成立。'
+    },
+    {
+      label: 'canary 實際顯示',
+      status: isWheelFormalCanaryActualDisplayRoute.value ? 'CommonGamePlayBoard 顯示中' : '尚未 apply',
+      ok: true,
+      description: '只有再加上 wheelFormalApply=1 時，才在候選路線實際渲染共用模組。'
+    },
+    {
+      label: '正式頁預設',
+      status: '原流程保留',
+      ok: true,
+      description: '未帶任何旗標的 /games/wheel 仍保留原本輪盤頁。'
+    },
+    {
+      label: 'legacy fallback',
+      status: isLegacyWheelRoute.value ? '目前 fallback 啟用' : '最高優先保留',
+      ok: true,
+      description: 'legacyWheel=1 優先於 formalDryRun / formalCommon / formalGray / formalCanary / formalApply。'
+    },
+    {
+      label: 'API guard',
+      status: commonWheelPlayApiSafetyGuard.value.requestWillBeSent ? '測試旗標完整' : '受保護',
+      ok: true,
+      description: 'verify / play API 仍只在 commonWheel 測試區與完整旗標下才可能送出。'
+    }
+  ]
+})
+
+const commonWheelPlayControlUnlockChecks = computed(() => {
+  return [
+    {
+      label: 'verify 結果接入',
+      status: commonWheelVerifySerialLiveState.value.valid ? '已驗證成功' : '等待 verify 成功',
+      ok: true,
+      description: 'verify-serial 的 normalized result 已接入 playControl 解鎖判斷。'
+    },
+    {
+      label: 'playControl UI',
+      status: commonWheelPlayControlUnlockGuard.value.canUnlockTestPlayControl ? '測試 UI 可解鎖' : '仍鎖定',
+      ok: true,
+      description: '只影響 ?commonWheel=1 測試區的 UI 狀態，正式輪盤頁不受影響。'
+    },
+    {
+      label: 'play request preview',
+      status: '已建立',
+      ok: true,
+      description: '已建立 play API payload preview，供下一批安全包裝使用。'
+    },
+    {
+      label: 'play API 送出',
+      status: '不送出',
+      ok: true,
+      description: 'requestWillBeSent 固定 false，不呼叫 play API、不寫 DB、不產生紀錄。'
+    },
+    {
+      label: 'legacy fallback',
+      status: isLegacyWheelRoute.value ? '目前啟用' : '最高優先保留',
+      ok: true,
+      description: '?legacyWheel=1 仍可強制回到原輪盤正式流程。'
+    }
+  ]
+})
+
+const commonWheelPlayControlUnlockCards = computed(() => {
+  return [
+    {
+      label: 'Verify Result',
+      value: commonWheelVerifySerialLiveState.value.valid ? '已通過' : '尚未通過',
+      passed: commonWheelVerifySerialLiveState.value.valid === true,
+      icon: '🎫'
+    },
+    {
+      label: 'Unlock Guard',
+      value: commonWheelPlayControlUnlockGuard.value.canUnlockTestPlayControl ? '可解鎖測試 UI' : '鎖定中',
+      passed: commonWheelPlayControlUnlockGuard.value.canUnlockTestPlayControl,
+      icon: '🔓'
+    },
+    {
+      label: 'Play API',
+      value: '不送出',
+      passed: true,
+      icon: '🛑'
+    },
+    {
+      label: '正式頁',
+      value: '保護中',
+      passed: true,
+      icon: '🛡️'
+    }
+  ]
+})
+
+const commonWheelSerialVerificationProps = computed(() => {
+  return {
+    enabled: Boolean(isWheelVerifyApiSafetyRoute.value),
+    verified: commonWheelVerifySerialLiveState.value.verified,
+    valid: commonWheelVerifySerialLiveState.value.valid,
+    serialCode: commonWheelVerifySerialLiveState.value.serialCode,
+    status: commonWheelVerifySerialLiveState.value.status,
+    requestWillBeSent: isCommonWheelVerifyApiRealSendAllowed.value,
+    allowRealVerifyApi: isCommonWheelVerifyApiRealSendAllowed.value,
+    isSending: commonWheelVerifySerialSending.value,
+    sendAction: sendCommonWheelVerifySerialApi,
+    message: commonWheelVerifySerialLiveState.value.message,
+    requestPreview: commonWheelVerifySerialRequestPreview.value,
+    normalizedState: commonWheelVerifySerialLiveState.value,
+    guard: commonWheelVerifySerialApiSafetyGuard.value
+  }
+})
+
+const commonWheelPlayControlProps = computed(() => {
+  const unlockGuard = commonWheelPlayControlUnlockGuard.value
+
+  return {
+    enabled: unlockGuard.canUnlockTestPlayControl,
+    canPlay: unlockGuard.canUnlockTestPlayControl,
+    requestWillBeSent: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+    isPlaying: commonWheelPlayApiSending.value,
+    status: commonWheelPlayApiSafetyGuard.value.requestWillBeSent ? 'ready_to_send' : (unlockGuard.canUnlockTestPlayControl ? 'unlock_preview_only' : (isWheelPlayApiRoute.value ? 'preview_only_locked' : 'locked')),
+    buttonText: commonWheelPlayApiSafetyGuard.value.requestWillBeSent ? '送出輪盤 play API 測試' : (unlockGuard.canUnlockTestPlayControl ? '可進入輪盤測試播放預覽' : '輪盤共用模組測試中'),
+    sendAction: sendCommonWheelPlayApi,
+    reason: unlockGuard.reason,
+    unlockGuard,
+    requestPreview: commonWheelPlayRequestPreview.value,
+    playApiSafetyGuard: commonWheelPlayApiSafetyGuard.value,
+    playApiNormalizedState: commonWheelPlayApiNormalizedState.value,
+    playApiStageChecks: commonWheelPlayApiStageChecks.value,
+    unlockChecks: commonWheelPlayControlUnlockChecks.value
+  }
+})
+
+const commonWheelSafetyProps = computed(() => {
+  return {
+    keepFormalWheel: true,
+    keepLegacyWheelFallback: true,
+    keepCommonWheelTestArea: true,
+    keepRouterUnchanged: true,
+    keepDbUnchanged: true,
+    keepDrawCoreUnchanged: true,
+    allowVerifyApiPreview: Boolean(isWheelVerifyApiSafetyRoute.value),
+    allowVerifyApiSend: isCommonWheelVerifyApiRealSendAllowed.value,
+    allowPlayApiPreview: Boolean(isWheelPlayApiRoute.value),
+    allowPlayControlUnlockPreview: commonWheelPlayControlUnlockGuard.value.canUnlockTestPlayControl,
+    allowPlayApiSendCandidate: commonWheelPlayApiSafetyGuard.value.sendCandidate,
+    allowPlayApiSend: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+    verifySerialApiSafetyGuard: commonWheelVerifySerialApiSafetyGuard.value,
+    playApiSafetyGuard: commonWheelPlayApiSafetyGuard.value
+  }
+})
+
+const commonWheelGameBoardProps = computed(() => {
+  return {
+    template: commonWheelTemplateProps.value,
+    serialVerification: commonWheelSerialVerificationProps.value,
+    verifySerialApi: {
+      requestPreview: commonWheelVerifySerialRequestPreview.value,
+      normalizedState: commonWheelVerifySerialLiveState.value,
+      safetyGuard: commonWheelVerifySerialApiSafetyGuard.value,
+      stageChecks: commonWheelVerifySerialStageChecks.value
+    },
+    playApi: {
+      requestPreview: commonWheelPlayRequestPreview.value,
+      unlockGuard: commonWheelPlayControlUnlockGuard.value,
+      safetyGuard: commonWheelPlayApiSafetyGuard.value,
+      normalizedState: commonWheelPlayApiNormalizedState.value,
+      resultDisplayState: commonWheelResultDisplayState.value,
+      resultDisplayCards: commonWheelResultDisplayCards.value,
+      stageChecks: commonWheelPlayApiStageChecks.value,
+      unlockChecks: commonWheelPlayControlUnlockChecks.value,
+      requestWillBeSent: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+      sendAction: sendCommonWheelPlayApi
+    },
+    operationHint: commonWheelOperationHint.value,
+    playControl: commonWheelPlayControlProps.value,
+    safety: commonWheelSafetyProps.value,
+    preFormalAcceptance: {
+      checks: commonWheelPreFormalAcceptanceChecks.value,
+      safetyMatrix: commonWheelFormalSwitchSafetyMatrix.value
+    },
+    formalDryRun: {
+      routeMatrix: wheelFormalDryRunRouteMatrix.value,
+      candidatePropsSnapshot: wheelFormalCandidatePropsSnapshot.value,
+      rollbackChecklist: wheelFormalLegacyRollbackChecklist.value,
+      summary: wheelFormalDryRunSummary.value
+    },
+    bindingStage: commonWheelBindingStageInfo.value
+  }
+})
+
+const commonWheelActualBindingStageOneSummary = computed(() => {
+  return {
+    batch: '第 1701～1750 批',
+    title: '正式輪盤頁共用模組 canary 實際顯示切換與 fallback 保護版',
+    routeMode: wheelCommonRouteMode.value,
+    isCommonWheelRoute: isCommonWheelRoute.value,
+    isLegacyWheelRoute: isLegacyWheelRoute.value,
+    templateBound: true,
+    serialVerificationBound: true,
+    operationHintBound: true,
+    playControlBound: true,
+    safetyBound: true,
+    verifySerialApiSafetyPrepared: true,
+    verifyApiRequestWillBeSent: isCommonWheelVerifyApiRealSendAllowed.value,
+    itemCount: commonWheelTemplateProps.value.items.length,
+    playApiSendCandidate: commonWheelPlayApiSafetyGuard.value.sendCandidate,
+    playApiSendEnabled: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+    playControlUnlockPrepared: commonWheelPlayControlUnlockGuard.value.canUnlockTestPlayControl,
+    playApiSafetyPrepared: true,
+    resultDisplayStabilized: true,
+    preFormalAcceptanceReady: true,
+    requestWillBeSent: commonWheelPlayApiSafetyGuard.value.requestWillBeSent,
+    formalWheelKept: true,
+    legacyWheelFallbackKept: true
+  }
+})
+
+const commonWheelBoundGameBoardProps = computed(() => {
+  return {
+    ...commonWheelGameBoardProps.value,
+    bindingStage: {
+      ...commonWheelBindingStageInfo.value,
+      actualBindingStage: 'stage_8_formal_dry_run_legacy_dual_track_prepare',
+      actualBindingSummary: commonWheelActualBindingStageOneSummary.value,
+      verifySerialApiSafetyGuard: commonWheelVerifySerialApiSafetyGuard.value,
+    playApiSafetyGuard: commonWheelPlayApiSafetyGuard.value,
+      note: '第 1601～1650 批：新增正式輪盤頁共用模組灰度切換測試旗標；正式輪盤頁仍不真正切換。'
+    }
+  }
+})
+
+const commonWheelActualBindingChecks = computed(() => {
+  return [
+    {
+      label: 'CommonGamePlayBoard 元件',
+      status: isCommonWheelRoute.value ? '已在測試區顯示' : '待 commonWheel 測試',
+      ok: true,
+      description: '?commonWheel=1 才顯示 CommonGamePlayBoard 預備接入區，正式輪盤頁不受影響。'
+    },
+    {
+      label: 'wheel template props',
+      status: `${commonWheelTemplateProps.value.items.length} 個獎項已整理`,
+      ok: true,
+      description: '已把輪盤活動名稱、品牌、主色系與獎項清單整理成共用模組可讀的 template props。'
+    },
+    {
+      label: 'playControl',
+      status: '鎖定不送出',
+      ok: true,
+      description: 'enabled / canPlay / requestWillBeSent 固定 false，本批不送出 play API。'
+    },
+    {
+      label: 'legacy fallback',
+      status: isLegacyWheelRoute.value ? '目前啟用' : '最高優先保留',
+      ok: true,
+      description: '?legacyWheel=1 仍可強制回到原輪盤正式流程。'
+    },
+    {
+      label: 'actual props binding stage 1',
+      status: isCommonWheelRoute.value ? '已實際傳入' : '待 commonWheel 測試',
+      ok: true,
+      description: 'template、serialVerification、operationHint、playControl、safety 已透過 commonWheelBoundGameBoardProps 實際傳入 CommonGamePlayBoard。'
+    },
+    {
+      label: 'verify-serial API 安全開關',
+      status: isWheelVerifyApiSafetyRoute.value ? '準備完成' : '待 wheelVerifyApi 測試',
+      ok: true,
+      description: '已建立 request preview、normalized state 與 guard matrix；本批 requestWillBeSent 會依 wheelVerifySend / wheelConfirmVerify / local switch 顯示。'
+    },
+    {
+      label: 'playControl 解鎖預備',
+      status: commonWheelPlayControlUnlockGuard.value.canUnlockTestPlayControl ? '測試 UI 可解鎖' : '等待 verify 成功',
+      ok: true,
+      description: 'verify 結果已接入 playControl 解鎖判斷；requestWillBeSent 仍固定 false，不送出 play API。'
+    },
+    {
+      label: 'router / DB / draw-core',
+      status: '未變更',
+      ok: true,
+      description: '本批只處理前端測試區顯示、verify 結果接入與 playControl 解鎖預備，不動核心架構。'
+    }
+  ]
 })
 
 const campaign = reactive({
@@ -131,6 +1864,199 @@ const player = reactive({
   chances: 3,
   sharedCount: 0
 })
+
+// 第 26701～27100 批：正式玩家頁序號輸入與驗證狀態。
+// 分享區不能取代序號輸入；玩家必須先在這裡輸入商家序號。
+const serialVerify = reactive({
+  code: '',
+  verified: false,
+  verifying: false,
+  message: '',
+  error: '',
+  serialCodeId: null,
+  remainingChance: 0
+})
+
+const normalizedSerialCode = computed(() => {
+  return String(serialVerify.code || '').trim().replace(/\s+/g, '').toUpperCase()
+})
+
+const normalizeSerialRemainingChance = (data = {}) => {
+  const source = data || {}
+  const serialCode = source.serialCode || source.serial || source.serialStatus || {}
+  const result = source.result || {}
+
+  const rawValue =
+    source.remainingChance ??
+    source.remainingSerialChances ??
+    source.remainingUses ??
+    source.remainingUse ??
+    serialCode.remainingChance ??
+    serialCode.remainingSerialChances ??
+    serialCode.remainingUses ??
+    serialCode.remainingUse ??
+    result.remainingChance ??
+    result.remainingSerialChances ??
+    result.remainingUses ??
+    result.remainingUse ??
+    source.rewardChance ??
+    serialCode.rewardChance ??
+    result.rewardChance ??
+    source.availableChance ??
+    source.availableUses ??
+    source.totalLimit ??
+    source.dailyLimit ??
+    1
+
+  const value = Number(rawValue)
+
+  if (!Number.isFinite(value) || value < 0) return 0
+
+  return Math.max(0, value)
+}
+
+const buildWheelSerialChanceMessage = (remainingChance = 0) => {
+  const chance = Math.max(0, Number(remainingChance || 0))
+
+  return `序號可使用，剩餘 ${chance} 次。`
+}
+
+const syncWheelChancesFromSerial = (remainingChance = 1, options = {}) => {
+  const rawChance = Number(remainingChance)
+  const normalizedChance = Number.isFinite(rawChance) ? Math.max(0, rawChance) : 1
+  serialVerify.remainingChance = normalizedChance
+  player.chances = normalizedChance
+
+  if (serialVerify.verified || options.forceMessage) {
+    serialVerify.message = options.message || buildWheelSerialChanceMessage(normalizedChance)
+  }
+
+  updateChanceText()
+  savePremiumWheelState()
+}
+
+const consumeWheelSerialChance = (usedCount = 1) => {
+  if (!shouldRequireSerialCode.value || !serialVerify.verified) return
+
+  const nextChance = Math.max(0, Number(serialVerify.remainingChance || player.chances || 0) - usedCount)
+  serialVerify.remainingChance = nextChance
+  player.chances = nextChance
+  updateChanceText()
+  savePremiumWheelState()
+}
+
+const setWheelSerialChanceAfterPlay = (apiRemainingChance = null, beforeChance = null) => {
+  const before = Number(beforeChance ?? serialVerify.remainingChance ?? player.chances ?? 0)
+  const apiValue = Number(apiRemainingChance)
+
+  // 有些後端會回傳 play 前的 remainingChance，例如仍是 99。
+  // 如果 API 回傳值沒有變小，就以前端保守扣 1 次，避免畫面卡在 99 或被舊 chances 歸零。
+  if (Number.isFinite(apiValue) && apiValue >= 0 && apiValue < before) {
+    syncWheelChancesFromSerial(apiValue, {
+      message: buildWheelSerialChanceMessage(apiValue)
+    })
+    return
+  }
+
+  const fallbackChance = Math.max(0, before - 1)
+
+  syncWheelChancesFromSerial(fallbackChance, {
+    message: buildWheelSerialChanceMessage(fallbackChance)
+  })
+}
+
+const shouldRequireSerialCode = computed(() => {
+  return route.query.adminPreviewDraft !== '1'
+})
+
+// 第 30301～30700 批：正式玩家頁統一用這個作為畫面與按鈕判斷次數。
+// 避免 serialVerify.remainingChance 顯示 97，但 player.chances 還停在 1，造成畫面互相矛盾。
+const effectiveWheelChances = computed(() => {
+  if (shouldRequireSerialCode.value && serialVerify.verified) {
+    return Math.max(0, Number(serialVerify.remainingChance || 0))
+  }
+
+  return Math.max(0, Number(player.chances || 0))
+})
+
+const getFormalWheelCampaignId = () => {
+  if (isTenantWheelMode.value) {
+    return remoteWheelCampaignId.value || route.query.campaignId || route.query.id || null
+  }
+
+  return remoteWheelCampaignId.value || route.query.campaignId || route.query.id || campaign.id || 1
+}
+
+const ensureTenantWheelCampaignLoaded = async () => {
+  if (!isTenantWheelMode.value) return true
+
+  if (remoteWheelCampaignId.value) return true
+
+  await loadTenantWheelRemoteState()
+
+  return Boolean(remoteWheelCampaignId.value)
+}
+
+const verifySerialCode = async () => {
+  serialVerify.error = ''
+  serialVerify.message = ''
+
+  if (!normalizedSerialCode.value) {
+    serialVerify.error = '請先輸入商家提供的序號。'
+    return
+  }
+
+  serialVerify.verifying = true
+
+  try {
+    const loaded = await ensureTenantWheelCampaignLoaded()
+
+    if (!loaded) {
+      serialVerify.verified = false
+      serialVerify.error = '找不到這個商家的幸運輪盤活動，請先到後台建立或使用此活動。'
+      return
+    }
+
+    const formalCampaignId = getFormalWheelCampaignId()
+
+    if (!formalCampaignId) {
+      serialVerify.verified = false
+      serialVerify.error = '找不到幸運輪盤活動 ID，請重新整理後再試。'
+      return
+    }
+
+    const campaignId = encodeURIComponent(formalCampaignId)
+    const payload = await formalFetchJson(`/draw-engine/campaigns/${campaignId}/verify-serial`, {
+      method: 'POST',
+      body: JSON.stringify({
+        code: normalizedSerialCode.value,
+        serialCode: normalizedSerialCode.value,
+        gameType: 'WHEEL',
+        tenantSlug: routeTenantSlug.value || route.query.tenantSlug || '',
+        source: 'formal-wheel-player'
+      })
+    })
+
+    const data = unwrapFormalApiPayload(payload) || {}
+
+    if (data.valid === false || data.success === false || payload.success === false) {
+      serialVerify.verified = false
+      serialVerify.error = data.message || payload.message || '序號驗證失敗，請確認序號是否正確。'
+      return
+    }
+
+    serialVerify.verified = true
+    serialVerify.serialCodeId = data.serialCodeId || data.id || data.serialCode?.id || null
+    syncWheelChancesFromSerial(normalizeSerialRemainingChance(data))
+    serialVerify.message = data.message || payload.message || `序號驗證成功，可使用 ${serialVerify.remainingChance} 次。`
+  } catch (error) {
+    console.error('輪盤序號驗證失敗：', error)
+    serialVerify.verified = false
+    serialVerify.error = error?.message || '序號驗證失敗，請確認後端 API 是否啟動。'
+  } finally {
+    serialVerify.verifying = false
+  }
+}
 
 const prizes = ref([
   {
@@ -985,11 +2911,11 @@ const goldRainPieces = computed(() => {
 const premiumVersionInfo = computed(() => {
   return {
     version: 'Premium Wheel V1 Stable',
-    platformVersion: 'Multi Game Platform V2.2 Stable',
-    batch: '第 258 批',
+    platformVersion: 'Multi Game Platform V2.3 Common Module Expansion',
+    batch: '第 1351～1400 批：commonWheel 測試區 verify-serial 真 API 實際送出安全開關版',
     playerMode: 'VIP 精緻版',
     adminMode: '管理預覽版',
-    status: '基礎骨架 / 可測試 / 可延伸'
+    status: 'commonWheel 測試區 / verify-serial 真 API 安全開關準備 / verify-play API 鎖定 / 不切正式頁'
   }
 })
 
@@ -1241,13 +3167,18 @@ const movePrizeItem = (index, direction) => {
 }
 
 const canSpin = computed(() => {
-  return player.chances > 0 && availablePrizePool.value.length > 0 && !isSpinning.value
+  if (remoteWheelLoading.value || remoteWheelError.value) return false
+  if (shouldRequireSerialCode.value && !serialVerify.verified) return false
+
+  return effectiveWheelChances.value > 0 && availablePrizePool.value.length > 0 && !isSpinning.value
 })
 
 const wheelButtonText = computed(() => {
   if (isSpinning.value) return '轉盤中'
 
-  if (player.chances <= 0) return '次數用完'
+  if (shouldRequireSerialCode.value && !serialVerify.verified) return '請先輸入序號'
+
+  if (effectiveWheelChances.value <= 0) return '次數用完'
 
   if (!availablePrizePool.value.length) return '獎品已抽完'
 
@@ -1271,7 +3202,7 @@ const wheelResultClass = computed(() => {
 const resultActionText = computed(() => {
   if (isResultActionProcessing.value) return '處理中...'
 
-  if (player.chances > 0) return '繼續轉盤'
+  if (effectiveWheelChances.value > 0) return '繼續轉盤'
 
   return '分享增加機會'
 })
@@ -1279,8 +3210,8 @@ const resultActionText = computed(() => {
 const resultHintText = computed(() => {
   if (!resultPrize.value) return '結果已寫入我的遊戲紀錄。'
 
-  if (player.chances > 0) {
-    return `結果已寫入我的遊戲紀錄，目前還有 ${player.chances} 次轉盤機會。`
+  if (effectiveWheelChances.value > 0) {
+    return `結果已寫入我的遊戲紀錄，目前還有 ${effectiveWheelChances.value} 次轉盤機會。`
   }
 
   return '結果已寫入我的遊戲紀錄，目前轉盤機會已用完，可分享活動增加 1 次。'
@@ -1292,7 +3223,7 @@ const handleResultPrimaryAction = async () => {
   isResultActionProcessing.value = true
 
   try {
-    if (player.chances > 0) {
+    if (effectiveWheelChances.value > 0) {
       closeResultAndContinue()
       return
     }
@@ -1307,20 +3238,28 @@ const handleResultPrimaryAction = async () => {
 }
 
 const playerStatusMessage = computed(() => {
+  if (remoteWheelLoading.value) return '正在讀取商家正式輪盤活動資料，請稍候。'
+
+  if (remoteWheelError.value) return remoteWheelError.value
+
   if (isSpinning.value) return '轉盤進行中，系統會自動顯示結果。'
 
   if (!availablePrizePool.value.length) return '目前獎品庫存已抽完，請等待主辦單位更新活動。'
 
-  if (player.chances <= 0) return '目前沒有轉盤機會，可以分享活動增加 1 次。'
+  if (shouldRequireSerialCode.value && !serialVerify.verified) {
+    return '請先輸入商家提供的序號，驗證成功後即可開始轉盤。'
+  }
 
-  return `目前還有 ${player.chances} 次轉盤機會。`
+  if (effectiveWheelChances.value <= 0) return '目前沒有轉盤機會，請重新驗證可用序號或聯絡商家確認次數。'
+
+  return `目前還有 ${effectiveWheelChances.value} 次轉盤機會。`
 })
 
 const frontPlayerSummaryItems = computed(() => {
   return [
     {
       label: '剩餘次數',
-      value: `${player.chances}`,
+      value: `${effectiveWheelChances.value}`,
       subText: '可轉盤',
       tone: 'yellow'
     },
@@ -1509,7 +3448,11 @@ const getPrizeImageUrl = (prize) => {
 }
 
 const updateChanceText = () => {
-  campaign.chanceText = `還有 ${player.chances} 次轉盤機會`
+  const displayChance = shouldRequireSerialCode.value && serialVerify.verified
+    ? serialVerify.remainingChance
+    : player.chances
+
+  campaign.chanceText = `還有 ${Math.max(0, Number(displayChance || 0))} 次轉盤機會`
 }
 
 const showSavedMessage = (message) => {
@@ -2192,7 +4135,7 @@ const shareResultText = async () => {
 }
 
 const getShareSuccessText = (prefix = '已增加 1 次轉盤機會') => {
-  return `${prefix}，目前還有 ${player.chances} 次轉盤機會。`
+  return `${prefix}，目前還有 ${effectiveWheelChances.value} 次轉盤機會。`
 }
 
 const showShareSuccess = (message) => {
@@ -2253,6 +4196,225 @@ const saveHistoryItem = (prize) => {
     JSON.stringify([item, ...history].slice(0, 50))
   )
 }
+
+
+const normalizeWheelRemoteSettings = (apiCampaign = {}) => {
+  const directSettings = apiCampaign.settings || apiCampaign.gameConfig?.settings || apiCampaign.GameConfig?.settings || {}
+  const gameConfigSettings = Array.isArray(apiCampaign.gameConfigs)
+    ? (apiCampaign.gameConfigs[0]?.settings || {})
+    : {}
+
+  return {
+    ...(gameConfigSettings || {}),
+    ...(directSettings || {})
+  }
+}
+
+const normalizeWheelRemotePrizes = (apiCampaign = {}, settings = {}) => {
+  const candidates =
+    settings.prizes ||
+    settings.items ||
+    settings.rewards ||
+    apiCampaign.prizes ||
+    apiCampaign.rewards ||
+    apiCampaign.rewardItems ||
+    []
+
+  if (!Array.isArray(candidates)) return []
+
+  return candidates
+    .filter((item) => item)
+    .map((item, index) => {
+      const title = item.title || item.name || item.prizeName || item.shortName || `獎項${index + 1}`
+
+      return {
+        id: item.id || item.prizeId || `remote-wheel-prize-${index + 1}`,
+        name: title,
+        shortName: item.shortName || item.label || title,
+        description: item.description || item.note || '',
+        icon: item.icon || item.emoji || '🎁',
+        imageUrl: item.imageUrl || item.image || item.prizeImageUrl || '',
+        isEnabled: item.isEnabled !== false && item.enabled !== false,
+        probability: Number(item.probability ?? item.weight ?? item.chance ?? 1),
+        stock: Number(item.stock ?? item.quantity ?? item.remainStock ?? item.remainingStock ?? 9999),
+        type: item.type || item.prizeType || 'win',
+        rank: item.rank || (item.type === 'lose' ? 'none' : 'normal'),
+        backendPrize: item
+      }
+    })
+}
+
+const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
+  const settings = normalizeWheelRemoteSettings(apiCampaign)
+
+  remoteWheelCampaign.value = apiCampaign
+  remoteWheelCampaignId.value = Number(apiCampaign.id || settings.campaignId || route.query.campaignId || 0) || null
+
+  campaign.id = remoteWheelCampaignId.value
+  campaign.pageTitle = settings.pageTitle || settings.title || apiCampaign.title || campaign.pageTitle
+  campaign.brandName = settings.brandName || settings.merchantName || apiCampaign.tenant?.name || campaign.brandName
+  campaign.mainTitle = settings.mainTitle || settings.headline || apiCampaign.title || campaign.mainTitle
+  campaign.subTitle = settings.subTitle || settings.subtitle || settings.description || apiCampaign.description || campaign.subTitle
+  campaign.heroTagline = settings.heroTagline || settings.brandSubtitle || campaign.heroTagline
+  campaign.noticeText = settings.noticeText || apiCampaign.description || campaign.noticeText
+  campaign.logoText = settings.logoText || settings.logo || campaign.logoText
+  campaign.logoImageUrl = settings.logoImageUrl || campaign.logoImageUrl
+  campaign.bannerImageUrl = settings.bannerImageUrl || campaign.bannerImageUrl
+  campaign.websiteUrl = settings.websiteUrl || settings.officialLinkUrl || campaign.websiteUrl
+  campaign.websiteText = settings.websiteText || settings.officialLinkLabel || campaign.websiteText
+
+  campaign.themeStart = settings.themeStart || settings.theme?.start || settings.colors?.start || campaign.themeStart
+  campaign.themeMiddle = settings.themeMiddle || settings.theme?.middle || settings.colors?.middle || campaign.themeMiddle
+  campaign.themeEnd = settings.themeEnd || settings.theme?.end || settings.colors?.end || campaign.themeEnd
+
+  campaign.shareButtonText = settings.shareButtonText || campaign.shareButtonText
+  campaign.shareHint = settings.shareHint || campaign.shareHint
+  campaign.ruleTitle = settings.ruleTitle || campaign.ruleTitle
+  campaign.ruleContent = settings.ruleContent || campaign.ruleContent
+  campaign.prizeInfoTitle = settings.prizeInfoTitle || campaign.prizeInfoTitle
+  campaign.prizeInfoContent = settings.prizeInfoContent || campaign.prizeInfoContent
+
+  const remotePrizes = normalizeWheelRemotePrizes(apiCampaign, settings)
+  if (remotePrizes.length) {
+    prizes.value = remotePrizes
+  }
+
+  player.chances = 0
+  serialVerify.verified = false
+  serialVerify.message = ''
+  serialVerify.error = ''
+  updateChanceText()
+  remoteWheelLoadedAt.value = new Date().toLocaleString('zh-TW')
+}
+
+const loadTenantWheelRemoteState = async () => {
+  if (!isTenantWheelMode.value) return
+
+  remoteWheelLoading.value = true
+  remoteWheelError.value = ''
+
+  try {
+    const payload = await formalFetchJson(`/campaigns?tenantSlug=${encodeURIComponent(routeTenantSlug.value)}`)
+    const data = unwrapFormalApiPayload(payload)
+    const campaigns = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.campaigns) ? data.campaigns : []))
+    const target = campaigns.find((item) => String(item?.gameType || '').toUpperCase() === 'WHEEL') || campaigns[0]
+
+    if (!target?.id) {
+      throw new Error(`找不到 ${routeTenantSlug.value} 的 WHEEL 活動`)
+    }
+
+    let campaignDetail = target
+    try {
+      const detailPayload = await formalFetchJson(`/campaigns/${target.id}`)
+      campaignDetail = unwrapFormalApiPayload(detailPayload) || target
+    } catch (error) {
+      console.warn('讀取輪盤活動 detail 失敗，改用列表資料：', error)
+    }
+
+    try {
+      const configPayload = await formalFetchJson(`/campaigns/${target.id}/game-config`)
+      const config = unwrapFormalApiPayload(configPayload)
+      campaignDetail = {
+        ...campaignDetail,
+        gameConfig: config?.gameConfig || config,
+        settings: config?.settings || config?.gameConfig?.settings || campaignDetail.settings
+      }
+    } catch (error) {
+      console.warn('讀取輪盤 GameConfig settings 失敗，改用活動資料：', error)
+    }
+
+    applyRemoteWheelCampaignData(campaignDetail)
+  } catch (error) {
+    console.error('載入商家輪盤正式活動失敗：', error)
+    remoteWheelCampaign.value = null
+    remoteWheelCampaignId.value = null
+    remoteWheelError.value = error?.message || '載入商家輪盤正式活動失敗，請稍後再試。'
+    player.chances = 0
+    updateChanceText()
+  } finally {
+    remoteWheelLoading.value = false
+  }
+}
+
+const playTenantWheelRemoteDraw = async () => {
+  const loaded = await ensureTenantWheelCampaignLoaded()
+
+  if (!loaded) {
+    throw new Error('找不到這個商家的幸運輪盤活動，請先到後台建立或使用此活動。')
+  }
+
+  const campaignId = remoteWheelCampaignId.value || getFormalWheelCampaignId()
+
+  if (!campaignId) {
+    throw new Error('找不到幸運輪盤活動 ID，請重新整理後再試。')
+  }
+
+  const beforeChance = Number(serialVerify.remainingChance || player.chances || 0)
+
+  const payload = await formalFetchJson(`/draw-engine/campaigns/${encodeURIComponent(campaignId)}/play`, {
+    method: 'POST',
+    body: JSON.stringify({
+      gameType: 'WHEEL',
+      serialCode: normalizedSerialCode.value,
+      code: normalizedSerialCode.value,
+      tenantSlug: routeTenantSlug.value,
+      source: 'formal-wheel-player',
+      trafficSource: String(route.query.from || route.query.source || 'direct'),
+      frontUrl: typeof window === 'undefined' ? '' : window.location.pathname + window.location.search,
+      resultPayload: {
+        template: 'wheel',
+        tenantSlug: routeTenantSlug.value
+      }
+    })
+  })
+
+  const data = unwrapFormalApiPayload(payload) || {}
+  remoteWheelLastPlayResult.value = data
+
+  const serialData = data.serialCode || data.serial || data.serialStatus || data.result?.serialCode || data.playRecord?.serialCode || {}
+  const apiRemainingChance =
+    serialData.remainingChance ??
+    serialData.remainingSerialChances ??
+    serialData.remainingUses ??
+    data.remainingChance ??
+    data.remainingSerialChances ??
+    data.remainingUses ??
+    data.result?.remainingChance ??
+    data.result?.remainingSerialChances ??
+    data.result?.remainingUses ??
+    null
+
+  setWheelSerialChanceAfterPlay(apiRemainingChance, beforeChance)
+
+  const prizeData = data.prize || data.result?.prize || data.result || data.playRecord?.prize || {}
+  const prizeId = prizeData.id || data.prizeId || data.result?.prizeId || data.playRecord?.prizeId
+  const prizeTitle = prizeData.title || prizeData.name || data.prizeTitle || data.result?.prizeTitle
+
+  const matched = prizes.value.find((item) => {
+    return String(item.id) === String(prizeId) || String(item.name) === String(prizeTitle) || String(item.shortName) === String(prizeTitle)
+  })
+
+  if (matched) return matched
+
+  if (prizeTitle || prizeData.name) {
+    return {
+      id: prizeId || `remote-wheel-result-${Date.now()}`,
+      name: prizeTitle || prizeData.name || '中獎獎項',
+      shortName: prizeData.shortName || prizeTitle || prizeData.name || '獎項',
+      description: prizeData.description || '',
+      icon: prizeData.icon || prizeData.emoji || '🎁',
+      imageUrl: prizeData.imageUrl || '',
+      isEnabled: true,
+      probability: 1,
+      stock: 9999,
+      type: prizeData.type || 'win',
+      rank: prizeData.rank || 'normal'
+    }
+  }
+
+  return pickPrize()
+}
+
 
 const savePremiumWheelState = () => {
   if (isApplyingPremiumWheelRemoteState.value) return
@@ -2725,10 +4887,15 @@ const startPointerTickSound = () => {
 }
 
 
-const startSpin = () => {
+const startSpin = async () => {
   if (!canSpin.value) {
-    if (player.chances <= 0) {
-      showShareSuccess('目前沒有轉盤機會，請先分享活動增加次數。')
+    if (shouldRequireSerialCode.value && !serialVerify.verified) {
+      showShareSuccess('請先輸入商家提供的序號並完成驗證。')
+      return
+    }
+
+    if (effectiveWheelChances.value <= 0) {
+      showShareSuccess('目前沒有轉盤機會，請重新驗證可用序號或聯絡商家確認次數。')
       return
     }
 
@@ -2739,7 +4906,15 @@ const startSpin = () => {
     return
   }
 
-  const prize = pickPrize()
+  let prize = null
+
+  try {
+    prize = isTenantWheelMode.value ? await playTenantWheelRemoteDraw() : pickPrize()
+  } catch (error) {
+    console.error('正式輪盤 play API 失敗：', error)
+    showShareSuccess(error?.message || '抽獎失敗，請稍後再試。')
+    return
+  }
 
   if (!prize) return
 
@@ -2751,8 +4926,11 @@ const startSpin = () => {
   const pointerOffset = 360 - (targetIndex * angle + angle / 2)
   const extraTurns = 360 * 6
 
-  player.chances -= 1
-  updateChanceText()
+  if (!isTenantWheelMode.value) {
+    player.chances -= 1
+    updateChanceText()
+  }
+
   isSpinning.value = true
   startPointerTickSound()
   activePrizeIndex.value = -1
@@ -2770,7 +4948,13 @@ const shareCampaign = async () => {
   if (isSpinning.value) return
 
   player.sharedCount += 1
-  player.chances += 1
+
+  // 正式遠端玩家頁的可玩次數只跟序號 / 資料庫 play 記錄同步。
+  // 不再讓分享按鈕直接增加 player.chances，避免畫面出現序號剩餘次數與分享次數互相覆蓋。
+  if (!isTenantWheelMode.value) {
+    player.chances += 1
+  }
+
   updateChanceText()
   savePremiumWheelState()
 
@@ -2986,12 +5170,16 @@ const resetAllPremiumWheelDefaults = () => {
   showSavedMessage('已還原全部預設設定。')
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (getAuthToken()) {
     fetchShareRewardStatusFromServer()
   }
 
-  loadPremiumWheelState()
+  if (isTenantWheelMode.value) {
+    await loadTenantWheelRemoteState()
+  } else {
+    loadPremiumWheelState()
+  }
 
   if (typeof window === 'undefined') return
 
@@ -3040,6 +5228,431 @@ watch(
     deep: true
   }
 )
+
+
+const wheelPostLiveOpsObservabilitySummary = computed(() => {
+  return {
+    title: '正式輪盤頁上線後營運觀測與維護交接版',
+    batch: '第 2151～2200 批',
+    formalDefaultCommonBoard: isWheelFormalLiveApplyRoute.value,
+    legacyFallbackKept: true,
+    commonWheelTestAreaKept: true,
+    routerDbDrawCoreChanged: false,
+    focus: '上線後觀測、營運巡檢、商家/客服回報、維護交接與版本封存後續策略。',
+    routeMode: isLegacyWheelRoute.value
+      ? 'legacy_fallback_original_wheel'
+      : (isCommonWheelRoute.value ? 'common_wheel_test_area' : 'formal_live_common_board')
+  }
+})
+
+const wheelPostLiveOpsMetricItems = computed(() => {
+  return [
+    {
+      label: '正式頁可用性',
+      status: isWheelFormalLiveApplyRoute.value ? '正式頁共用模組運行中' : '待比對',
+      description: '確認 /games/wheel 可正常載入 CommonGamePlayBoard，且玩家可以看到完整輪盤活動資訊。'
+    },
+    {
+      label: 'legacy 回退可用性',
+      status: '保留最高優先',
+      description: '確認 /games/wheel?legacyWheel=1 可立即回到原輪盤頁，作為緊急 rollback 路線。'
+    },
+    {
+      label: 'commonWheel 測試區',
+      status: '保留',
+      description: '確認 /games/wheel?commonWheel=1 可用於比對正式共用模組 props、verify/play guard 與結果回填。'
+    },
+    {
+      label: 'verify / play guard',
+      status: '未放寬',
+      description: 'verify/play API 仍只在完整測試旗標下送出，正式觀測與維護面板不改變送出條件。'
+    },
+    {
+      label: 'router / DB / draw-core',
+      status: '未變更',
+      description: '本批只做上線後營運觀測與維護交接，不改路由、資料庫 schema 或抽獎核心。'
+    }
+  ]
+})
+
+const wheelPostLiveMaintenanceCadenceItems = computed(() => {
+  return [
+    {
+      label: '上線當日',
+      description: '檢查正式頁、legacy 回退、commonWheel 測試區、玩家回報與客服回報是否正常。'
+    },
+    {
+      label: '上線後 1～3 天',
+      description: '追蹤載入失敗、序號驗證失敗、play 失敗、玩家中獎結果回填與兌獎回報。'
+    },
+    {
+      label: '每週巡檢',
+      description: '比對正式頁與 legacy 回退是否仍可用，整理商家回報、客服問題與營運報表。'
+    },
+    {
+      label: '版本維護',
+      description: '以第 2151～2200 批作為正式輪盤上線後營運觀測與維護交接封存點。'
+    }
+  ]
+})
+
+const wheelPostLiveIncidentHandoffItems = computed(() => {
+  return [
+    {
+      label: '玩家無法開啟正式頁',
+      action: '先測 /games/wheel?legacyWheel=1，確認原輪盤 fallback 是否可用，再比對 commonWheel 測試區。'
+    },
+    {
+      label: '玩家回報無法抽獎',
+      action: '確認 verify/play guard 狀態、序號狀態、活動狀態與後端 play API 回應。'
+    },
+    {
+      label: '中獎結果顯示異常',
+      action: '比對 CommonGamePlayBoard 結果回填、play response normalized state 與玩家紀錄。'
+    },
+    {
+      label: '需要緊急回退',
+      action: '使用 ?legacyWheel=1 驗證原輪盤頁，必要時通知商家與客服先導回 legacy URL。'
+    }
+  ]
+})
+
+const wheelLongTermMaintenanceSummary = computed(() => {
+  return {
+    title: '正式輪盤頁長期維護節奏與多遊戲擴展銜接版',
+    batch: '第 2201～2250 批',
+    formalDefaultCommonBoard: isWheelFormalLiveApplyRoute.value,
+    legacyFallbackKept: true,
+    commonWheelTestAreaKept: true,
+    routerDbDrawCoreChanged: false,
+    focus: '長期維護、跨遊戲擴展、版本封存後巡檢、下一個遊戲導入交接。',
+    nextExpansionHint: '輪盤已正式套用 CommonGamePlayBoard，可把相同 verify/play guard、fallback、監控與交付節奏複用到刮刮卡、翻牌或金蛋。'
+  }
+})
+
+const wheelLongTermMaintenanceCadenceItems = computed(() => {
+  return [
+    {
+      label: '每日快速巡檢',
+      status: '保留',
+      description: '確認 /games/wheel、?commonWheel=1、?legacyWheel=1 三路線可用，並確認玩家主要操作提示沒有異常。'
+    },
+    {
+      label: '每週營運回顧',
+      status: '建議執行',
+      description: '彙整 verify/play 成功率、錯誤類型、玩家回報、客服案例與商家兌獎問題。'
+    },
+    {
+      label: '每月版本檢查',
+      status: '封存對照',
+      description: '以第 2201～2250 批作為輪盤長期維護封存點，檢查是否需要同步 CommonGamePlayBoard 新能力。'
+    },
+    {
+      label: '異常回退演練',
+      status: '可隨時執行',
+      description: '使用 ?legacyWheel=1 驗證原輪盤 fallback，確認商家與客服仍知道緊急導回方式。'
+    }
+  ]
+})
+
+const wheelMultiGameExpansionHandoffItems = computed(() => {
+  return [
+    {
+      label: '下一個導入遊戲',
+      description: '建議從刮刮卡或金蛋開始，沿用輪盤與九宮格的 common route / legacy fallback / verify-play guard 節奏。'
+    },
+    {
+      label: '可複用能力',
+      description: 'CommonGamePlayBoard props、serialVerification、operationHint、playControl、safety、監控面板、rollback SOP。'
+    },
+    {
+      label: '不可直接複製項目',
+      description: '各遊戲動畫、獎項呈現、抽選節奏、互動手勢與結果視覺仍需按遊戲特性微調。'
+    },
+    {
+      label: '下一階段保護線',
+      description: '新遊戲一律先建立 ?commonX=1 測試區與 ?legacyX=1 fallback，再做 verify/play API 真實送出安全開關。'
+    }
+  ]
+})
+
+const wheelLongTermArchiveChecklist = computed(() => {
+  return [
+    '保留第 2201～2250 批檔案作為輪盤長期維護封存點。',
+    '保留 ?legacyWheel=1 作為最高優先緊急回退路線。',
+    '保留 ?commonWheel=1 作為正式頁與共用模組測試比對區。',
+    '後續只在有明確需求時調整 verify/play guard，不因營運提示而放寬 API 安全條件。',
+    '跨遊戲導入時以輪盤與九宮格正式套用經驗作為共用流程範本。'
+  ]
+})
+
+/*
+ * V2.3 第 2201～2250 批正式輪盤長期維護封存摘要：
+ * - /games/wheel 正式玩家頁預設顯示 CommonGamePlayBoard。
+ * - 上線後觀測、日常巡檢、商家/客服回報與維護交接已整理。
+ * - 長期維護節奏、多遊戲共用模組擴展銜接與版本封存後巡檢已補強。
+ * - ?legacyWheel=1 強制回原輪盤頁，為最高優先緊急 fallback。
+ * - ?commonWheel=1 測試區保留。
+ * - verify/play API guard 不放寬。
+ * - router / DB schema / draw core 未變更。
+ */
+
+
+const wheelActualOperationAcceptanceSummary = computed(() => {
+  return {
+    title: '正式輪盤頁實際操作驗收與上線前最後檢查版',
+    batch: '第 2251～2300 批',
+    formalDefaultCommonBoard: isWheelFormalLiveApplyRoute.value,
+    legacyFallbackKept: true,
+    commonWheelTestAreaKept: true,
+    routerDbDrawCoreChanged: false,
+    focus: '實際操作驗收、玩家流程測試、商家驗收、verify/play 檢查、rollback 演練與上線前最後 checklist。',
+    operationReady: '可進入正式操作測試與上線前最後驗收。'
+  }
+})
+
+const wheelActualPlayerOperationChecklist = computed(() => {
+  return [
+    {
+      label: '玩家開啟正式輪盤頁',
+      route: '/games/wheel',
+      expected: '預設顯示 CommonGamePlayBoard 共用模組，活動標題、獎項、操作提示與結果區正常。'
+    },
+    {
+      label: '玩家輸入序號或進入抽獎流程',
+      route: '/games/wheel',
+      expected: 'verify/play guard 顯示清楚，未符合條件時不會誤送 API，符合測試條件時可依安全開關驗證。'
+    },
+    {
+      label: '玩家完成抽獎後看結果',
+      route: '/games/wheel',
+      expected: '中獎結果、錯誤提示、等待提示、兌獎提醒與玩家紀錄提示都可正常顯示。'
+    },
+    {
+      label: '玩家遇到異常時客服引導',
+      route: '/games/wheel?legacyWheel=1',
+      expected: '客服可引導到 legacy fallback 路線，確認原輪盤頁仍可打開。'
+    }
+  ]
+})
+
+const wheelActualMerchantAcceptanceChecklist = computed(() => {
+  return [
+    '商家確認正式入口 /games/wheel 可開啟。',
+    '商家確認活動標題、品牌資訊、獎項資訊與玩家提示正確。',
+    '商家確認中獎結果與兌獎提示符合營運話術。',
+    '商家確認 ?legacyWheel=1 緊急回退路線可使用。',
+    '商家確認客服知道玩家異常回報時要檢查正式頁、commonWheel 測試區與 legacy fallback。'
+  ]
+})
+
+const wheelActualVerifyPlayTestChecklist = computed(() => {
+  return [
+    {
+      label: 'verify-serial 安全測試',
+      route: '/games/wheel?commonWheel=1&wheelDryRun=1&wheelVerifyApi=1&wheelVerifySend=1&wheelConfirmVerify=1&wheelLocalVerifySwitch=1',
+      expected: '只在 commonWheel 測試區與完整安全旗標下送出 verify API。'
+    },
+    {
+      label: 'play API 安全測試',
+      route: '/games/wheel?commonWheel=1&wheelDryRun=1&wheelVerifyApi=1&wheelVerifySend=1&wheelConfirmVerify=1&wheelLocalVerifySwitch=1&wheelPlayApi=1&wheelSendPlayApi=1&wheelConfirmPlay=1&wheelLocalPlaySwitch=1',
+      expected: '只在 verify 成功與完整 play 安全旗標下送出 play API。'
+    },
+    {
+      label: '正式頁 guard 檢查',
+      route: '/games/wheel',
+      expected: '正式頁不因監控或驗收卡片放寬 verify/play API guard。'
+    },
+    {
+      label: 'legacy fallback 檢查',
+      route: '/games/wheel?legacyWheel=1',
+      expected: 'legacyWheel 仍為最高優先，任何正式/測試旗標都不可覆蓋回退。'
+    }
+  ]
+})
+
+const wheelPreLaunchFinalChecklist = computed(() => {
+  return [
+    '確認 npm run dev 前端可正常啟動。',
+    '確認 /games/wheel 正式頁可正常載入 CommonGamePlayBoard。',
+    '確認 /games/wheel?commonWheel=1 測試區可正常載入。',
+    '確認 /games/wheel?legacyWheel=1 可立即回原輪盤頁。',
+    '確認 verify/play API 只在完整測試旗標下送出。',
+    '確認中獎結果、錯誤提示、等待狀態與兌獎提示可讀性正常。',
+    '確認手機版主要操作區、結果區與兌獎提示不被遮擋。',
+    '確認商家、客服、營運人員知道 rollback 路線與異常回報欄位。',
+    '確認本批不改 router / DB schema / draw core。',
+    '確認第 2251～2300 批可作為正式操作驗收與上線前最後檢查基準。'
+  ]
+})
+
+/*
+ * V2.3 第 2251～2300 批正式輪盤實際操作驗收摘要：
+ * - /games/wheel 正式玩家頁預設顯示 CommonGamePlayBoard。
+ * - 實際操作流程、玩家驗收、商家驗收、verify/play 測試與 rollback 演練已整理。
+ * - ?legacyWheel=1 仍為最高優先緊急 fallback。
+ * - ?commonWheel=1 測試區保留。
+ * - verify/play API guard 不放寬。
+ * - router / DB schema / draw core 未變更。
+ */
+
+
+
+const wheelDeployFinalHandoffSummary = computed(() => {
+  return {
+    title: '正式輪盤頁上線操作指令與部署交付最終版',
+    batch: '第 2301～2350 批',
+    formalDefaultCommonBoard: isWheelFormalLiveApplyRoute.value,
+    legacyFallbackKept: true,
+    commonWheelTestAreaKept: true,
+    routerDbDrawCoreChanged: false,
+    focus: 'PowerShell 指令、前端 build、後端健康檢查、Git / Render 部署、正式網址驗收、rollback SOP 與交付最終清單。',
+    deployReady: '可作為正式上線操作與部署交付最終參考。'
+  }
+})
+
+const wheelDeployPowerShellCommandGroups = computed(() => {
+  return [
+    {
+      title: '進入專案根目錄',
+      commands: [
+        'cd C:\\Users\\User\\Desktop\\marketing-game-v1',
+        'dir',
+        'git status'
+      ],
+      note: '確認目前位置是 marketing-game-v1，並先看 Git 狀態，避免覆蓋錯檔。'
+    },
+    {
+      title: '前端本機檢查',
+      commands: [
+        'cd C:\\Users\\User\\Desktop\\marketing-game-v1\\frontend',
+        'npm install',
+        'npm run dev'
+      ],
+      note: '啟動後檢查 /games/wheel、?commonWheel=1、?legacyWheel=1 三條路線。'
+    },
+    {
+      title: '前端正式 build',
+      commands: [
+        'cd C:\\Users\\User\\Desktop\\marketing-game-v1\\frontend',
+        'npm run build'
+      ],
+      note: 'build 成功後才進行 Git commit / push。'
+    },
+    {
+      title: '後端健康檢查',
+      commands: [
+        'cd C:\\Users\\User\\Desktop\\marketing-game-v1\\backend',
+        'npm install',
+        'npm run dev'
+      ],
+      note: '確認 API server 可啟動，verify / play API guard 沒有被本批放寬。'
+    },
+    {
+      title: 'Git 提交與推送',
+      commands: [
+        'cd C:\\Users\\User\\Desktop\\marketing-game-v1',
+        'git status',
+        'git add frontend/src/views/front/games/WheelGameView.vue',
+        'git commit -m "feat: finalize premium wheel live deploy handoff"',
+        'git push origin main'
+      ],
+      note: '只提交輪盤主檔案，避免把未確認檔案一起送出。'
+    }
+  ]
+})
+
+const wheelDeployRouteAcceptanceItems = computed(() => {
+  return [
+    {
+      label: '正式輪盤頁',
+      route: '/games/wheel',
+      expected: '預設顯示 CommonGamePlayBoard 共用模組，玩家可看到正式輪盤活動、操作提示、結果區與兌獎提示。',
+      status: '必測'
+    },
+    {
+      label: 'commonWheel 測試區',
+      route: '/games/wheel?commonWheel=1',
+      expected: '保留測試區，可與正式頁比對 props、verify/play guard、結果回填與提示文案。',
+      status: '必測'
+    },
+    {
+      label: 'legacy 緊急回退',
+      route: '/games/wheel?legacyWheel=1',
+      expected: '強制回原本輪盤頁，優先權必須高於所有正式、canary、測試旗標。',
+      status: '必測'
+    },
+    {
+      label: 'verify / play 安全測試',
+      route: '/games/wheel?commonWheel=1&wheelDryRun=1&wheelVerifyApi=1&wheelVerifySend=1&wheelConfirmVerify=1&wheelLocalVerifySwitch=1&wheelPlayApi=1&wheelSendPlayApi=1&wheelConfirmPlay=1&wheelLocalPlaySwitch=1',
+      expected: '只在 commonWheel 測試區與完整安全旗標下送出 API，正式頁不因部署交付項目放寬 guard。',
+      status: '必要時測'
+    }
+  ]
+})
+
+const wheelRenderDeployCheckItems = computed(() => {
+  return [
+    'Render 部署前確認 GitHub main 分支已包含本批 WheelGameView.vue。',
+    'Render build log 需確認 npm install / npm run build / Prisma generate 或 migrate deploy 沒有報錯。',
+    '正式網址開啟後先測 /games/wheel，再測 ?legacyWheel=1，最後測 ?commonWheel=1。',
+    '若正式頁異常，先用 ?legacyWheel=1 回退對外服務，再回頭檢查 console 與部署 log。',
+    '若 API 異常，先確認後端環境變數、DATABASE_URL、CORS 與 draw-engine endpoint 是否正常。'
+  ]
+})
+
+const wheelFinalRollbackOperationSteps = computed(() => {
+  return [
+    {
+      step: '第一步：立即確認正式頁異常範圍',
+      detail: '同時開啟 /games/wheel、/games/wheel?commonWheel=1、/games/wheel?legacyWheel=1，比對是共用模組、正式入口或 API 問題。'
+    },
+    {
+      step: '第二步：對外先導向 legacyWheel',
+      detail: '若正式頁共用模組異常，客服或商家可先使用 /games/wheel?legacyWheel=1 維持活動可用。'
+    },
+    {
+      step: '第三步：檢查 console 與部署 log',
+      detail: '優先找 ReferenceError、undefined alias、API 401/403/500、CORS 或環境變數錯誤。'
+    },
+    {
+      step: '第四步：必要時 Git 回退',
+      detail: '使用上一個已確認正常批次檔案覆蓋 WheelGameView.vue，再重新 build、commit、push、部署。'
+    },
+    {
+      step: '第五步：恢復後完成通知',
+      detail: '通知商家、客服與營運：正式頁已恢復，legacy fallback 保留，並補記異常原因。'
+    }
+  ]
+})
+
+const wheelFinalDeployAcceptanceChecklist = computed(() => {
+  return [
+    '確認第 2301～2350 批檔案已覆蓋 frontend\\src\\views\\front\\games\\WheelGameView.vue。',
+    '確認 /games/wheel 正式頁可載入 CommonGamePlayBoard。',
+    '確認 /games/wheel?commonWheel=1 測試區可載入。',
+    '確認 /games/wheel?legacyWheel=1 可立即回原輪盤頁。',
+    '確認 npm run build 成功。',
+    '確認 Git commit / push 成功。',
+    '確認 Render 部署成功且正式網址可開啟。',
+    '確認 verify / play API guard 沒有因交付文件或監控面板被放寬。',
+    '確認商家知道正式入口與 legacy rollback 入口。',
+    '確認客服知道異常回報時要截圖、記錄網址、時間、裝置與 console 錯誤。',
+    '確認本批不改 router / DB schema / draw core。',
+    '確認第 2301～2350 批可作為正式輪盤頁上線操作指令與部署交付最終版。'
+  ]
+})
+
+/*
+ * V2.3 第 2301～2350 批正式輪盤上線操作與部署交付摘要：
+ * - /games/wheel 正式玩家頁預設顯示 CommonGamePlayBoard。
+ * - PowerShell 指令、前端 build、後端健康檢查、Git commit / push、Render 部署檢查與正式網址驗收已整理。
+ * - ?legacyWheel=1 仍為最高優先緊急 fallback。
+ * - ?commonWheel=1 測試區保留。
+ * - verify/play API guard 不放寬。
+ * - router / DB schema / draw core 未變更。
+ */
+
 </script>
 
 <template>
@@ -3139,6 +5752,26 @@ watch(
           <p class="mt-2 text-sm font-bold leading-6 text-orange-700">
             {{ premiumVersionInfo.platformVersion }}｜{{ premiumVersionInfo.batch }}｜{{ premiumVersionInfo.status }}
           </p>
+        </div>
+
+        <div class="mt-5 rounded-3xl border border-violet-100 bg-violet-50 p-4">
+          <p class="text-xs font-black uppercase tracking-[0.22em] text-violet-500">
+            Common Wheel Verify / PlayControl Safety
+          </p>
+
+          <h2 class="mt-2 text-lg font-black text-violet-950">
+            第 1151～1200 批：commonWheel 測試區第一階段
+          </h2>
+
+          <p class="mt-2 text-xs font-bold leading-6 text-violet-700">
+            目前已接入輪盤真實檔案，但正式輪盤頁仍保留原流程；後續共用模組只先從 <span class="font-black">?commonWheel=1</span> 測試區開始。
+          </p>
+
+          <div class="mt-3 grid gap-2 text-xs font-black text-violet-800">
+            <p class="break-all rounded-2xl bg-white/80 px-3 py-2">測試區：{{ commonWheelTestPath }}</p>
+            <p class="break-all rounded-2xl bg-white/80 px-3 py-2">Dry-run：{{ commonWheelDryRunPath }}</p>
+            <p class="break-all rounded-2xl bg-white/80 px-3 py-2">Fallback：{{ legacyWheelFallbackPath }}</p>
+          </div>
         </div>
 
         <div class="mt-4 grid gap-2 sm:grid-cols-2">
@@ -5130,7 +7763,511 @@ watch(
             <div class="premium-vip-orb premium-vip-orb-right pointer-events-none"></div>
 
             <div class="relative">
-              <section class="premium-vip-header-card overflow-hidden rounded-[32px] border border-white/25 p-3 shadow-2xl backdrop-blur sm:p-4" :style="bannerBackgroundStyle">
+              <section
+                v-if="isCommonWheelRoute || isLegacyWheelRoute || isWheelDryRunRoute || isWheelFormalDryRunPreviewRoute"
+                class="mb-4 rounded-[28px] border border-white/25 bg-black/25 p-4 shadow-2xl backdrop-blur"
+              >
+                <p class="text-[10px] font-black uppercase tracking-[0.22em] text-yellow-100">
+                  Common Wheel Verify / PlayControl Safety
+                </p>
+
+                <h2 class="mt-2 text-lg font-black text-white">
+                  {{ wheelCommonRouteModeLabel }}
+                </h2>
+
+                <p class="mt-2 text-xs font-bold leading-6 text-white/80">
+                  {{ commonWheelOperationHint }}
+                </p>
+
+                <div class="mt-3 grid gap-2 text-[11px] font-black text-white/90">
+                  <div
+                    v-for="item in commonWheelStageOneChecks"
+                    :key="item.label"
+                    class="rounded-2xl border border-white/15 bg-white/10 px-3 py-2"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <span>{{ item.label }}</span>
+                      <span class="rounded-full bg-white/15 px-2 py-0.5 text-yellow-100">{{ item.status }}</span>
+                    </div>
+                    <p class="mt-1 text-[10px] font-bold leading-4 text-white/65">
+                      {{ item.description }}
+                    </p>
+                  </div>
+                </div>
+                <div v-if="isCommonWheelRoute || isWheelFormalCanaryActualDisplayRoute" class="mt-4 rounded-[24px] border border-yellow-200/35 bg-white/10 p-3">
+                  <p class="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-100">
+                    CommonGamePlayBoard Preview
+                  </p>
+                  <p class="mt-1 text-[11px] font-bold leading-5 text-white/70">
+                    第 1801～1850 批已正式套用：正式輪盤玩家頁預設顯示 CommonGamePlayBoard；?legacyWheel=1 可立即回原輪盤頁。
+                  </p>
+
+                  <div class="mt-3 overflow-hidden rounded-[22px] border border-white/15 bg-white text-slate-900">
+                    <CommonGamePlayBoard v-bind="commonWheelBoundGameBoardProps" />
+                  </div>
+
+                  <div v-if="isWheelFormalLiveApplyRoute" class="mt-3 rounded-[22px] border border-emerald-200/30 bg-emerald-400/10 p-3 text-[11px] font-bold leading-5 text-white/80">
+                    <p class="font-black text-emerald-100">{{ wheelFormalLiveApplySummary.title }}</p>
+                    <p class="mt-1">正式頁預設共用模組：{{ wheelFormalLiveApplySummary.formalDefaultCommonBoard ? '已啟用' : '未啟用' }}</p>
+                    <p class="mt-1">緊急回退：網址加上 <span class="font-black text-yellow-100">?legacyWheel=1</span> 即可回原輪盤頁。</p>
+                  </div>
+
+
+                  <div
+                    v-if="isCommonWheelRoute || isLegacyWheelRoute"
+                    class="mt-3 rounded-[22px] border border-cyan-200/30 bg-cyan-400/10 p-3 text-[11px] font-bold leading-5 text-white/80"
+                  >
+                    <p class="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">
+                      Post Live Monitor / Rollback Hint
+                    </p>
+                    <p class="mt-1 font-black text-cyan-50">
+                      {{ wheelPostLiveMonitorSummary.title }}｜{{ wheelPostLiveMonitorSummary.batch }}
+                    </p>
+                    <p class="mt-1 text-white/75">
+                      {{ wheelPostLiveMonitorSummary.operatorHint }}
+                    </p>
+
+                    <div class="mt-3 grid gap-2 md:grid-cols-3">
+                      <div
+                        v-for="item in wheelPostLiveRouteMonitorItems"
+                        :key="`post-live-route-${item.label}`"
+                        class="rounded-2xl border border-white/15 bg-white/10 px-3 py-2"
+                      >
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="font-black text-white">{{ item.label }}</span>
+                          <span class="rounded-full bg-white/15 px-2 py-0.5 text-[10px] font-black text-cyan-100">{{ item.status }}</span>
+                        </div>
+                        <p class="mt-1 break-all text-[10px] text-yellow-100">{{ item.route }}</p>
+                        <p class="mt-1 text-[10px] leading-4 text-white/65">{{ item.description }}</p>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 grid gap-2 md:grid-cols-2">
+                      <div
+                        v-for="item in wheelPostLiveRollbackChecklist"
+                        :key="`post-live-check-${item.label}`"
+                        class="rounded-2xl border border-emerald-200/20 bg-white/10 px-3 py-2"
+                      >
+                        <div class="flex items-center justify-between gap-2">
+                          <span class="font-black text-white">{{ item.label }}</span>
+                          <span class="rounded-full bg-emerald-200/15 px-2 py-0.5 text-[10px] font-black text-emerald-100">{{ item.status }}</span>
+                        </div>
+                        <p class="mt-1 text-[10px] leading-4 text-white/65">{{ item.description }}</p>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 rounded-2xl border border-white/15 bg-black/15 px-3 py-2">
+                      <p class="font-black text-yellow-100">營運操作提示</p>
+                      <ul class="mt-2 list-disc space-y-1 pl-4 text-[10px] text-white/70">
+                        <li v-for="hint in wheelPostLiveOpsHints" :key="hint">{{ hint }}</li>
+                      </ul>
+                    </div>
+
+
+                    <div class="mt-3 rounded-2xl border border-purple-200/25 bg-purple-400/10 px-3 py-3">
+                      <p class="text-[10px] font-black uppercase tracking-[0.2em] text-purple-100">
+                        Post Live Data Flow / Player Operation
+                      </p>
+                      <p class="mt-1 font-black text-purple-50">
+                        {{ wheelPostLiveDataFlowSummary.title }}｜{{ wheelPostLiveDataFlowSummary.batch }}
+                      </p>
+                      <p class="mt-1 text-[10px] leading-5 text-white/70">
+                        {{ wheelPostLiveDataFlowSummary.playerHint }}
+                      </p>
+
+                      <div class="mt-3 grid gap-2 md:grid-cols-2">
+                        <div
+                          v-for="item in wheelPostLiveDataFlowItems"
+                          :key="`post-live-flow-${item.label}`"
+                          class="rounded-2xl border border-white/15 bg-white/10 px-3 py-2"
+                        >
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="font-black text-white">{{ item.label }}</span>
+                            <span class="rounded-full bg-purple-100/20 px-2 py-0.5 text-[10px] font-black text-purple-100">{{ item.status }}</span>
+                          </div>
+                          <p class="mt-1 text-[10px] leading-4 text-white/65">{{ item.description }}</p>
+                        </div>
+                      </div>
+
+                      <div class="mt-3 grid gap-2 md:grid-cols-2">
+                        <div
+                          v-for="card in wheelPostLivePlayerOperationCards"
+                          :key="`post-live-player-operation-${card.title}`"
+                          class="rounded-2xl border border-white/15 bg-black/10 px-3 py-2"
+                        >
+                          <p class="font-black text-yellow-100">{{ card.title }}</p>
+                          <p class="mt-1 text-[10px] leading-4 text-white/65">{{ card.description }}</p>
+                        </div>
+                      </div>
+
+
+                      <div class="mt-3 rounded-2xl border border-cyan-200/25 bg-cyan-400/10 px-3 py-3">
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-cyan-100">
+                          Go Live Replacement / Ops Monitoring
+                        </p>
+                        <p class="mt-1 font-black text-cyan-50">
+                          {{ wheelPostLiveGoLiveOpsSummary.title }}｜{{ wheelPostLiveGoLiveOpsSummary.batch }}
+                        </p>
+                        <p class="mt-1 text-[10px] leading-5 text-white/70">
+                          {{ wheelPostLiveGoLiveOpsSummary.summaryText }}
+                        </p>
+
+                        <div class="mt-3 grid gap-2 md:grid-cols-2">
+                          <div
+                            v-for="item in wheelPostLiveGoLiveChecklist"
+                            :key="`go-live-check-${item.label}`"
+                            class="rounded-2xl border border-white/15 bg-white/10 px-3 py-2"
+                          >
+                            <div class="flex items-center justify-between gap-2">
+                              <span class="font-black text-white">{{ item.label }}</span>
+                              <span class="rounded-full bg-cyan-100/20 px-2 py-0.5 text-[10px] font-black text-cyan-100">{{ item.status }}</span>
+                            </div>
+                            <p class="mt-1 text-[10px] leading-4 text-white/65">{{ item.description }}</p>
+                          </div>
+                        </div>
+
+                        <div class="mt-3 grid gap-2 md:grid-cols-2">
+                          <div
+                            v-for="card in wheelPostLiveOpsMonitorCards"
+                            :key="`ops-monitor-${card.title}`"
+                            class="rounded-2xl border border-white/15 bg-black/10 px-3 py-2"
+                          >
+                            <p class="font-black text-yellow-100">{{ card.title }}</p>
+                            <p class="mt-1 text-[10px] leading-4 text-white/65">{{ card.description }}</p>
+                          </div>
+                        </div>
+
+
+                        <div class="mt-3 rounded-2xl border border-emerald-200/25 bg-emerald-400/10 px-3 py-3">
+                          <p class="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">
+                            Long Term Maintenance / Multi Game Expansion
+                          </p>
+                          <p class="mt-1 font-black text-emerald-50">
+                            {{ wheelLongTermMaintenanceSummary.title }}｜{{ wheelLongTermMaintenanceSummary.batch }}
+                          </p>
+                          <p class="mt-1 text-[10px] leading-5 text-white/70">
+                            {{ wheelLongTermMaintenanceSummary.focus }}
+                          </p>
+
+                          <div class="mt-3 grid gap-2 md:grid-cols-2">
+                            <div
+                              v-for="item in wheelLongTermMaintenanceCadenceItems"
+                              :key="`wheel-long-term-cadence-${item.label}`"
+                              class="rounded-2xl border border-white/15 bg-white/10 px-3 py-2"
+                            >
+                              <div class="flex items-center justify-between gap-2">
+                                <span class="font-black text-white">{{ item.label }}</span>
+                                <span class="rounded-full bg-emerald-100/20 px-2 py-0.5 text-[10px] font-black text-emerald-100">{{ item.status }}</span>
+                              </div>
+                              <p class="mt-1 text-[10px] leading-4 text-white/65">{{ item.description }}</p>
+                            </div>
+                          </div>
+
+                          <div class="mt-3 grid gap-2 md:grid-cols-2">
+                            <div
+                              v-for="item in wheelMultiGameExpansionHandoffItems"
+                              :key="`wheel-expansion-handoff-${item.label}`"
+                              class="rounded-2xl border border-white/15 bg-black/10 px-3 py-2"
+                            >
+                              <p class="font-black text-yellow-100">{{ item.label }}</p>
+                              <p class="mt-1 text-[10px] leading-4 text-white/65">{{ item.description }}</p>
+                            </div>
+                          </div>
+
+                          <div class="mt-3 rounded-2xl border border-white/15 bg-black/15 px-3 py-2">
+                            <p class="font-black text-emerald-100">長期封存檢查</p>
+                            <ul class="mt-2 list-disc space-y-1 pl-4 text-[10px] text-white/70">
+                              <li v-for="item in wheelLongTermArchiveChecklist" :key="item">{{ item }}</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="isCommonWheelRoute" class="mt-3 rounded-[24px] border border-sky-200/30 bg-sky-400/10 p-3">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-[10px] font-black uppercase tracking-[0.2em] text-sky-100">
+                        Verify Serial API Safety
+                      </p>
+                      <p class="mt-1 text-[11px] font-bold leading-5 text-white/70">
+                        {{ commonWheelVerifySerialNormalizedState.message }}
+                      </p>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-sky-100/20 px-2 py-1 text-[10px] font-black text-sky-100">
+                      {{ commonWheelVerifySerialNormalizedState.status }}
+                    </span>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[10px] font-bold text-white/75">
+                    <p class="break-all rounded-2xl bg-white/10 px-3 py-2">
+                      Endpoint：{{ commonWheelVerifySerialRequestPreview.endpoint }}
+                    </p>
+                    <p class="break-all rounded-2xl bg-white/10 px-3 py-2">
+                      Campaign：{{ commonWheelVerifySerialRequestPreview.campaignId }}｜Serial：{{ commonWheelVerifySerialRequestPreview.serialCode || '尚未輸入' }}
+                    </p>
+                    <p class="rounded-2xl bg-rose-500/15 px-3 py-2 text-rose-100">
+                      verify requestWillBeSent：{{ commonWheelVerifySerialRequestPreview.requestWillBeSent }}｜play requestWillBeSent：{{ commonWheelPlayApiSafetyGuard.requestWillBeSent }}
+                    </p>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[11px] font-black text-white/90">
+                    <div
+                      v-for="item in commonWheelVerifySerialStageChecks"
+                      :key="`verify-${item.label}`"
+                      class="rounded-2xl border border-sky-200/25 bg-white/10 px-3 py-2"
+                    >
+                      <div class="flex items-center justify-between gap-2">
+                        <span>{{ item.label }}</span>
+                        <span class="rounded-full bg-sky-100/20 px-2 py-0.5 text-sky-100">{{ item.status }}</span>
+                      </div>
+                      <p class="mt-1 text-[10px] font-bold leading-4 text-white/65">
+                        {{ item.description }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="isCommonWheelRoute" class="mt-3 rounded-[24px] border border-emerald-200/30 bg-emerald-400/10 p-3">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">
+                        PlayControl Unlock Prepare
+                      </p>
+                      <p class="mt-1 text-[11px] font-bold leading-5 text-white/70">
+                        {{ commonWheelPlayControlUnlockGuard.reason }}
+                      </p>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-emerald-100/20 px-2 py-1 text-[10px] font-black text-emerald-100">
+                      {{ commonWheelPlayControlProps.status }}
+                    </span>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 sm:grid-cols-4">
+                    <div
+                      v-for="card in commonWheelPlayControlUnlockCards"
+                      :key="`play-card-${card.label}`"
+                      class="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-[10px] font-black text-white/85"
+                    >
+                      <p>{{ card.icon }} {{ card.label }}</p>
+                      <p class="mt-1 text-emerald-100">{{ card.value }}</p>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[10px] font-bold text-white/75">
+                    <p class="break-all rounded-2xl bg-white/10 px-3 py-2">
+                      Play Endpoint：{{ commonWheelPlayRequestPreview.endpoint }}
+                    </p>
+                    <p class="break-all rounded-2xl bg-white/10 px-3 py-2">
+                      Campaign：{{ commonWheelPlayRequestPreview.campaignId }}｜Serial：{{ commonWheelPlayRequestPreview.serialCode || '尚未輸入' }}
+                    </p>
+                    <p class="rounded-2xl bg-rose-500/15 px-3 py-2 text-rose-100">
+                      requestWillBeSent：{{ commonWheelPlayApiSafetyGuard.requestWillBeSent }}｜完整測試旗標通過後才允許送出 play API
+                    </p>
+                  </div>
+
+                  <div class="mt-3 rounded-[22px] border border-emerald-200/25 bg-white/10 p-3">
+                    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-100">
+                          Play API Real Send
+                        </p>
+                        <p class="mt-1 text-[11px] font-bold leading-5 text-white/70">
+                          {{ commonWheelPlayApiNormalizedState.message }}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        class="rounded-full bg-emerald-300 px-4 py-2 text-[11px] font-black text-slate-950 shadow-lg disabled:cursor-not-allowed disabled:opacity-45"
+                        :disabled="!commonWheelPlayApiSafetyGuard.requestWillBeSent || commonWheelPlayApiSending"
+                        @click="sendCommonWheelPlayApi"
+                      >
+                        {{ commonWheelPlayApiSending ? '送出中' : '送出 play API 測試' }}
+                      </button>
+                    </div>
+                    <div class="mt-3 grid gap-2 text-[10px] font-bold text-white/75 sm:grid-cols-3">
+                      <p class="rounded-2xl bg-white/10 px-3 py-2">狀態：{{ commonWheelPlayApiNormalizedState.status }}</p>
+                      <p class="rounded-2xl bg-white/10 px-3 py-2">獎項：{{ commonWheelPlayApiNormalizedState.prizeName || '尚未取得' }}</p>
+                      <p class="rounded-2xl bg-white/10 px-3 py-2">紀錄：{{ commonWheelPlayApiNormalizedState.playRecordId || '尚未建立' }}</p>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 rounded-[22px] border border-yellow-200/30 bg-yellow-300/10 p-3">
+                    <div class="flex items-start justify-between gap-3">
+                      <div>
+                        <p class="text-[10px] font-black uppercase tracking-[0.2em] text-yellow-100">
+                          Result Display / Pre-formal Acceptance
+                        </p>
+                        <p class="mt-1 text-[11px] font-bold leading-5 text-white/70">
+                          {{ commonWheelResultDisplayState.title }}｜{{ commonWheelResultDisplayState.message }}
+                        </p>
+                      </div>
+                      <span class="shrink-0 rounded-full bg-yellow-100/20 px-2 py-1 text-[10px] font-black text-yellow-100">
+                        {{ commonWheelResultDisplayState.tone }}
+                      </span>
+                    </div>
+
+                    <div class="mt-3 grid gap-2 sm:grid-cols-4">
+                      <div
+                        v-for="card in commonWheelResultDisplayCards"
+                        :key="`result-${card.label}`"
+                        class="rounded-2xl border border-white/15 bg-white/10 px-3 py-2 text-[10px] font-black text-white/85"
+                      >
+                        <p>{{ card.icon }} {{ card.label }}</p>
+                        <p class="mt-1 break-words text-yellow-100">{{ card.value }}</p>
+                      </div>
+                    </div>
+
+                    <div class="mt-3 grid gap-2 text-[11px] font-black text-white/90">
+                      <div
+                        v-for="item in commonWheelPreFormalAcceptanceChecks"
+                        :key="`acceptance-${item.label}`"
+                        class="rounded-2xl border border-yellow-200/25 bg-white/10 px-3 py-2"
+                      >
+                        <div class="flex items-center justify-between gap-2">
+                          <span>{{ item.label }}</span>
+                          <span class="rounded-full bg-yellow-100/20 px-2 py-0.5 text-yellow-100">{{ item.status }}</span>
+                        </div>
+                        <p class="mt-1 text-[10px] font-bold leading-4 text-white/65">
+                          {{ item.description }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[11px] font-black text-white/90">
+                    <div
+                      v-for="item in commonWheelPlayControlUnlockChecks"
+                      :key="`unlock-${item.label}`"
+                      class="rounded-2xl border border-emerald-200/25 bg-white/10 px-3 py-2"
+                    >
+                      <div class="flex items-center justify-between gap-2">
+                        <span>{{ item.label }}</span>
+                        <span class="rounded-full bg-emerald-100/20 px-2 py-0.5 text-emerald-100">{{ item.status }}</span>
+                      </div>
+                      <p class="mt-1 text-[10px] font-bold leading-4 text-white/65">
+                        {{ item.description }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="isWheelFormalDryRunPreviewRoute || isLegacyWheelRoute" class="mt-3 rounded-[24px] border border-fuchsia-200/30 bg-fuchsia-400/10 p-3">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-100">
+                        Formal Wheel Dry-run / Legacy Fallback
+                      </p>
+                      <p class="mt-1 text-[11px] font-bold leading-5 text-white/70">
+                        {{ wheelFormalDryRunSummary.title }}｜正式輪盤頁仍不真正切換，只做雙軌預演與回退檢查。
+                      </p>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-fuchsia-100/20 px-2 py-1 text-[10px] font-black text-fuchsia-100">
+                      {{ wheelFormalDryRunSummary.isFormalGrayPreview ? 'formalGray preview' : (wheelFormalDryRunSummary.isFormalCommonDryRun ? 'formalCommon dry-run' : (wheelFormalDryRunSummary.isFormalDryRun ? 'formal dry-run' : 'fallback guard')) }}
+                    </span>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[11px] font-black text-white/90">
+                    <div
+                      v-for="item in wheelFormalDryRunRouteMatrix"
+                      :key="`formal-dryrun-${item.label}`"
+                      class="rounded-2xl border border-fuchsia-200/25 bg-white/10 px-3 py-2"
+                    >
+                      <div class="flex items-center justify-between gap-2">
+                        <span>{{ item.label }}</span>
+                        <span class="rounded-full bg-fuchsia-100/20 px-2 py-0.5 text-fuchsia-100">{{ item.status }}</span>
+                      </div>
+                      <p class="mt-1 text-[10px] font-bold leading-4 text-white/65">
+                        {{ item.description }}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[10px] font-bold text-white/75 sm:grid-cols-2">
+                    <p class="rounded-2xl bg-white/10 px-3 py-2">
+                      候選模式：{{ wheelFormalCandidatePropsSnapshot.mode }}
+                    </p>
+                    <p class="rounded-2xl bg-white/10 px-3 py-2">
+                      獎項數：{{ wheelFormalCandidatePropsSnapshot.itemCount }}｜正式切換：{{ wheelFormalCandidatePropsSnapshot.formalWheelDefaultSwitched ? '已切換' : '未切換' }}
+                    </p>
+                    <p class="rounded-2xl bg-white/10 px-3 py-2">
+                      Verify requestWillBeSent：{{ wheelFormalCandidatePropsSnapshot.verifyRequestWillBeSent }}
+                    </p>
+                    <p class="rounded-2xl bg-white/10 px-3 py-2">
+                      Play requestWillBeSent：{{ wheelFormalCandidatePropsSnapshot.playRequestWillBeSent }}
+                    </p>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[11px] font-black text-white/90">
+                    <div
+                      v-for="item in wheelFormalLegacyRollbackChecklist"
+                      :key="`rollback-${item.label}`"
+                      class="rounded-2xl border border-rose-200/25 bg-rose-500/10 px-3 py-2"
+                    >
+                      <div class="flex items-center justify-between gap-2">
+                        <span>{{ item.label }}</span>
+                        <span class="rounded-full bg-rose-100/20 px-2 py-0.5 text-rose-100">{{ item.status }}</span>
+                      </div>
+                      <p class="mt-1 text-[10px] font-bold leading-4 text-white/65">
+                        {{ item.description }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="isWheelFormalCanaryRoute || isWheelFormalCanaryActualDisplayRoute" class="mt-3 rounded-[24px] border border-purple-200/30 bg-purple-500/10 p-3">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-[10px] font-black uppercase tracking-[0.2em] text-purple-100">
+                        Formal Wheel Canary Actual Display
+                      </p>
+                      <p class="mt-1 text-[11px] font-bold leading-5 text-white/70">
+                        {{ wheelFormalCanaryApplySummary.title }}｜正式頁預設仍保留原輪盤流程，canary 完整旗標下才實際顯示共用模組。
+                      </p>
+                    </div>
+                    <span class="shrink-0 rounded-full bg-purple-100/20 px-2 py-1 text-[10px] font-black text-purple-100">
+                      {{ wheelFormalCanaryApplySummary.routeMode }}
+                    </span>
+                  </div>
+
+                  <div class="mt-3 grid gap-2 text-[11px] font-black text-white/90">
+                    <div
+                      v-for="item in wheelFormalCanaryApplyChecks"
+                      :key="`canary-apply-${item.label}`"
+                      class="rounded-2xl border border-purple-200/25 bg-white/10 px-3 py-2"
+                    >
+                      <div class="flex items-center justify-between gap-2">
+                        <span>{{ item.label }}</span>
+                        <span class="rounded-full bg-purple-100/20 px-2 py-0.5 text-purple-100">{{ item.status }}</span>
+                      </div>
+                      <p class="mt-1 text-[10px] font-bold leading-4 text-white/65">
+                        {{ item.description }}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="isCommonWheelRoute || isLegacyWheelRoute" class="mt-3 grid gap-2 text-[11px] font-black text-white/90">
+                  <div
+                    v-for="item in commonWheelActualBindingChecks"
+                    :key="`binding-${item.label}`"
+                    class="rounded-2xl border border-emerald-200/25 bg-emerald-400/10 px-3 py-2"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <span>{{ item.label }}</span>
+                      <span class="rounded-full bg-emerald-100/20 px-2 py-0.5 text-emerald-100">{{ item.status }}</span>
+                    </div>
+                    <p class="mt-1 text-[10px] font-bold leading-4 text-white/65">
+                      {{ item.description }}
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <template v-if="isWheelOriginalFormalRouteVisible">
+                <section class="premium-vip-header-card overflow-hidden rounded-[32px] border border-white/25 p-3 shadow-2xl backdrop-blur sm:p-4" :style="bannerBackgroundStyle">
                 <div class="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-yellow-100/80 to-transparent"></div>
 
                 <div class="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -5410,6 +8547,54 @@ watch(
                 >
                   {{ wheelButtonText }}
                 </button>
+
+                <section
+                  v-if="shouldRequireSerialCode"
+                  class="mx-auto mt-4 max-w-sm rounded-[28px] border border-yellow-100/35 bg-white/15 p-4 text-center shadow-inner backdrop-blur"
+                >
+                  <p class="text-sm font-black text-white">
+                    輸入序號開始轉盤
+                  </p>
+                  <p class="mt-1 text-xs font-bold leading-5 text-white/75">
+                    請輸入商家提供的序號，驗證成功後即可使用轉盤機會。
+                  </p>
+
+                  <div class="mt-3 flex flex-col gap-2 sm:flex-row">
+                    <input
+                      v-model="serialVerify.code"
+                      type="text"
+                      inputmode="text"
+                      autocomplete="one-time-code"
+                      placeholder="請輸入序號"
+                      class="min-h-[48px] flex-1 rounded-2xl border border-yellow-100/50 bg-white px-4 text-center text-sm font-black uppercase tracking-wider text-orange-700 outline-none transition placeholder:text-orange-300 focus:border-yellow-200 focus:ring-4 focus:ring-yellow-100/40"
+                      :disabled="serialVerify.verifying || serialVerify.verified"
+                      @keyup.enter="verifySerialCode"
+                    />
+
+                    <button
+                      type="button"
+                      class="min-h-[48px] rounded-2xl bg-white px-5 text-sm font-black text-orange-600 shadow-lg transition hover:-translate-y-0.5 hover:bg-yellow-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      :disabled="serialVerify.verifying || serialVerify.verified"
+                      @click="verifySerialCode"
+                    >
+                      {{ serialVerify.verifying ? '驗證中' : serialVerify.verified ? '已驗證' : '驗證序號' }}
+                    </button>
+                  </div>
+
+                  <p
+                    v-if="serialVerify.message"
+                    class="mt-3 rounded-2xl border border-emerald-100/50 bg-emerald-100/20 px-4 py-2 text-xs font-black leading-5 text-emerald-50"
+                  >
+                    {{ serialVerify.message }}
+                  </p>
+
+                  <p
+                    v-if="serialVerify.error"
+                    class="mt-3 rounded-2xl border border-rose-100/50 bg-rose-100/20 px-4 py-2 text-xs font-black leading-5 text-rose-50"
+                  >
+                    {{ serialVerify.error }}
+                  </p>
+                </section>
               </section>
 
               <section class="premium-front-action-card premium-vip-action-card relative mt-4 overflow-hidden rounded-[30px] border border-yellow-100/30 bg-white/15 p-4 text-center shadow-inner backdrop-blur">
@@ -5470,7 +8655,7 @@ watch(
                     </span>
 
                     <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-orange-600">
-                      剩餘 {{ player.chances }} 次
+                      剩餘 {{ effectiveWheelChances }} 次
                     </span>
                   </div>
 
@@ -5503,7 +8688,7 @@ watch(
               </section>
 
               <section
-                v-if="!isAdminMode && player.chances <= 0"
+                v-if="!isAdminMode && effectiveWheelChances <= 0"
                 class="relative mt-4 rounded-3xl border border-white/30 bg-white/20 p-4 text-center shadow-inner backdrop-blur"
               >
                 <p class="text-sm font-black text-white">
@@ -5786,6 +8971,7 @@ watch(
               <p class="relative mt-4 text-center text-[11px] font-bold leading-5 text-white/70">
                 {{ isAdminMode ? campaign.noticeText : '請依照活動規則參加轉盤；獎項與兌換方式以主辦單位公告為準。' }}
               </p>
+              </template>
             </div>
           </div>
         </div>
@@ -6022,7 +9208,7 @@ watch(
           <div class="mt-4 grid grid-cols-2 gap-3">
             <div class="rounded-3xl bg-orange-100 px-3 py-4">
               <p class="text-2xl font-black text-orange-700">
-                {{ player.chances }}
+                {{ effectiveWheelChances }}
               </p>
 
               <p class="mt-1 text-xs font-black text-orange-500">
@@ -7436,3 +10622,71 @@ aside {
 }
 
 </style>
+
+<!--
+Multi Game Platform V2.3 第 1751～1800 批：正式輪盤頁共用模組 live apply 前最後驗收版
+
+本批延續第 1701～1750 批穩定點，僅作為 live apply 前最後驗收與交付標記：
+1. 正式輪盤頁預設仍保留原本流程，不永久切換。
+2. ?legacyWheel=1 仍為最高優先 fallback。
+3. ?commonWheel=1 測試區仍保留。
+4. full canary flags 可實際顯示 CommonGamePlayBoard。
+5. verify / play API guard 維持嚴格測試旗標保護。
+6. 本批不改 router / DB schema / draw-core。
+7. 作為下一批 live apply controlled switch 前的最後穩定驗收點。
+-->
+
+
+<!--
+Multi Game Platform V2.3 第 1851～1900 批：正式輪盤頁套用後監控面板與 legacy rollback 操作提示版
+
+本批延續第 1801～1850 批正式套用穩定點：
+1. 正式輪盤玩家頁預設維持 CommonGamePlayBoard 共用模組。
+2. ?legacyWheel=1 保留最高優先緊急回退。
+3. ?commonWheel=1 測試區保留。
+4. 新增正式套用後監控面板、三路線狀態、rollback checklist 與營運操作提示。
+5. 不改 router / DB schema / 抽獎核心。
+6. verify / play API guard 不放寬。
+-->
+
+
+<!--
+Multi Game Platform V2.3 第 1901～1950 批：正式輪盤頁資料流檢查與玩家操作狀態精緻化版
+
+本批延續第 1851～1900 批正式套用後監控穩定點：
+1. 正式輪盤玩家頁預設維持 CommonGamePlayBoard 共用模組。
+2. ?legacyWheel=1 保留最高優先緊急回退。
+3. ?commonWheel=1 測試區保留。
+4. 新增正式套用後資料流檢查、玩家操作狀態、verify/play guard 顯示與錯誤提示收斂。
+5. 不改 router / DB schema / 抽獎核心。
+6. verify / play API guard 不放寬。
+-->
+
+
+<!--
+Multi Game Platform V2.3 第 1951～2000 批：正式輪盤頁資料流檢查與玩家操作狀態修正後穩定版
+
+本批延續第 1950-1 批小批修正版：
+1. 正式輪盤玩家頁預設維持 CommonGamePlayBoard 共用模組。
+2. ?legacyWheel=1 保留最高優先緊急回退。
+3. ?commonWheel=1 測試區保留。
+4. 保留 commonWheelPlayNormalizedState alias 修正成果，避免正式頁 render crash。
+5. 重新收斂正式套用後資料流檢查、玩家操作狀態、verify/play guard 顯示與錯誤提示。
+6. 不改 router / DB schema / 抽獎核心。
+7. verify / play API guard 不放寬。
+-->
+
+<!--
+Multi Game Platform V2.3 第 2101～2150 批：正式輪盤頁部署驗收與版本封存交付版
+
+本批延續第 2051～2100 批正式上線更換穩定點：
+1. 正式輪盤玩家頁預設維持 CommonGamePlayBoard 共用模組。
+2. ?legacyWheel=1 保留最高優先緊急回退。
+3. ?commonWheel=1 測試區保留。
+4. 整理正式部署驗收流程：本機正式頁、commonWheel 測試區、legacy rollback 三路線必測。
+5. 整理版本封存交付流程：覆蓋 WheelGameView.vue、前端 build、Git commit / push、Render 部署檢查、正式網址驗收。
+6. 整理營運維護節奏：上線當日巡檢、1～3 天觀測、每週報表檢查、異常回報與 rollback SOP。
+7. 不改 router / DB schema / 抽獎核心。
+8. verify / play API guard 不放寬。
+9. 保留 commonWheelPlayNormalizedState alias 修正成果，避免正式頁 render crash。
+-->

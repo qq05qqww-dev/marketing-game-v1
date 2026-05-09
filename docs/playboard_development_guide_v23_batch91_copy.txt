@@ -1,0 +1,509 @@
+# Multi Game Platform V2.3 第 91 批
+# PlayBoard 玩法元件開發規範說明檔版
+
+## 一、這份文件目的
+
+目前已經建立多個玩法骨架：
+
+- PremiumGridPlayBoard.vue
+- GoldenEggPlayBoard.vue
+- LuckyWheelPlayBoard.vue
+- ScratchCardPlayBoard.vue
+- FlipCardPlayBoard.vue
+
+接下來如果要把多遊戲平台真正做成可擴充架構，每個玩法元件都必須遵守同一套規格。
+
+這份文件用來規範：
+
+1. PlayBoard 元件應該負責什麼
+2. PlayBoard 元件不應該負責什麼
+3. props 要統一哪些名稱
+4. emit 要統一哪些事件
+5. 新遊戲玩法元件要怎麼命名
+6. 未來接入 GenericGamePlayView 時要注意什麼
+
+---
+
+## 二、PlayBoard 是什麼
+
+PlayBoard 是「遊戲玩法區」。
+
+例如：
+
+- 九宮格的 3x3 格子與跑燈
+- 金蛋的蛋排列與破蛋動畫
+- 輪盤的轉盤與指針
+- 刮刮卡的遮罩與刮開動畫
+- 翻牌的卡片與翻轉動畫
+
+PlayBoard 只負責畫面互動與動畫，不負責整個活動流程。
+
+---
+
+## 三、PlayBoard 應該負責的事情
+
+PlayBoard 可以負責：
+
+1. 玩法畫面
+   - 格子
+   - 輪盤
+   - 金蛋
+   - 卡片
+   - 刮刮卡
+
+2. 玩法動畫
+   - 跑燈
+   - 旋轉
+   - 破蛋
+   - 翻牌
+   - 刮開
+
+3. 玩家點擊互動
+   - 點擊開始
+   - 選擇格子
+   - 選擇金蛋
+   - 選擇卡片
+   - 模擬刮開
+
+4. 動畫狀態呈現
+   - isDrawing
+   - activeIndex
+   - selectedIndex
+   - flippedIndexes
+   - brokenIndexes
+   - scratchedPercent
+
+5. 動畫完成後通知外層
+   - animation-end
+   - flip-end
+   - break-end
+   - scratch-complete
+
+---
+
+## 四、PlayBoard 不應該負責的事情
+
+PlayBoard 不應該直接處理：
+
+1. API 請求
+   - 不直接呼叫 draw API
+   - 不直接呼叫 campaign API
+   - 不直接呼叫 prize API
+
+2. 活動狀態
+   - 不判斷活動是否已開始
+   - 不判斷活動是否已結束
+   - 不判斷商家是否啟用
+
+3. 抽獎資料寫入
+   - 不直接寫 PlayRecord
+   - 不直接寫 RewardRecord
+
+4. 分享加次數
+   - 不直接處理分享
+   - 不直接處理 clipboard
+
+5. 結果彈窗
+   - 不自己跳結果 modal
+   - 結果交給 GameResultModal.vue
+
+6. 獎品展示
+   - 不自己做完整獎品展示
+   - 獎品展示交給 GamePrizeShowcase.vue
+
+7. 抽獎紀錄
+   - 不自己做 drawLogs
+   - 紀錄顯示交給 GameDrawLogs.vue
+
+---
+
+## 五、標準 props 規格
+
+每個 PlayBoard 建議盡量支援以下 props：
+
+### 1. 資料類
+
+items：
+通用項目資料，適合九宮格。
+
+prizes：
+獎品資料，適合輪盤。
+
+cards：
+卡片資料，適合翻牌。
+
+eggs：
+金蛋資料，適合金蛋。
+
+resultPrize：
+本次抽獎結果獎品。
+
+config：
+玩法專屬設定。
+
+theme：
+玩法主題色。
+
+---
+
+### 2. 狀態類
+
+disabled：
+是否禁止操作。
+
+isDrawing：
+是否正在抽獎或動畫中。
+
+activeIndex：
+目前高亮位置，適合九宮格、輪盤。
+
+selectedIndex：
+目前選中位置，適合翻牌、金蛋。
+
+scratchedPercent：
+刮刮卡刮開比例。
+
+---
+
+### 3. 文字類
+
+drawButtonText：
+開始按鈕文字。
+
+drawButtonIcon：
+開始按鈕 icon。
+
+emptyText：
+沒有資料時顯示文字。
+
+---
+
+## 六、標準 emit 規格
+
+每個 PlayBoard 建議至少支援：
+
+### draw
+
+用途：
+通知外層開始抽獎。
+
+範例：
+
+emit('draw')
+
+---
+
+### select
+
+用途：
+玩家選擇某一個玩法項目。
+
+可依玩法分成：
+
+- select-cell
+- select-prize
+- select-card
+- select-egg
+
+---
+
+### animation-start
+
+用途：
+動畫開始。
+
+範例：
+
+emit('animation-start', { index, item })
+
+---
+
+### animation-end
+
+用途：
+動畫結束。
+
+範例：
+
+emit('animation-end', { index, item, prize })
+
+---
+
+### reset
+
+用途：
+重置玩法狀態。
+
+範例：
+
+emit('reset')
+
+---
+
+## 七、目前各玩法元件事件對照
+
+### PremiumGridPlayBoard.vue
+
+props：
+
+- items
+- activeIndex
+- disabled
+- isDrawing
+- drawButtonText
+- drawButtonIcon
+- emptyText
+
+emit：
+
+- draw
+- select-cell
+
+---
+
+### GoldenEggPlayBoard.vue
+
+props：
+
+- eggs
+- selectedIndex
+- resultPrize
+- disabled
+- isDrawing
+- eggCount
+- allowMultipleBreak
+- drawButtonText
+- hammerText
+- emptyText
+
+emit：
+
+- draw
+- select-egg
+- break-start
+- break-end
+- reset
+
+---
+
+### LuckyWheelPlayBoard.vue
+
+props：
+
+- prizes
+- activeIndex
+- rotation
+- disabled
+- isDrawing
+- drawButtonText
+- drawButtonIcon
+- pointerText
+- showOuterLights
+- emptyText
+
+emit：
+
+- draw
+- select-prize
+
+---
+
+### ScratchCardPlayBoard.vue
+
+props：
+
+- prize
+- disabled
+- isDrawing
+- scratchedPercent
+- scratchThreshold
+- maskText
+- drawButtonText
+- drawButtonIcon
+- emptyText
+
+emit：
+
+- draw
+- scratch-start
+- scratch-progress
+- scratch-complete
+- reset
+
+---
+
+### FlipCardPlayBoard.vue
+
+props：
+
+- cards
+- selectedIndex
+- resultPrize
+- disabled
+- isDrawing
+- cardCount
+- allowMultipleFlip
+- drawButtonText
+- cardBackText
+- emptyText
+
+emit：
+
+- draw
+- select-card
+- flip-start
+- flip-end
+- reset
+
+---
+
+## 八、新增 PlayBoard 命名規則
+
+檔案放置位置：
+
+frontend/src/views/games/playboards/
+
+命名方式：
+
+- GoldenEggPlayBoard.vue
+- PremiumGridPlayBoard.vue
+- LuckyWheelPlayBoard.vue
+- ScratchCardPlayBoard.vue
+- FlipCardPlayBoard.vue
+- RedPacketPlayBoard.vue
+- SlotMachinePlayBoard.vue
+
+命名格式：
+
+玩法名稱 + PlayBoard.vue
+
+---
+
+## 九、新增 PlayBoard 後要更新哪裡
+
+新增一個玩法元件後，必須更新：
+
+1. playboardsIndex.js
+
+檔案：
+
+frontend/src/views/games/playboards/playboardsIndex.js
+
+要加入：
+
+- import
+- export
+- PLAYBOARD_COMPONENTS
+- PLAYBOARD_COMPONENT_LIST
+
+---
+
+2. gameRegistry.js
+
+檔案：
+
+frontend/src/games/gameRegistry.js
+
+要確認：
+
+- GAME_TYPES 有這個 gameType
+- GAME_REGISTRY 有完整定義
+- boardComponent 名稱正確
+- frontPath 正確
+- status 正確
+
+---
+
+3. GenericGamePlayView.vue
+
+如果要預覽這個玩法，確認：
+
+- previewGameOptions 有包含這個 gameType
+- boardItems 有對應資料格式
+- component props 有傳對
+
+---
+
+## 十、PlayBoard 和 GameResultModal 的關係
+
+PlayBoard 不直接顯示結果彈窗。
+
+正確流程：
+
+1. 玩家點 PlayBoard
+2. PlayBoard emit draw
+3. 外層頁面呼叫 draw API 或示範抽獎
+4. 外層頁面拿到 resultPrize
+5. PlayBoard 播放動畫
+6. 動畫結束
+7. 外層頁面打開 GameResultModal
+
+不要讓 PlayBoard 自己 import GameResultModal。
+
+---
+
+## 十一、PlayBoard 和 useGameDrawEngine 的關係
+
+PlayBoard 不直接使用 useGameDrawEngine。
+
+正確位置：
+
+- useGameDrawEngine 放在 View 層
+- PlayBoard 只 emit draw
+- View 層接收到 draw 後再呼叫 runDraw()
+
+原因：
+
+PlayBoard 要保持單純，這樣才能在預覽頁、正式頁、後台預覽都重複使用。
+
+---
+
+## 十二、PlayBoard 和後台預覽的關係
+
+未來後台右側預覽可以直接使用同一個 PlayBoard。
+
+例如：
+
+- 後台調整九宮格樣式
+- 右側 PremiumGridPlayBoard 即時更新
+- 不需要另外做一套預覽畫面
+
+這樣可以減少重複開發。
+
+---
+
+## 十三、手機版注意事項
+
+所有 PlayBoard 必須符合：
+
+1. 手機可操作
+2. 按鈕不可太小
+3. 不可超出手機框
+4. 不可造成橫向捲動
+5. 動畫不能讓畫面高度突然跳動
+6. 重要按鈕要容易點擊
+
+建議：
+
+- 最大寬度 380px 到 430px
+- 使用 aspect-square
+- 使用 grid / flex
+- 避免固定超大 px 寬度
+- 避免 position fixed 放在 PlayBoard 內
+
+---
+
+## 十四、結論
+
+PlayBoard 是未來多遊戲平台的玩法核心。
+
+但 PlayBoard 必須保持乾淨：
+
+只做玩法；
+不做資料；
+不做 API；
+不做結果彈窗；
+不做報表；
+不做後台邏輯。
+
+這樣未來新增遊戲才會快，也能讓金蛋、九宮格、輪盤、刮刮卡共用同一套平台核心。

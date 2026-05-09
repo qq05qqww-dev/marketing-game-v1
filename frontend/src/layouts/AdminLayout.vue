@@ -1,7 +1,9 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+
+// 第 25501～25900 批：商家我的活動統一管理三遊戲遠端入口版
 
 const route = useRoute()
 const router = useRouter()
@@ -45,11 +47,11 @@ const menuItems = computed(() => {
       roles: ['ADMIN', 'SUPER_ADMIN']
     },
     {
-      label: '活動管理',
-      description: '平台活動',
+      label: isPlatformAdmin.value ? '活動管理' : '我的活動',
+      description: isPlatformAdmin.value ? '平台活動' : '建立 / 修改遊戲',
       to: '/admin/campaigns',
       icon: '📣',
-      roles: ['ADMIN', 'SUPER_ADMIN']
+      roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
     },
     {
       label: '遊戲設定',
@@ -64,13 +66,6 @@ const menuItems = computed(() => {
       to: '/admin/prizes',
       icon: '🎁',
       roles: ['ADMIN', 'SUPER_ADMIN']
-    },
-    {
-      label: '砸金蛋後台',
-      description: '活動營運',
-      to: '/admin/golden-egg',
-      icon: '🥚',
-      roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
     },
     {
       label: '報表中心',
@@ -118,6 +113,29 @@ const menuItems = computed(() => {
 
   return items.filter((item) => item.roles.includes(role.value))
 })
+
+
+const isDirectLegacySingleGameAdminRoute = computed(() => {
+  const path = String(route.path || '')
+  const hasCampaignContext = Boolean(
+    route.query?.singleGame ||
+      route.query?.campaignId ||
+      route.query?.tenantSlug ||
+      route.query?.playerUrl
+  )
+
+  return !isPlatformAdmin.value && path === '/admin/golden-egg' && !hasCampaignContext
+})
+
+watch(
+  isDirectLegacySingleGameAdminRoute,
+  (shouldRedirect) => {
+    if (shouldRedirect) {
+      router.replace('/admin/campaigns')
+    }
+  },
+  { immediate: true }
+)
 
 const isActive = (item) => {
   return route.path === item.to || route.path.startsWith(`${item.to}/`)

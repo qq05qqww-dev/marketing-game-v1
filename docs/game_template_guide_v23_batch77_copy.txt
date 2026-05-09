@@ -1,0 +1,570 @@
+# Multi Game Platform V2.3 第 77 批
+# 多遊戲新增模板說明檔 game_template_guide.txt 版
+
+## 一、這份文件目的
+
+這份文件用來定義：
+
+以後新增一個新遊戲時，不要再重新做整套前台、後台、抽獎紀錄、結果彈窗、分享、領獎提醒。
+
+正確方式是：
+
+新增遊戲 = 新增玩法元件 + 註冊 gameType + 套用共用元件 + 接入共用抽獎流程
+
+---
+
+## 二、目前已建立的共用基礎
+
+### 1. 遊戲註冊表
+
+檔案位置：
+
+frontend/src/games/gameRegistry.js
+
+用途：
+
+- 統一管理 gameType
+- 統一管理遊戲名稱
+- 統一管理前台網址
+- 統一管理後台網址
+- 統一管理預設設定
+- 統一管理是否支援序號
+- 統一管理是否支援分享加次數
+- 統一管理是否支援來源追蹤
+
+目前已登記：
+
+- GOLDEN_EGG：砸金蛋
+- GRID：精緻九宮格
+- WHEEL：幸運輪盤
+- SCRATCH_CARD：刮刮卡
+- FLIP_CARD：翻牌抽獎
+- RED_PACKET：紅包雨
+- SLOT_MACHINE：拉霸機
+
+---
+
+### 2. 共用活動核心
+
+檔案位置：
+
+frontend/src/composables/useGameActivityCore.js
+
+用途：
+
+- 活動資料
+- 商家資料
+- 活動狀態判斷
+- 活動開始 / 結束時間
+- 獎品資料標準化
+- 可抽獎品數量
+- 獎品總庫存
+- 分享來源
+- 活動摘要
+
+---
+
+### 3. 共用抽獎流程
+
+檔案位置：
+
+frontend/src/composables/useGameDrawEngine.js
+
+用途：
+
+- 抽獎中狀態
+- 抽獎錯誤
+- 最後一次抽獎結果
+- 抽獎結果標準化
+- 中獎 / 未中獎 / 再玩一次判斷
+- 剩餘抽獎次數
+- 抽獎 payload 標準化
+
+---
+
+### 4. 共用元件索引
+
+檔案位置：
+
+frontend/src/components/game-common/gameCommonIndex.js
+
+用途：
+
+集中匯出所有 game-common 共用元件。
+
+---
+
+## 三、目前已建立的前台共用元件
+
+資料夾：
+
+frontend/src/components/game-common/
+
+目前元件：
+
+1. GameShell.vue
+   - 活動頁外框
+   - 手機框
+   - 管理右側區塊
+   - 背景漸層
+   - phone / admin / after 插槽
+
+2. GameActivityHeader.vue
+   - 商家名稱
+   - 商家標語
+   - LOGO
+   - 活動狀態
+   - 活動主標題
+   - 抽獎機會 / 可抽獎品 / 分享次數統計
+
+3. GameStatusNotice.vue
+   - 載入中
+   - 載入失敗
+   - 尚未開放
+   - 未開始
+   - 已結束
+   - 重新載入活動資料
+
+4. GameChanceCard.vue
+   - 抽獎機會
+   - 分享次數
+   - 抽選中
+   - 獎品已抽完
+   - 分享增加機會
+
+5. GamePrizeShowcase.vue
+   - 獎品展示
+   - 今日亮點獎項
+   - 庫存
+   - 權重
+   - 展開 / 收合
+
+6. GameRulesPanel.vue
+   - 活動規則
+   - 獎品說明
+   - STEP / NOTE 卡片
+
+7. GameResultModal.vue
+   - 中獎彈窗
+   - 未中獎彈窗
+   - 領獎提醒
+   - 下一步流程
+   - 複製本次抽獎結果
+
+8. GameDrawLogs.vue
+   - 最新抽獎紀錄
+   - 中獎 / 未中獎 / 加碼標籤
+   - 最新高亮
+   - 分享來源
+   - 清空畫面暫存紀錄
+
+9. GameClaimInfo.vue
+   - 領獎提醒
+   - 保留結果
+   - 查看紀錄
+   - 聯絡確認
+
+10. GameQuickNav.vue
+    - 頂部
+    - 獎品
+    - 規則
+    - 紀錄
+    - 回到頂部
+
+11. GameFooterInfo.vue
+    - 活動商家
+    - 活動狀態
+    - 活動來源
+    - 同步時間
+
+---
+
+## 四、新增一個遊戲的標準流程
+
+假設要新增：
+
+WHEEL 幸運輪盤
+
+標準流程如下：
+
+### 第 1 步：確認 gameRegistry.js 是否已註冊
+
+檢查：
+
+frontend/src/games/gameRegistry.js
+
+確認有：
+
+GAME_TYPES.WHEEL
+
+以及：
+
+GAME_REGISTRY[GAME_TYPES.WHEEL]
+
+內容至少包含：
+
+- gameType
+- label
+- shortLabel
+- description
+- icon
+- frontPath
+- adminPath
+- boardComponent
+- defaultRouteName
+- defaultRequireSerialCode
+- supportsSerialCode
+- supportsShareBonus
+- supportsSourceTracking
+- supportsPrizeWeight
+- supportsStock
+- supportsRewardRecord
+- status
+- theme
+- defaultConfig
+
+---
+
+### 第 2 步：建立玩法元件
+
+建立資料夾：
+
+frontend/src/views/games/playboards/
+
+建立檔案：
+
+frontend/src/views/games/playboards/LuckyWheelPlayBoard.vue
+
+這個元件只負責輪盤玩法：
+
+- 輪盤扇形
+- 指針
+- 旋轉動畫
+- 停止位置
+- 點擊開始
+- 動畫結束後通知外層顯示結果
+
+不負責：
+
+- 活動資料
+- 獎品展示
+- 結果彈窗
+- 抽獎紀錄
+- 分享加次數
+- 領獎提醒
+
+這些都交給共用元件。
+
+---
+
+### 第 3 步：建立遊戲頁 View
+
+建立：
+
+frontend/src/views/games/WheelGameView.vue
+
+或未來統一成：
+
+frontend/src/views/games/GamePlayView.vue
+
+理想上新遊戲頁應該使用：
+
+- GameShell
+- GameActivityHeader
+- GameStatusNotice
+- GameChanceCard
+- GamePrizeShowcase
+- GameRulesPanel
+- GameResultModal
+- GameDrawLogs
+- GameClaimInfo
+- GameQuickNav
+- GameFooterInfo
+
+中間玩法區放：
+
+LuckyWheelPlayBoard
+
+---
+
+### 第 4 步：接入共用活動核心
+
+在新遊戲頁使用：
+
+useGameActivityCore.js
+
+用途：
+
+- 讀取 tenantSlug
+- 設定 gameType
+- 套用 campaign
+- 套用 prizes
+- 判斷活動狀態
+- 計算可抽獎品
+- 顯示活動同步時間
+
+---
+
+### 第 5 步：接入共用抽獎流程
+
+在新遊戲頁使用：
+
+useGameDrawEngine.js
+
+用途：
+
+- 抽獎中狀態
+- 呼叫 draw API
+- 標準化抽獎結果
+- 更新剩餘次數
+- 顯示結果彈窗
+
+---
+
+### 第 6 步：新增路由
+
+在 router 加入類似：
+
+/play/:tenantSlug/wheel
+
+或未來改成統一路由：
+
+/play/:tenantSlug/:gamePath
+
+若使用統一路由，需要從 gameRegistry.js 找對應 gameType。
+
+---
+
+### 第 7 步：確認後端 Campaign gameType
+
+資料庫 Campaign 要有：
+
+gameType = WHEEL
+
+並且此 Campaign 要屬於某個 tenant。
+
+---
+
+### 第 8 步：確認獎品資料
+
+Prize 必須綁定：
+
+- tenantId
+- campaignId
+- gameType 或透過 campaign.gameType 判斷
+
+獎品欄位要走共用格式：
+
+- title
+- shortName
+- icon
+- imageUrl
+- type
+- probability / weight
+- remainStock / quantity
+- status
+
+---
+
+### 第 9 步：確認抽獎 API
+
+所有遊戲都應該走同一套抽獎 API：
+
+POST /api/draw-engine/campaigns/:campaignId/play
+
+傳入：
+
+{
+  gameType: "WHEEL",
+  source: "line",
+  requireSerialCode: false,
+  serialCode: ""
+}
+
+回傳統一格式後，由 useGameDrawEngine.js 標準化。
+
+---
+
+### 第 10 步：測試前台完整流程
+
+測試：
+
+1. 前台網址可開啟
+2. 商家活動資料正確
+3. 獎品展示正確
+4. 抽獎機會正確
+5. 點擊玩法元件可開始動畫
+6. 動畫結束後顯示結果彈窗
+7. 抽獎紀錄新增
+8. 分享增加機會
+9. 領獎提醒正常
+10. 底部活動資訊正常
+11. 手機版正常
+12. 桌機版正常
+
+---
+
+## 五、新增遊戲最少需要的檔案
+
+以 WHEEL 為例，最少需要：
+
+1. frontend/src/views/games/playboards/LuckyWheelPlayBoard.vue
+2. frontend/src/views/games/WheelGameView.vue
+3. router/index.js 新增 route
+4. backend 補建 WHEEL campaign 的 patch script 或後台建立活動
+5. gameRegistry.js 確認 WHEEL 已登記
+
+如果後台已經可以用 gameType 建立活動，就不用寫 patch script。
+
+---
+
+## 六、玩法元件的標準 props / emit
+
+玩法元件建議統一：
+
+### props
+
+- prizes
+- disabled
+- isDrawing
+- resultPrize
+- theme
+- config
+
+### emit
+
+- draw
+- animation-start
+- animation-end
+- select
+- error
+
+範例：
+
+<WheelPlayBoard
+  :prizes="normalizedPrizes"
+  :disabled="!canDraw"
+  :is-drawing="isDrawing"
+  :result-prize="resultPrize"
+  :theme="gameTheme"
+  :config="gameConfig"
+  @draw="startDraw"
+  @animation-end="showResultModal = true"
+/>
+
+---
+
+## 七、每個遊戲不能重做的東西
+
+新增遊戲時不要重做：
+
+- 結果彈窗
+- 獎品展示
+- 抽獎機會卡
+- 活動規則
+- 抽獎紀錄
+- 領獎提醒
+- 快速導覽
+- 底部活動資訊
+- 活動狀態提示
+- 分享加次數
+- 活動資料讀取邏輯
+- 抽獎結果標準化
+
+這些都要共用。
+
+---
+
+## 八、每個遊戲可以自己做的東西
+
+每個遊戲只做自己的玩法：
+
+### 砸金蛋
+
+- 金蛋排列
+- 錘子動畫
+- 破蛋動畫
+- 蛋殼效果
+
+### 九宮格
+
+- 3x3 格子
+- 跑燈路徑
+- 中間按鈕
+- 停止動畫
+
+### 輪盤
+
+- 扇形輪盤
+- 指針
+- 旋轉動畫
+- 跑馬燈
+
+### 刮刮卡
+
+- Canvas 刮除
+- 遮罩
+- 刮開比例
+
+### 翻牌
+
+- 卡片排列
+- 翻牌動畫
+- 選牌限制
+
+---
+
+## 九、建議後續批次
+
+第 77 批：
+建立多遊戲新增模板說明檔 game_template_guide.txt 版
+
+第 78 批：
+建立 playboards 資料夾與 PremiumGridPlayBoard.vue 規劃骨架版
+
+第 79 批：
+建立 LuckyWheelPlayBoard.vue 骨架版
+
+第 80 批：
+建立 ScratchCardPlayBoard.vue 骨架版
+
+第 81 批：
+建立 FlipCardPlayBoard.vue 骨架版
+
+第 82 批：
+建立 GamePlayView 共用頁面草案
+
+第 83 批：
+評估九宮格玩法區抽出成 PremiumGridPlayBoard.vue
+
+第 84 批：
+評估金蛋前台接入共用元件
+
+---
+
+## 十、結論
+
+從現在開始，新增遊戲不能再重做整套頁面。
+
+標準方向：
+
+共用功能：
+- GameShell
+- GameActivityHeader
+- GameStatusNotice
+- GameChanceCard
+- GamePrizeShowcase
+- GameRulesPanel
+- GameResultModal
+- GameDrawLogs
+- GameClaimInfo
+- GameQuickNav
+- GameFooterInfo
+- useGameActivityCore
+- useGameDrawEngine
+- gameRegistry
+
+遊戲專屬：
+- PlayBoard 玩法元件
+
+這樣 Multi Game Platform 才會真正變成可擴充的多遊戲平台。

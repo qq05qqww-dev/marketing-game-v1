@@ -1,6 +1,7 @@
+// 第 21501～21900 批：輪盤單一活動設定頁精簡與玩家入口防誤導版
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import BaseBadge from '../../components/common/BaseBadge.vue'
 import BaseEmptyState from '../../components/common/BaseEmptyState.vue'
 import BaseSearchInput from '../../components/common/BaseSearchInput.vue'
@@ -8,6 +9,7 @@ import BaseModal from '../../components/common/BaseModal.vue'
 import { useAdminGameSettings } from '../../composables/useAdminGameSettings'
 
 const router = useRouter()
+const route = useRoute()
 
 const {
   gameSettings,
@@ -428,6 +430,10 @@ const getGameWebsiteHint = (game) => {
 }
 
 const getPlayerPreviewRoute = (game) => {
+  if (isSingleGameMode.value) {
+    return normalizeRoute(getSingleActivityPlayerRoute(game))
+  }
+
   return normalizeRoute(game?.route || '/games')
 }
 
@@ -435,6 +441,11 @@ const getAdminPreviewRoute = (game) => {
   const route = getPlayerPreviewRoute(game)
 
   if (!route) return '/games'
+
+  if (isSingleGameMode.value) {
+    // 商家單一活動設定頁不要再導到 mode=admin 測試頁，避免看到共用模組 debug / 模板預覽區塊。
+    return route
+  }
 
   const separator = route.includes('?') ? '&' : '?'
 
@@ -599,6 +610,11 @@ const openPlayerPreview = (game) => {
 }
 
 const openAdminPreview = (game) => {
+  if (isSingleGameMode.value) {
+    showToast('單一活動模式不開啟管理版 debug 頁；請使用玩家版或回我的活動。')
+    return
+  }
+
   const route = getAdminPreviewRoute(game)
 
   openPreviewRouteSafely(route, '管理版')
@@ -781,6 +797,111 @@ const getRouteTestStatus = (game) => {
   }
 }
 
+const routeQueryGameId = computed(() => {
+  return String(route.query.gameId || route.query.templateId || '').trim().toLowerCase()
+})
+
+const routeQueryGameType = computed(() => {
+  return String(route.query.gameType || '').trim().toUpperCase()
+})
+
+const routeQueryCampaignId = computed(() => {
+  return String(route.query.campaignId || '').trim()
+})
+
+const routeQueryTenantSlug = computed(() => {
+  return String(route.query.tenantSlug || '').trim()
+})
+
+const routeQueryPlayerUrl = computed(() => {
+  return String(route.query.playerUrl || '').trim()
+})
+
+const isWheelSingleActivityMode = computed(() => {
+  return isSingleGameMode.value && routeQueryGameType.value === 'WHEEL'
+})
+
+const getSingleActivityPlayerRoute = (game) => {
+  if (routeQueryPlayerUrl.value) {
+    try {
+      const url = new URL(routeQueryPlayerUrl.value)
+      return `${url.pathname}${url.search || ''}`
+    } catch (error) {
+      return routeQueryPlayerUrl.value
+    }
+  }
+
+  const type = routeQueryGameType.value || String(game?.type || game?.gameType || '').toUpperCase()
+
+  if (type === 'GRID' && routeQueryTenantSlug.value) {
+    return `/play/${routeQueryTenantSlug.value}/premium-grid`
+  }
+
+  if (type === 'WHEEL') {
+    // 目前 router 尚未提供 /play/:tenantSlug/wheel；先保留正式輪盤入口，不再加 mode=admin。
+    return '/games/wheel'
+  }
+
+  if (type === 'GOLDEN_EGG') {
+    return '/games/golden-egg'
+  }
+
+  return getPlayerPreviewRoute(game)
+}
+
+const isSingleGameMode = computed(() => {
+  return Boolean(route.query.singleGame === '1' || routeQueryGameId.value || routeQueryGameType.value || routeQueryCampaignId.value)
+})
+
+const queryGameTypeToGameIdMap = {
+  GRID: 'premium-grid',
+  WHEEL: 'wheel',
+  GOLDEN_EGG: 'egg-smash',
+  SCRATCH: 'scratch-card',
+  FLIP: 'flip-card'
+}
+
+const singleGameTargetId = computed(() => {
+  if (routeQueryGameId.value) return routeQueryGameId.value
+
+  return queryGameTypeToGameIdMap[routeQueryGameType.value] || ''
+})
+
+const singleGameTarget = computed(() => {
+  if (!singleGameTargetId.value) return null
+
+  return gameSettings.value.find((game) => {
+    return String(game.id || '').toLowerCase() === singleGameTargetId.value ||
+      String(game.templateId || '').toLowerCase() === singleGameTargetId.value
+  }) || null
+})
+
+const singleGameModeTitle = computed(() => {
+  if (!isSingleGameMode.value) return '遊戲設定管理'
+
+  if (singleGameTarget.value) {
+    return `${singleGameTarget.value.name}｜單一活動設定`
+  }
+
+  return '單一遊戲設定'
+})
+
+const singleGameModeDescription = computed(() => {
+  if (!isSingleGameMode.value) {
+    return '管理前台九宮格、刮刮卡、輪盤、翻牌、敲金蛋、拉霸機、套圈圈、夾娃娃與推薦任務等遊戲設定。'
+  }
+
+  if (routeQueryCampaignId.value) {
+    return `目前從活動 #${routeQueryCampaignId.value} 進入，只顯示這個活動對應的遊戲設定；不再顯示全部模板與測試工具。`
+  }
+
+  return '目前是單一遊戲設定模式，只顯示指定遊戲模板。'
+})
+
+const backToCampaignCenter = () => {
+  router.push('/admin/campaigns')
+}
+
 const routeTestSummary = computed(() => {
   const data = {
     total: gameSettings.value.length,
@@ -816,6 +937,15 @@ const routeTestSummary = computed(() => {
 
 const filteredGames = computed(() => {
   return gameSettings.value.filter((game) => {
+    if (isSingleGameMode.value && singleGameTargetId.value) {
+      const gameId = String(game.id || '').toLowerCase()
+      const templateId = String(game.templateId || '').toLowerCase()
+
+      if (gameId !== singleGameTargetId.value && templateId !== singleGameTargetId.value) {
+        return false
+      }
+    }
+
     const routeTestStatus = getRouteTestStatus(game).status
     const routeHealthStatus = getRouteHealthStatus(game)
 
@@ -2142,16 +2272,26 @@ loadReportExportLogsFromStorage()
           </div>
 
           <h1 class="mt-4 text-3xl font-black text-slate-900">
-            遊戲設定管理
+            {{ singleGameModeTitle }}
           </h1>
 
           <p class="mt-2 text-sm leading-6 text-slate-500">
-            管理前台九宮格、刮刮卡、輪盤、翻牌、敲金蛋、拉霸機、套圈圈、夾娃娃與推薦任務等遊戲設定。
+            {{ singleGameModeDescription }}
           </p>
         </div>
 
         <div class="flex flex-wrap gap-3">
           <button
+            v-if="isSingleGameMode"
+            type="button"
+            class="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-100"
+            @click="backToCampaignCenter"
+          >
+            回我的活動
+          </button>
+
+          <button
+            v-if="!isSingleGameMode"
             type="button"
             class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
             @click="router.push('/games')"
@@ -2160,6 +2300,7 @@ loadReportExportLogsFromStorage()
           </button>
 
           <button
+            v-if="!isSingleGameMode"
             type="button"
             class="rounded-2xl border px-5 py-3 text-sm font-black transition"
             :class="abnormalRouteCount > 0
@@ -2175,6 +2316,7 @@ loadReportExportLogsFromStorage()
           </button>
 
           <button
+            v-if="!isSingleGameMode"
             type="button"
             class="rounded-2xl border border-rose-200 bg-rose-50 px-5 py-3 text-sm font-black text-rose-600 transition hover:bg-rose-100"
             @click="resetSettings"
@@ -2183,6 +2325,7 @@ loadReportExportLogsFromStorage()
           </button>
 
           <button
+            v-if="!isSingleGameMode"
             type="button"
             class="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-600"
             @click="openAddGameModal"
@@ -2200,7 +2343,34 @@ loadReportExportLogsFromStorage()
       {{ savedMessage }}
     </section>
 
-    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section
+      v-if="isSingleGameMode"
+      class="rounded-3xl border border-violet-200 bg-violet-50 p-6 shadow-sm"
+    >
+      <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <p class="text-sm font-black text-violet-700">
+            商家單一活動設定模式
+          </p>
+          <h2 class="mt-1 text-2xl font-black text-slate-950">
+            目前只顯示 {{ singleGameTarget?.name || '指定遊戲' }}
+          </h2>
+          <p class="mt-2 text-sm font-bold leading-6 text-violet-700">
+            這個畫面是從「我的活動」進入的設定頁，不會再顯示全部遊戲模板，避免商家選錯。
+          </p>
+        </div>
+        <div class="rounded-2xl bg-white px-5 py-4 text-sm font-bold text-slate-700">
+          <p>活動 ID：{{ routeQueryCampaignId || '-' }}</p>
+          <p>遊戲類型：{{ routeQueryGameType || '-' }}</p>
+          <p>目標模板：{{ singleGameTargetId || '-' }}</p>
+        </div>
+      </div>
+    </section>
+
+    <section
+      v-if="!isSingleGameMode"
+      class="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+    >
       <article
         v-for="card in statCards"
         :key="card.title"
@@ -2234,6 +2404,7 @@ loadReportExportLogsFromStorage()
     </section>
 
     <section
+      v-if="!isSingleGameMode"
       class="rounded-3xl border p-5 shadow-sm"
       :class="abnormalRouteCount > 0 ? 'border-amber-200 bg-amber-50' : 'border-emerald-200 bg-emerald-50'"
     >
@@ -2294,7 +2465,7 @@ loadReportExportLogsFromStorage()
       </div>
     </section>
 
-    <section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section v-if="!isSingleGameMode" class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div class="inline-flex rounded-full bg-purple-50 px-4 py-2 text-sm font-black text-purple-600">
@@ -3374,9 +3545,16 @@ loadReportExportLogsFromStorage()
       </div>
     </section>
 
+    <section
+      v-if="isSingleGameMode"
+      class="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-sm font-bold leading-6 text-amber-800"
+    >
+      目前是商家單一活動設定模式。此頁只用來設定目前活動對應的遊戲模板；玩家版按鈕不會再開啟 mode=admin 或共用模組 debug 頁。
+    </section>
+
 <section
       v-if="filteredGames.length"
-      class="grid gap-6 xl:grid-cols-2"
+      :class="isSingleGameMode ? 'grid gap-6 xl:grid-cols-1' : 'grid gap-6 xl:grid-cols-2'"
     >
       <article
         v-for="game in filteredGames"
@@ -3580,7 +3758,7 @@ loadReportExportLogsFromStorage()
               </p>
 
               <p class="mt-1 text-xs text-slate-400">
-                玩家版給客人看；管理版會自動加 mode=admin，方便後台測試。
+                單一活動模式只保留玩家版入口；管理版 debug / 全部模板測試會隱藏。
               </p>
             </div>
 
@@ -3625,7 +3803,7 @@ loadReportExportLogsFromStorage()
                   </p>
 
                   <p class="mt-1 text-xs font-bold text-indigo-700">
-                    管理者預覽會自動加上 mode=admin，方便測試 LOGO、網址與活動品牌。
+                    單一活動模式不開啟 mode=admin，避免看到共用模組 debug 與模板預覽區。
                   </p>
                 </div>
               </div>
@@ -3644,11 +3822,11 @@ loadReportExportLogsFromStorage()
 
             <p>
               <span class="font-black text-indigo-700">管理版：</span>
-              後台測試與設定預覽畫面，網址會自動加上 mode=admin。
+              單一活動模式已關閉管理版 debug 入口。
             </p>
           </div>
 
-          <div class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-blue-100 bg-blue-50 p-4">
+          <div v-if="!isSingleGameMode" class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-blue-100 bg-blue-50 p-4">
             <div>
               <p class="text-sm font-black text-blue-900">
                 玩家版 / 管理版路徑狀態
@@ -3678,7 +3856,7 @@ loadReportExportLogsFromStorage()
             </div>
           </div>
 
-          <div class="mt-3 grid gap-3 rounded-3xl border border-blue-100 bg-blue-50 p-4 text-xs font-bold leading-5 text-blue-700 lg:grid-cols-2">
+          <div v-if="!isSingleGameMode" class="mt-3 grid gap-3 rounded-3xl border border-blue-100 bg-blue-50 p-4 text-xs font-bold leading-5 text-blue-700 lg:grid-cols-2">
             <div class="rounded-2xl bg-white/70 p-3">
               <div class="flex flex-wrap items-center gap-2">
                 <span
@@ -3747,9 +3925,19 @@ loadReportExportLogsFromStorage()
             </button>
 
             <button
+              v-if="isSingleGameMode"
+              type="button"
+              class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-black text-violet-700 transition hover:-translate-y-0.5 hover:bg-violet-100 hover:shadow-md"
+              @click="backToCampaignCenter"
+            >
+              回我的活動
+            </button>
+
+            <button
+              v-if="!isSingleGameMode"
               type="button"
               class="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm font-black text-indigo-700 transition hover:-translate-y-0.5 hover:bg-indigo-100 hover:shadow-md"
-              title="開啟後台管理版預覽畫面，網址會自動加上 mode=admin"
+              title="單一活動模式不開啟管理版 debug 頁"
               @click.stop.prevent="openAdminPreview(game)"
             >
               管理版
@@ -3764,6 +3952,7 @@ loadReportExportLogsFromStorage()
             </button>
 
             <button
+              v-if="!isSingleGameMode"
               type="button"
               class="rounded-2xl border border-purple-200 bg-purple-50 px-4 py-3 text-sm font-black text-purple-600 transition hover:bg-purple-100"
               @click="openFrontendUrlInNewTab(game)"
@@ -3772,6 +3961,7 @@ loadReportExportLogsFromStorage()
             </button>
 
             <button
+              v-if="!isSingleGameMode"
               type="button"
               class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-600 transition hover:bg-blue-100"
               @click="goPrizeSettings(game)"
@@ -3780,6 +3970,7 @@ loadReportExportLogsFromStorage()
             </button>
 
             <button
+              v-if="!isSingleGameMode"
               type="button"
               class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-black text-amber-600 transition hover:bg-amber-100"
               @click="goProbabilitySettings(game)"
@@ -3796,6 +3987,7 @@ loadReportExportLogsFromStorage()
             </button>
 
             <button
+              v-if="!isSingleGameMode"
               type="button"
               class="rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-700"
               @click="toggleTestFlow(game)"
@@ -3806,7 +3998,7 @@ loadReportExportLogsFromStorage()
         </div>
 
         <div
-          v-if="activeTestGameId === game.id"
+          v-if="!isSingleGameMode && activeTestGameId === game.id"
           class="border-t border-blue-100 bg-blue-50 p-6"
         >
           <div class="mb-5">

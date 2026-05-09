@@ -1,0 +1,540 @@
+# Multi Game Platform V2.3 第 57 批
+# 以砸金蛋為基礎的多遊戲共用核心規劃版
+
+## 一、這批目標
+
+目前平台已經有兩個重要遊戲基準：
+
+1. 砸金蛋 Golden Egg
+   - 後台功能最完整
+   - 活動設定完整
+   - 獎品 / 序號 / 紀錄 / 報表 / 分享 / 前台網址都已經走過多批穩定
+   - 適合當作「完整活動管理流程」的基礎
+
+2. 精緻九宮格 Premium Grid
+   - 前台玩家體驗近期大量優化
+   - 已接入共用 GameResultModal.vue
+   - 已接入共用 GamePrizeShowcase.vue
+   - 已建立 GameRulesPanel.vue
+   - 適合當作「前台共用元件化」的實驗基礎
+
+但如果未來新增輪盤、刮刮卡、翻牌、紅包雨，每個遊戲都重新做前台、後台、抽獎紀錄、結果彈窗、分享、領獎提醒，會非常累，也容易出錯。
+
+所以從這批開始，方向調整為：
+
+以砸金蛋作為「完整活動管理流程」的基礎；
+以九宮格近期整理出的元件作為「前台共用顯示元件」的基礎；
+最後合併成真正的多遊戲共用核心。
+
+---
+
+## 二、核心原則
+
+未來新增遊戲不應該是：
+
+新增遊戲 = 重新做前台 + 重新做後台 + 重新做報表 + 重新做抽獎紀錄
+
+而應該是：
+
+新增遊戲 = 新增玩法元件 + 套用共用活動核心 + 套用共用後台管理
+
+---
+
+## 三、以砸金蛋為基礎的原因
+
+砸金蛋目前最適合當作共用核心基礎，原因如下：
+
+1. 後台管理成熟
+   - 活動設定
+   - 獎品設定
+   - 序號設定
+   - 紀錄管理
+   - 前台設定
+   - 分享文案
+   - 備份還原
+   - 右側預覽
+
+2. 多租戶流程成熟
+   - tenantId
+   - tenantSlug
+   - 商家管理員權限
+   - 平台總管理員權限
+
+3. 抽獎流程完整
+   - 活動狀態
+   - 抽獎 API
+   - 獎品庫存
+   - 機率 / 權重
+   - 遊玩紀錄
+   - 發獎紀錄
+
+4. 報表中心已接入
+   - 商家篩選
+   - 日期篩選
+   - 來源統計
+   - 獎項成效
+   - 匯出
+
+5. 序號驗證可變成共用選配
+   - 金蛋需要序號
+   - 九宮格可以不需要序號
+   - 輪盤可設定是否需要序號
+   - 刮刮卡可設定是否需要序號
+
+---
+
+## 四、砸金蛋哪些功能應該抽成共用
+
+### 1. 活動核心資料
+
+來源基礎：
+Campaign
+
+共用欄位：
+
+- tenantId
+- gameType
+- title
+- description
+- status
+- startAt
+- endAt
+- rules
+- prizeDescription
+- dailyLimit
+- totalLimit
+- requireSerialCode
+- sourceTrackingEnabled
+- shareEnabled
+
+未來所有遊戲都應該讀這些共用活動資料。
+
+---
+
+### 2. 獎品核心資料
+
+來源基礎：
+Prize
+
+共用欄位：
+
+- campaignId
+- tenantId
+- title
+- shortName
+- icon
+- imageUrl
+- type
+- probability
+- weight
+- remainStock
+- stockTotal
+- stockUsed
+- status
+- sortOrder
+
+未來所有遊戲都不應該自己做一套獎品結構。
+
+---
+
+### 3. 抽獎紀錄
+
+來源基礎：
+PlayRecord
+
+共用欄位：
+
+- tenantId
+- campaignId
+- gameType
+- playerName
+- result
+- prizeId
+- prizeTitle
+- source
+- serialCode
+- resultPayload
+- createdAt
+
+未來九宮格、金蛋、輪盤都走同一套 PlayRecord。
+
+---
+
+### 4. 發獎紀錄
+
+來源基礎：
+RewardRecord
+
+共用欄位：
+
+- tenantId
+- campaignId
+- prizeId
+- playRecordId
+- status
+- issuedAt
+- note
+- operatorId
+
+未來領獎 / 核銷也應該共用。
+
+---
+
+### 5. 序號驗證
+
+來源基礎：
+SerialCode
+
+共用化方式：
+
+- requireSerialCode = true 時啟用
+- requireSerialCode = false 時不檢查
+- serialCode campaign-scoped
+- serialCode tenant-scoped
+
+金蛋可以預設啟用；
+九宮格可以預設停用；
+輪盤可由後台決定。
+
+---
+
+### 6. 分享來源追蹤
+
+共用來源：
+
+- ?from=line
+- ?from=facebook
+- ?from=instagram
+- ?from=direct
+
+PlayRecord.resultPayload 或 source 欄位統一記錄。
+
+未來所有遊戲都要共用來源追蹤。
+
+---
+
+### 7. 領獎提醒
+
+共用設定：
+
+- claimTitle
+- claimDescription
+- contactText
+- rewardNotice
+- customerServiceText
+
+前台結果彈窗與領獎提醒區都讀同一套設定。
+
+---
+
+## 五、哪些保留遊戲專屬
+
+### 砸金蛋專屬
+
+- 金蛋排列
+- 砸蛋動畫
+- 錘子動畫
+- 金蛋破裂效果
+- 蛋殼掉落
+- 金蛋音效
+- 金蛋數量設定
+
+### 九宮格專屬
+
+- 3x3 格子
+- 跑燈路徑
+- 中間抽選按鈕
+- 跑燈速度
+- 停止動畫
+
+### 輪盤專屬
+
+- 輪盤扇形
+- 指針
+- 旋轉動畫
+- 指針抖動
+- 外圈燈效
+
+### 刮刮卡專屬
+
+- Canvas 刮除
+- 刮開比例
+- 刮開後結果顯示
+- 刮刮卡遮罩
+
+### 翻牌專屬
+
+- 卡片排列
+- 翻牌動畫
+- 翻牌限制
+
+---
+
+## 六、前台建議架構
+
+未來前台建議拆成：
+
+frontend/src/components/game-common/
+
+共用元件：
+
+1. GameResultModal.vue
+   - 已建立
+   - 九宮格已接入
+
+2. GamePrizeShowcase.vue
+   - 已建立
+   - 九宮格已接入
+
+3. GameRulesPanel.vue
+   - 已建立
+   - 九宮格下一步可接入 / 或已準備接入
+
+4. GameChanceCard.vue
+   - 尚未建立
+
+5. GameDrawLogs.vue
+   - 尚未建立
+
+6. GameClaimInfo.vue
+   - 尚未建立
+
+7. GameActivityHeader.vue
+   - 尚未建立
+
+8. GameStatusNotice.vue
+   - 尚未建立
+
+9. GameQuickNav.vue
+   - 尚未建立
+
+10. GameFooterInfo.vue
+    - 尚未建立
+
+玩法元件：
+
+frontend/src/views/games/playboards/
+
+1. GoldenEggPlayBoard.vue
+2. PremiumGridPlayBoard.vue
+3. LuckyWheelPlayBoard.vue
+4. ScratchCardPlayBoard.vue
+5. FlipCardPlayBoard.vue
+
+---
+
+## 七、後台建議架構
+
+不要每個遊戲做一套後台。
+
+後台應該統一成：
+
+1. 活動管理
+   - 選擇遊戲類型
+   - 活動名稱
+   - 活動時間
+   - 活動狀態
+   - 商家歸屬
+   - 是否需要序號
+   - 是否啟用分享
+
+2. 獎品管理
+   - 依活動管理獎品
+   - 依 gameType 篩選
+   - 庫存
+   - 機率 / 權重
+   - 啟用 / 停用
+
+3. 遊戲設定
+   - 共用設定
+   - 遊戲專屬設定
+
+共用設定：
+
+- 主視覺
+- 分享文案
+- 領獎提醒
+- 活動規則
+- 獎品說明
+- 來源追蹤
+
+遊戲專屬設定：
+
+- 金蛋：蛋數量、破蛋動畫、錘子樣式
+- 九宮格：跑燈速度、格子樣式
+- 輪盤：指針樣式、外圈燈效
+- 刮刮卡：刮除比例、遮罩樣式
+
+4. 報表中心
+   - 依商家
+   - 依活動
+   - 依 gameType
+   - 依日期
+   - 來源統計
+   - 獎項成效
+   - 匯出
+
+---
+
+## 八、共用抽獎流程
+
+所有遊戲未來都應該走同一個抽獎流程：
+
+1. 前台讀取商家活動
+2. 判斷活動狀態
+3. 判斷是否需要序號
+4. 判斷是否還有抽獎機會
+5. 呼叫 DrawEngine
+6. DrawEngine 根據 campaignId 抽獎
+7. 扣除庫存
+8. 寫入 PlayRecord
+9. 若中獎則寫入 RewardRecord
+10. 回傳標準化結果
+11. 前台玩法動畫播放
+12. 共用結果彈窗顯示結果
+
+---
+
+## 九、標準化抽獎結果格式
+
+建議所有遊戲 DrawEngine 回傳：
+
+{
+  success: true,
+  data: {
+    playRecordId: 123,
+    rewardRecordId: 456,
+    campaignId: 10,
+    tenantId: 2,
+    gameType: "GRID",
+    result: "WIN",
+    source: "line",
+    prize: {
+      id: 1,
+      title: "品牌折價券",
+      shortName: "折價券",
+      icon: "🎁",
+      imageUrl: "",
+      type: "WIN"
+    },
+    player: {
+      remainingChances: 1
+    },
+    meta: {
+      serialCode: "",
+      from: "line"
+    }
+  }
+}
+
+前台所有遊戲都吃同一種 result 格式。
+
+---
+
+## 十、gameType registry
+
+未來建議建立：
+
+frontend/src/games/gameRegistry.js
+
+內容概念：
+
+export const GAME_REGISTRY = {
+  GOLDEN_EGG: {
+    label: '砸金蛋',
+    frontPath: 'golden-egg',
+    boardComponent: 'GoldenEggPlayBoard',
+    requireSerialDefault: true
+  },
+  GRID: {
+    label: '精緻九宮格',
+    frontPath: 'premium-grid',
+    boardComponent: 'PremiumGridPlayBoard',
+    requireSerialDefault: false
+  },
+  WHEEL: {
+    label: '幸運輪盤',
+    frontPath: 'wheel',
+    boardComponent: 'LuckyWheelPlayBoard',
+    requireSerialDefault: false
+  },
+  SCRATCH_CARD: {
+    label: '刮刮卡',
+    frontPath: 'scratch-card',
+    boardComponent: 'ScratchCardPlayBoard',
+    requireSerialDefault: false
+  }
+}
+
+---
+
+## 十一、接下來建議批次
+
+第 57 批：
+以砸金蛋為基礎的多遊戲共用核心規劃版
+
+第 58 批：
+建立 gameRegistry.js 遊戲註冊表
+
+第 59 批：
+建立 useGameActivityCore.js 共用活動核心 composable
+
+第 60 批：
+建立 useGameDrawEngine.js 共用抽獎流程 composable
+
+第 61 批：
+九宮格抽獎流程改接共用 useGameDrawEngine
+
+第 62 批：
+建立 GameChanceCard.vue 共用抽獎機會元件
+
+第 63 批：
+九宮格接入 GameChanceCard.vue
+
+第 64 批：
+建立 GameDrawLogs.vue 共用紀錄元件
+
+第 65 批：
+九宮格接入 GameDrawLogs.vue
+
+第 66 批：
+評估金蛋前台接入 GameResultModal.vue
+
+第 67 批：
+建立 GameShell.vue 共用活動頁框架
+
+第 68 批：
+九宮格接入 GameShell.vue
+
+第 69 批：
+金蛋前台逐步接入 GameShell.vue
+
+---
+
+## 十二、這批結論
+
+可以用砸金蛋當基礎，而且很適合。
+
+但正確做法不是把所有遊戲變成金蛋，
+而是把金蛋成熟的活動流程抽成共用核心。
+
+最後平台會變成：
+
+共用平台核心：
+- 商家
+- 活動
+- 獎品
+- 抽獎
+- 紀錄
+- 報表
+- 分享
+- 領獎
+
+遊戲玩法：
+- 金蛋
+- 九宮格
+- 輪盤
+- 刮刮卡
+- 翻牌
+
+這樣未來新增遊戲就會快很多，也不會一直重複做一整套系統。

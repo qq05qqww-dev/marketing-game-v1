@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 3 批：Campaign / GameConfig Controller tenantId 資料隔離版
+// 第 21101～21500 批：Campaign Controller 九宮格設定儲存結果回傳版
 //
 // 覆蓋位置：
 // backend/src/controllers/campaign.controller.js
@@ -92,9 +92,9 @@ export const updateCampaignHandler = async (req, res) => {
 
 export const deleteCampaignHandler = async (req, res) => {
   try {
-    await deleteCampaign(req.params.id, getRequestUser(req))
+    const result = await deleteCampaign(req.params.id, getRequestUser(req))
 
-    return successResponse(res, null, '刪除活動成功')
+    return successResponse(res, result, '刪除活動成功')
   } catch (error) {
     console.error('刪除活動失敗:', error)
     return handleTenantAwareError(res, error, '刪除活動失敗')

@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 6 批：Draw Engine Service tenantId 寫入版
+// 第 28701～29100 批：Draw Engine GameConfig settings 獎項 fallback 版
 //
 // 建議放置位置：
 // backend/src/services/drawEngine.service.js
@@ -11,6 +11,7 @@
 // 4. 中獎獎項扣庫存加入 updateMany 條件保護，降低同時抽獎超賣風險
 // 5. 庫存不足時不建立中獎紀錄
 // 6. 錯誤訊息統一中文
+// 7. Campaign.prizes 為空時，支援從 GameConfig.settings.gridItems / prizes / rewards 產生虛擬獎項抽獎。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -48,6 +49,160 @@ const normalizeGameType = (value) => {
 
   return 'GOLDEN_EGG'
 }
+
+
+const normalizeGameConfigPrizeType = (value) => {
+  const rawType = String(value || '').toUpperCase()
+
+  if (['LOSE', 'THANKS', 'NO_PRIZE', 'NONE', 'BUTTON'].includes(rawType)) {
+    return 'LOSE'
+  }
+
+  return 'WIN'
+}
+
+const normalizeGameConfigPrizeTitle = (item = {}, index = 0) => {
+  return (
+    item.title ||
+    item.name ||
+    item.prizeName ||
+    item.shortName ||
+    item.label ||
+    `獎項 ${index + 1}`
+  )
+}
+
+const normalizeGameConfigPrizeStock = (item = {}) => {
+  const stock = Number(
+    item.remainStock ??
+      item.stock ??
+      item.quantity ??
+      item.inventory ??
+      item.stockTotal ??
+      item.total ??
+      0
+  )
+
+  if (normalizeGameConfigPrizeType(item.type || item.rewardType) === 'LOSE') {
+    return 999999999
+  }
+
+  return Math.max(0, stock)
+}
+
+const normalizeGameConfigPrizeProbability = (item = {}) => {
+  return Number(item.probability ?? item.weight ?? item.chance ?? item.rate ?? 1)
+}
+
+const isGameConfigItemEnabled = (item = {}) => {
+  if (!item) return false
+  if (item.enabled === false) return false
+  if (item.isEnabled === false) return false
+  if (String(item.status || '').toUpperCase() === 'DISABLED') return false
+  if (String(item.rewardType || '').toUpperCase() === 'BUTTON') return false
+  if (String(item.type || '').toUpperCase() === 'BUTTON') return false
+
+  return true
+}
+
+const extractGameConfigPrizeItems = (settings = {}) => {
+  const candidates = [
+    settings.gridItems,
+    settings.prizes,
+    settings.rewards,
+    settings.rewardItems,
+    settings.items,
+    settings.wheelItems,
+    settings.eggItems
+  ]
+
+  for (const value of candidates) {
+    if (Array.isArray(value) && value.length) {
+      return value
+    }
+  }
+
+  return []
+}
+
+const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
+  const title = normalizeGameConfigPrizeTitle(item, index)
+  const prizeType = normalizeGameConfigPrizeType(item.type || item.rewardType)
+  const remainStock = normalizeGameConfigPrizeStock(item)
+  const probability = normalizeGameConfigPrizeProbability(item)
+
+  return {
+    id: `game-config-${campaign.id || 'campaign'}-${item.position || index + 1}`,
+    isVirtualGameConfigPrize: true,
+    campaignId: campaign.id,
+    tenantId: campaign.tenantId || null,
+    title,
+    shortName: item.shortName || item.label || title,
+    description: item.description || item.note || '',
+    imageUrl: item.imageUrl || item.image || item.prizeImageUrl || '',
+    icon: item.icon || item.emoji || '',
+    type: prizeType,
+    status: 'ACTIVE',
+    probability,
+    remainStock,
+    stockTotal: remainStock,
+    stockUsed: 0,
+    sortOrder: Number(item.sortOrder ?? item.position ?? index + 1),
+    source: 'GAME_CONFIG_SETTINGS',
+    sourcePayload: item
+  }
+}
+
+const buildGameConfigPrizePool = (campaign = {}) => {
+  const settings = campaign.gameConfig?.settings || {}
+  const items = extractGameConfigPrizeItems(settings)
+
+  return items
+    .filter(isGameConfigItemEnabled)
+    .map((item, index) => normalizeGameConfigPrize(item, index, campaign))
+    .filter((prize) => {
+      if (prize.type === 'LOSE') return true
+      return Number(prize.remainStock || 0) > 0 && Number(prize.probability || 0) > 0
+    })
+}
+
+const getCampaignPrizePool = (campaign = {}) => {
+  if (Array.isArray(campaign.prizes) && campaign.prizes.length) {
+    return campaign.prizes
+  }
+
+  return buildGameConfigPrizePool(campaign)
+}
+
+const toResponsePrize = (prize = null) => {
+  if (!prize) return null
+
+  return {
+    id: prize.id,
+    title: prize.title,
+    shortName: prize.shortName || null,
+    description: prize.description || null,
+    imageUrl: prize.imageUrl || null,
+    icon: prize.icon || null,
+    type: prize.type,
+    status: prize.status,
+    probability: prize.probability,
+    remainStock: prize.remainStock,
+    stockTotal: prize.stockTotal,
+    stockUsed: prize.stockUsed,
+    sortOrder: prize.sortOrder,
+    isVirtualGameConfigPrize: Boolean(prize.isVirtualGameConfigPrize),
+    source: prize.source || 'PRIZE_TABLE'
+  }
+}
+
+const getPrizeIdForWrite = (prize = null) => {
+  if (!prize) return null
+  if (prize.isVirtualGameConfigPrize) return null
+
+  return normalizeId(prize.id)
+}
+
 
 const normalizeTrafficSource = (value = '') => {
   const source = String(value || '').trim().toLowerCase()
@@ -165,6 +320,10 @@ const isPrizeAvailable = (prize) => {
   if (prize.status !== 'ACTIVE') return false
   if (prize.type === 'LOSE') return true
 
+  if (prize.isVirtualGameConfigPrize) {
+    return Number(prize.remainStock || 0) > 0
+  }
+
   return getPrizeAvailableStock(prize) > 0
 }
 
@@ -281,7 +440,7 @@ const validateSerialCodeForDraw = async (tx, campaignId, payload = {}) => {
 }
 
 const reserveWinningPrizeStock = async (tx, prize) => {
-  if (!prize || prize.type === 'LOSE') {
+  if (!prize || prize.type === 'LOSE' || prize.isVirtualGameConfigPrize) {
     return prize
   }
 
@@ -408,7 +567,8 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
               id: 'asc'
             }
           ]
-        }
+        },
+        gameConfig: true
       }
     })
 
@@ -419,11 +579,15 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
     const serialUsageInfo = serialValidation?.usageInfo || null
     const trafficPayload = buildTrafficPayload(payload)
 
-    const prize = pickPrizeByProbability(campaign.prizes)
+    const prizePool = getCampaignPrizePool(campaign)
+    const prize = pickPrizeByProbability(prizePool)
 
     if (!prize) {
       throw createHttpError('目前沒有可抽的獎項', 409)
     }
+
+    const prizeIdForWrite = getPrizeIdForWrite(prize)
+    const prizeForResponse = toResponsePrize(prize)
 
     const isWin = prize.type !== 'LOSE'
 
@@ -440,7 +604,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         userId: payload.userId ? normalizeId(payload.userId) : null,
         campaignId: normalizedCampaignId,
         tenantId: campaign.tenantId || null,
-        prizeId: prize.id,
+        prizeId: prizeIdForWrite,
         isWin,
         gameType: normalizeGameType(payload.gameType || campaign.gameType),
         status: 'SUCCESS',
@@ -462,7 +626,9 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
           frontUrl: trafficPayload.frontUrl,
           referrer: trafficPayload.referrer,
           selectedPrizeId: prize.id,
-          selectedPrizeTitle: prize.title
+          selectedPrizeTitle: prize.title,
+          selectedPrizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
+          virtualPrize: prize.isVirtualGameConfigPrize ? prizeForResponse : null
         }
       },
       include: {
@@ -479,7 +645,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
           campaignId: normalizedCampaignId,
           tenantId: campaign.tenantId || null,
           playRecordId: playRecord.id,
-          prizeId: prize.id,
+          prizeId: prizeIdForWrite,
           status: 'PENDING',
           winnerName: payload.winnerName || payload.playerName || null,
           winnerPhone: payload.winnerPhone || payload.playerPhone || null,
@@ -499,6 +665,16 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       serialRemainingChance
     } = await updateSerialCodeAfterDraw(tx, serialCode, serialUsageInfo, payload)
 
+    const serialResponse = updatedSerialCode
+      ? {
+          ...updatedSerialCode,
+          rewardChance: serialUsageInfo?.rewardChance || updatedSerialCode.rewardChance || 0,
+          usedCount: serialUsedCountAfterThisDraw,
+          remainingChance: serialRemainingChance,
+          remainingSerialChances: serialRemainingChance
+        }
+      : null
+
     return {
       campaign: {
         id: campaign.id,
@@ -508,8 +684,10 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       },
       playRecord,
       rewardRecord,
-      serialCode: updatedSerialCode,
-      prize: updatedPrize,
+      serialCode: serialResponse,
+      remainingChance: serialRemainingChance,
+      remainingSerialChances: serialRemainingChance,
+      prize: updatedPrize?.isVirtualGameConfigPrize ? prizeForResponse : updatedPrize,
       tracking: {
         source: trafficPayload.source,
         tenantSlug: trafficPayload.tenantSlug,
@@ -520,9 +698,12 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         prizeId: prize.id,
         prizeTitle: prize.title,
         prizeType: prize.type,
+        prizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
+        virtualPrize: prize.isVirtualGameConfigPrize ? prizeForResponse : null,
         serialCodeUsed: !!serialCode,
         rewardChance: serialUsageInfo?.rewardChance || serialCode?.rewardChance || 0,
         serialUsedCount: serialUsedCountAfterThisDraw,
+        remainingChance: serialRemainingChance,
         remainingSerialChances: serialRemainingChance
       }
     }
@@ -550,7 +731,8 @@ export const previewDrawPool = async (campaignId) => {
             id: 'asc'
           }
         ]
-      }
+      },
+      gameConfig: true
     }
   })
 
@@ -558,7 +740,8 @@ export const previewDrawPool = async (campaignId) => {
     throw createHttpError('找不到活動', 404)
   }
 
-  const totalProbability = campaign.prizes
+  const prizePool = getCampaignPrizePool(campaign)
+  const totalProbability = prizePool
     .filter((prize) => prize.status === 'ACTIVE')
     .reduce((sum, prize) => sum + Number(prize.probability || 0), 0)
 
@@ -574,7 +757,8 @@ export const previewDrawPool = async (campaignId) => {
       availability: isCampaignAvailable(campaign)
     },
     totalProbability,
-    prizes: campaign.prizes.map((prize) => ({
+    prizeSource: Array.isArray(campaign.prizes) && campaign.prizes.length ? 'PRIZE_TABLE' : 'GAME_CONFIG_SETTINGS',
+    prizes: prizePool.map((prize) => ({
       id: prize.id,
       title: prize.title,
       type: prize.type,
@@ -583,8 +767,10 @@ export const previewDrawPool = async (campaignId) => {
       remainStock: prize.remainStock,
       stockTotal: prize.stockTotal,
       stockUsed: prize.stockUsed,
-      availableStock: getPrizeAvailableStock(prize),
-      isAvailable: isPrizeAvailable(prize)
+      availableStock: prize.isVirtualGameConfigPrize ? Number(prize.remainStock || 0) : getPrizeAvailableStock(prize),
+      isAvailable: isPrizeAvailable(prize),
+      isVirtualGameConfigPrize: Boolean(prize.isVirtualGameConfigPrize),
+      source: prize.source || 'PRIZE_TABLE'
     }))
   }
 }
@@ -670,8 +856,11 @@ export const verifySerialCodeForDraw = async (campaignId, code) => {
       rewardChance: usageInfo.rewardChance,
       usedCount: usageInfo.usedCount,
       remainingChance: usageInfo.remainingChance,
+      remainingSerialChances: usageInfo.remainingChance,
       batchCode: serialCode.batchCode,
       expireAt: serialCode.expireAt
-    }
+    },
+    remainingChance: usageInfo.remainingChance,
+    remainingSerialChances: usageInfo.remainingChance
   }
 }

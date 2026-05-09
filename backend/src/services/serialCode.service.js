@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 19 批：SerialCode 序號活動內唯一版
+// 第 29101～29500 批：SerialCode 手動指定序號 API 對齊版
 //
 // 建議放置位置：
 // backend/src/services/serialCode.service.js
@@ -27,6 +27,22 @@ const normalizeCode = (value) => {
     .replace(/[^A-Z0-9-]/g, '')
     .replace(/-{2,}/g, '-')
     .replace(/^-|-$/g, '')
+}
+
+const getPayloadSerialCode = (payload = {}) => {
+  return normalizeCode(
+    payload.code ||
+      payload.serialCode ||
+      payload.serial ||
+      payload.value ||
+      payload.manualCode ||
+      payload.couponCode ||
+      ''
+  )
+}
+
+const getPayloadExpireAt = (payload = {}) => {
+  return payload.expireAt || payload.expiresAt || payload.expiredAt || payload.expirationAt || null
 }
 
 const normalizeStatus = (value) => {
@@ -357,10 +373,12 @@ export const getSerialCodeStats = async (campaignId, currentUser = null) => {
 
 export const createSerialCodeForCampaign = async (campaignId, payload = {}, currentUser = null) => {
   const campaign = await assertCampaignAccess(campaignId, currentUser)
-  const code = normalizeCode(payload.code)
+  const code = getPayloadSerialCode(payload)
 
-  if (!code || code.length < 6) {
-    const error = new Error('序號不能空白，且至少需要 6 個字元')
+  // 第 29101～29500 批：
+  // 前端手動指定序號允許 4 碼以上，例如 7777、VIP1、A001。
+  if (!code || code.length < 4) {
+    const error = new Error('序號不能空白，且至少需要 4 個字元')
     error.status = 400
     throw error
   }
@@ -388,7 +406,7 @@ export const createSerialCodeForCampaign = async (campaignId, payload = {}, curr
       distributedAt: parseDateOrNull(payload.distributedAt),
       distributedTo: payload.distributedTo || null,
       distributedChannel: payload.distributedChannel || null,
-      expireAt: parseDateOrNull(payload.expireAt)
+      expireAt: parseDateOrNull(getPayloadExpireAt(payload))
     }
   })
 }

@@ -17,6 +17,87 @@ export const getCampaignDetailApi = (id) => {
 }
 
 
+const GAME_CONFIG_GET_CANDIDATE_URLS = (id) => [
+  `/campaigns/${id}/game-config`,
+  `/admin/campaigns/${id}/game-config`,
+  `/campaigns/${id}`,
+  `/admin/campaigns/${id}`
+]
+
+const GAME_CONFIG_SAVE_CANDIDATE_URLS = (id) => [
+  `/campaigns/${id}/game-config`,
+  `/admin/campaigns/${id}/game-config`,
+  `/campaigns/${id}`,
+  `/admin/campaigns/${id}`
+]
+
+const isRouteNotFoundError = (error) => {
+  return [404, 405].includes(Number(error?.response?.status))
+}
+
+const requestWithFallback = async (candidates = [], requestFactory) => {
+  let lastError = null
+
+  for (const url of candidates) {
+    try {
+      return await requestFactory(url)
+    } catch (error) {
+      lastError = error
+
+      if (!isRouteNotFoundError(error)) {
+        throw error
+      }
+    }
+  }
+
+  if (lastError) {
+    lastError.__fallbackUrls = candidates
+  }
+
+  throw lastError
+}
+
+export const getCampaignGameConfigApi = (id) => {
+  return requestWithFallback(GAME_CONFIG_GET_CANDIDATE_URLS(id), async (url) => {
+    return http.get(url)
+  })
+}
+
+export const saveCampaignGameConfigApi = (id, settings = {}) => {
+  const body = {
+    settings,
+    gameConfig: {
+      settings
+    },
+    source: 'AdminPremiumGridSettingsView',
+    savedAt: new Date().toISOString()
+  }
+
+  return requestWithFallback(GAME_CONFIG_SAVE_CANDIDATE_URLS(id), async (url) => {
+    if (url.includes('/game-config')) {
+      return http.put(url, body)
+    }
+
+    return http.patch(url, {
+      settings,
+      gameConfig: {
+        settings
+      },
+      title:
+        settings?.basicText?.pageTitle ||
+        settings?.basicText?.headline ||
+        undefined
+    })
+  })
+}
+
+export const upsertCampaignGameConfigApi = saveCampaignGameConfigApi
+
+export const reloadCampaignGameConfigApi = (id) => {
+  return getCampaignGameConfigApi(id)
+}
+
+
 
 export const getTenantPremiumGridCampaignApi = (tenantSlug) => {
   return http.get('/campaigns', {
@@ -61,15 +142,15 @@ export const getTenantCampaignsApi = (tenantSlug, params = {}) => {
 }
 
 export const createCampaignApi = (data) => {
-  return http.post('/admin/campaigns', data)
+  return http.post('/campaigns', data)
 }
 
 export const updateCampaignApi = (id, data) => {
-  return http.put(`/admin/campaigns/${id}`, data)
+  return http.patch(`/campaigns/${id}`, data)
 }
 
 export const deleteCampaignApi = (id) => {
-  return http.delete(`/admin/campaigns/${id}`)
+  return http.delete(`/campaigns/${id}`)
 }
 
 // ===== Prize =====

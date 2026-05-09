@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 3 批：Campaign / GameConfig Routes tenantId 資料隔離版
+// 第 21101～21500 批：九宮格設定儲存正式寫入資料庫版
 //
 // 覆蓋位置：
 // backend/src/routes/campaign.routes.js
@@ -52,6 +52,16 @@ const optionalTenantAuth = (req, res, next) => {
   return next()
 }
 
+const hasTenantBinding = (user = null) => {
+  return Boolean(
+    user?.tenantId ||
+    user?.tenant?.id ||
+    user?.tenantSlug ||
+    user?.merchantSlug ||
+    user?.tenant?.slug
+  )
+}
+
 const requireRoleSet = (allowedRoles) => {
   return (req, res, next) => {
     const role = String(req.user?.role || '').toUpperCase()
@@ -63,10 +73,10 @@ const requireRoleSet = (allowedRoles) => {
       })
     }
 
-    if (role.startsWith('MERCHANT_') && !req.user?.tenantId) {
+    if (role.startsWith('MERCHANT_') && !hasTenantBinding(req.user)) {
       return res.status(403).json({
         success: false,
-        message: '此商家帳號尚未綁定 tenantId'
+        message: '此商家帳號尚未綁定 tenantId / tenantSlug'
       })
     }
 

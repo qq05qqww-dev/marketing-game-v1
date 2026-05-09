@@ -1,0 +1,39 @@
+# Multi Game Platform V2.3 第 120 批
+# PlayBoard 正式替換前穩定備份檔版
+
+## 目的
+
+這批不改任何功能。
+
+這批只是把目前已確認正常的第 119 批 PremiumGridLotteryView.vue 另存成正式替換前備份檔。
+
+## 備份檔
+
+PremiumGridLotteryView_v23_batch120_before_playboard_replace_backup_copy.txt
+
+## 目前穩定內容
+
+目前保留：
+
+- 正式九宮格網址正常
+- ?playboard=1 並排測試模式正常
+- ?playboard=1&playboardOnly=1 Only 測試模式正常
+- PlayBoard 測試區塊可呼叫正式 startDraw()
+- 狀態檢查卡正常
+- 流程對照說明正常
+- 正式替換前檢查清單正常
+- 正式替換前備份提醒正常
+- 正式原本九宮格玩法區仍保留
+
+## 後續使用方式
+
+如果後續正式替換 PlayBoard 出現問題，可以把這份備份檔內容覆蓋回：
+
+frontend/src/views/games/PremiumGridLotteryView.vue
+
+即可回到第 119 批確認正常狀態。
+
+## 注意
+
+這份備份不是新功能。
+這份備份是正式替換前的安全回復點。

@@ -1,0 +1,393 @@
+Multi Game Platform V2.3
+九宮格正式部署上線指令版
+第 2701～2750 批：
+九宮格正式部署上線指令、Git / Render 檢查與正式網址驗收版
+
+目前穩定基準：
+V2.3 第 2351～2700 批
+九宮格正式版實際操作驗收、後台營運銜接與長期維護完整整理版
+
+最新可延續檔案：
+PremiumGridLotteryView_v23_batch2351_2700_grid_formal_ops_backend_handoff_complete_copy.txt
+
+目前保護：
+- 正式九宮格玩家頁維持 CommonGamePlayBoard 共用模組
+- ?legacyGrid=1 最高優先緊急回退
+- ?commonGrid=1 測試區保留
+- verify / play guard 不放寬
+- 不改 router
+- 不改 DB schema
+- 不改抽獎核心
+
+============================================================
+一、正式上線前本機檢查
+============================================================
+
+1. 開啟 PowerShell
+
+2. 進入專案根目錄：
+
+cd C:\Users\User\Desktop\marketing-game-v1
+
+3. 檢查目前檔案狀態：
+
+git status
+
+4. 確認九宮格主檔已覆蓋：
+
+dir frontend\src\views\games\PremiumGridLotteryView.vue
+
+5. 確認前端套件是否存在：
+
+dir frontend\node_modules
+
+如果沒有 node_modules，進入 frontend 安裝：
+
+cd C:\Users\User\Desktop\marketing-game-v1\frontend
+npm install
+
+============================================================
+二、前端本機啟動檢查
+============================================================
+
+1. 進入 frontend：
+
+cd C:\Users\User\Desktop\marketing-game-v1\frontend
+
+2. 啟動前端：
+
+npm run dev
+
+3. 開啟瀏覽器測試三條路線：
+
+正式九宮格玩家頁：
+http://localhost:5173/play/a-shop/premium-grid
+
+commonGrid 測試區：
+http://localhost:5173/play/a-shop/premium-grid?commonGrid=1
+
+legacyGrid 緊急回退：
+http://localhost:5173/play/a-shop/premium-grid?legacyGrid=1
+
+驗收標準：
+- 正式頁可以正常開啟
+- commonGrid 測試區可以正常開啟
+- legacyGrid 回退可以正常開啟
+- Console 不應出現 ReferenceError
+- Console 不應出現 render function crash
+- 畫面不能白屏
+- 按鈕與提示卡片不能跑版
+
+============================================================
+三、後端本機健康檢查
+============================================================
+
+另開一個 PowerShell 視窗。
+
+1. 進入 backend：
+
+cd C:\Users\User\Desktop\marketing-game-v1\backend
+
+2. 安裝套件，如果尚未安裝：
+
+npm install
+
+3. 啟動後端：
+
+npm run dev
+
+4. 檢查後端是否正常啟動：
+通常會看到類似：
+- Server running on port 3000
+- Database connection is healthy
+- API ready
+
+5. 使用 PowerShell 測試 API health，如果你的後端有 health endpoint：
+
+Invoke-RestMethod -Uri "http://localhost:3000/api/health" -Method GET
+
+如果沒有 health endpoint，可測試已存在的 campaigns 或 auth 相關 endpoint。
+
+============================================================
+四、前端 build 檢查
+============================================================
+
+1. 回到 frontend：
+
+cd C:\Users\User\Desktop\marketing-game-v1\frontend
+
+2. 執行正式 build：
+
+npm run build
+
+3. 驗收標準：
+- build 必須成功
+- 不可出現 Failed to resolve import
+- 不可出現 Vue compiler error
+- 不可出現 ReferenceError 相關 build 阻斷
+- dist 資料夾應正常產生
+
+檢查 dist：
+
+dir dist
+
+============================================================
+五、Git commit / push 指令
+============================================================
+
+1. 回到專案根目錄：
+
+cd C:\Users\User\Desktop\marketing-game-v1
+
+2. 檢查變更：
+
+git status
+
+3. 加入全部變更：
+
+git add .
+
+4. 建立 commit：
+
+git commit -m "V2.3 premium grid formal deployment handoff"
+
+5. 推送到 GitHub：
+
+git push
+
+6. 如果 push 被拒絕，先確認遠端狀態：
+
+git remote -v
+
+7. 如果需要先拉取遠端更新：
+
+git pull --rebase
+
+再重新推送：
+
+git push
+
+============================================================
+六、Render 部署檢查
+============================================================
+
+到 Render 後台檢查：
+
+1. Backend service 是否有自動部署
+2. Deploy logs 是否成功
+3. Environment variables 是否正確
+4. DATABASE_URL 是否存在
+5. NODE_ENV 是否正確
+6. CORS 是否允許前端正式網址
+7. Build command 是否正確
+8. Start command 是否正確
+
+Render Backend 建議檢查項：
+
+Build Command：
+npm install && npx prisma generate && npx prisma migrate deploy
+
+Start Command：
+npm start
+
+或依你目前 backend package.json 設定為準。
+
+如果 Render log 出現 Prisma 錯誤：
+- 檢查 DATABASE_URL
+- 檢查 prisma/schema.prisma
+- 檢查 Prisma 版本
+- 檢查是否需要 npx prisma generate
+- 檢查是否要 migrate deploy
+
+============================================================
+七、正式網址驗收流程
+============================================================
+
+正式部署後，測試正式網址三條路線。
+
+請把正式網域替換成你的實際網址：
+
+正式九宮格玩家頁：
+https://你的正式前端網址/play/a-shop/premium-grid
+
+commonGrid 測試區：
+https://你的正式前端網址/play/a-shop/premium-grid?commonGrid=1
+
+legacyGrid 緊急回退：
+https://你的正式前端網址/play/a-shop/premium-grid?legacyGrid=1
+
+驗收標準：
+1. 正式頁可開啟。
+2. commonGrid 測試區可開啟。
+3. legacyGrid 回退可開啟。
+4. 手機版可正常顯示。
+5. 平板版可正常顯示。
+6. 電腦版可正常顯示。
+7. Console 無 ReferenceError。
+8. Console 無 render function crash。
+9. verify / play guard 不應被錯誤放寬。
+10. 玩家結果與兌獎提示應正常顯示。
+
+============================================================
+八、九宮格正式操作驗收
+============================================================
+
+正式頁：
+https://你的正式前端網址/play/a-shop/premium-grid
+
+驗收項目：
+- 活動標題正常
+- 品牌資訊正常
+- 九宮格共用模組顯示正常
+- 玩家提示正常
+- 序號輸入區正常
+- verify 狀態正常
+- play 狀態正常
+- 中獎結果正常
+- 兌獎提示正常
+- 玩家紀錄提示正常
+- 錯誤訊息友善
+- 手機版不跑版
+
+commonGrid 測試區：
+https://你的正式前端網址/play/a-shop/premium-grid?commonGrid=1
+
+驗收項目：
+- 測試區可正常開啟
+- 測試資訊不影響正式頁
+- guard 狀態顯示正常
+- 結果回填顯示正常
+
+legacyGrid 回退：
+https://你的正式前端網址/play/a-shop/premium-grid?legacyGrid=1
+
+驗收項目：
+- 原九宮格 fallback 可正常顯示
+- 若正式共用模組出問題，可以立刻用 legacyGrid 給商家臨時使用
+
+============================================================
+九、rollback 操作流程
+============================================================
+
+如果正式頁出現以下問題：
+- 白屏
+- ReferenceError
+- Vue render function crash
+- verify 大量失敗
+- play 大量失敗
+- 中獎結果不回填
+- 玩家無法操作
+- 商家大量回報異常
+
+第一步：
+請先引導使用 legacyGrid：
+
+https://你的正式前端網址/play/a-shop/premium-grid?legacyGrid=1
+
+第二步：
+確認是否只有正式頁共用模組異常：
+
+測試：
+https://你的正式前端網址/play/a-shop/premium-grid
+https://你的正式前端網址/play/a-shop/premium-grid?commonGrid=1
+https://你的正式前端網址/play/a-shop/premium-grid?legacyGrid=1
+
+第三步：
+如果要回退程式碼：
+
+cd C:\Users\User\Desktop\marketing-game-v1
+git log --oneline
+
+找到上一個穩定 commit 後：
+
+git revert <commit-id>
+
+或如果你清楚要回到前一個版本：
+
+git reset --hard <commit-id>
+
+注意：
+git reset --hard 會丟棄目前變更，請謹慎使用。
+
+推送回退版本：
+
+git push
+
+如果遠端需要強制覆蓋才可用：
+
+git push --force
+
+注意：
+正式專案不建議隨便 force push，除非你確定這是你自己的專案且知道後果。
+
+============================================================
+十、上線後巡檢節奏
+============================================================
+
+上線當日：
+- 每 30～60 分鐘檢查正式頁
+- 檢查 verify 錯誤率
+- 檢查 play 錯誤率
+- 檢查商家回報
+- 檢查玩家是否能看到結果
+- 檢查 legacyGrid 是否仍可開啟
+
+上線後 1～3 天：
+- 每天檢查正式頁
+- 每天檢查報表
+- 每天檢查兌獎紀錄
+- 每天檢查錯誤訊息
+- 每天確認客服是否有大量問題
+
+每週：
+- 檢查活動結束狀態
+- 檢查序號狀態
+- 檢查遊玩紀錄
+- 檢查兌獎紀錄
+- 檢查 legacyGrid 回退仍可用
+- 檢查 commonGrid 測試區仍可用
+
+============================================================
+十一、建議 commit message
+============================================================
+
+正式部署前：
+
+git commit -m "V2.3 premium grid formal deployment ready"
+
+營運交付版：
+
+git commit -m "V2.3 premium grid operations handoff"
+
+rollback 修正版：
+
+git commit -m "fix: premium grid rollback guard"
+
+正式上線後觀測版：
+
+git commit -m "V2.3 premium grid post-live observability"
+
+============================================================
+十二、第 2701～2750 批結論
+============================================================
+
+本批完成：
+- 九宮格正式部署上線指令
+- PowerShell 操作流程
+- 前端 build 檢查
+- 後端健康檢查
+- Git commit / push
+- Render 部署檢查
+- 正式網址三路線驗收
+- rollback 操作流程
+- 上線後巡檢節奏
+
+本批不修改：
+- router
+- DB schema
+- 抽獎核心
+- verify / play guard 行為
+
+目前建議穩定點：
+V2.3 第 2701～2750 批：
+九宮格正式部署上線指令、Git / Render 檢查與正式網址驗收版

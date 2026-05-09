@@ -1,0 +1,56 @@
+# Multi Game Platform V2.3 第 130 批
+# 準正式替換試驗階段穩定備份版
+
+## 目的
+
+這批不改任何功能，也不改任何程式內容。
+
+這批只是把目前已確認正常的第 129 批 PremiumGridLotteryView.vue 另存成：
+
+PremiumGridLotteryView_v23_batch130_formal_replace_trial_stable_backup_copy.txt
+
+這份是「準正式替換試驗階段」的安全回復點。
+
+---
+
+## 目前已確認正常內容
+
+目前保留：
+
+- 正式九宮格網址正常
+- ?playboard=1 並排測試模式正常
+- ?playboard=1&playboardOnly=1 Only 測試模式正常
+- ?playboard=1&playboardReplace=1 替換試驗模式正常
+- ?playboard=1&playboardReplace=1&formalReplace=1 準正式替換試驗模式正常
+- PremiumGridPlayBoard 可呼叫正式 startDraw()
+- 正式結果彈窗正常
+- 正式抽獎紀錄正常
+- 剩餘次數同步正常
+- 狀態檢查卡正常
+- 流程對照說明正常
+- 連續測試指引正常
+- 完成度摘要正常
+- 最終確認卡正常
+- 準正式替換試驗安全確認面板正常
+- 準正式替換試驗操作紀錄提示正常
+- 正式原本九宮格玩法區仍可保留與恢復
+
+---
+
+## 回復方式
+
+如果後續正式替換 PlayBoard 出現問題，可以把這份備份檔內容覆蓋回：
+
+frontend/src/views/games/PremiumGridLotteryView.vue
+
+即可回到第 129 批確認正常狀態。
+
+---
+
+## 下一步建議
+
+下一步可以開始：
+
+V2.3 第 131 批：準正式替換試驗完成條件鎖定版
+
+建議仍然不要直接刪除原本正式九宮格玩法區，而是先把「可以進入正式替換」的條件顯示得更清楚。

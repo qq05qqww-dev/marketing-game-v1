@@ -1,0 +1,60 @@
+# Multi Game Platform V2.3 第 164 批
+# 正式預設切新版前最後備份版
+
+## 目的
+
+這批不改任何功能，也不改任何程式內容。
+
+這批只是把目前已確認正常的第 163 批 PremiumGridLotteryView.vue 另存成：
+
+PremiumGridLotteryView_v23_batch164_before_formal_default_new_board_backup_copy.txt
+
+這份是「正式網址預設切成新版 PremiumGridPlayBoard 前」的最後安全回復點。
+
+---
+
+## 目前已確認正常內容
+
+目前保留：
+
+- 正式九宮格網址正常
+- ?defaultNewBoard=1 可讓新版 PremiumGridPlayBoard 成為主要玩法區
+- ?defaultNewBoard=1&legacyGrid=1 可強制回退舊版九宮格
+- legacyGrid=1 舊版九宮格回退正常
+- usePremiumGridPlayBoardDefaultTestParam computed 正常
+- usePremiumGridPlayBoardAsDefault computed 正常
+- useLegacyPremiumGridBoard computed 正常
+- usePremiumGridPlayBoardAsMainBoard computed 正常
+- 新版 PremiumGridPlayBoard 可作為主要玩法區
+- 舊版九宮格可透過 legacyGrid=1 強制回退
+- defaultNewBoard 主玩法區狀態檢查正常
+- defaultNewBoard 主玩法區連續測試指引正常
+- defaultNewBoard 主玩法區完成度摘要正常
+- defaultNewBoard 主玩法區最終確認卡正常
+- 正式預設切新版前最後人工確認正常
+- 新舊玩法區切換測試面板正常
+- 正式 startDraw 流程正常
+- 正式結果彈窗正常
+- 正式抽獎紀錄正常
+- 剩餘次數同步正常
+- 正式網址目前仍不受影響
+
+---
+
+## 回復方式
+
+如果後續真的把正式網址預設切成新版 PremiumGridPlayBoard 後出現問題，可以把這份備份檔內容覆蓋回：
+
+frontend/src/views/games/PremiumGridLotteryView.vue
+
+即可回到第 163 批確認正常狀態。
+
+---
+
+## 下一步建議
+
+下一步可以開始：
+
+V2.3 第 165 批：正式預設切新版試驗開關版
+
+建議仍然不要一次永久切換正式網址，而是先新增一個更明確的正式預設試驗開關與提示。

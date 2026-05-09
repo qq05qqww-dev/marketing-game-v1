@@ -15,6 +15,7 @@ import ClawMachineView from '../views/front/games/ClawMachineView.vue'
 import ReferralTaskView from '../views/front/games/ReferralTaskView.vue'
 import GridLotteryView from '../views/front/games/GridLotteryView.vue'
 import PremiumGridLotteryView from '../views/games/PremiumGridLotteryView.vue'
+import CommonGamePlayerTestView from '../views/front/games/CommonGamePlayerTestView.vue'
 import FlipCardView from '../views/front/games/FlipCardView.vue'
 import LoginView from '../views/front/LoginView.vue'
 import RegisterView from '../views/front/RegisterView.vue'
@@ -24,9 +25,11 @@ import NotFoundView from '../views/front/NotFoundView.vue'
 import MyGameHistoryView from '../views/front/MyGameHistoryView.vue'
 
 import AdminLayout from '../layouts/AdminLayout.vue'
+import AdminTenantsView from '../views/admin/AdminTenantsView.vue'
 import AdminCampaignsView from '../views/admin/AdminCampaignsView.vue'
 import AdminPrizesView from '../views/admin/AdminPrizesView.vue'
 import AdminGameSettingsView from '../views/admin/AdminGameSettingsView.vue'
+import AdminCommonGameEditorView from '../views/admin/AdminCommonGameEditorView.vue'
 import AdminGamePrizesView from '../views/admin/AdminGamePrizesView.vue'
 import AdminGameProbabilityView from '../views/admin/AdminGameProbabilityView.vue'
 import AdminGameEditView from '../views/admin/AdminGameEditView.vue'
@@ -37,7 +40,7 @@ import CampaignStyleEditorView from '../views/admin/CampaignStyleEditorView.vue'
 import AdminGamePreviewView from '../views/admin/AdminGamePreviewView.vue'
 import AdminSystemStatusView from '../views/admin/AdminSystemStatusView.vue'
 import AdminGoldenEggView from '../views/admin/AdminGoldenEggView.vue'
-import AdminTenantsView from '../views/admin/AdminTenantsView.vue'
+import AdminPremiumGridSettingsView from '../views/admin/AdminPremiumGridSettingsView.vue'
 
 import { usePageProgress } from '../composables/usePageProgress'
 
@@ -46,9 +49,6 @@ const {
   finishPageProgress,
   failPageProgress
 } = usePageProgress()
-
-const PLATFORM_ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN']
-const ADMIN_ROLES = ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
 
 const getStoredAuth = () => {
   const token = localStorage.getItem('token') || ''
@@ -77,36 +77,8 @@ const getStoredAuth = () => {
   }
 }
 
-const getUserRole = (user) => {
-  return String(user?.role || '').toUpperCase()
-}
-
 const isAdminUser = (user) => {
-  return ADMIN_ROLES.includes(getUserRole(user))
-}
-
-const isPlatformAdminUser = (user) => {
-  return PLATFORM_ADMIN_ROLES.includes(getUserRole(user))
-}
-
-const getDefaultAdminPath = (user) => {
-  return isPlatformAdminUser(user) ? '/admin/tenants' : '/admin/golden-egg'
-}
-
-const canAccessAdminRoute = (to, user) => {
-  if (!to.meta?.requiresAdmin) return true
-
-  const role = getUserRole(user)
-
-  if (!ADMIN_ROLES.includes(role)) return false
-
-  const allowedRoles = to.meta?.allowedRoles
-
-  if (!Array.isArray(allowedRoles) || allowedRoles.length === 0) {
-    return true
-  }
-
-  return allowedRoles.map((item) => String(item).toUpperCase()).includes(role)
+  return ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF'].includes(String(user?.role || '').toUpperCase())
 }
 
 const router = createRouter({
@@ -118,6 +90,17 @@ const router = createRouter({
       component: HomeView,
       meta: {
         title: '首頁'
+      }
+    },
+    {
+      path: '/dev/common-game-player-test',
+      name: 'common-game-player-test',
+      component: CommonGamePlayerTestView,
+      meta: {
+        title: '公用玩家頁測試入口',
+        devOnly: true,
+        batch: 'V2.3-214',
+        safeTestRoute: true
       }
     },
     {
@@ -242,18 +225,26 @@ const router = createRouter({
     },
     {
       path: '/play/:tenantSlug/premium-grid',
-      name: 'tenant-premium-grid-play',
+      name: 'tenant-premium-grid',
       component: PremiumGridLotteryView,
       meta: {
-        title: '商家精緻九宮格活動'
+        title: '精緻九宮格抽獎'
       }
     },
     {
       path: '/play/:tenantSlug/golden-egg',
-      name: 'tenant-golden-egg-play',
+      name: 'tenant-golden-egg',
       component: GoldenEggGameView,
       meta: {
-        title: '商家砸金蛋活動'
+        title: '砸金蛋抽獎'
+      }
+    },
+    {
+      path: '/play/:tenantSlug/wheel',
+      name: 'tenant-wheel',
+      component: WheelGameView,
+      meta: {
+        title: '幸運輪盤抽獎'
       }
     },
     {
@@ -318,10 +309,7 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: () => {
-            const { user } = getStoredAuth()
-            return getDefaultAdminPath(user)
-          }
+          redirect: '/admin/campaigns'
         },
         {
           path: 'tenants',
@@ -331,7 +319,8 @@ const router = createRouter({
             title: '商家管理',
             requiresAuth: true,
             requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            batch: 'V2.3-16301-16700',
+            safeAdminRoute: true
           }
         },
         {
@@ -341,52 +330,59 @@ const router = createRouter({
           meta: {
             title: '活動管理',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
-          path: 'game-settings',
+          path: 'common-game-editor',
+          name: 'admin-common-game-editor',
+          component: AdminCommonGameEditorView,
+          meta: {
+            title: '公用遊戲設定頁',
+            requiresAuth: true,
+            requiresAdmin: true,
+            batch: 'V2.3-218',
+            safeTestRoute: true
+          }
+        },
+        {
+          path: '/admin/game-settings',
           name: 'admin-game-settings',
           component: AdminGameSettingsView,
           meta: {
             title: '遊戲設定管理',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
-          path: 'game-settings/:gameId/prizes',
+          path: '/admin/game-settings/:gameId/prizes',
           name: 'admin-game-prizes',
           component: AdminGamePrizesView,
           meta: {
             title: '獎項設定',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
-          path: 'game-settings/:gameId/probability',
+          path: '/admin/game-settings/:gameId/probability',
           name: 'admin-game-probability',
           component: AdminGameProbabilityView,
           meta: {
             title: '機率設定',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
-          path: 'game-settings/:gameId/edit',
+          path: '/admin/game-settings/:gameId/edit',
           name: 'admin-game-edit',
           component: AdminGameEditView,
           meta: {
             title: '編輯遊戲設定',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
@@ -396,8 +392,7 @@ const router = createRouter({
           meta: {
             title: '獎項管理',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
@@ -407,8 +402,7 @@ const router = createRouter({
           meta: {
             title: '報表中心',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN']
+            requiresAdmin: true
           }
         },
         {
@@ -418,8 +412,7 @@ const router = createRouter({
           meta: {
             title: '會員管理',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
@@ -429,8 +422,7 @@ const router = createRouter({
           meta: {
             title: '發獎核銷',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
+            requiresAdmin: true
           }
         },
         {
@@ -440,8 +432,7 @@ const router = createRouter({
           meta: {
             title: '活動樣式編輯器',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
@@ -451,8 +442,7 @@ const router = createRouter({
           meta: {
             title: '遊戲預覽中心',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         },
         {
@@ -462,8 +452,19 @@ const router = createRouter({
           meta: {
             title: '砸金蛋後台管理',
             requiresAuth: true,
+            requiresAdmin: true
+          }
+        },
+        {
+          path: 'premium-grid-settings/:id?',
+          name: 'admin-premium-grid-settings',
+          component: AdminPremiumGridSettingsView,
+          meta: {
+            title: '九宮格設定中心',
+            requiresAuth: true,
             requiresAdmin: true,
-            allowedRoles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
+            batch: 'V2.3-3501-3900',
+            safeAdminRoute: true
           }
         },
         {
@@ -473,8 +474,7 @@ const router = createRouter({
           meta: {
             title: '系統狀態 / 版本資訊',
             requiresAuth: true,
-            requiresAdmin: true,
-            allowedRoles: PLATFORM_ADMIN_ROLES
+            requiresAdmin: true
           }
         }
       ]
@@ -529,12 +529,6 @@ router.beforeEach((to, from) => {
   if (to.meta.requiresAdmin && !isAdminUser(user)) {
     return {
       path: '/'
-    }
-  }
-
-  if (to.meta.requiresAdmin && !canAccessAdminRoute(to, user)) {
-    return {
-      path: getDefaultAdminPath(user)
     }
   }
 
