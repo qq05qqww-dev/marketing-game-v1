@@ -1,5 +1,11 @@
 <script setup>
 /**
+ * Multi Game Platform V2.3 第 35601～36000 批：九宮格轉圈圈數與音效精緻化版
+ *
+ * 本批只強化九宮格玩家頁抽獎演出：增加跑燈圈數、三段式減速、答答聲、成功音效與手機震動。
+ * 不修改後端、不修改資料庫、不影響正式序號驗證與 play API 扣次數。
+ *
+
  * Multi Game Platform V2.3 第 4701～5100 批：九宮格正式玩家頁接入共用 PlayBoard dry-run 版
  *
  * 第 16300-1 批：修正 http import 插入位置錯誤小批修正版。
@@ -130,6 +136,8 @@ const {
 
 const isDrawing = ref(false)
 const activeIndex = ref(-1)
+const drawPerformanceMessage = ref('')
+const drawPerformancePhase = ref('idle')
 const resultPrize = ref(null)
 const showResultModal = ref(false)
 const drawLogs = ref([])
@@ -2403,7 +2411,7 @@ const playerStatusMessage = computed(() => {
 const drawingStatusText = computed(() => {
   if (!isDrawing.value) return ''
 
-  return '系統正在抽選獎項，請不要關閉畫面。'
+  return drawPerformanceMessage.value || '九宮格正在高速跑燈抽選，請不要關閉畫面。'
 })
 
 const layoutFeatureCards = computed(() => {
@@ -2433,6 +2441,170 @@ const sleep = (time) => {
   return new Promise((resolve) => {
     setTimeout(resolve, time)
   })
+}
+
+const gridSpinTuning = {
+  minRounds: 9,
+  extraRounds: 3,
+  startDelay: 42,
+  cruiseDelay: 64,
+  endDelay: 240,
+  settleDelay: 420,
+  tickVolume: 0.045,
+  finishVolume: 0.09
+}
+
+let gridAudioContext = null
+
+const getGridAudioContext = () => {
+  if (typeof window === 'undefined') return null
+
+  const AudioContextConstructor = window.AudioContext || window.webkitAudioContext
+
+  if (!AudioContextConstructor) return null
+
+  if (!gridAudioContext) {
+    gridAudioContext = new AudioContextConstructor()
+  }
+
+  if (gridAudioContext.state === 'suspended') {
+    gridAudioContext.resume().catch(() => {})
+  }
+
+  return gridAudioContext
+}
+
+const playGridTone = ({
+  frequency = 640,
+  duration = 0.045,
+  volume = gridSpinTuning.tickVolume,
+  type = 'square'
+} = {}) => {
+  try {
+    const audioContext = getGridAudioContext()
+
+    if (!audioContext) return
+
+    const oscillator = audioContext.createOscillator()
+    const gain = audioContext.createGain()
+    const now = audioContext.currentTime
+
+    oscillator.type = type
+    oscillator.frequency.setValueAtTime(frequency, now)
+
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, volume), now + 0.008)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+
+    oscillator.connect(gain)
+    gain.connect(audioContext.destination)
+    oscillator.start(now)
+    oscillator.stop(now + duration + 0.012)
+  } catch (error) {
+    // 音效只做玩家體驗強化，瀏覽器不支援時不可影響抽獎流程。
+  }
+}
+
+const playGridTickSound = (step = 0, progress = 0) => {
+  const baseFrequency = progress > 0.82 ? 520 : progress > 0.55 ? 610 : 720
+  const frequency = baseFrequency + ((step % 3) * 22)
+
+  playGridTone({
+    frequency,
+    duration: progress > 0.82 ? 0.065 : 0.042,
+    volume: progress > 0.82 ? 0.055 : gridSpinTuning.tickVolume,
+    type: 'square'
+  })
+}
+
+const playGridFinishSound = () => {
+  playGridTone({
+    frequency: 880,
+    duration: 0.09,
+    volume: gridSpinTuning.finishVolume,
+    type: 'triangle'
+  })
+
+  setTimeout(() => {
+    playGridTone({
+      frequency: 1174,
+      duration: 0.11,
+      volume: gridSpinTuning.finishVolume,
+      type: 'triangle'
+    })
+  }, 88)
+}
+
+const vibrateGridDevice = (pattern = 12) => {
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return
+
+  try {
+    navigator.vibrate(pattern)
+  } catch (error) {
+    // 手機震動不支援時略過。
+  }
+}
+
+const easeOutCubic = (value) => {
+  return 1 - Math.pow(1 - value, 3)
+}
+
+const getGridSpinDelay = (step, totalSteps) => {
+  const progress = totalSteps <= 1 ? 1 : step / (totalSteps - 1)
+
+  if (progress < 0.22) {
+    return gridSpinTuning.startDelay + Math.round(progress * 42)
+  }
+
+  if (progress < 0.66) {
+    return gridSpinTuning.cruiseDelay + Math.round(Math.sin(progress * Math.PI) * 14)
+  }
+
+  const slowProgress = (progress - 0.66) / 0.34
+
+  return gridSpinTuning.cruiseDelay + Math.round(easeOutCubic(slowProgress) * (gridSpinTuning.endDelay - gridSpinTuning.cruiseDelay))
+}
+
+const getGridSpinPhaseMessage = (progress) => {
+  if (progress < 0.24) return '九宮格開始高速跑燈，幸運格正在啟動。'
+  if (progress < 0.66) return '跑燈持續加強中，系統正在抽選獎項。'
+  if (progress < 0.9) return '跑燈逐步減速，準備停在本次結果。'
+
+  return '最後確認中，請稍候揭曉獎項。'
+}
+
+const runPremiumGridSpinAnimation = async (targetIndex) => {
+  const normalizedTargetIndex = Number.isInteger(targetIndex) && targetIndex >= 0
+    ? targetIndex
+    : drawPath[drawPath.length - 1]
+
+  const targetPathIndex = drawPath.findIndex((index) => index === normalizedTargetIndex)
+  const safeTargetPathIndex = targetPathIndex >= 0 ? targetPathIndex : drawPath.length - 1
+  const baseRounds = gridSpinTuning.minRounds + Math.floor(Math.random() * (gridSpinTuning.extraRounds + 1))
+  const totalSteps = baseRounds * drawPath.length + safeTargetPathIndex + 1
+
+  drawPerformancePhase.value = 'spinning'
+
+  for (let step = 0; step < totalSteps; step += 1) {
+    const progress = totalSteps <= 1 ? 1 : step / (totalSteps - 1)
+    activeIndex.value = drawPath[step % drawPath.length]
+    drawPerformanceMessage.value = getGridSpinPhaseMessage(progress)
+
+    playGridTickSound(step, progress)
+
+    if (step % 5 === 0) {
+      vibrateGridDevice(progress > 0.82 ? [10, 18, 10] : 8)
+    }
+
+    await sleep(getGridSpinDelay(step, totalSteps))
+  }
+
+  activeIndex.value = normalizedTargetIndex
+  drawPerformancePhase.value = 'settled'
+  drawPerformanceMessage.value = '抽選完成，正在開啟中獎結果。'
+  playGridFinishSound()
+  vibrateGridDevice([18, 24, 18])
+  await sleep(gridSpinTuning.settleDelay)
 }
 
 const showStorageMessage = (message) => {
@@ -3065,12 +3237,16 @@ const startDraw = async () => {
   } catch (error) {
     console.error('精緻九宮格抽獎失敗：', error)
     isDrawing.value = false
+    drawPerformanceMessage.value = ''
+    drawPerformancePhase.value = 'idle'
     showShareSuccess(error?.response?.data?.message || error?.message || '抽獎失敗，請稍後再試。')
     return
   }
 
   if (!prize) {
     isDrawing.value = false
+    drawPerformanceMessage.value = ''
+    drawPerformancePhase.value = 'idle'
     showShareSuccess('目前獎品已抽完，請等待主辦單位更新活動。')
     return
   }
@@ -3081,16 +3257,8 @@ const startDraw = async () => {
   }
 
   const targetIndex = gridItems.value.findIndex((item) => item.id === prize.id)
-  const targetPathIndex = drawPath.findIndex((index) => index === targetIndex)
-  const baseRounds = 4
-  const totalSteps = baseRounds * drawPath.length + targetPathIndex + 1
 
-  for (let step = 0; step < totalSteps; step += 1) {
-    activeIndex.value = drawPath[step % drawPath.length]
-
-    const speed = Math.min(55 + step * 5, 180)
-    await sleep(speed)
-  }
+  await runPremiumGridSpinAnimation(targetIndex)
 
   prize.quantity = Math.max(0, Number(prize.quantity || 0) - 1)
   resultPrize.value = prize
@@ -3111,9 +3279,11 @@ const startDraw = async () => {
   addDrawHistory(prize)
   savePremiumGridState()
 
-  await sleep(300)
+  await sleep(180)
   showResultModal.value = true
   isDrawing.value = false
+  drawPerformanceMessage.value = ''
+  drawPerformancePhase.value = 'idle'
 }
 
 const shareCampaign = async () => {
@@ -3231,12 +3401,17 @@ const getResultModalHint = () => {
 
 const getCellStyle = (index) => {
   const isActive = activeIndex.value === index
+  const isSettled = drawPerformancePhase.value === 'settled' && isActive
 
   return {
-    transform: isActive ? 'scale(1.08)' : 'scale(1)',
+    transform: isActive ? (isSettled ? 'scale(1.12)' : 'scale(1.085)') : 'scale(1)',
+    filter: isActive ? 'brightness(1.1) saturate(1.08)' : 'brightness(1)',
     boxShadow: isActive
-      ? '0 0 0 4px rgba(255,255,255,0.88), 0 22px 38px rgba(154, 52, 18, 0.42)'
-      : 'inset 0 2px 0 rgba(255,255,255,0.65), 0 10px 22px rgba(154, 52, 18, 0.2)'
+      ? isSettled
+        ? '0 0 0 5px rgba(255,255,255,0.95), 0 0 34px rgba(250,204,21,0.78), 0 26px 44px rgba(154, 52, 18, 0.48)'
+        : '0 0 0 4px rgba(255,255,255,0.9), 0 0 24px rgba(250,204,21,0.52), 0 22px 38px rgba(154, 52, 18, 0.42)'
+      : 'inset 0 2px 0 rgba(255,255,255,0.65), 0 10px 22px rgba(154, 52, 18, 0.2)',
+    transition: isDrawing.value ? 'transform 80ms linear, filter 80ms linear, box-shadow 80ms linear' : 'transform 150ms ease, filter 150ms ease, box-shadow 150ms ease'
   }
 }
 
@@ -34800,11 +34975,13 @@ const toggleWheelRealFilePrep11011150 = () => {
 
 @keyframes premium-drawing-pulse {
   from {
-    filter: brightness(1);
+    filter: brightness(1) saturate(1);
+    transform: translateY(0);
   }
 
   to {
-    filter: brightness(1.08);
+    filter: brightness(1.1) saturate(1.08);
+    transform: translateY(-1px);
   }
 }
 
