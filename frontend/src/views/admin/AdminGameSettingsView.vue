@@ -1,4 +1,4 @@
-// 第 21501～21900 批：輪盤單一活動設定頁精簡與玩家入口防誤導版
+// 第 36801～37200 批：商家可用遊戲精簡與平台模板中心分流版
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -26,6 +26,7 @@ const activeType = ref('all')
 const activeStatus = ref('all')
 const activeRouteStatus = ref('all')
 const activeRouteTestStatus = ref('all')
+const activeTemplateVisibility = ref('official')
 const activeTestGameId = ref('')
 const showAddGameModal = ref(false)
 const savedMessage = ref('')
@@ -78,6 +79,74 @@ const reportLayoutOptions = [
 const FILTER_STORAGE_KEY = 'v22_admin_game_settings_filters'
 const REPORT_EXPORT_LOG_STORAGE_KEY = 'v22_admin_game_settings_report_export_logs'
 const REPORT_EXPORT_LOG_LIMIT = 10
+
+const MERCHANT_OFFICIAL_GAME_IDS = new Set([
+  'premium-grid',
+  'wheel',
+  'egg-smash'
+])
+
+const MERCHANT_OFFICIAL_GAME_ALIASES = {
+  'premium-grid': {
+    merchantTitle: '精緻九宮格',
+    officialPath: '/play/a-shop/premium-grid',
+    note: '正式商家可用：九宮格玩家頁'
+  },
+  wheel: {
+    merchantTitle: '幸運輪盤',
+    officialPath: '/play/a-shop/wheel',
+    note: '正式商家可用：輪盤玩家頁'
+  },
+  'egg-smash': {
+    merchantTitle: '砸金蛋',
+    officialPath: '/play/a-shop/golden-egg',
+    note: '正式商家可用：砸金蛋玩家頁'
+  }
+}
+
+const templateVisibilityTabs = [
+  {
+    label: '正式開放給商家',
+    value: 'official',
+    icon: '✅',
+    description: '只顯示目前正式營運的三個遊戲：輪盤、九宮格、砸金蛋。'
+  },
+  {
+    label: '平台預留模組',
+    value: 'reserved',
+    icon: '🧩',
+    description: '顯示尚未正式開放給商家的模板，例如刮刮卡、翻牌、拉霸、套圈圈等。'
+  },
+  {
+    label: '全部模板',
+    value: 'all',
+    icon: '🗂️',
+    description: '平台管理員檢查用，包含所有內建模板與測試模組。'
+  }
+]
+
+const isOfficialMerchantGame = (game = {}) => {
+  return MERCHANT_OFFICIAL_GAME_IDS.has(String(game.id || ''))
+}
+
+const getTemplateVisibilityText = (game = {}) => {
+  return isOfficialMerchantGame(game) ? '正式開放' : '平台預留'
+}
+
+const getTemplateVisibilityClass = (game = {}) => {
+  return isOfficialMerchantGame(game)
+    ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+    : 'border-slate-200 bg-slate-50 text-slate-500'
+}
+
+const getMerchantOfficialGameInfo = (game = {}) => {
+  return MERCHANT_OFFICIAL_GAME_ALIASES[String(game.id || '')] || null
+}
+
+const goMerchantGameCenter = () => {
+  router.push('/admin/my-games')
+}
+
 
 const addGameForm = reactive({
   templateId: 'premium-grid',
@@ -679,7 +748,8 @@ watch(
     activeType,
     activeStatus,
     activeRouteStatus,
-    activeRouteTestStatus
+    activeRouteTestStatus,
+    activeTemplateVisibility
   ],
   () => {
     saveFiltersToStorage()
@@ -974,7 +1044,12 @@ const filteredGames = computed(() => {
       activeRouteTestStatus.value === 'all' ||
       routeTestStatus === activeRouteTestStatus.value
 
-    return matchKeyword && matchType && matchStatus && matchRouteStatus && matchRouteTestStatus
+    const matchTemplateVisibility =
+      activeTemplateVisibility.value === 'all' ||
+      (activeTemplateVisibility.value === 'official' && isOfficialMerchantGame(game)) ||
+      (activeTemplateVisibility.value === 'reserved' && !isOfficialMerchantGame(game))
+
+    return matchKeyword && matchType && matchStatus && matchRouteStatus && matchRouteTestStatus && matchTemplateVisibility
   })
 })
 
@@ -1023,11 +1098,25 @@ const filteredGameSummary = computed(() => {
 const statCards = computed(() => {
   return [
     {
-      title: '全部遊戲',
+      title: '全部模板',
       value: summary.value.total,
-      description: '目前平台遊戲總數',
+      description: '目前平台模板總數',
       icon: '🎮',
       colorClass: 'from-slate-700 to-slate-500'
+    },
+    {
+      title: '正式開放',
+      value: gameSettings.value.filter((game) => isOfficialMerchantGame(game)).length,
+      description: '商家正式可用遊戲',
+      icon: '✅',
+      colorClass: 'from-emerald-500 to-teal-400'
+    },
+    {
+      title: '平台預留',
+      value: gameSettings.value.filter((game) => !isOfficialMerchantGame(game)).length,
+      description: '暫不提供商家日常使用',
+      icon: '🧩',
+      colorClass: 'from-slate-500 to-slate-400'
     },
     {
       title: '已啟用',
@@ -1837,7 +1926,8 @@ const saveFiltersToStorage = () => {
     activeType: activeType.value,
     activeStatus: activeStatus.value,
     activeRouteStatus: activeRouteStatus.value,
-    activeRouteTestStatus: activeRouteTestStatus.value
+    activeRouteTestStatus: activeRouteTestStatus.value,
+    activeTemplateVisibility: activeTemplateVisibility.value
   }
 
   localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(payload))
@@ -1856,6 +1946,7 @@ const loadFiltersFromStorage = () => {
     activeStatus.value = parsed.activeStatus || 'all'
     activeRouteStatus.value = parsed.activeRouteStatus || 'all'
     activeRouteTestStatus.value = parsed.activeRouteTestStatus || 'all'
+    activeTemplateVisibility.value = parsed.activeTemplateVisibility || 'official'
   } catch (error) {
     console.error('讀取篩選條件失敗：', error)
   }
@@ -1867,6 +1958,7 @@ const resetAllFilters = () => {
   activeStatus.value = 'all'
   activeRouteStatus.value = 'all'
   activeRouteTestStatus.value = 'all'
+  activeTemplateVisibility.value = 'official'
 
   localStorage.removeItem(FILTER_STORAGE_KEY)
 
@@ -2293,6 +2385,15 @@ loadReportExportLogsFromStorage()
           <button
             v-if="!isSingleGameMode"
             type="button"
+            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+            @click="goMerchantGameCenter"
+          >
+            前往商家遊戲中心
+          </button>
+
+          <button
+            v-if="!isSingleGameMode"
+            type="button"
             class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
             @click="router.push('/games')"
           >
@@ -2341,6 +2442,74 @@ loadReportExportLogsFromStorage()
       class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5 text-sm font-black text-emerald-700"
     >
       {{ savedMessage }}
+    </section>
+
+    <section
+      v-if="!isSingleGameMode"
+      class="overflow-hidden rounded-3xl border border-indigo-100 bg-white shadow-sm"
+    >
+      <div class="grid gap-0 xl:grid-cols-[1.1fr_0.9fr]">
+        <div class="bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-6 text-white">
+          <div class="inline-flex rounded-full bg-white/10 px-4 py-2 text-sm font-black text-cyan-100">
+            平台模板中心
+          </div>
+
+          <h2 class="mt-4 text-2xl font-black">
+            這裡是平台管理員管理「模組模板」的地方
+          </h2>
+
+          <p class="mt-3 text-sm font-bold leading-7 text-white/75">
+            商家真正要操作活動、複製玩家網址、管理序號與查看報表，請到「商家遊戲中心」。
+            本頁只用來整理平台支援哪些遊戲模組，避免把未開放模板誤交付給商家。
+          </p>
+
+          <div class="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              class="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-50"
+              @click="goMerchantGameCenter"
+            >
+              前往商家遊戲中心
+            </button>
+
+            <button
+              type="button"
+              class="rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
+              @click="activeTemplateVisibility = 'official'"
+            >
+              只看正式開放遊戲
+            </button>
+          </div>
+        </div>
+
+        <div class="grid gap-3 bg-indigo-50/70 p-5">
+          <button
+            v-for="tab in templateVisibilityTabs"
+            :key="tab.value"
+            type="button"
+            class="rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"
+            :class="activeTemplateVisibility === tab.value
+              ? 'border-indigo-300 bg-white text-indigo-800 shadow-sm'
+              : 'border-white bg-white/70 text-slate-600'
+            "
+            @click="activeTemplateVisibility = tab.value"
+          >
+            <div class="flex items-start gap-3">
+              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-2xl">
+                {{ tab.icon }}
+              </div>
+              <div>
+                <p class="text-sm font-black">
+                  {{ tab.label }}
+                </p>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+                  {{ tab.description }}
+                </p>
+              </div>
+            </div>
+          </button>
+        </div>
+      </div>
     </section>
 
     <section
@@ -3592,6 +3761,13 @@ loadReportExportLogsFromStorage()
                 <p class="mt-3 text-sm leading-6 text-slate-500">
                   {{ game.description }}
                 </p>
+
+                <div
+                  v-if="getMerchantOfficialGameInfo(game)"
+                  class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-black leading-5 text-emerald-700"
+                >
+                  {{ getMerchantOfficialGameInfo(game)?.note }}
+                </div>
 
                 <p
                   v-if="game.templateId"

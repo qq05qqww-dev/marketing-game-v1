@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 36401～36800 批：商家遊戲中心精簡操作版
+// 第 36801～37200 批：商家可用遊戲精簡與平台模板中心分流版
 //
 // 建議放置位置：
 // frontend/src/views/admin/AdminMerchantGameCenterView.vue
@@ -8,7 +8,7 @@
 // 本頁目的：
 // 1. 給商家一個簡單、精緻、正式營運用的入口。
 // 2. 只顯示商家最常用的三個正式遊戲：輪盤、九宮格、砸金蛋。
-// 3. 每個遊戲提供玩家網址、複製網址、開啟玩家頁、到活動管理、序號管理、報表入口。
+// 3. 每個遊戲提供玩家網址、複製網址、開啟玩家頁、到活動管理、序號管理、報表入口。\n// 4. 此頁才是商家真正會看到的遊戲操作中心；平台模板中心不再當作商家操作入口。
 // 4. 不再讓商家誤進「遊戲模板中心」或 debug 頁。
 
 import { computed, onMounted, ref } from 'vue'
@@ -58,6 +58,12 @@ const tenantName = computed(() => {
 
 const role = computed(() => String(authStore.user?.role || '').toUpperCase())
 const isPlatformAdmin = computed(() => ['ADMIN', 'SUPER_ADMIN'].includes(role.value))
+
+const merchantCenterNotice = computed(() => {
+  return isPlatformAdmin.value
+    ? '平台管理員目前看到的是商家交付版入口，用來確認商家拿到的玩家網址與操作按鈕。'
+    : '這裡只顯示你目前正式可用的遊戲。若要新增其他遊戲，請聯絡平台管理員開通。'
+})
 
 const gameCards = computed(() => {
   const gameDefinitions = [

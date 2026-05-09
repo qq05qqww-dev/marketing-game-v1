@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-// 第 36401～36800 批：商家遊戲中心精簡操作版
+// 第 36801～37200 批：商家可用遊戲精簡與平台模板中心分流版
 
 const route = useRoute()
 const router = useRouter()
@@ -62,7 +62,7 @@ const menuItems = computed(() => {
     },
     {
       label: '遊戲模板中心',
-      description: '平台模板 / 模組',
+      description: '平台模板 / 模組，商家請用遊戲中心',
       to: '/admin/game-settings',
       icon: '🎮',
       roles: ['ADMIN', 'SUPER_ADMIN']
