@@ -1,5 +1,14 @@
 <script setup>
 /**
+ * Multi Game Platform V2.3 第 36001～36400 批：砸金蛋遊戲音效精緻化版
+ *
+ * 修正重點：
+ * 1. 砸金蛋即使沒有上傳音效網址，也會使用 Web Audio 產生敲擊、裂開、成功提示聲。
+ * 2. 點擊金蛋會有連續敲擊音、裂開音與手機震動。
+ * 3. 中獎會有短促上揚提示音；未中獎也有柔和收尾音。
+ * 4. 離開頁面會停止音效，不影響正式 draw-engine / 序號扣次數。
+ */
+/**
  * Multi Game Platform V2.3 第 27101～27500 批：三遊戲正式資料庫遠端玩家串接版｜
  * 金蛋正式玩家頁 GameConfig settings 完整套用與獎品同步版
  *
@@ -463,12 +472,12 @@ const campaign = reactive({
   themeButtonDarkColor: '#991b1b',
   enableWinConfetti: true,
   enableGoldRain: true,
-  enableWinSound: false,
+  enableWinSound: true,
   winSoundUrl: '',
   winSoundVolume: 70,
-  enableHammerSound: false,
+  enableHammerSound: true,
   hammerSoundUrl: '',
-  hammerSoundVolume: 60,
+  hammerSoundVolume: 68,
   winEffectDuration: 5,
   confettiCount: 48,
   goldRainCount: 54,
@@ -1156,6 +1165,8 @@ const isRulesOpen = ref(false)
 const isPrizeInfoOpen = ref(false)
 const hammerAudio = ref(null)
 const winAudio = ref(null)
+let goldenEggAudioContext = null
+let goldenEggSoundTimers = []
 
 const confettiColors = [
   '#f97316',
@@ -2143,8 +2154,129 @@ const pickPrize = () => {
   return pool[pool.length - 1]
 }
 
+const getGoldenEggAudioContext = () => {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext
+
+    if (!AudioContextClass) return null
+
+    if (!goldenEggAudioContext) {
+      goldenEggAudioContext = new AudioContextClass()
+    }
+
+    if (goldenEggAudioContext.state === 'suspended') {
+      goldenEggAudioContext.resume?.()
+    }
+
+    return goldenEggAudioContext
+  } catch (error) {
+    console.warn('初始化金蛋音效失敗：', error)
+    return null
+  }
+}
+
+const playGoldenEggTone = ({
+  frequency = 420,
+  duration = 0.08,
+  delay = 0,
+  volume = 0.35,
+  type = 'triangle',
+  slideTo = null
+} = {}) => {
+  const context = getGoldenEggAudioContext()
+
+  if (!context) return
+
+  try {
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    const now = context.currentTime + Math.max(0, delay)
+    const safeVolume = Math.min(0.9, Math.max(0.001, Number(volume || 0.25)))
+
+    oscillator.type = type
+    oscillator.frequency.setValueAtTime(frequency, now)
+
+    if (slideTo) {
+      oscillator.frequency.exponentialRampToValueAtTime(Math.max(40, slideTo), now + duration)
+    }
+
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(safeVolume, now + 0.012)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(now)
+    oscillator.stop(now + duration + 0.025)
+  } catch (error) {
+    console.warn('播放金蛋合成音效失敗：', error)
+  }
+}
+
+const stopGoldenEggSyntheticSounds = () => {
+  goldenEggSoundTimers.forEach((timer) => window.clearTimeout(timer))
+  goldenEggSoundTimers = []
+}
+
+const playGoldenEggCrackSequence = (volume = campaign.hammerSoundVolume) => {
+  if (!campaign.enableHammerSound) return
+
+  stopGoldenEggSyntheticSounds()
+
+  const baseVolume = Math.min(0.75, Math.max(0.08, Number(volume || 60) / 140))
+  const sequence = [
+    { delay: 0, frequency: 210, slideTo: 150, duration: 0.075, volume: baseVolume, type: 'square' },
+    { delay: 85, frequency: 280, slideTo: 190, duration: 0.065, volume: baseVolume * 0.78, type: 'triangle' },
+    { delay: 170, frequency: 720, slideTo: 360, duration: 0.095, volume: baseVolume * 0.52, type: 'sawtooth' }
+  ]
+
+  sequence.forEach((item) => {
+    const timer = window.setTimeout(() => {
+      playGoldenEggTone({ ...item, delay: 0 })
+    }, item.delay)
+
+    goldenEggSoundTimers.push(timer)
+  })
+
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate([28, 35, 24])
+  }
+}
+
+const playGoldenEggResultSound = (isWin = true, volume = campaign.winSoundVolume) => {
+  if (!campaign.enableWinSound) return
+
+  const baseVolume = Math.min(0.7, Math.max(0.08, Number(volume || 70) / 150))
+
+  if (isWin) {
+    playGoldenEggTone({ frequency: 520, slideTo: 760, duration: 0.12, volume: baseVolume, type: 'triangle' })
+    playGoldenEggTone({ frequency: 760, slideTo: 1040, duration: 0.16, delay: 0.11, volume: baseVolume * 0.8, type: 'sine' })
+  } else {
+    playGoldenEggTone({ frequency: 260, slideTo: 180, duration: 0.18, volume: baseVolume * 0.55, type: 'triangle' })
+  }
+}
+
 const playAudio = async (audioRef, enabled, volume) => {
-  if (!enabled || !audioRef.value) return
+  if (!enabled) return
+
+  const isHammerAudio = audioRef === hammerAudio
+  const isWinAudio = audioRef === winAudio
+
+  if (!audioRef.value) {
+    if (isHammerAudio) {
+      playGoldenEggCrackSequence(volume)
+      return
+    }
+
+    if (isWinAudio) {
+      playGoldenEggResultSound(true, volume)
+      return
+    }
+
+    return
+  }
 
   try {
     audioRef.value.pause()
@@ -2152,7 +2284,15 @@ const playAudio = async (audioRef, enabled, volume) => {
     audioRef.value.volume = Math.min(1, Math.max(0, Number(volume || 0) / 100))
     await audioRef.value.play()
   } catch (error) {
-    console.warn('Audio play failed:', error)
+    console.warn('Audio play failed，改用金蛋合成音效：', error)
+
+    if (isHammerAudio) {
+      playGoldenEggCrackSequence(volume)
+    }
+
+    if (isWinAudio) {
+      playGoldenEggResultSound(true, volume)
+    }
   }
 }
 
@@ -2266,6 +2406,8 @@ const crackEggWithRemoteApi = async (egg) => {
       if (prize.type === 'win') {
         await playAudio(winAudio, campaign.enableWinSound, campaign.winSoundVolume)
         triggerWinEffects()
+      } else {
+        playGoldenEggResultSound(false, campaign.winSoundVolume)
       }
 
       window.setTimeout(() => {
@@ -2344,6 +2486,8 @@ const crackEgg = async (egg) => {
     if (prize.type !== 'lose') {
       triggerWinEffects()
       await playAudio(winAudio, campaign.enableWinSound, campaign.winSoundVolume)
+    } else {
+      playGoldenEggResultSound(false, campaign.winSoundVolume)
     }
 
     window.setTimeout(() => {
@@ -2664,6 +2808,15 @@ onUnmounted(() => {
   if (activityCountdownTimer.value) {
     window.clearInterval(activityCountdownTimer.value)
     activityCountdownTimer.value = null
+  }
+
+  stopGoldenEggSyntheticSounds()
+
+  try {
+    hammerAudio.value?.pause?.()
+    winAudio.value?.pause?.()
+  } catch (error) {
+    console.warn('停止金蛋音效失敗：', error)
   }
 
   if (typeof window !== 'undefined') {

@@ -1,4 +1,12 @@
 <script setup>
+/**
+ * Multi Game Platform V2.3 第 36001～36400 批：輪盤音效停止保護修正版
+ *
+ * 修正重點：
+ * 1. 輪盤轉完後強制停止轉動 loop 音效。
+ * 2. 同步停止指針答答聲 interval，避免結果後繼續響。
+ * 3. 離開頁面 / 關閉結果 / 重置時清乾淨所有音效。
+ */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import CommonGamePlayBoard from '../../../components/common-game/CommonGamePlayBoard.vue'
@@ -4503,8 +4511,17 @@ const resetWheelState = () => {
 const stopSpinSound = () => {
   if (!spinAudio.value) return
 
-  spinAudio.value.pause()
-  spinAudio.value.currentTime = 0
+  try {
+    spinAudio.value.loop = false
+    spinAudio.value.pause()
+    spinAudio.value.currentTime = 0
+    spinAudio.value.removeAttribute?.('src')
+    spinAudio.value.load?.()
+  } catch (error) {
+    console.warn('停止轉盤轉動音效失敗：', error)
+  } finally {
+    spinAudio.value = null
+  }
 }
 
 const playSpinSound = async () => {
@@ -4559,6 +4576,7 @@ const testWinSound = async () => {
 }
 
 const stopAllSounds = () => {
+  stopPointerTickSound()
   stopSpinSound()
   stopWinSound()
   showSavedMessage('已停止所有音效。')
@@ -4567,8 +4585,12 @@ const stopAllSounds = () => {
 const stopWinSound = () => {
   if (!winAudio.value) return
 
-  winAudio.value.pause()
-  winAudio.value.currentTime = 0
+  try {
+    winAudio.value.pause()
+    winAudio.value.currentTime = 0
+  } catch (error) {
+    console.warn('停止中獎音樂失敗：', error)
+  }
 }
 
 const playWinSound = async () => {
@@ -4773,6 +4795,7 @@ const previewWinEffects = () => {
 }
 
 const finishSpin = (prize, index) => {
+  stopPointerTickSound()
   stopSpinSound()
   resultPrize.value = prize
   activePrizeIndex.value = index
@@ -4972,6 +4995,8 @@ const shareCampaign = async () => {
 const closeResultAndContinue = () => {
   isResultActionProcessing.value = false
   showWinEffects.value = false
+  stopPointerTickSound()
+  stopSpinSound()
   stopWinSound()
   showResultModal.value = false
   resultPrize.value = null
@@ -5192,6 +5217,8 @@ onBeforeUnmount(() => {
     premiumWheelSaveTimer = null
   }
   stopPointerTickSound()
+  stopSpinSound()
+  stopWinSound()
   if (typeof window === 'undefined') return
 
   window.removeEventListener('storage', handlePremiumWheelStorageSync)
