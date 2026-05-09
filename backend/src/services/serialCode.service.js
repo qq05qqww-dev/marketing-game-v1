@@ -1,8 +1,14 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 29101～29500 批：SerialCode 手動指定序號 API 對齊版
+// 第 35201～35600 批：後台序號總次數、已使用、剩餘次數同步顯示版
 //
-// 建議放置位置：
+// 覆蓋位置：
 // backend/src/services/serialCode.service.js
+//
+// 修正重點：
+// 1. 序號列表 API 依 PlayRecord.serialCodeId 計算 usedCount。
+// 2. 回傳 totalChance / usedCount / remainingChance。
+// 3. 後台可顯示「總次數、已使用、剩餘次數」。
+// 4. 不變更 Prisma schema，不影響 draw-engine 正式抽獎流程。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -324,6 +330,59 @@ const buildSerialCodeWhere = async (campaignId, query = {}, currentUser = null) 
   }
 }
 
+const buildSerialUsageInfoMap = async (serialCodes = []) => {
+  const serialCodeIds = serialCodes
+    .map((item) => normalizeId(item?.id))
+    .filter(Boolean)
+
+  if (!serialCodeIds.length) {
+    return new Map()
+  }
+
+  const usageRows = await prisma.playRecord.groupBy({
+    by: ['serialCodeId'],
+    where: {
+      serialCodeId: {
+        in: serialCodeIds
+      }
+    },
+    _count: {
+      _all: true
+    }
+  })
+
+  return new Map(
+    usageRows.map((row) => [
+      row.serialCodeId,
+      Number(row?._count?._all || 0)
+    ])
+  )
+}
+
+const buildSerialUsagePayload = (serialCode = {}, usedCount = 0) => {
+  const totalChance = Math.max(1, Number(serialCode.rewardChance || 1))
+  const normalizedUsedCount = Math.max(0, Number(usedCount || 0))
+  const remainingChance = Math.max(0, totalChance - normalizedUsedCount)
+  const rawEffectiveStatus = getEffectiveStatus(serialCode)
+  const usageEffectiveStatus = remainingChance <= 0 ? 'USED' : rawEffectiveStatus
+
+  return {
+    totalChance,
+    rewardChance: totalChance,
+    usedCount: normalizedUsedCount,
+    serialUsedCount: normalizedUsedCount,
+    remainingChance,
+    remainingSerialChances: remainingChance,
+    usageSummary: {
+      totalChance,
+      usedCount: normalizedUsedCount,
+      remainingChance
+    },
+    effectiveStatus: usageEffectiveStatus,
+    rawEffectiveStatus
+  }
+}
+
 export const getSerialCodesByCampaignId = async (campaignId, query = {}, currentUser = null) => {
   const { where } = await buildSerialCodeWhere(campaignId, query, currentUser)
 
@@ -334,10 +393,17 @@ export const getSerialCodesByCampaignId = async (campaignId, query = {}, current
     }
   })
 
-  return serialCodes.map((item) => ({
-    ...item,
-    effectiveStatus: getEffectiveStatus(item)
-  }))
+  const usageInfoMap = await buildSerialUsageInfoMap(serialCodes)
+
+  return serialCodes.map((item) => {
+    const usedCount = usageInfoMap.get(item.id) || 0
+    const usagePayload = buildSerialUsagePayload(item, usedCount)
+
+    return {
+      ...item,
+      ...usagePayload
+    }
+  })
 }
 
 export const getSerialCodeStats = async (campaignId, currentUser = null) => {
@@ -703,6 +769,8 @@ export const exportSerialCodesCsv = async (campaignId, query = {}, currentUser =
       'campaignId',
       'code',
       'rewardChance',
+      'usedCount',
+      'remainingChance',
       'status',
       'effectiveStatus',
       'batchCode',
@@ -722,6 +790,8 @@ export const exportSerialCodesCsv = async (campaignId, query = {}, currentUser =
       item.campaignId,
       item.code,
       item.rewardChance,
+      item.usedCount || 0,
+      item.remainingChance ?? item.rewardChance,
       item.status,
       item.effectiveStatus,
       item.batchCode || '',

@@ -1,14 +1,14 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 33601～34000 批：正式網址與序號活動綁定檢查修正版
+// 第 35201～35600 批：後台序號總次數、已使用、剩餘次數同步顯示版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminCampaignsView.vue
 //
 // 本批重點：
 // 1. 保留既有活動建立 / 序號 / 設定入口。
-// 2. 新增正式商家交付中心：三遊戲正式玩家網址、一鍵複製、一鍵開啟。
-// 3. 新增客服可直接複製的活動文案。
+// 2. 序號列表顯示「總次數、已使用、剩餘次數」。
+// 3. 匯出 CSV 也包含總次數 / 已使用 / 剩餘次數。
 // 4. 不改 router / DB schema / draw-core。
 
 import { computed, onMounted, reactive, ref } from 'vue'
@@ -499,29 +499,18 @@ const apiBaseUrl = computed(() => {
   return String(http?.defaults?.baseURL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '')
 })
 
-const OFFICIAL_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
-
-const isLocalFrontHost = () => {
-  if (typeof window === 'undefined') return false
-
-  return ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
-}
-
 const frontOrigin = computed(() => {
-  // 第 33601～34000 批：
-  // 後台交付中心一律產生「正式可給玩家」網址。
-  // 本機 / 手機測試時不要把 localhost 給客人，否則手機會連到自己的 localhost。
+  // 第 25501～25900 批：
+  // 正式上線時請在 Render / Vercel / Netlify 設定 VITE_PUBLIC_FRONTEND_URL。
+  // 例如：https://your-domain.com
+  // 沒設定時才使用目前瀏覽器 origin，方便本機開發。
   const publicFrontendUrl = String(import.meta.env.VITE_PUBLIC_FRONTEND_URL || '').trim().replace(/\/$/, '')
 
   if (publicFrontendUrl) {
     return publicFrontendUrl
   }
 
-  if (isLocalFrontHost()) {
-    return OFFICIAL_FRONTEND_URL
-  }
-
-  if (typeof window === 'undefined') return OFFICIAL_FRONTEND_URL
+  if (typeof window === 'undefined') return 'http://localhost:5173'
 
   return window.location.origin
 })
@@ -673,13 +662,50 @@ const getSerialCreatedAtText = (code) => {
   return code?.createdAt || ''
 }
 
+const getSerialTotalChance = (code = {}) => {
+  const value = Number(code.totalChance ?? code.rewardChance ?? code.chance ?? 1)
+
+  if (!Number.isFinite(value)) return 1
+
+  return Math.max(1, Math.floor(value))
+}
+
+const getSerialUsedCount = (code = {}) => {
+  const value = Number(code.usedCount ?? code.serialUsedCount ?? code.usageSummary?.usedCount ?? 0)
+
+  if (!Number.isFinite(value)) return 0
+
+  return Math.max(0, Math.floor(value))
+}
+
+const getSerialRemainingChance = (code = {}) => {
+  const directValue = code.remainingChance ?? code.remainingSerialChances ?? code.usageSummary?.remainingChance
+
+  if (directValue !== undefined && directValue !== null && directValue !== '') {
+    const value = Number(directValue)
+
+    if (Number.isFinite(value)) {
+      return Math.max(0, Math.floor(value))
+    }
+  }
+
+  return Math.max(0, getSerialTotalChance(code) - getSerialUsedCount(code))
+}
+
+const getSerialUsageText = (code = {}) => {
+  return `總次數：${getSerialTotalChance(code)}｜已使用：${getSerialUsedCount(code)}｜剩餘次數：${getSerialRemainingChance(code)}`
+}
+
+
 const buildChineseSerialCsv = (items = []) => {
   const headers = [
     '序號ID',
     '活動ID',
     '序號',
     '狀態',
-    '可用次數',
+    '總次數',
+    '已使用',
+    '剩餘次數',
     '批次',
     '過期時間',
     '備註',
@@ -691,7 +717,9 @@ const buildChineseSerialCsv = (items = []) => {
     item.campaignId || selectedCampaignId.value || '',
     getSerialCodeText(item),
     getSerialStatusText(item.status),
-    item.rewardChance || item.chance || 1,
+    getSerialTotalChance(item),
+    getSerialUsedCount(item),
+    getSerialRemainingChance(item),
     getSerialBatchText(item),
     getSerialExpireText(item),
     item.note || '',
@@ -1582,46 +1610,34 @@ const getTenantSlug = (campaign) => {
   return campaign?.tenant?.slug || campaign?.tenantSlug || campaign?.slug || 'demo-shop'
 }
 
-const appendCampaignIdQuery = (url, campaign) => {
-  const campaignId = campaign?.id
-
-  if (!campaignId) return url
-
-  const connector = String(url).includes('?') ? '&' : '?'
-
-  return `${url}${connector}campaignId=${encodeURIComponent(campaignId)}`
-}
-
 const getPlayerUrl = (campaign) => {
   const type = String(campaign?.gameType || '').toUpperCase()
   const tenantSlug = getCampaignTenantSlug(campaign) || normalizeTenantSlug(getCurrentTenantSlug())
 
-  // 第 33601～34000 批：
-  // 1. 三個正式對客玩家網址都固定使用 /play/:tenantSlug/...。
-  // 2. 一律帶 campaignId，避免同一商家有多個 ACTIVE 活動時，前台抓到別的活動，造成「後台有序號但前台找不到序號」。
-  // 3. 序號仍維持正式規則：只屬於自己的 campaign，不跨遊戲共用。
+  // 三個正式對客玩家網址都固定使用 /play/:tenantSlug/...。
+  // 這些網址可以直接給客人遠端開啟，並由前台依 tenantSlug / campaignId 從資料庫讀活動。
   if (type === 'GRID') {
-    const url = tenantSlug
-      ? `${frontOrigin.value}/play/${tenantSlug}/premium-grid`
-      : `${frontOrigin.value}/games/premium-grid`
+    if (tenantSlug) {
+      return `${frontOrigin.value}/play/${tenantSlug}/premium-grid`
+    }
 
-    return appendCampaignIdQuery(url, campaign)
+    return `${frontOrigin.value}/games/premium-grid`
   }
 
   if (type === 'WHEEL') {
-    const url = tenantSlug
-      ? `${frontOrigin.value}/play/${tenantSlug}/wheel`
-      : `${frontOrigin.value}/games/wheel`
+    if (tenantSlug) {
+      return `${frontOrigin.value}/play/${tenantSlug}/wheel`
+    }
 
-    return appendCampaignIdQuery(url, campaign)
+    return `${frontOrigin.value}/games/wheel`
   }
 
   if (type === 'GOLDEN_EGG') {
-    const url = tenantSlug
-      ? `${frontOrigin.value}/play/${tenantSlug}/golden-egg`
-      : `${frontOrigin.value}/games/golden-egg`
+    if (tenantSlug) {
+      return `${frontOrigin.value}/play/${tenantSlug}/golden-egg`
+    }
 
-    return appendCampaignIdQuery(url, campaign)
+    return `${frontOrigin.value}/games/golden-egg`
   }
 
   return campaign?.shareUrl || campaign?.playerUrl || `${frontOrigin.value}/games`
@@ -1734,9 +1750,7 @@ const officialCustomerServiceText = computed(() => {
       item.url,
       ''
     ]),
-    '請輸入店家提供的活動序號後即可參加抽獎。',
-    '',
-    '提醒：序號綁定活動，不同遊戲 / 不同活動的序號不能互相共用。'
+    '請輸入店家提供的活動序號後即可參加抽獎。'
   ]
 
   return lines.join('\n')
@@ -3112,7 +3126,9 @@ onMounted(() => {
                 </th>
                 <th class="px-4 py-3">序號</th>
                 <th class="px-4 py-3">狀態</th>
-                <th class="px-4 py-3">可用次數</th>
+                <th class="px-4 py-3">總次數</th>
+                <th class="px-4 py-3">已使用</th>
+                <th class="px-4 py-3">剩餘次數</th>
                 <th class="px-4 py-3">批次</th>
                 <th class="px-4 py-3">過期</th>
                 <th class="px-4 py-3">操作</th>
@@ -3154,7 +3170,13 @@ onMounted(() => {
                   </span>
                 </td>
                 <td class="px-4 py-3 text-xs font-black text-slate-700">
-                  {{ code.rewardChance || code.chance || 1 }} 次
+                  {{ getSerialTotalChance(code) }} 次
+                </td>
+                <td class="px-4 py-3 text-xs font-black text-amber-700">
+                  {{ getSerialUsedCount(code) }} 次
+                </td>
+                <td class="px-4 py-3 text-xs font-black text-emerald-700">
+                  {{ getSerialRemainingChance(code) }} 次
                 </td>
                 <td class="px-4 py-3 text-xs font-bold text-slate-500">
                   {{ code.batchCode || code.batch || '-' }}
