@@ -1,13 +1,104 @@
+// Multi Game Platform V2.3 Tenant Edition
+// 第 37601～38000 批：遊戲模板中心正式三遊戲資料源清理與錯誤路由根修正版
+//
+// 覆蓋位置：
+// frontend/src/composables/useAdminGameSettings.js
+//
+// 修正重點：
+// 1. 正式商家遊戲固定為 premium-grid / wheel / golden-egg。
+// 2. 舊 grid-lottery 自動視為 premium-grid 的舊模板，不再當成正式商家入口。
+// 3. 舊 egg-smash 自動視為 golden-egg 的舊模板，不再當成正式商家入口。
+// 4. 新增模板不再產生 /games/1、/games/99 這種不存在路由。
+// 5. 所有複製版模板會走 /games/{正式模板}?gameId={自訂ID}，不會 404。
+// 6. localStorage 舊資料會自動清理路由，不需要手動刪瀏覽器快取。
+
 import { computed, ref } from 'vue'
 import { gameSettings as defaultGameSettings } from '../constants/gameSettings'
 
 const STORAGE_KEY = 'v22_admin_game_settings'
+
+const OFFICIAL_GAME_IDS = ['premium-grid', 'wheel', 'golden-egg']
+
+const LEGACY_TEMPLATE_ALIAS_MAP = {
+  'grid-lottery': 'premium-grid',
+  'egg-smash': 'golden-egg',
+  'premium-nine-grid': 'premium-grid',
+  'nine-golden-egg': 'golden-egg',
+  'golden-egg-deluxe': 'golden-egg'
+}
+
+const OFFICIAL_TEMPLATE_ROUTE_MAP = {
+  'premium-grid': '/games/premium-grid',
+  wheel: '/games/wheel',
+  'golden-egg': '/games/golden-egg',
+  'scratch-card': '/games/scratch-card',
+  'flip-card': '/games/flip-card',
+  'slot-machine': '/games/slot-machine',
+  'ring-toss': '/games/ring-toss',
+  'claw-machine': '/games/claw-machine',
+  'referral-task': '/games/referral-task'
+}
+
+const RESERVED_ROUTE_IDS = new Set([
+  'scratch-card',
+  'flip-card',
+  'slot-machine',
+  'ring-toss',
+  'claw-machine',
+  'referral-task'
+])
 
 const cloneData = (data) => {
   return JSON.parse(JSON.stringify(data))
 }
 
 const gameSettings = ref([])
+
+const normalizeSlug = (value = '') => {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-_]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-|-$/g, '')
+}
+
+const normalizeGameTemplateId = (value = '') => {
+  const id = normalizeSlug(value)
+
+  return LEGACY_TEMPLATE_ALIAS_MAP[id] || id
+}
+
+const inferTemplateIdFromText = (game = {}) => {
+  const text = [
+    game.id,
+    game.templateId,
+    game.name,
+    game.title,
+    game.description,
+    game.route
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+  if (/premium|九宮格|nine|grid/.test(text)) return 'premium-grid'
+  if (/wheel|輪盤|轉盤/.test(text)) return 'wheel'
+  if (/golden|egg|金蛋|砸金蛋|敲金蛋/.test(text)) return 'golden-egg'
+  if (/scratch|刮刮/.test(text)) return 'scratch-card'
+  if (/flip|翻牌/.test(text)) return 'flip-card'
+  if (/slot|拉霸/.test(text)) return 'slot-machine'
+  if (/ring|套圈/.test(text)) return 'ring-toss'
+  if (/claw|夾娃娃/.test(text)) return 'claw-machine'
+  if (/referral|推薦/.test(text)) return 'referral-task'
+
+  return normalizeGameTemplateId(game.templateId || game.id || '')
+}
+
+const isNumericLikeId = (value = '') => {
+  return /^\d+$/.test(String(value || '').trim())
+}
 
 const normalizeRoute = (route = '') => {
   const value = String(route || '').trim()
@@ -29,8 +120,26 @@ const normalizeRoute = (route = '') => {
     return `/${value}`
   }
 
+  // 舊正式別名
+  if (value.startsWith('/games/grid-lottery')) {
+    const query = value.includes('?') ? value.slice(value.indexOf('?')) : ''
+
+    return `/games/premium-grid${query}`
+  }
+
+  if (value.startsWith('/games/egg-smash')) {
+    const query = value.includes('?') ? value.slice(value.indexOf('?')) : ''
+
+    return `/games/golden-egg${query}`
+  }
+
   // 正確情況：/games/xxx
   if (value.startsWith('/games/')) {
+    return value
+  }
+
+  // 正確情況：/play/xxx
+  if (value.startsWith('/play/')) {
     return value
   }
 
@@ -42,15 +151,166 @@ const normalizeRoute = (route = '') => {
   return value
 }
 
-const normalizeGame = (game = {}) => {
+const getSafeTemplateRoute = (templateId = '') => {
+  const normalizedTemplateId = normalizeGameTemplateId(templateId)
+
+  return OFFICIAL_TEMPLATE_ROUTE_MAP[normalizedTemplateId] || `/games/${normalizedTemplateId || 'premium-grid'}`
+}
+
+const buildTemplateRoute = (templateRoute, gameId, templateId = '') => {
+  const normalizedGameId = normalizeSlug(gameId)
+  const normalizedTemplateId = normalizeGameTemplateId(templateId)
+  const normalizedTemplateRoute = normalizeRoute(templateRoute)
+  const safeBaseRoute = normalizedTemplateRoute && !/^\/games\/\d+/.test(normalizedTemplateRoute)
+    ? normalizedTemplateRoute.split('?')[0]
+    : getSafeTemplateRoute(normalizedTemplateId)
+
+  if (!normalizedGameId || normalizedGameId === normalizedTemplateId) {
+    return safeBaseRoute
+  }
+
+  return `${safeBaseRoute}?gameId=${normalizedGameId}`
+}
+
+const getCanonicalOfficialGame = (game = {}) => {
+  const inferredTemplateId = inferTemplateIdFromText(game)
+  const normalizedTemplateId = normalizeGameTemplateId(inferredTemplateId)
+  const id = normalizeSlug(game.id || normalizedTemplateId)
+
   return {
-    ...game,
-    route: normalizeRoute(game.route)
+    normalizedId: normalizeGameTemplateId(id),
+    templateId: normalizedTemplateId
   }
 }
 
+const normalizeGame = (game = {}) => {
+  const originalId = normalizeSlug(game.id || '')
+  const inferredTemplateId = inferTemplateIdFromText(game)
+  const templateId = normalizeGameTemplateId(game.templateId || inferredTemplateId)
+  const normalizedId = normalizeGameTemplateId(originalId || templateId)
+  const isCustomClone = isNumericLikeId(originalId) || (!!game.templateId && originalId !== templateId)
+  const baseRoute = getSafeTemplateRoute(templateId || normalizedId)
+  const normalizedExistingRoute = normalizeRoute(game.route)
+
+  let route = normalizedExistingRoute
+
+  if (!route || /^\/games\/\d+/.test(route)) {
+    route = isCustomClone
+      ? buildTemplateRoute(baseRoute, originalId, templateId || normalizedId)
+      : baseRoute
+  }
+
+  if (route.startsWith('/games/grid-lottery')) {
+    route = route.replace('/games/grid-lottery', '/games/premium-grid')
+  }
+
+  if (route.startsWith('/games/egg-smash')) {
+    route = route.replace('/games/egg-smash', '/games/golden-egg')
+  }
+
+  if (/^\/games\/\d+/.test(route)) {
+    route = buildTemplateRoute(baseRoute, originalId, templateId || normalizedId)
+  }
+
+  const officialId = OFFICIAL_GAME_IDS.includes(normalizedId)
+    ? normalizedId
+    : templateId
+
+  return {
+    ...game,
+    id: originalId || officialId,
+    templateId: templateId || '',
+    route,
+    isOfficialMerchantGame: OFFICIAL_GAME_IDS.includes(originalId || normalizedId) && !isCustomClone,
+    merchantVisibility: OFFICIAL_GAME_IDS.includes(originalId || normalizedId) && !isCustomClone
+      ? 'official'
+      : 'reserved'
+  }
+}
+
+const dedupeOfficialGames = (settings = []) => {
+  const normalizedSettings = settings.map((game) => normalizeGame(game))
+  const usedOfficialIds = new Set()
+  const result = []
+
+  normalizedSettings.forEach((game) => {
+    const id = normalizeGameTemplateId(game.id)
+    const templateId = normalizeGameTemplateId(game.templateId)
+    const isCanonicalOfficial = OFFICIAL_GAME_IDS.includes(id) && id === templateId
+
+    if (isCanonicalOfficial) {
+      if (usedOfficialIds.has(id)) {
+        result.push({
+          ...game,
+          id: `${id}-reserved-${Date.now()}`,
+          merchantVisibility: 'reserved',
+          isOfficialMerchantGame: false,
+          name: `${game.name || id}（平台預留）`
+        })
+        return
+      }
+
+      usedOfficialIds.add(id)
+      result.push({
+        ...game,
+        id,
+        templateId: id,
+        route: getSafeTemplateRoute(id),
+        merchantVisibility: 'official',
+        isOfficialMerchantGame: true
+      })
+      return
+    }
+
+    result.push(game)
+  })
+
+  return result
+}
+
+const ensureOfficialGames = (settings = []) => {
+  const normalizedSettings = dedupeOfficialGames(settings)
+  const result = [...normalizedSettings]
+
+  OFFICIAL_GAME_IDS.forEach((officialId) => {
+    const exists = result.some((game) => {
+      return normalizeGameTemplateId(game.id) === officialId && game.merchantVisibility === 'official'
+    })
+
+    if (exists) return
+
+    const defaultGame = normalizeGame(defaultGameSettings.find((game) => {
+      return normalizeGameTemplateId(game.id) === officialId ||
+        normalizeGameTemplateId(game.templateId) === officialId ||
+        normalizeGame(game).templateId === officialId
+    }) || {})
+
+    result.unshift({
+      ...defaultGame,
+      id: officialId,
+      templateId: officialId,
+      name: officialId === 'premium-grid'
+        ? '精緻九宮格'
+        : officialId === 'wheel'
+          ? '幸運輪盤'
+          : '砸金蛋',
+      icon: officialId === 'premium-grid'
+        ? '✨'
+        : officialId === 'wheel'
+          ? '🎡'
+          : '🥚',
+      route: getSafeTemplateRoute(officialId),
+      status: 'enabled',
+      merchantVisibility: 'official',
+      isOfficialMerchantGame: true
+    })
+  })
+
+  return result
+}
+
 const normalizeGameSettings = (settings = []) => {
-  return settings.map((game) => normalizeGame(game))
+  return ensureOfficialGames(settings)
 }
 
 const saveGameSettings = () => {
@@ -104,7 +364,7 @@ const getGameSettingById = (id) => {
 
   if (urlGameId) {
     const customGame = gameSettings.value.find((game) => {
-      return game.id === urlGameId && game.templateId === id
+      return game.id === urlGameId && normalizeGameTemplateId(game.templateId) === normalizeGameTemplateId(id)
     })
 
     if (customGame) {
@@ -116,27 +376,15 @@ const getGameSettingById = (id) => {
 }
 
 const getRawGameSettingById = (id) => {
-  return gameSettings.value.find((game) => game.id === id)
+  const normalizedId = normalizeGameTemplateId(id)
+
+  return gameSettings.value.find((game) => {
+    return game.id === id || normalizeGameTemplateId(game.id) === normalizedId
+  })
 }
 
 const createSlug = (value) => {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-_]/g, '')
-}
-
-const buildTemplateRoute = (templateRoute, gameId) => {
-  const normalizedTemplateRoute = normalizeRoute(templateRoute)
-
-  if (!normalizedTemplateRoute) {
-    return `/games/${gameId}`
-  }
-
-  const baseRoute = normalizedTemplateRoute.split('?')[0]
-
-  return `${baseRoute}?gameId=${gameId}`
+  return normalizeSlug(value)
 }
 
 const addGameSetting = (payload = {}) => {
@@ -158,8 +406,9 @@ const addGameSetting = (payload = {}) => {
     }
   }
 
-  const templateGame = payload.templateId
-    ? getRawGameSettingById(payload.templateId)
+  const templateId = normalizeGameTemplateId(payload.templateId || inferTemplateIdFromText(payload))
+  const templateGame = templateId
+    ? getRawGameSettingById(templateId)
     : null
 
   const sourcePrizes = payload.prizes?.length
@@ -196,14 +445,12 @@ const addGameSetting = (payload = {}) => {
           }
         ]
 
-  const templateRoute = templateGame?.route?.split('?')[0] || ''
-  const route = payload.templateId
-    ? buildTemplateRoute(templateRoute, id)
-    : normalizeRoute(payload.route || `/games/${id}`)
+  const templateRoute = templateGame?.route?.split('?')[0] || getSafeTemplateRoute(templateId)
+  const route = buildTemplateRoute(templateRoute, id, templateId)
 
   const newGame = normalizeGame({
     id,
-    templateId: payload.templateId || templateGame?.id || '',
+    templateId,
     name: payload.name || templateGame?.name || '新遊戲',
     description: payload.description || templateGame?.description || '請輸入遊戲說明',
     icon: payload.icon || templateGame?.icon || '🎮',
@@ -213,7 +460,9 @@ const addGameSetting = (payload = {}) => {
     playLimit: Number(payload.playLimit || templateGame?.playLimit || 1),
     probabilityMode: payload.probabilityMode || templateGame?.probabilityMode || 'weight',
     requiredInviteCount: Number(payload.requiredInviteCount || templateGame?.requiredInviteCount || 0),
-    prizes: sourcePrizes
+    prizes: sourcePrizes,
+    merchantVisibility: 'reserved',
+    isOfficialMerchantGame: false
   })
 
   gameSettings.value.unshift(newGame)
@@ -234,13 +483,16 @@ const updateGameSetting = (gameId, payload = {}) => {
   }
 
   const currentGame = gameSettings.value[index]
+  const nextTemplateId = normalizeGameTemplateId(payload.templateId ?? currentGame.templateId ?? inferTemplateIdFromText(currentGame))
 
   const updatedGame = normalizeGame({
     ...currentGame,
-    templateId: payload.templateId ?? currentGame.templateId ?? '',
+    templateId: nextTemplateId,
     name: payload.name ?? currentGame.name,
     description: payload.description ?? currentGame.description,
-    route: normalizeRoute(payload.route ?? currentGame.route),
+    route: payload.route
+      ? normalizeRoute(payload.route)
+      : buildTemplateRoute(getSafeTemplateRoute(nextTemplateId), currentGame.id, nextTemplateId),
     icon: payload.icon ?? currentGame.icon,
     type: payload.type ?? currentGame.type,
     status: payload.status ?? currentGame.status,
@@ -369,7 +621,9 @@ const getGameSettingSummary = () => {
     disabled: gameSettings.value.filter((game) => game.status !== 'enabled').length,
     lottery: gameSettings.value.filter((game) => game.type === 'lottery').length,
     skill: gameSettings.value.filter((game) => game.type === 'skill').length,
-    mission: gameSettings.value.filter((game) => game.type === 'mission').length
+    mission: gameSettings.value.filter((game) => game.type === 'mission').length,
+    official: gameSettings.value.filter((game) => game.merchantVisibility === 'official').length,
+    reserved: gameSettings.value.filter((game) => game.merchantVisibility !== 'official').length
   }
 }
 
@@ -380,9 +634,19 @@ export function useAdminGameSettings() {
     return gameSettings.value.filter((game) => game.status === 'enabled')
   })
 
+  const officialMerchantGameSettings = computed(() => {
+    return gameSettings.value.filter((game) => game.merchantVisibility === 'official')
+  })
+
+  const reservedGameSettings = computed(() => {
+    return gameSettings.value.filter((game) => game.merchantVisibility !== 'official')
+  })
+
   return {
     gameSettings,
     enabledGameSettings,
+    officialMerchantGameSettings,
+    reservedGameSettings,
     loadGameSettings,
     saveGameSettings,
     resetGameSettings,
@@ -395,6 +659,8 @@ export function useAdminGameSettings() {
     deleteGamePrize,
     fixAllGameRoutes,
     normalizeRoute,
+    normalizeGameTemplateId,
+    getSafeTemplateRoute,
     getGameSettingSummary
   }
 }

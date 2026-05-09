@@ -1,4 +1,4 @@
-// 第 37201～37600 批：正式三遊戲模板對齊與錯誤路由修正版
+// 第 37601～38000 批：遊戲模板中心正式三遊戲資料源清理與錯誤路由根修正版
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -140,6 +140,10 @@ const templateVisibilityTabs = [
 ]
 
 const isOfficialMerchantGame = (game = {}) => {
+  if (game.merchantVisibility) {
+    return game.merchantVisibility === 'official'
+  }
+
   return MERCHANT_OFFICIAL_GAME_IDS.has(normalizeGameTemplateId(game.id))
 }
 
@@ -172,6 +176,10 @@ const getSafeTemplateRoute = (templateId = '') => {
   const normalizedId = normalizeGameTemplateId(templateId)
 
   return OFFICIAL_TEMPLATE_ROUTE_MAP[normalizedId] || `/games/${normalizedId}`
+}
+
+const getGameRouteDisplayText = (game = {}) => {
+  return getSafeTemplatePlayerRoute(game)
 }
 
 const getSafeTemplatePlayerRoute = (game = {}) => {
