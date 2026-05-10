@@ -1,4 +1,4 @@
-// 第 49201～49600 批：輪盤設定中心中文化與分類操作版
+// 第 49601～50000 批：輪盤設定分類內容分流修正版
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -158,6 +158,33 @@ const defaultSettings = () => ({
     hidePrizesBeforeDraw: false,
     enableSound: true,
     showDebugInfo: false
+  },
+  wheelStyle: {
+    wheelSize: 320,
+    outerRingWidth: 12,
+    centerButtonSize: 86,
+    pointerSize: 42,
+    prizeTextSize: 13,
+    prizeIconSize: 38,
+    cellGap: 2,
+    showPrizeIcon: true,
+    showPrizeName: true,
+    showSliceBorder: true
+  },
+  effects: {
+    enableTickSound: true,
+    enableResultSound: true,
+    enablePointerShake: true,
+    enableLightGlow: true,
+    enableConfetti: true,
+    enableSpinMask: true
+  },
+  content: {
+    rulesTitle: '活動規則',
+    rulesText: '請輸入商家提供的序號，驗證成功後即可開始轉盤。中獎後請依主辦單位公告方式兌換。',
+    prizeInfoTitle: '獎品說明',
+    prizeInfoText: '獎項、兌換方式與使用期限，以主辦單位現場或官方公告為準。',
+    footerNote: '請依照活動規則參加抽獎；獎項與兌換方式以主辦單位公告為準。'
   },
   prizes: [
     { id: 1, icon: '🎁', name: '50 元折價券', weight: 35, color: '#facc15' },
@@ -320,7 +347,7 @@ onMounted(() => {
       <div class="grid gap-0 xl:grid-cols-[1fr_0.72fr]">
         <div class="bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 p-6 text-white">
           <p class="text-xs font-black uppercase tracking-[0.24em] text-orange-200">
-            Wheel Admin Center｜第 49201～49600 批
+            Wheel Admin Center｜第 49601～50000 批
           </p>
           <h1 class="mt-3 text-3xl font-black">
             輪盤單一活動設定
@@ -486,9 +513,11 @@ onMounted(() => {
           </div>
         </section>
 
-        <section v-show="activeCategory === 'theme' || activeCategory === 'wheel'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+        <section v-show="activeCategory === 'theme'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">主題色彩</p>
-          <h2 class="mt-2 text-2xl font-black text-slate-950">視覺設定</h2>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">主題色彩設定</h2>
+          <p class="mt-2 text-sm font-bold text-slate-500">只調整整體配色：背景、面板、按鈕、指針與輪盤主色。</p>
+
           <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <label v-for="(value, key) in settings.theme" :key="key" class="grid gap-2 text-sm font-black text-slate-700">
               <span>{{ themeLabels[key] || key }}</span>
@@ -501,17 +530,189 @@ onMounted(() => {
           </div>
         </section>
 
-        <section v-show="activeCategory === 'display' || activeCategory === 'sound' || activeCategory === 'rules'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">顯示開關</p>
-          <h2 class="mt-2 text-2xl font-black text-slate-950">玩家畫面顯示設定</h2>
-          <p class="mt-2 text-sm font-bold text-slate-500">這裡已改成中文名稱，避免商家看到英文欄位看不懂。</p>
+        <section v-show="activeCategory === 'wheel'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">輪盤樣式</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">輪盤外觀與獎項顯示</h2>
+          <p class="mt-2 text-sm font-bold text-slate-500">這裡只管輪盤本體：尺寸、外框、中心按鈕、指針、獎項文字與圖示。</p>
+
+          <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              輪盤尺寸
+              <input v-model.number="settings.wheelStyle.wheelSize" type="range" min="260" max="420" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.wheelSize }} px</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              外框粗細
+              <input v-model.number="settings.wheelStyle.outerRingWidth" type="range" min="6" max="22" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.outerRingWidth }} px</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              中心按鈕大小
+              <input v-model.number="settings.wheelStyle.centerButtonSize" type="range" min="64" max="120" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.centerButtonSize }} px</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              指針大小
+              <input v-model.number="settings.wheelStyle.pointerSize" type="range" min="28" max="64" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.pointerSize }} px</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              獎項文字大小
+              <input v-model.number="settings.wheelStyle.prizeTextSize" type="range" min="10" max="20" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeTextSize }} px</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              獎項圖示大小
+              <input v-model.number="settings.wheelStyle.prizeIconSize" type="range" min="24" max="54" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeIconSize }} px</span>
+            </label>
+          </div>
+
+          <div class="mt-5 grid gap-3 md:grid-cols-3">
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              顯示獎項圖示
+              <input v-model="settings.wheelStyle.showPrizeIcon" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              顯示獎項名稱
+              <input v-model="settings.wheelStyle.showPrizeName" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              顯示分隔線
+              <input v-model="settings.wheelStyle.showSliceBorder" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+          </div>
+        </section>
+
+        <section v-show="activeCategory === 'display'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">展示區塊</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">玩家頁展示區塊</h2>
+          <p class="mt-2 text-sm font-bold text-slate-500">控制玩家頁要不要顯示剩餘次數、抽獎紀錄、獎品展示等區塊。</p>
+
           <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            <label v-for="(value, key) in settings.display" :key="key" class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
-              <span class="min-w-0">
-                <span class="block">{{ displayLabels[key] || key }}</span>
-                <span class="mt-1 block text-xs font-bold leading-5 text-slate-400">{{ displayDescriptions[key] || '控制玩家頁顯示或隱藏。' }}</span>
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              <span>
+                <span class="block">顯示剩餘次數</span>
+                <span class="mt-1 block text-xs font-bold text-slate-400">顯示目前可轉盤次數。</span>
               </span>
-              <input v-model="settings.display[key]" type="checkbox" class="h-5 w-5 shrink-0 rounded border-slate-300 text-orange-500" />
+              <input v-model="settings.display.showRemainingChance" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              <span>
+                <span class="block">顯示抽獎紀錄</span>
+                <span class="mt-1 block text-xs font-bold text-slate-400">玩家頁下方顯示我的抽獎紀錄。</span>
+              </span>
+              <input v-model="settings.display.showHistory" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              <span>
+                <span class="block">顯示獎品展示</span>
+                <span class="mt-1 block text-xs font-bold text-slate-400">顯示獎品展示橫向區塊。</span>
+              </span>
+              <input v-model="settings.display.showPrizeShelf" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              <span>
+                <span class="block">顯示品牌卡片</span>
+                <span class="mt-1 block text-xs font-bold text-slate-400">玩家頁上方品牌 Logo / 活動名稱。</span>
+              </span>
+              <input v-model="settings.display.showBrandCard" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              <span>
+                <span class="block">顯示活動狀態</span>
+                <span class="mt-1 block text-xs font-bold text-slate-400">顯示活動進行中、活動提示。</span>
+              </span>
+              <input v-model="settings.display.showStatusCard" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              <span>
+                <span class="block">顯示除錯資訊</span>
+                <span class="mt-1 block text-xs font-bold text-slate-400">只建議測試時開啟，正式頁請關閉。</span>
+              </span>
+              <input v-model="settings.display.showDebugInfo" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+          </div>
+        </section>
+
+        <section v-show="activeCategory === 'sound'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">音效特效</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">音效與動畫效果</h2>
+          <p class="mt-2 text-sm font-bold text-slate-500">這裡只管理聲音、跑燈、指針抖動、結果特效，不再混到展示開關。</p>
+
+          <div class="mt-5 grid gap-3 md:grid-cols-2">
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              開啟遊戲音效
+              <input v-model="settings.display.enableSound" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              轉盤卡點聲
+              <input v-model="settings.effects.enableTickSound" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              結果音效
+              <input v-model="settings.effects.enableResultSound" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              指針微震動
+              <input v-model="settings.effects.enablePointerShake" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              外圈光暈
+              <input v-model="settings.effects.enableLightGlow" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              中獎彩帶
+              <input v-model="settings.effects.enableConfetti" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
+          </div>
+        </section>
+
+        <section v-show="activeCategory === 'rules'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">規則說明</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">活動規則與獎品說明</h2>
+          <p class="mt-2 text-sm font-bold text-slate-500">這裡只編輯玩家會看到的規則文字與獎品說明。</p>
+
+          <div class="mt-5 grid gap-4">
+            <div class="grid gap-3 md:grid-cols-2">
+              <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+                顯示活動規則
+                <input v-model="settings.display.showRules" type="checkbox" class="h-5 w-5 shrink-0" />
+              </label>
+              <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+                顯示獎品說明
+                <input v-model="settings.display.showPrizeInfo" type="checkbox" class="h-5 w-5 shrink-0" />
+              </label>
+            </div>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              活動規則標題
+              <input v-model="settings.content.rulesTitle" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              活動規則內容
+              <textarea v-model="settings.content.rulesText" rows="5" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"></textarea>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              獎品說明標題
+              <input v-model="settings.content.prizeInfoTitle" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              獎品說明內容
+              <textarea v-model="settings.content.prizeInfoText" rows="5" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100"></textarea>
             </label>
           </div>
         </section>
@@ -636,14 +837,41 @@ onMounted(() => {
                     剩餘次數 99｜可轉盤
                   </div>
 
-                  <div class="relative mx-auto mt-5 aspect-square max-w-[300px] rounded-full border-[12px] border-white/80 p-3 shadow-2xl" :style="{ background: conicGradient }">
-                    <div class="absolute -top-5 left-1/2 z-10 -translate-x-1/2 text-4xl" :style="{ color: settings.theme.pointerColor }">▼</div>
-                    <div class="absolute inset-[38%] flex items-center justify-center rounded-full text-lg font-black text-white shadow-xl" :style="{ background: settings.theme.spinButtonColor }">
+                  <div
+                    class="relative mx-auto mt-5 aspect-square rounded-full border-white/80 p-3 shadow-2xl"
+                    :style="{
+                      background: conicGradient,
+                      maxWidth: `${settings.wheelStyle.wheelSize}px`,
+                      borderWidth: `${settings.wheelStyle.outerRingWidth}px`
+                    }"
+                  >
+                    <div
+                      class="absolute left-1/2 z-10 -translate-x-1/2"
+                      :style="{
+                        color: settings.theme.pointerColor,
+                        top: `-${Math.max(18, Math.round(settings.wheelStyle.pointerSize / 2))}px`,
+                        fontSize: `${settings.wheelStyle.pointerSize}px`
+                      }"
+                    >▼</div>
+                    <div
+                      class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-lg font-black text-white shadow-xl"
+                      :style="{
+                        background: settings.theme.spinButtonColor,
+                        width: `${settings.wheelStyle.centerButtonSize}px`,
+                        height: `${settings.wheelStyle.centerButtonSize}px`
+                      }"
+                    >
                       SPIN
                     </div>
                     <div class="grid h-full w-full place-items-center rounded-full border border-white/70 bg-white/10 text-center text-sm font-black text-white/95 backdrop-blur-[1px]">
                       <div class="grid gap-1">
-                        <span v-for="prize in previewPrizes.slice(0, 4)" :key="prize.id">{{ settings.display.hidePrizesBeforeDraw ? '神秘獎品' : `${prize.icon} ${prize.name}` }}</span>
+                        <span
+                          v-for="prize in previewPrizes.slice(0, 4)"
+                          :key="prize.id"
+                          :style="{ fontSize: `${settings.wheelStyle.prizeTextSize}px` }"
+                        >
+                          {{ settings.display.hidePrizesBeforeDraw ? '神秘獎品' : `${settings.wheelStyle.showPrizeIcon ? prize.icon : ''} ${settings.wheelStyle.showPrizeName ? prize.name : ''}` }}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -672,12 +900,12 @@ onMounted(() => {
 
                   <div class="mt-5 grid gap-3">
                     <div v-if="settings.display.showRules" class="rounded-3xl bg-white/95 p-4 text-slate-900">
-                      <p class="font-black">活動規則</p>
-                      <p class="mt-1 text-xs font-bold text-slate-400">點擊展開查看參加方式</p>
+                      <p class="font-black">{{ settings.content.rulesTitle }}</p>
+                      <p class="mt-1 text-xs font-bold text-slate-400">{{ settings.content.rulesText }}</p>
                     </div>
                     <div v-if="settings.display.showPrizeInfo" class="rounded-3xl bg-white/95 p-4 text-slate-900">
-                      <p class="font-black">獎品說明</p>
-                      <p class="mt-1 text-xs font-bold text-slate-400">點擊展開查看獎品規則</p>
+                      <p class="font-black">{{ settings.content.prizeInfoTitle }}</p>
+                      <p class="mt-1 text-xs font-bold text-slate-400">{{ settings.content.prizeInfoText }}</p>
                     </div>
                   </div>
                 </div>
