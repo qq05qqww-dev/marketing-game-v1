@@ -42,6 +42,7 @@ import AdminGamePreviewView from '../views/admin/AdminGamePreviewView.vue'
 import AdminSystemStatusView from '../views/admin/AdminSystemStatusView.vue'
 import AdminGoldenEggView from '../views/admin/AdminGoldenEggView.vue'
 import AdminPremiumGridSettingsView from '../views/admin/AdminPremiumGridSettingsView.vue'
+import AdminAccountSettingsView from '../views/admin/AdminAccountSettingsView.vue'
 
 import { usePageProgress } from '../composables/usePageProgress'
 
@@ -476,6 +477,16 @@ const router = createRouter({
             requiresAdmin: true,
             batch: 'V2.3-3501-3900',
             safeAdminRoute: true
+          }
+        },
+        {
+          path: 'account',
+          name: 'admin-account',
+          component: AdminAccountSettingsView,
+          meta: {
+            title: '我的帳號',
+            requiresAuth: true,
+            requiresAdmin: true
           }
         },
         {

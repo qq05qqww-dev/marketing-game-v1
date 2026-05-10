@@ -1,6 +1,11 @@
 import jwt from 'jsonwebtoken'
 import prisma from '../config/prisma.js'
-import { loginUser, registerUser } from '../services/auth.service.js'
+import {
+  loginUser,
+  registerUser,
+  updateCurrentUserProfile,
+  changeCurrentUserPassword
+} from '../services/auth.service.js'
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
@@ -605,6 +610,70 @@ export const getMe = async (req, res) => {
       success: false,
       message: '取得目前會員資料失敗',
       error: String(error)
+    })
+  }
+}
+
+export const updateMe = async (req, res) => {
+  try {
+    const userId = Number(req.user?.id)
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: '登入資料無效，請重新登入'
+      })
+    }
+
+    const result = await updateCurrentUserProfile({
+      userId,
+      name: req.body?.name
+    })
+
+    return res.json({
+      success: true,
+      message: '帳號資料已更新',
+      data: result
+    })
+  } catch (error) {
+    console.error('更新目前會員資料失敗:', error)
+
+    return res.status(400).json({
+      success: false,
+      message: error.message || '更新目前會員資料失敗'
+    })
+  }
+}
+
+export const changeMyPassword = async (req, res) => {
+  try {
+    const userId = Number(req.user?.id)
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: '登入資料無效，請重新登入'
+      })
+    }
+
+    const result = await changeCurrentUserPassword({
+      userId,
+      currentPassword: req.body?.currentPassword,
+      newPassword: req.body?.newPassword,
+      confirmPassword: req.body?.confirmPassword
+    })
+
+    return res.json({
+      success: true,
+      message: '密碼已更新',
+      data: result
+    })
+  } catch (error) {
+    console.error('修改目前會員密碼失敗:', error)
+
+    return res.status(400).json({
+      success: false,
+      message: error.message || '修改密碼失敗'
     })
   }
 }

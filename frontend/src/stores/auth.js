@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+// 第 39601～40000 批：商家我的帳號與自行修改密碼版
 import { getProfileApi } from '../api/auth'
 
 export const useAuthStore = defineStore('auth', {

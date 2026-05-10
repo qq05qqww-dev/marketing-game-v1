@@ -4,6 +4,8 @@ import {
   login,
   register,
   getMe,
+  updateMe,
+  changeMyPassword,
   googleLogin,
   googleCallback,
   lineLogin,
@@ -17,8 +19,10 @@ const router = express.Router()
 router.post('/register', register)
 router.post('/login', login)
 
-// 取得目前登入會員資料
+// 取得 / 更新目前登入會員資料
 router.get('/me', authMiddleware, getMe)
+router.patch('/me', authMiddleware, updateMe)
+router.patch('/me/password', authMiddleware, changeMyPassword)
 
 // Google OAuth Login
 router.get('/google', googleLogin)

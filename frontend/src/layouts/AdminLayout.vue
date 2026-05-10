@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-// 第 37201～37600 批：正式三遊戲模板對齊與錯誤路由修正版
+// 第 39601～40000 批：商家我的帳號與自行修改密碼版
 
 const route = useRoute()
 const router = useRouter()
@@ -108,6 +108,13 @@ const menuItems = computed(() => {
       to: '/admin/game-preview',
       icon: '👁️',
       roles: ['ADMIN', 'SUPER_ADMIN']
+    },
+    {
+      label: '我的帳號',
+      description: '個人資料 / 修改密碼',
+      to: '/admin/account',
+      icon: '🔐',
+      roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
     },
     {
       label: '系統狀態',
