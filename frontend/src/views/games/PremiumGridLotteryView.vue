@@ -641,11 +641,23 @@ const shouldRequireSerialCode = computed(() => {
 // 上一批有把畫面與邏輯改成使用 effectiveGridChances / postGridJson，
 // 但實際檔案沒有成功插入這兩個 const，導致 ReferenceError。
 const effectiveGridChances = computed(() => {
+  if (shouldRequireSerialCode.value && !serialVerify.verified) {
+    return 0
+  }
+
   if (shouldRequireSerialCode.value && serialVerify.verified) {
     return Math.max(0, Number(serialVerify.remainingChance || 0))
   }
 
   return Math.max(0, Number(player.chances || 0))
+})
+
+const frontGridChanceText = computed(() => {
+  if (shouldRequireSerialCode.value && !serialVerify.verified) {
+    return '請先輸入商家提供的序號'
+  }
+
+  return `還有 ${effectiveGridChances.value} 次抽獎機會`
 })
 
 const GRID_API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '')
@@ -1778,7 +1790,7 @@ const premiumGridSharedPlayBoardBaseSettings = computed(() => ({
     participationTitle: '活動參加方式',
     participationText: '點擊九宮格中間按鈕開始抽獎，中獎後會自動寫入遊戲紀錄。分享活動會複製活動連結並增加抽獎機會。',
     customerServiceText: '請依照活動規則參加抽獎，獎項與兌換方式以主辦單位公告為準。',
-    // 第 46001～46400 批：玩家前台清潔顯示開關。
+    // 第 46401～46800 批：九宮格玩家頁序號前不顯示次數與紀錄直接顯示版。
     showFrontRules: true,
     showFrontPrizeInfo: true,
     showFrontPrizeShelf: true,
@@ -2440,6 +2452,17 @@ const drawingStatusText = computed(() => {
   return drawPerformanceMessage.value || '九宮格正在高速跑燈抽選，請不要關閉畫面。'
 })
 
+const frontGridRecordRows = computed(() => {
+  return drawLogs.value.slice(0, 5).map((log, index) => ({
+    id: log.id || `grid-record-${index}`,
+    icon: log.icon || '🎁',
+    prizeName: log.prizeName || log.name || log.title || '抽獎紀錄',
+    resultText: log.isWin === false ? '未中獎' : '中獎',
+    serialCode: log.serialCode || log.code || normalizedSerialCode.value || '—',
+    createdAt: log.createdAt || log.time || ''
+  }))
+})
+
 const layoutFeatureCards = computed(() => {
   return [
     {
@@ -2642,6 +2665,11 @@ const showStorageMessage = (message) => {
 }
 
 const updateChanceText = () => {
+  if (shouldRequireSerialCode.value && !serialVerify.verified) {
+    campaign.chanceText = '請先輸入商家提供的序號'
+    return
+  }
+
   const displayChance = shouldRequireSerialCode.value && serialVerify.verified
     ? serialVerify.remainingChance
     : player.chances
@@ -33285,7 +33313,7 @@ const toggleWheelRealFilePrep11011150 = () => {
 
                 <section class="relative mt-5 text-center sm:mt-6">
                   <p class="text-sm font-black text-white/90">
-                    {{ campaign.chanceText }}
+                    {{ frontGridChanceText }}
                   </p>
 
                   <p
@@ -34601,26 +34629,60 @@ const toggleWheelRealFilePrep11011150 = () => {
                 </section>
 
                 <section
-                  v-if="frontDisplay.showHistoryButton || frontDisplay.showBackToGameCenter"
-                  class="relative mt-4 grid gap-3 sm:grid-cols-2"
+                  v-if="frontDisplay.showHistoryButton"
+                  class="relative mt-4 rounded-3xl bg-white/95 p-4 text-slate-900 shadow-xl"
                 >
-                  <button
-                    v-if="frontDisplay.showHistoryButton"
-                    type="button"
-                    class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
-                    @click="goGameHistory"
-                  >
-                    查看我的紀錄
-                  </button>
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-sm font-black text-slate-900">
+                        我的抽獎紀錄
+                      </p>
+                      <p class="mt-1 text-xs font-bold text-slate-400">
+                        最近 {{ frontGridRecordRows.length }} 筆紀錄直接顯示在前台
+                      </p>
+                    </div>
 
-                  <button
-                    v-if="frontDisplay.showBackToGameCenter"
-                    type="button"
-                    class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
-                    @click="goGamesCenter"
+                    <button
+                      type="button"
+                      class="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black text-orange-600"
+                      @click="goGameHistory"
+                    >
+                      全部紀錄
+                    </button>
+                  </div>
+
+                  <div v-if="frontGridRecordRows.length" class="mt-3 grid gap-2">
+                    <article
+                      v-for="record in frontGridRecordRows"
+                      :key="record.id"
+                      class="flex items-center justify-between gap-3 rounded-2xl bg-orange-50 px-3 py-2"
+                    >
+                      <div class="flex min-w-0 items-center gap-2">
+                        <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-lg shadow-sm">
+                          {{ record.icon }}
+                        </span>
+                        <div class="min-w-0 text-left">
+                          <p class="truncate text-xs font-black text-slate-900">
+                            {{ record.prizeName }}
+                          </p>
+                          <p class="mt-0.5 truncate text-[11px] font-bold text-slate-400">
+                            序號：{{ record.serialCode }}
+                          </p>
+                        </div>
+                      </div>
+
+                      <span class="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-black text-orange-600 shadow-sm">
+                        {{ record.resultText }}
+                      </span>
+                    </article>
+                  </div>
+
+                  <div
+                    v-else
+                    class="mt-3 rounded-2xl bg-orange-50 px-4 py-4 text-center text-xs font-black leading-5 text-orange-600"
                   >
-                    回遊戲中心
-                  </button>
+                    目前尚無抽獎紀錄，完成抽獎後會直接顯示在這裡。
+                  </div>
                 </section>
 
                 <p class="relative mt-4 text-center text-[11px] font-bold leading-5 text-white/70">

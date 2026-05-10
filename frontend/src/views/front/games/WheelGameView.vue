@@ -1832,7 +1832,7 @@ const campaign = reactive({
   ruleContent: '每日登入可獲得 1 次轉盤機會。\n分享活動可依設定增加轉盤機會。\n獎項數量有限，送完為止。',
   prizeInfoTitle: '獎品說明',
   prizeInfoContent: '中獎結果會顯示於畫面與最近轉盤紀錄。\n實際兌換方式以主辦單位公告為準。\n部分獎項可能有使用期限或資格限制。',
-  // 第 46001～46400 批：玩家前台清潔顯示開關。正式玩家頁預設簡潔，mode=admin 才顯示完整輔助資訊。
+  // 第 46401～46800 批：輪盤玩家頁分享區隱藏與剩餘次數長條版。正式玩家頁預設簡潔，mode=admin 才顯示完整輔助資訊。
   showFrontRules: true,
   showFrontPrizeInfo: true,
   showFrontPrizeShelf: false,
@@ -8437,21 +8437,21 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </div>
               </section>
 
-              <section class="premium-front-summary premium-vip-summary mt-4 grid grid-cols-3 gap-2">
+              <section class="premium-front-summary premium-vip-summary mx-auto mt-4 grid w-full max-w-sm gap-2">
                 <div
                   v-for="item in frontPlayerSummaryItems"
                   :key="item.label"
-                  class="rounded-3xl border border-yellow-100/25 bg-white/15 px-2 py-3 text-center shadow-inner backdrop-blur"
+                  class="rounded-[999px] border border-yellow-100/35 bg-white/15 px-6 py-4 text-center shadow-inner backdrop-blur"
                 >
-                  <p class="text-[10px] font-black text-yellow-50/70">
+                  <p class="text-xs font-black text-yellow-50/75">
                     {{ item.label }}
                   </p>
 
-                  <p class="mt-1 truncate text-xl font-black text-white drop-shadow">
+                  <p class="mt-1 text-3xl font-black text-white drop-shadow">
                     {{ item.value }}
                   </p>
 
-                  <p class="mt-0.5 text-[10px] font-bold text-yellow-50/70">
+                  <p class="mt-0.5 text-xs font-bold text-yellow-50/75">
                     {{ item.subText }}
                   </p>
                 </div>
@@ -8754,7 +8754,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
               </section>
 
               <section
-                v-if="!isAdminMode && effectiveWheelChances <= 0"
+                v-if="frontDisplay.showShareButton && !isAdminMode && effectiveWheelChances <= 0"
                 class="relative mt-4 rounded-3xl border border-white/30 bg-white/20 p-4 text-center shadow-inner backdrop-blur"
               >
                 <p class="text-sm font-black text-white">
