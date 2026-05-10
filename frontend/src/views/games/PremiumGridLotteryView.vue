@@ -1790,7 +1790,7 @@ const premiumGridSharedPlayBoardBaseSettings = computed(() => ({
     participationTitle: '活動參加方式',
     participationText: '點擊九宮格中間按鈕開始抽獎，中獎後會自動寫入遊戲紀錄。分享活動會複製活動連結並增加抽獎機會。',
     customerServiceText: '請依照活動規則參加抽獎，獎項與兌換方式以主辦單位公告為準。',
-    // 第 47601～48000 批：九宮格抽選中不揭露獎品與神秘格精緻版。
+    // 第 48001～48400 批：九宮格神秘獎品亮黃色卡片配色版。
     showFrontRules: true,
     showFrontPrizeInfo: true,
     showFrontPrizeShelf: true,
@@ -33326,7 +33326,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                             : 'bg-gradient-to-br from-slate-400 to-slate-600 text-white'
                           : isGridPrizeRevealed(item, index)
                             ? 'bg-gradient-to-br from-yellow-100 via-yellow-300 to-orange-300 text-orange-900'
-                            : 'bg-gradient-to-br from-orange-300 via-orange-400 to-red-500 text-white',
+                            : 'bg-gradient-to-br from-yellow-100 via-yellow-300 to-orange-300 text-orange-900',
                         !item.isButton && isDrawing && activeIndex === index
                           ? 'ring-4 ring-yellow-200 scale-[1.03] shadow-[0_0_28px_rgba(253,224,71,.75)]'
                           : '',
@@ -33379,18 +33379,18 @@ const toggleWheelRealFilePrep11011150 = () => {
                         </template>
 
                         <template v-else>
-                          <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/30 text-3xl shadow-inner backdrop-blur sm:h-12 sm:w-12 sm:text-4xl">
+                          <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/55 text-3xl shadow-inner backdrop-blur sm:h-12 sm:w-12 sm:text-4xl">
                             {{ getGridHiddenPrizeIcon(index) }}
                           </span>
 
                           <span
-                            class="font-black leading-tight text-white drop-shadow"
+                            class="font-black leading-tight text-orange-900 drop-shadow-sm"
                             :style="getAdminPreviewTextStyle('prizeTextSize', 13)"
                           >
                             {{ getGridHiddenPrizeLabel(item, index) }}
                           </span>
 
-                          <span class="mt-0.5 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-black text-white/90">
+                          <span class="mt-0.5 rounded-full bg-white/45 px-2 py-0.5 text-[10px] font-black text-orange-700">
                             {{ getGridHiddenPrizeBadge(item, index) }}
                           </span>
                         </template>
