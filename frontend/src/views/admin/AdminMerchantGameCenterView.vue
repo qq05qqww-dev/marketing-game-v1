@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 37201～37600 批：正式三遊戲模板對齊與錯誤路由修正版
+// 第 40401～40800 批：商家客服文字可編輯與交付文案精緻版
 //
 // 建議放置位置：
 // frontend/src/views/admin/AdminMerchantGameCenterView.vue
@@ -8,7 +8,8 @@
 // 本頁目的：
 // 1. 給商家一個簡單、精緻、正式營運用的入口。
 // 2. 只顯示商家最常用的三個正式遊戲：輪盤、九宮格、砸金蛋。
-// 3. 每個遊戲提供玩家網址、複製網址、開啟玩家頁、到活動管理、序號管理、報表入口。\n// 4. 此頁才是商家真正會看到的遊戲操作中心；平台模板中心不再當作商家操作入口。
+// 3. 每個遊戲提供玩家網址、複製網址、開啟玩家頁、到活動管理、序號管理、報表入口。
+// 4. 此頁才是商家真正會看到的遊戲操作中心；平台模板中心不再當作商家操作入口。
 // 4. 不再讓商家誤進「遊戲模板中心」或 debug 頁。
 
 import { computed, onMounted, ref } from 'vue'
@@ -23,6 +24,12 @@ const campaigns = ref([])
 const loading = ref(false)
 const loadError = ref('')
 const copiedMessage = ref('')
+const customerTextEditMode = ref(false)
+const customerTextDraft = ref('')
+const savedCustomerText = ref('')
+
+const CUSTOMER_TEXT_STORAGE_PREFIX = 'mgp_merchant_customer_text_v1'
+
 
 const officialFrontendBase = computed(() => {
   const envUrl = import.meta.env.VITE_PUBLIC_FRONTEND_URL || ''
@@ -54,6 +61,39 @@ const tenantName = computed(() => {
     tenantSlug.value ||
     '目前商家'
   )
+})
+
+const customerTextStorageKey = computed(() => {
+  return `${CUSTOMER_TEXT_STORAGE_PREFIX}_${tenantSlug.value || 'default'}`
+})
+
+const generatedCustomerText = computed(() => {
+  const activeGames = gameCards.value.filter((item) => item.hasCampaign)
+
+  const lines = [
+    `您好，這是 ${tenantName.value} 的抽獎活動網址：`,
+    ''
+  ]
+
+  if (activeGames.length) {
+    activeGames.forEach((item) => {
+      lines.push(`${item.title}：`)
+      lines.push(item.playerUrl)
+      lines.push('')
+    })
+  } else {
+    lines.push('目前活動尚未建立完成，請稍後再確認活動網址。')
+    lines.push('')
+  }
+
+  lines.push('請輸入店家提供的活動序號後即可參加抽獎。')
+  lines.push('中獎後請依店家公告方式兌換獎品。')
+
+  return lines.join('\n').trim()
+})
+
+const displayCustomerText = computed(() => {
+  return savedCustomerText.value || generatedCustomerText.value
 })
 
 const role = computed(() => String(authStore.user?.role || '').toUpperCase())
@@ -127,6 +167,70 @@ const gameCards = computed(() => {
 const activeGameCount = computed(() => gameCards.value.filter((item) => item.isActive).length)
 const createdGameCount = computed(() => gameCards.value.filter((item) => item.hasCampaign).length)
 
+const notCreatedGameCount = computed(() => gameCards.value.filter((item) => !item.hasCampaign).length)
+const inactiveGameCount = computed(() => gameCards.value.filter((item) => item.hasCampaign && !item.isActive).length)
+
+const operationSteps = [
+  {
+    step: '01',
+    title: '確認活動',
+    description: '先確認輪盤、九宮格、砸金蛋是否已建立並啟用。',
+    action: '活動管理',
+    icon: '📣'
+  },
+  {
+    step: '02',
+    title: '建立序號',
+    description: '每個活動都要建立自己的序號，客人才能驗證遊玩。',
+    action: '管理序號',
+    icon: '🎟️'
+  },
+  {
+    step: '03',
+    title: '確認獎項',
+    description: '檢查獎項名稱、庫存與兌換說明，避免客人中獎後不清楚。',
+    action: '管理獎項',
+    icon: '🎁'
+  },
+  {
+    step: '04',
+    title: '複製網址',
+    description: '把正式玩家網址貼到 LINE、簡訊、社群或門市 QR Code。',
+    action: '複製玩家網址',
+    icon: '🔗'
+  },
+  {
+    step: '05',
+    title: '查看報表',
+    description: '活動開始後，到報表中心追蹤遊玩、中獎與兌獎紀錄。',
+    action: '查看報表',
+    icon: '📊'
+  }
+]
+
+const deliveryChecklist = computed(() => [
+  {
+    label: '已建立正式活動',
+    done: createdGameCount.value > 0,
+    description: `${createdGameCount.value} / 3 個遊戲已有活動`
+  },
+  {
+    label: '至少一個活動啟用',
+    done: activeGameCount.value > 0,
+    description: `${activeGameCount.value} 個活動啟用中`
+  },
+  {
+    label: '可複製玩家網址',
+    done: gameCards.value.some((item) => item.playerUrl),
+    description: '玩家網址已依商家 slug 自動產生'
+  },
+  {
+    label: '可查看營運資料',
+    done: true,
+    description: '可由報表中心與發獎核銷追蹤結果'
+  }
+])
+
 const statusTextMap = {
   ACTIVE: '啟用中',
   DRAFT: '草稿',
@@ -143,6 +247,16 @@ const getStatusClass = (item) => {
   if (!item.hasCampaign) return 'bg-slate-100 text-slate-500 border-slate-200'
   if (item.isActive) return 'bg-emerald-100 text-emerald-700 border-emerald-200'
   return 'bg-amber-100 text-amber-700 border-amber-200'
+}
+
+const getCampaignTitle = (item) => {
+  return item?.campaign?.title || item?.campaign?.name || '尚未建立正式活動'
+}
+
+const getNextActionText = (item) => {
+  if (!item.hasCampaign) return '先建立活動'
+  if (!item.isActive) return '確認活動狀態'
+  return '可直接交付客人'
 }
 
 const loadCampaigns = async () => {
@@ -261,21 +375,69 @@ const goReports = (item) => {
   })
 }
 
-const copyCustomerText = () => {
-  const lines = [
-    `您好，這是 ${tenantName.value} 的抽獎活動網址：`,
-    '',
-    ...gameCards.value
-      .filter((item) => item.hasCampaign)
-      .map((item) => `${item.title}：\n${item.playerUrl}`),
-    '',
-    '請輸入店家提供的活動序號後即可參加抽獎。'
-  ]
+const loadCustomerText = () => {
+  try {
+    savedCustomerText.value = localStorage.getItem(customerTextStorageKey.value) || ''
+  } catch (error) {
+    console.warn('讀取客服文字失敗:', error)
+    savedCustomerText.value = ''
+  }
+}
 
-  copyText(lines.join('\n'))
+const startEditCustomerText = () => {
+  customerTextDraft.value = displayCustomerText.value
+  customerTextEditMode.value = true
+}
+
+const cancelEditCustomerText = () => {
+  customerTextDraft.value = ''
+  customerTextEditMode.value = false
+}
+
+const saveCustomerText = () => {
+  const text = customerTextDraft.value.trim()
+
+  try {
+    if (text) {
+      localStorage.setItem(customerTextStorageKey.value, text)
+      savedCustomerText.value = text
+    } else {
+      localStorage.removeItem(customerTextStorageKey.value)
+      savedCustomerText.value = ''
+    }
+
+    customerTextEditMode.value = false
+    copiedMessage.value = '客服文字已儲存'
+    window.setTimeout(() => {
+      copiedMessage.value = ''
+    }, 1800)
+  } catch (error) {
+    console.error('儲存客服文字失敗:', error)
+    loadError.value = '儲存客服文字失敗，請稍後再試。'
+  }
+}
+
+const resetCustomerText = () => {
+  try {
+    localStorage.removeItem(customerTextStorageKey.value)
+    savedCustomerText.value = ''
+    customerTextDraft.value = generatedCustomerText.value
+    copiedMessage.value = '已還原預設客服文字'
+    window.setTimeout(() => {
+      copiedMessage.value = ''
+    }, 1800)
+  } catch (error) {
+    console.error('還原客服文字失敗:', error)
+    loadError.value = '還原客服文字失敗，請稍後再試。'
+  }
+}
+
+const copyCustomerText = () => {
+  copyText(displayCustomerText.value)
 }
 
 onMounted(() => {
+  loadCustomerText()
   loadCampaigns()
 })
 </script>
@@ -287,13 +449,13 @@ onMounted(() => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Game Center｜第 36401～36800 批
+              Merchant Game Center｜第 40401～40800 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               商家遊戲中心
             </h1>
             <p class="mt-3 max-w-3xl text-sm font-bold leading-7 text-slate-300">
-              這裡是正式給商家使用的簡化入口。要修改商家的遊戲，不用進複雜的模板頁，直接從這裡進入輪盤、九宮格、砸金蛋的活動、序號、獎項與報表。
+              這裡是商家正式交付入口。商家要給客人遊玩、複製玩家網址、管理序號、檢查獎項與查看報表，都從這裡開始，不需要進平台模板中心。
             </p>
           </div>
 
@@ -305,6 +467,10 @@ onMounted(() => {
             <div class="rounded-3xl bg-white/10 px-5 py-4 text-center ring-1 ring-white/10">
               <p class="text-2xl font-black">{{ activeGameCount }}</p>
               <p class="mt-1 text-xs font-bold text-slate-300">啟用中</p>
+            </div>
+            <div class="rounded-3xl bg-white/10 px-5 py-4 text-center ring-1 ring-white/10">
+              <p class="text-2xl font-black">{{ notCreatedGameCount }}</p>
+              <p class="mt-1 text-xs font-bold text-slate-300">待建立</p>
             </div>
             <button
               type="button"
@@ -332,6 +498,84 @@ onMounted(() => {
           <p class="mt-1 text-sm font-bold leading-6 text-slate-600">
             建立活動 → 建立序號 → 設定獎項 → 複製玩家網址 → 查看報表。
           </p>
+        </div>
+      </div>
+    </section>
+
+
+    <section class="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+      <div class="rounded-[2rem] border border-emerald-100 bg-emerald-50 p-6">
+        <div class="flex items-start justify-between gap-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">
+              Official Handoff
+            </p>
+            <h2 class="mt-2 text-2xl font-black text-emerald-950">
+              商家正式交付檢查
+            </h2>
+            <p class="mt-2 text-sm font-bold leading-6 text-emerald-700">
+              給商家或客人之前，先確認活動、網址、序號與報表入口都能正常使用。
+            </p>
+          </div>
+          <div class="rounded-3xl bg-white px-5 py-4 text-center shadow-sm">
+            <p class="text-3xl font-black text-emerald-700">{{ activeGameCount }}</p>
+            <p class="mt-1 text-xs font-black text-slate-500">可交付遊戲</p>
+          </div>
+        </div>
+
+        <div class="mt-5 grid gap-3 md:grid-cols-2">
+          <div
+            v-for="item in deliveryChecklist"
+            :key="item.label"
+            class="rounded-3xl border bg-white p-4"
+            :class="item.done ? 'border-emerald-100' : 'border-amber-100'"
+          >
+            <div class="flex items-start gap-3">
+              <span
+                class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl text-sm font-black"
+                :class="item.done ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
+              >
+                {{ item.done ? '✓' : '!' }}
+              </span>
+              <div>
+                <p class="text-sm font-black text-slate-950">{{ item.label }}</p>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-500">{{ item.description }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rounded-[2rem] border border-blue-100 bg-white p-6 shadow-sm">
+        <p class="text-xs font-black uppercase tracking-[0.2em] text-blue-500">
+          Merchant Guide
+        </p>
+        <h2 class="mt-2 text-2xl font-black text-slate-950">
+          商家操作導引
+        </h2>
+        <div class="mt-5 space-y-3">
+          <div
+            v-for="step in operationSteps"
+            :key="step.step"
+            class="rounded-3xl border border-slate-100 bg-slate-50 p-4"
+          >
+            <div class="flex items-start gap-3">
+              <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-xl shadow-sm">
+                {{ step.icon }}
+              </div>
+              <div>
+                <p class="text-sm font-black text-slate-950">
+                  {{ step.step }}｜{{ step.title }}
+                </p>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+                  {{ step.description }}
+                </p>
+                <p class="mt-2 text-xs font-black text-blue-600">
+                  建議點：{{ step.action }}
+                </p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -381,6 +625,18 @@ onMounted(() => {
             <div class="rounded-3xl bg-slate-50 p-4">
               <p class="text-xs font-black text-slate-400">活動狀態</p>
               <p class="mt-1 text-lg font-black text-slate-950">{{ getStatusText(item.status) }}</p>
+            </div>
+          </div>
+
+          <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-black text-indigo-500">目前活動</p>
+                <p class="mt-1 text-sm font-black text-slate-950">{{ getCampaignTitle(item) }}</p>
+              </div>
+              <span class="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700">
+                {{ getNextActionText(item) }}
+              </span>
             </div>
           </div>
 
@@ -454,33 +710,81 @@ onMounted(() => {
         <div>
           <h2 class="text-xl font-black text-slate-950">商家客服文字</h2>
           <p class="mt-2 text-sm font-bold leading-6 text-slate-500">
-            可以直接複製貼到 LINE、簡訊、社群貼文或客服對話。
+            可以自行修改文字，儲存後會記住這個商家的文案，再複製到 LINE、簡訊、社群貼文或客服對話。
           </p>
         </div>
-        <button
-          type="button"
-          class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
-          @click="copyCustomerText"
-        >
-          複製客服文字
-        </button>
+
+        <div class="flex flex-wrap gap-2">
+          <button
+            v-if="!customerTextEditMode"
+            type="button"
+            class="rounded-2xl border border-indigo-200 bg-indigo-50 px-5 py-3 text-sm font-black text-indigo-700 transition hover:bg-indigo-100"
+            @click="startEditCustomerText"
+          >
+            編輯文字
+          </button>
+
+          <button
+            type="button"
+            class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+            @click="copyCustomerText"
+          >
+            複製客服文字
+          </button>
+        </div>
       </div>
 
-      <div class="mt-5 rounded-3xl bg-slate-50 p-5 text-sm font-bold leading-7 text-slate-600">
-        <p>您好，這是 {{ tenantName }} 的抽獎活動網址：</p>
-        <template
-          v-for="item in gameCards.filter((game) => game.hasCampaign)"
-          :key="item.type"
-        >
-          <p class="mt-3 font-black text-slate-950">{{ item.title }}</p>
-          <p class="break-all font-mono text-xs">{{ item.playerUrl }}</p>
-        </template>
-        <p class="mt-3">請輸入店家提供的活動序號後即可參加抽獎。</p>
+      <div
+        v-if="customerTextEditMode"
+        class="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50 p-5"
+      >
+        <label class="block">
+          <span class="text-sm font-black text-indigo-900">可編輯客服文案</span>
+          <textarea
+            v-model="customerTextDraft"
+            rows="10"
+            class="mt-3 w-full rounded-2xl border border-indigo-100 bg-white px-4 py-3 text-sm font-bold leading-7 text-slate-700 outline-none transition focus:border-indigo-400"
+            placeholder="請輸入要給客人的客服文字..."
+          />
+        </label>
+
+        <div class="mt-4 flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            @click="cancelEditCustomerText"
+          >
+            取消
+          </button>
+
+          <button
+            type="button"
+            class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-100"
+            @click="resetCustomerText"
+          >
+            還原預設
+          </button>
+
+          <button
+            type="button"
+            class="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700"
+            @click="saveCustomerText"
+          >
+            儲存文字
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-else
+        class="mt-5 whitespace-pre-wrap rounded-3xl bg-slate-50 p-5 text-sm font-bold leading-7 text-slate-600"
+      >
+        {{ displayCustomerText }}
       </div>
     </section>
 
     <section class="rounded-[2rem] border border-blue-100 bg-blue-50 p-6">
-      <h2 class="text-lg font-black text-blue-950">商家操作說明</h2>
+      <h2 class="text-lg font-black text-blue-950">快速流程提醒</h2>
       <div class="mt-4 grid gap-3 md:grid-cols-4">
         <div class="rounded-3xl bg-white p-4">
           <p class="text-2xl">1️⃣</p>
