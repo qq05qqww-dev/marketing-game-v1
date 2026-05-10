@@ -1790,7 +1790,7 @@ const premiumGridSharedPlayBoardBaseSettings = computed(() => ({
     participationTitle: '活動參加方式',
     participationText: '點擊九宮格中間按鈕開始抽獎，中獎後會自動寫入遊戲紀錄。分享活動會複製活動連結並增加抽獎機會。',
     customerServiceText: '請依照活動規則參加抽獎，獎項與兌換方式以主辦單位公告為準。',
-    // 第 46401～46800 批：九宮格玩家頁序號前不顯示次數與紀錄直接顯示版。
+    // 第 47201～47600 批：九宮格獎品預設隱藏與抽中後揭曉版。
     showFrontRules: true,
     showFrontPrizeInfo: true,
     showFrontPrizeShelf: true,
@@ -2462,6 +2462,37 @@ const frontGridRecordRows = computed(() => {
     createdAt: log.createdAt || log.time || ''
   }))
 })
+
+const isGridPrizeRevealed = (item = {}, index = -1) => {
+  if (item?.isButton) return true
+  if (isAdminMode.value) return true
+  if (isDrawing.value && activeIndex.value === index) return true
+
+  const prize = resultPrize.value
+
+  if (!prize) return false
+
+  return String(prize.id || '') === String(item.id || '') || String(prize.name || '') === String(item.name || '')
+}
+
+const getGridHiddenPrizeIcon = (index = 0) => {
+  const icons = ['🎁', '💎', '🎟️', '✨', '🎁', '🎫', '🎁', '👑', '🏆']
+  return icons[index] || '🎁'
+}
+
+const getGridPrizeCellTitle = (item = {}, index = -1) => {
+  if (item?.isButton) return drawButtonText.value
+  if (isGridPrizeRevealed(item, index)) return item.shortName || item.name || '中獎獎品'
+
+  return '神秘獎品'
+}
+
+const getGridPrizeCellAriaLabel = (item = {}, index = -1) => {
+  if (item?.isButton) return drawButtonText.value
+  if (isGridPrizeRevealed(item, index)) return item.name || item.shortName || '已揭曉獎品'
+
+  return '隱藏獎品，抽中後揭曉'
+}
 
 const layoutFeatureCards = computed(() => {
   return [
@@ -33270,12 +33301,15 @@ const toggleWheelRealFilePrep11011150 = () => {
                       v-for="(item, index) in gridItems"
                       :key="item.id"
                       type="button"
+                      :aria-label="getGridPrizeCellAriaLabel(item, index)"
                       class="relative aspect-square overflow-hidden rounded-2xl border border-orange-200/80 text-center transition duration-150 sm:rounded-3xl"
                       :class="item.isButton
                         ? canStartGridDraw
                           ? 'bg-gradient-to-br from-orange-500 to-red-600 text-white'
                           : 'bg-gradient-to-br from-slate-400 to-slate-600 text-white'
-                        : 'bg-gradient-to-br from-yellow-100 via-yellow-300 to-orange-300 text-orange-900'
+                        : isGridPrizeRevealed(item, index)
+                          ? 'bg-gradient-to-br from-yellow-100 via-yellow-300 to-orange-300 text-orange-900'
+                          : 'bg-gradient-to-br from-yellow-200 via-orange-300 to-orange-500 text-white'
                       "
                       :style="getCellStyle(index)"
                       :disabled="item.isButton && !canStartGridDraw"
@@ -33285,27 +33319,58 @@ const toggleWheelRealFilePrep11011150 = () => {
                       <div class="absolute bottom-2 right-2 h-6 w-6 rounded-full border-b-4 border-r-4 border-white/40 sm:h-8 sm:w-8"></div>
 
                       <div class="flex h-full flex-col items-center justify-center gap-1 px-1.5 sm:px-2">
-                        <img
-                          v-if="item.imageUrl"
-                          :src="item.imageUrl"
-                          :alt="item.name"
-                          class="mx-auto h-9 w-9 max-w-full rounded-xl object-cover shadow-md sm:h-10 sm:w-10"
-                        />
+                        <template v-if="item.isButton">
+                          <span class="text-3xl drop-shadow sm:text-4xl">
+                            ✨
+                          </span>
 
-                        <span
-                          v-else
-                          class="text-3xl drop-shadow sm:text-4xl"
-                        >
-                          {{ item.icon }}
-                        </span>
+                          <span
+                            class="font-black leading-tight text-white"
+                            :style="getAdminPreviewTextStyle('prizeTextSize', 13)"
+                          >
+                            {{ drawButtonText }}
+                          </span>
+                        </template>
 
-                        <span
-                          class="font-black leading-tight"
-                          :class="item.isButton ? 'text-white' : 'text-orange-900'"
-                          :style="getAdminPreviewTextStyle('prizeTextSize', 13)"
-                        >
-                          {{ item.isButton ? drawButtonText : item.shortName }}
-                        </span>
+                        <template v-else-if="isGridPrizeRevealed(item, index)">
+                          <img
+                            v-if="item.imageUrl"
+                            :src="item.imageUrl"
+                            :alt="item.name"
+                            class="mx-auto h-9 w-9 max-w-full rounded-xl object-cover shadow-md sm:h-10 sm:w-10"
+                          />
+
+                          <span
+                            v-else
+                            class="text-3xl drop-shadow sm:text-4xl"
+                          >
+                            {{ item.icon }}
+                          </span>
+
+                          <span
+                            class="font-black leading-tight text-orange-900"
+                            :style="getAdminPreviewTextStyle('prizeTextSize', 13)"
+                          >
+                            {{ getGridPrizeCellTitle(item, index) }}
+                          </span>
+                        </template>
+
+                        <template v-else>
+                          <span class="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/30 text-3xl shadow-inner backdrop-blur sm:h-12 sm:w-12 sm:text-4xl">
+                            {{ getGridHiddenPrizeIcon(index) }}
+                          </span>
+
+                          <span
+                            class="font-black leading-tight text-white drop-shadow"
+                            :style="getAdminPreviewTextStyle('prizeTextSize', 13)"
+                          >
+                            神秘獎品
+                          </span>
+
+                          <span class="mt-0.5 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-black text-white/90">
+                            抽中揭曉
+                          </span>
+                        </template>
                       </div>
                     </button>
                   </div>
