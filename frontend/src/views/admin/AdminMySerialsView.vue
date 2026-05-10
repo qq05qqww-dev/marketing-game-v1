@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 41601～42000 批：正式對客網址避免 localhost 交付修正版
+// 第 42401～42800 批：商家序號管理重新讀取與自動同步版
 //
 // 新增位置：
 // frontend/src/views/admin/AdminMySerialsView.vue
@@ -11,7 +11,7 @@
 // 3. 支援查詢、新增、批次新增、自動產生、停用、恢復、刪除、複製。
 // 4. 使用既有後端 /api/serial-codes/campaigns/:campaignId API，不改 DB。
 
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getAdminCampaignsApi } from '../../api/campaign'
 import http from '../../api/http'
@@ -97,6 +97,10 @@ const statusFilter = ref('ALL')
 const copiedMessage = ref('')
 const errorMessage = ref('')
 const successMessage = ref('')
+const lastReloadAt = ref('')
+const autoRefreshEnabled = ref(true)
+const refreshingByUser = ref(false)
+const refreshTimer = ref(null)
 const expandedCreate = ref(true)
 const expandedBulk = ref(false)
 
@@ -273,6 +277,24 @@ const formatDate = (value) => {
   })
 }
 
+const formatTime = (value) => {
+  if (!value) return '尚未重新讀取'
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) return '尚未重新讀取'
+
+  return date.toLocaleTimeString('zh-TW', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+const setReloadTimestamp = () => {
+  lastReloadAt.value = new Date().toISOString()
+}
+
 const unwrapData = (response) => {
   const payload = response?.data ?? response
 
@@ -363,11 +385,60 @@ const loadSerialCodes = async () => {
     const data = unwrapData(response)
 
     serialCodes.value = Array.isArray(data) ? data : data?.items || data?.serialCodes || []
+    setReloadTimestamp()
   } catch (error) {
     console.error('載入序號失敗:', error)
     setError(error?.response?.data?.message || error?.message || '載入序號失敗。')
   } finally {
     loadingSerials.value = false
+  }
+}
+
+const refreshSerialCodes = async ({ silent = false } = {}) => {
+  if (!selectedCampaign.value?.id) {
+    serialCodes.value = []
+    return
+  }
+
+  if (!silent) {
+    refreshingByUser.value = true
+  }
+
+  try {
+    await loadSerialCodes()
+
+    if (!silent) {
+      setSuccess('序號列表已重新讀取，玩家遊玩後的剩餘次數已同步。')
+    }
+  } finally {
+    if (!silent) {
+      refreshingByUser.value = false
+    }
+  }
+}
+
+const startAutoRefresh = () => {
+  stopAutoRefresh()
+
+  if (!autoRefreshEnabled.value) return
+
+  refreshTimer.value = window.setInterval(() => {
+    if (document.hidden) return
+    if (!selectedCampaign.value?.id) return
+    refreshSerialCodes({ silent: true })
+  }, 15000)
+}
+
+const stopAutoRefresh = () => {
+  if (refreshTimer.value) {
+    window.clearInterval(refreshTimer.value)
+    refreshTimer.value = null
+  }
+}
+
+const handleVisibilityChange = () => {
+  if (!document.hidden) {
+    refreshSerialCodes({ silent: true })
   }
 }
 
@@ -596,6 +667,10 @@ watch([statusFilter, searchKeyword], () => {
   loadSerialCodes()
 })
 
+watch(autoRefreshEnabled, () => {
+  startAutoRefresh()
+})
+
 onMounted(async () => {
   await loadCampaigns()
 
@@ -605,6 +680,15 @@ onMounted(async () => {
   }
 
   await loadSerialCodes()
+  startAutoRefresh()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('focus', handleVisibilityChange)
+})
+
+onBeforeUnmount(() => {
+  stopAutoRefresh()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('focus', handleVisibilityChange)
 })
 </script>
 
@@ -615,7 +699,7 @@ onMounted(async () => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Serials｜第 41601～42000 批
+              Merchant Serials｜第 42401～42800 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               我的序號管理
@@ -628,10 +712,18 @@ onMounted(async () => {
           <div class="flex flex-wrap gap-3">
             <button
               type="button"
-              class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
-              @click="loadSerialCodes"
+              class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200 disabled:opacity-60"
+              :disabled="refreshingByUser || loadingSerials || !selectedCampaign"
+              @click="refreshSerialCodes()"
             >
-              重新整理序號
+              {{ refreshingByUser || loadingSerials ? '讀取中...' : '重新讀取序號' }}
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
+              @click="autoRefreshEnabled = !autoRefreshEnabled"
+            >
+              {{ autoRefreshEnabled ? '自動同步：開' : '自動同步：關' }}
             </button>
             <button
               type="button"
@@ -704,6 +796,39 @@ onMounted(async () => {
     >
       {{ errorMessage || successMessage || copiedMessage }}
     </div>
+
+    <section class="rounded-[2rem] border border-blue-100 bg-blue-50 p-5 shadow-sm">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-sm font-black text-blue-900">
+            序號同步狀態
+          </p>
+          <p class="mt-1 text-xs font-bold leading-5 text-blue-700">
+            玩家遊玩後，後端資料已更新；此頁需要重新讀取才會看到最新剩餘次數。已開啟自動同步時，每 15 秒會自動讀取一次。
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="rounded-full bg-white px-4 py-2 text-xs font-black text-blue-700 shadow-sm">
+            最後讀取：{{ formatTime(lastReloadAt) }}
+          </span>
+          <span
+            class="rounded-full px-4 py-2 text-xs font-black shadow-sm"
+            :class="autoRefreshEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'"
+          >
+            {{ autoRefreshEnabled ? '自動同步中' : '手動同步' }}
+          </span>
+          <button
+            type="button"
+            class="rounded-2xl bg-blue-600 px-5 py-3 text-sm font-black text-white transition hover:bg-blue-700 disabled:opacity-60"
+            :disabled="refreshingByUser || loadingSerials || !selectedCampaign"
+            @click="refreshSerialCodes()"
+          >
+            {{ refreshingByUser || loadingSerials ? '讀取中...' : '立即重新讀取' }}
+          </button>
+        </div>
+      </div>
+    </section>
 
     <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
       <div class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
@@ -915,6 +1040,14 @@ onMounted(async () => {
           </div>
 
           <div class="flex flex-wrap gap-2">
+            <button
+              type="button"
+              class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+              :disabled="refreshingByUser || loadingSerials || !selectedCampaign"
+              @click="refreshSerialCodes()"
+            >
+              {{ refreshingByUser || loadingSerials ? '讀取中...' : '重新讀取' }}
+            </button>
             <button
               type="button"
               class="rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black text-slate-600 transition hover:bg-slate-50"
