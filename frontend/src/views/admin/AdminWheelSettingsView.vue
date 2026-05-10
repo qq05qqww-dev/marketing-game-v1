@@ -1,4 +1,4 @@
-// 第 56401～56800 批：輪盤設定頁儲存前防呆確認版
+// 第 56801～57200 批：輪盤設定頁儲存後驗收摘要版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -102,6 +102,7 @@ const storageKey = computed(() => isPlatformTemplateMode.value
 const savedMessage = ref('')
 const copiedMessage = ref('')
 const saveErrorMessage = ref('')
+const saveAuditRecord = ref(null)
 const remoteConfigLoaded = ref(false)
 const isSaving = ref(false)
 const previewKey = ref(0)
@@ -469,6 +470,106 @@ const saveScopeGuard = computed(() => {
   }
 })
 
+
+const formatSaveAuditTime = (value = '') => {
+  if (!value) return '尚未儲存'
+
+  try {
+    return new Date(value).toLocaleString('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  } catch (error) {
+    return String(value)
+  }
+}
+
+const buildSaveAuditRecord = (status = 'success', extra = {}) => {
+  const platformMode = isPlatformTemplateMode.value
+
+  return {
+    status,
+    batch: '56801-57200',
+    savedAt: new Date().toISOString(),
+    mode: platformMode ? 'platform_template' : 'merchant_campaign',
+    title: platformMode ? '平台輪盤模板儲存驗收' : '商家輪盤活動儲存驗收',
+    target: platformMode
+      ? `platform-template:${templateId.value}`
+      : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
+    effect: platformMode
+      ? '只更新平台模板草稿，不會修改任何商家既有活動。'
+      : '只更新目前商家活動 gameConfig.settings，不會回寫平台模板或影響其他商家。',
+    playerSource: platformMode
+      ? '玩家頁不直接讀平台模板。新輪盤活動建立時才會複製模板預設。'
+      : '玩家頁讀取目前商家活動資料庫設定，手機重新整理後才會看到更新。',
+    templateGuard: platformMode
+      ? '平台模板本體'
+      : (templateCloneStatus.value.safe ? '安全商家副本，已鎖定不自動同步平台模板' : '尚未確認完整 templateMeta，建議檢查活動來源'),
+    ...extra
+  }
+}
+
+const saveResultAudit = computed(() => {
+  const record = saveAuditRecord.value
+
+  if (!record) {
+    return {
+      eyebrow: 'Save Result Audit｜第 56801～57200 批',
+      title: '尚未執行本次儲存',
+      badge: '等待儲存',
+      badgeClass: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+      statusText: '目前尚未有本次儲存結果。按下儲存並確認後，這裡會顯示儲存目標、影響範圍與隔離狀態。',
+      target: isPlatformTemplateMode.value
+        ? `platform-template:${templateId.value}`
+        : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
+      effect: isPlatformTemplateMode.value
+        ? '預計只保存平台模板草稿，不會動到商家既有活動。'
+        : '預計只更新目前商家活動設定，不會回寫平台模板。',
+      playerSource: isPlatformTemplateMode.value
+        ? '玩家頁不直接讀平台模板。'
+        : '玩家頁會讀目前活動的資料庫設定。',
+      templateGuard: isPlatformTemplateMode.value
+        ? '平台模板本體'
+        : templateCloneStatus.value.syncLabel,
+      savedAtLabel: '尚未儲存',
+      safe: true
+    }
+  }
+
+  const isSuccess = record.status === 'success'
+  const isCancelled = record.status === 'cancelled'
+
+  return {
+    eyebrow: 'Save Result Audit｜第 56801～57200 批',
+    title: record.title || '儲存結果驗收',
+    badge: isSuccess ? '儲存成功' : (isCancelled ? '已取消儲存' : '儲存失敗'),
+    badgeClass: isSuccess
+      ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+      : (isCancelled ? 'bg-slate-100 text-slate-700 ring-1 ring-slate-200' : 'bg-rose-100 text-rose-800 ring-1 ring-rose-200'),
+    statusText: record.message || (isSuccess ? '本次儲存已完成，並已通過儲存範圍檢查。' : '本次儲存沒有完成。'),
+    target: record.target,
+    effect: record.effect,
+    playerSource: record.playerSource,
+    templateGuard: record.templateGuard,
+    savedAtLabel: formatSaveAuditTime(record.savedAt),
+    safe: isSuccess || isCancelled
+  }
+})
+
+const saveResultAuditItems = computed(() => [
+  { label: '儲存目標', value: saveResultAudit.value.target },
+  { label: '影響範圍', value: saveResultAudit.value.effect },
+  { label: '玩家頁來源', value: saveResultAudit.value.playerSource },
+  { label: '隔離保護', value: saveResultAudit.value.templateGuard },
+  { label: '驗收批次', value: '56801-57200' },
+  { label: '儲存時間', value: saveResultAudit.value.savedAtLabel }
+])
+
 const safePreviewUrl = computed(() => {
   try {
     const parsed = new URL(playerUrl.value, frontOrigin.value)
@@ -639,6 +740,9 @@ const saveSettings = async (options = {}) => {
 
   if (isPlatformTemplateMode.value) {
     remoteConfigLoaded.value = false
+    saveAuditRecord.value = buildSaveAuditRecord('success', {
+      message: '平台輪盤模板草稿已儲存；本次沒有修改任何商家既有活動。'
+    })
     if (!silent) {
       savedMessage.value = '已儲存平台輪盤模板草稿。這不會改到商家單一活動。'
       window.setTimeout(() => {
@@ -649,6 +753,11 @@ const saveSettings = async (options = {}) => {
   }
 
   if (options?.localOnly === true) {
+    saveAuditRecord.value = buildSaveAuditRecord('success', {
+      title: '商家輪盤活動本機草稿驗收',
+      message: '本次只暫存本機草稿與預覽，尚未寫入後端資料庫。',
+      effect: '只更新瀏覽器本機草稿與右側預覽，不會寫入平台模板或商家活動資料庫。'
+    })
     if (!silent) {
       savedMessage.value = '已暫存本機草稿，右側預覽已重新載入。'
       window.setTimeout(() => {
@@ -663,6 +772,9 @@ const saveSettings = async (options = {}) => {
   try {
     await saveGameConfig()
     remoteConfigLoaded.value = true
+    saveAuditRecord.value = buildSaveAuditRecord('success', {
+      message: '商家輪盤活動設定已正式寫入資料庫；平台模板與其他商家活動沒有被修改。'
+    })
 
     if (!silent) {
       savedMessage.value = '已正式儲存到資料庫，玩家手機重新整理後會同步看到。'
@@ -671,7 +783,12 @@ const saveSettings = async (options = {}) => {
       }, 2600)
     }
   } catch (error) {
-    saveErrorMessage.value = error?.message || '儲存到資料庫失敗，請確認後端與登入權限。'
+    const message = error?.message || '儲存到資料庫失敗，請確認後端與登入權限。'
+    saveAuditRecord.value = buildSaveAuditRecord('failed', {
+      message,
+      effect: '本次儲存失敗，沒有完成資料庫寫入。請先確認後端、登入權限與 campaignId。'
+    })
+    saveErrorMessage.value = message
     savedMessage.value = ''
   } finally {
     isSaving.value = false
@@ -713,6 +830,11 @@ const guardedSaveSettings = async (options = {}) => {
     : window.confirm(buildSaveConfirmMessage())
 
   if (!confirmed) {
+    saveAuditRecord.value = buildSaveAuditRecord('cancelled', {
+      title: isPlatformTemplateMode.value ? '平台輪盤模板儲存已取消' : '商家輪盤活動儲存已取消',
+      message: '你已取消儲存，本次沒有修改平台模板或商家活動。',
+      effect: '取消後不會寫入任何資料。'
+    })
     copiedMessage.value = '已取消儲存，沒有修改平台模板或商家活動。'
     window.setTimeout(() => {
       copiedMessage.value = ''
@@ -1095,6 +1217,43 @@ onMounted(async () => {
 
       <div class="mt-4 rounded-3xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-800">
         {{ saveScopeGuard.warning }}
+      </div>
+    </section>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-500">{{ saveResultAudit.eyebrow }}</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">{{ saveResultAudit.title }}</h2>
+          <p class="mt-2 max-w-4xl text-sm font-bold leading-6 text-slate-500">
+            {{ saveResultAudit.statusText }}
+          </p>
+        </div>
+
+        <span
+          class="inline-flex rounded-full px-4 py-2 text-xs font-black"
+          :class="saveResultAudit.badgeClass"
+        >
+          {{ saveResultAudit.badge }}
+        </span>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div
+          v-for="item in saveResultAuditItems"
+          :key="item.label"
+          class="rounded-3xl border border-slate-100 bg-slate-50 p-4"
+        >
+          <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
+          <p class="mt-2 break-all text-sm font-black leading-6 text-slate-800">{{ item.value }}</p>
+        </div>
+      </div>
+
+      <div
+        class="mt-4 rounded-3xl border p-4 text-sm font-bold leading-6"
+        :class="saveResultAudit.safe ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'"
+      >
+        {{ isPlatformTemplateMode ? '驗收重點：平台模板儲存後仍只是模板草稿，不會直接同步到任何既有商家活動。' : '驗收重點：商家活動儲存後仍是該活動自己的設定，不會回寫平台模板，也不會影響其他商家。' }}
       </div>
     </section>
 
