@@ -1,4 +1,4 @@
-// 第 37601～38000 批：遊戲模板中心正式三遊戲資料源清理與錯誤路由根修正版
+// 第 53201～53600 批：平台輪盤模板模組編輯入口修正版
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -576,6 +576,30 @@ const templateRouteMap = {
   'referral-task': '/games/referral-task'
 }
 
+const PLATFORM_TEMPLATE_EDITOR_ROUTES = {
+  wheel: '/admin/wheel-settings/template?templateMode=1&templateOnly=1&gameId=wheel&playerUrl=/games/wheel'
+}
+
+const isPlatformTemplateEditable = (game = {}) => {
+  const normalizedId = normalizeGameTemplateId(game.templateId || game.id)
+
+  return Boolean(PLATFORM_TEMPLATE_EDITOR_ROUTES[normalizedId])
+}
+
+const getPlatformTemplateEditorRoute = (game = {}) => {
+  const normalizedId = normalizeGameTemplateId(game.templateId || game.id)
+
+  return PLATFORM_TEMPLATE_EDITOR_ROUTES[normalizedId] || `/admin/game-settings/${game.id}/edit`
+}
+
+const getEditButtonText = (game = {}) => {
+  if (!isSingleGameMode.value && isPlatformTemplateEditable(game)) {
+    return '模板模組設定'
+  }
+
+  return '編輯設定'
+}
+
 const getGameLogoText = (game) => {
   return String(game?.icon || '🎮').trim() || '🎮'
 }
@@ -589,15 +613,15 @@ const getGameWebsiteHint = (game) => {
 }
 
 const getPlayerPreviewRoute = (game) => {
+  if (!isSingleGameMode.value) {
+    return normalizeRoute(getSafeTemplatePlayerRoute(game) || game?.route || '/games')
+  }
+
   if (isOfficialMerchantLinkAvailable(game)) {
     return normalizeRoute(getOfficialMerchantPlayerRoute(game))
   }
 
-  if (isSingleGameMode.value) {
-    return normalizeRoute(getSingleActivityPlayerRoute(game))
-  }
-
-  return normalizeRoute(getSafeTemplatePlayerRoute(game) || game?.route || '/games')
+  return normalizeRoute(getSingleActivityPlayerRoute(game))
 }
 
 const getAdminPreviewRoute = (game) => {
@@ -2303,10 +2327,10 @@ const getTestSteps = (game) => {
   return [
     {
       title: '編輯設定',
-      description: '修改遊戲名稱、圖示、說明、遊玩限制',
-      icon: '✏️',
-      path: `/admin/game-settings/${game.id}/edit`,
-      buttonText: '去編輯'
+      description: isPlatformTemplateEditable(game) ? '修改平台輪盤模板，不會改到商家單一活動' : '修改遊戲名稱、圖示、說明、遊玩限制',
+      icon: isPlatformTemplateEditable(game) ? '🎡' : '✏️',
+      path: getPlatformTemplateEditorRoute(game),
+      buttonText: isPlatformTemplateEditable(game) ? '去模板' : '去編輯'
     },
     {
       title: '獎項設定',
@@ -2430,7 +2454,7 @@ const goProbabilitySettings = (game) => {
 }
 
 const editGameSettings = (game) => {
-  router.push(`/admin/game-settings/${game.id}/edit`)
+  router.push(getPlatformTemplateEditorRoute(game))
 }
 
 const goTestStep = (step) => {
@@ -2559,7 +2583,7 @@ loadReportExportLogsFromStorage()
 
           <p class="mt-3 text-sm font-bold leading-7 text-white/75">
             商家真正要操作活動、複製玩家網址、管理序號與查看報表，請到「商家遊戲中心」。
-            本頁只用來整理平台支援哪些遊戲模組，避免把未開放模板誤交付給商家。本頁的「玩家版」會直接開商家正式活動網址，方便你確認商家與客人看到的是同一個版本。
+            本頁只用來整理平台支援哪些遊戲模組，避免把未開放模板誤交付給商家。本頁的「玩家版」只開平台模板預覽；要修改商家實際活動，請到「商家遊戲中心」。
           </p>
 
           <div class="mt-5 flex flex-wrap gap-3">
@@ -3869,7 +3893,14 @@ loadReportExportLogsFromStorage()
                 </div>
 
                 <div
-                  v-if="isOfficialMerchantLinkAvailable(game)"
+                  v-if="!isSingleGameMode && isPlatformTemplateEditable(game)"
+                  class="mt-3 rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-xs font-black leading-5 text-orange-700"
+                >
+                  平台模板模組：點「模板模組設定」會進入平台輪盤模板編輯，不會改到 A 商家或任何單一活動。
+                </div>
+
+                <div
+                  v-if="isSingleGameMode && isOfficialMerchantLinkAvailable(game)"
                   class="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-black leading-5 text-emerald-700"
                 >
                   商家正式玩家頁：{{ getOfficialMerchantPlayerRoute(game) }}
@@ -4156,7 +4187,7 @@ loadReportExportLogsFromStorage()
 
               <p class="mt-2 break-all">
                 <span class="font-black text-blue-900">玩家版路徑：</span>
-                {{ isOfficialMerchantLinkAvailable(game) ? getOfficialMerchantPlayerRoute(game) : getPlayerPreviewRoute(game) }}
+                {{ getPlayerPreviewRoute(game) }}
               </p>
 
               <button
@@ -4266,7 +4297,7 @@ loadReportExportLogsFromStorage()
               class="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-black text-white transition hover:bg-blue-600"
               @click="editGameSettings(game)"
             >
-              編輯設定
+              {{ getEditButtonText(game) }}
             </button>
 
             <button
@@ -4290,7 +4321,7 @@ loadReportExportLogsFromStorage()
             </h3>
 
             <p class="mt-1 text-sm leading-6 text-blue-700">
-              建議依照 1 → 2 → 3 → 4 的順序測試，確認後台修改後前台有同步。
+              建議依照 1 → 2 → 3 → 4 的順序測試；平台模板修改不會影響既有商家活動。
             </p>
           </div>
 

@@ -22,7 +22,7 @@
  * - 只補公用模板設定檔
  */
 
-export const GAME_TEMPLATE_VERSION = 'Multi Game Platform V2.3 第 345 批：公用模板完整整合前後台穩定備份版'
+export const GAME_TEMPLATE_VERSION = 'Multi Game Platform V2.3 第 53201～53600 批：平台輪盤模板模組編輯入口修正版'
 
 export const COMMON_FRONT_PLAYER_SECTIONS = [
   {
@@ -318,7 +318,7 @@ export const GAME_TEMPLATE_TYPES = [
     status: 'active',
     playBoardComponent: 'WheelPlayBoard',
     routeMode: 'common-player',
-    description: '幸運輪盤抽獎玩法，使用公用玩家頁與 WheelPlayBoard。正式 WheelGameView.vue 不受影響。',
+    description: '幸運輪盤抽獎玩法，使用公用玩家頁與 WheelPlayBoard。平台模板可由 /admin/wheel-settings/template?templateMode=1 編輯，商家單一活動設定不受影響。',
     commonFrontSections: [
       'hero',
       'chanceCard',
@@ -1624,7 +1624,19 @@ export const getCommonTemplateCompleteIntegrationTotalStableCheckpoint = () => {
   }
 }
 
+
+export const WHEEL_PLATFORM_TEMPLATE_EDITOR = {
+  type: 'wheel',
+  label: '幸運輪盤平台模板',
+  editorRoute: '/admin/wheel-settings/template?templateMode=1&templateOnly=1&gameId=wheel&playerUrl=/games/wheel',
+  previewRoute: '/games/wheel',
+  storageKey: 'mgp:wheel-admin-settings:platform-template:wheel',
+  scope: 'platform-template',
+  note: '平台總管理員用於維護輪盤模組預設外觀；不直接覆蓋商家既有活動。'
+}
+
 export default {
+  WHEEL_PLATFORM_TEMPLATE_EDITOR,
   getCommonTemplateCompleteIntegrationTotalStableCheckpoint,
   getCommonTemplateCompleteIntegrationReadCompletedCheckpoint,
   getCommonTemplateCompleteIntegrationStableCheckpoint,

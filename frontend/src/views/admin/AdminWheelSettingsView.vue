@@ -1,4 +1,4 @@
-// 第 52801～53200 批：輪盤設定預覽定位、獎項表單與品牌按鈕修正版
+// 第 53201～53600 批：平台輪盤模板模式與商家活動模式分流修正版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -25,7 +25,18 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-const campaignId = computed(() => normalizeSingleQueryValue(route.params.id || route.query.campaignId || route.query.id || ''))
+const routeRecordId = computed(() => normalizeSingleQueryValue(route.params.id || route.query.campaignId || route.query.id || ''))
+const templateId = computed(() => normalizeSingleQueryValue(route.query.gameId || route.query.templateId || 'wheel') || 'wheel')
+const isPlatformTemplateMode = computed(() => {
+  const id = routeRecordId.value
+
+  return route.query.templateMode === '1' ||
+    route.query.templateOnly === '1' ||
+    id === 'template' ||
+    id === 'wheel-template' ||
+    id === 'platform-template'
+})
+const campaignId = computed(() => (isPlatformTemplateMode.value ? '' : routeRecordId.value))
 const tenantSlug = computed(() => normalizeSingleQueryValue(route.query.tenantSlug || 'a-shop') || 'a-shop')
 
 const normalizeUrl = (value = '') => String(value || '').trim().replace(/\/$/, '')
@@ -50,6 +61,12 @@ const frontOrigin = computed(() => {
 })
 
 const playerUrl = computed(() => {
+  if (isPlatformTemplateMode.value) {
+    const rawTemplateUrl = normalizeSingleQueryValue(route.query.playerUrl || '/games/wheel') || '/games/wheel'
+    const path = rawTemplateUrl.startsWith('/') ? rawTemplateUrl : `/${rawTemplateUrl}`
+    return `${frontOrigin.value}${path}`
+  }
+
   const raw = normalizeSingleQueryValue(route.query.playerUrl || '')
 
   const buildCleanUrl = (baseUrl) => {
@@ -78,7 +95,10 @@ const playerUrl = computed(() => {
   const query = campaignId.value ? `?campaignId=${encodeURIComponent(campaignId.value)}` : ''
   return `${frontOrigin.value}/play/${tenantSlug.value}/wheel${query}`
 })
-const storageKey = computed(() => `${STORAGE_PREFIX}${tenantSlug.value}:${campaignId.value || 'draft'}`)
+const storageKey = computed(() => isPlatformTemplateMode.value
+  ? `${STORAGE_PREFIX}platform-template:${templateId.value}`
+  : `${STORAGE_PREFIX}${tenantSlug.value}:${campaignId.value || 'draft'}`
+)
 const savedMessage = ref('')
 const copiedMessage = ref('')
 const saveErrorMessage = ref('')
@@ -309,6 +329,12 @@ const safePreviewUrl = computed(() => {
     parsed.searchParams.set('tenantSlug', tenantSlug.value)
     parsed.searchParams.set('adminPreviewFocus', previewFocusMode.value)
 
+    if (isPlatformTemplateMode.value) {
+      parsed.searchParams.set('templatePreview', '1')
+      parsed.searchParams.set('templateMode', '1')
+      parsed.searchParams.set('templateId', templateId.value)
+    }
+
     if (campaignId.value) {
       parsed.searchParams.set('campaignId', campaignId.value)
     }
@@ -323,6 +349,12 @@ const safePreviewUrl = computed(() => {
       tenantSlug: tenantSlug.value,
       adminPreviewFocus: previewFocusMode.value
     })
+
+    if (isPlatformTemplateMode.value) {
+      params.set('templatePreview', '1')
+      params.set('templateMode', '1')
+      params.set('templateId', templateId.value)
+    }
 
     if (campaignId.value) params.set('campaignId', campaignId.value)
 
@@ -347,6 +379,7 @@ const unwrapApiPayload = (payload) => {
 }
 
 const fetchGameConfig = async () => {
+  if (isPlatformTemplateMode.value) return null
   if (!campaignId.value) return null
 
   const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId.value)}/game-config`, {
@@ -368,6 +401,10 @@ const fetchGameConfig = async () => {
 }
 
 const saveGameConfig = async () => {
+  if (isPlatformTemplateMode.value) {
+    return { success: true, mode: 'platform-template-local-draft' }
+  }
+
   if (!campaignId.value) {
     throw new Error('缺少 campaignId，無法儲存到資料庫')
   }
@@ -405,6 +442,11 @@ const persistLocalDraft = () => {
 }
 
 const loadRemoteGameConfig = async () => {
+  if (isPlatformTemplateMode.value) {
+    remoteConfigLoaded.value = false
+    return
+  }
+
   if (!campaignId.value) return
 
   try {
@@ -441,6 +483,17 @@ const saveSettings = async (options = {}) => {
   saveErrorMessage.value = ''
   persistLocalDraft()
 
+  if (isPlatformTemplateMode.value) {
+    remoteConfigLoaded.value = false
+    if (!silent) {
+      savedMessage.value = '已儲存平台輪盤模板草稿。這不會改到商家單一活動。'
+      window.setTimeout(() => {
+        savedMessage.value = ''
+      }, 2600)
+    }
+    return
+  }
+
   if (options?.localOnly === true) {
     if (!silent) {
       savedMessage.value = '已暫存本機草稿，右側預覽已重新載入。'
@@ -471,6 +524,7 @@ const saveSettings = async (options = {}) => {
   }
 }
 
+
 let previewSyncTimer = null
 
 const schedulePreviewSync = () => {
@@ -488,7 +542,7 @@ const resetSettings = () => {
   assignDeep(settings, fresh)
   localStorage.removeItem(storageKey.value)
   previewKey.value += 1
-  savedMessage.value = '已還原輪盤預設設定，請按儲存設定寫入資料庫。'
+  savedMessage.value = isPlatformTemplateMode.value ? '已還原平台輪盤模板預設，請按儲存設定保存模板草稿。' : '已還原輪盤預設設定，請按儲存設定寫入資料庫。'
 }
 
 const copyText = async (text, message = '已複製到剪貼簿') => {
@@ -517,6 +571,11 @@ const openPlayer = () => {
 }
 
 const backToCampaigns = () => {
+  if (isPlatformTemplateMode.value) {
+    router.push('/admin/game-settings')
+    return
+  }
+
   router.push({
     path: '/admin/campaigns',
     query: campaignId.value
@@ -550,7 +609,9 @@ const downloadJson = () => {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `wheel-settings-${tenantSlug.value}-${campaignId.value || 'draft'}.json`
+  link.download = isPlatformTemplateMode.value
+    ? `wheel-platform-template-${templateId.value}.json`
+    : `wheel-settings-${tenantSlug.value}-${campaignId.value || 'draft'}.json`
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -640,7 +701,7 @@ onMounted(async () => {
         <div>
           <p class="text-xs font-black uppercase tracking-[0.18em] text-orange-500">設定操作</p>
           <p class="text-sm font-bold text-slate-500">
-            修改會先同步右側預覽；按「儲存設定」後會正式寫入資料庫，客人手機重新整理就會同步。
+            {{ isPlatformTemplateMode ? '目前是平台模板模式：修改只保存模板草稿，不會改到商家單一活動。' : '修改會先同步右側預覽；按「儲存設定」後會正式寫入資料庫，客人手機重新整理就會同步。' }}
           </p>
         </div>
 
@@ -655,7 +716,7 @@ onMounted(async () => {
             {{ saveErrorMessage }}
           </span>
           <span v-else-if="remoteConfigLoaded" class="rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600">
-            已連接資料庫設定
+            {{ isPlatformTemplateMode ? '平台模板草稿模式' : '已連接資料庫設定' }}
           </span>
 
           <button
@@ -671,7 +732,7 @@ onMounted(async () => {
             class="rounded-2xl border border-orange-200 bg-orange-50 px-5 py-3 text-sm font-black text-orange-700 transition hover:bg-orange-100"
             @click="openPlayer"
           >
-            開啟玩家頁
+            {{ isPlatformTemplateMode ? '開啟模板預覽' : '開啟玩家頁' }}
           </button>
           <button
             type="button"
@@ -687,13 +748,13 @@ onMounted(async () => {
       <div class="grid gap-0 xl:grid-cols-[1fr_0.72fr]">
         <div class="bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 p-6 text-white">
           <p class="text-xs font-black uppercase tracking-[0.24em] text-orange-200">
-            Wheel Admin Center｜第 52801～53200 批
+            Wheel Template Center｜第 53201～53600 批
           </p>
           <h1 class="mt-3 text-3xl font-black">
-            輪盤單一活動設定
+            {{ isPlatformTemplateMode ? '平台輪盤模板設定' : '輪盤單一活動設定' }}
           </h1>
           <p class="mt-3 max-w-3xl text-sm font-bold leading-7 text-white/75">
-            這裡是商家編輯幸運輪盤玩家畫面的地方。九宮格、砸金蛋已經有專屬設定頁，這批補上輪盤設定中心，避免進入模板中心後看不到可修改內容。
+            {{ isPlatformTemplateMode ? '這裡是平台總管理員編輯輪盤模組模板的地方。這份模板用來當新商家活動的預設外觀，不會直接覆蓋既有商家活動。' : '這裡是商家編輯幸運輪盤玩家畫面的地方。九宮格、砸金蛋已經有專屬設定頁，這批補上輪盤設定中心，避免進入模板中心後看不到可修改內容。' }}
           </p>
 
           <div class="mt-5 flex flex-wrap gap-3">
@@ -709,14 +770,14 @@ onMounted(async () => {
               class="rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
               @click="openPlayer"
             >
-              開啟玩家頁
+              {{ isPlatformTemplateMode ? '開啟模板預覽' : '開啟玩家頁' }}
             </button>
             <button
               type="button"
               class="rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
               @click="backToCampaigns"
             >
-              回我的活動
+              {{ isPlatformTemplateMode ? '回模板中心' : '回我的活動' }}
             </button>
           </div>
         </div>
@@ -724,23 +785,23 @@ onMounted(async () => {
         <div class="grid gap-3 bg-orange-50 p-5">
           <div class="rounded-3xl border border-orange-100 bg-white p-4">
             <p class="text-xs font-black text-slate-400">目前活動</p>
-            <p class="mt-2 text-2xl font-black text-slate-950">ID {{ campaignId || '-' }}</p>
-            <p class="mt-1 text-sm font-bold text-slate-500">商家：{{ tenantSlug }}</p>
+            <p class="mt-2 text-2xl font-black text-slate-950">{{ isPlatformTemplateMode ? '模板 wheel' : `ID ${campaignId || '-'}` }}</p>
+            <p class="mt-1 text-sm font-bold text-slate-500">{{ isPlatformTemplateMode ? '平台總管理員 / 模組模板' : `商家：${tenantSlug}` }}</p>
           </div>
 
           <div class="rounded-3xl border border-orange-100 bg-white p-4">
-            <p class="text-xs font-black text-slate-400">正式玩家網址</p>
+            <p class="text-xs font-black text-slate-400">{{ isPlatformTemplateMode ? '模板預覽網址' : '正式玩家網址' }}</p>
             <p class="mt-2 break-all font-mono text-xs font-black leading-6 text-slate-700">{{ playerUrl }}</p>
             <button
               type="button"
               class="mt-3 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-2 text-xs font-black text-orange-700"
-              @click="copyText(playerUrl, '已複製輪盤玩家網址')"
+              @click="copyText(playerUrl, isPlatformTemplateMode ? '已複製輪盤模板預覽網址' : '已複製輪盤玩家網址')"
             >
               複製網址
             </button>
 
             <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-800">
-              目前此頁先儲存「輪盤設定草稿」與右側預覽。若要讓正式玩家網址立即套用，需要下一批把 WheelGameView.vue 串接這份設定。
+              {{ isPlatformTemplateMode ? '平台模板模式只保存模板草稿；商家活動要另外從模板複製後才會套用。' : '此頁會儲存商家單一活動設定；客人手機重新整理後會讀取資料庫設定。' }}
             </div>
           </div>
         </div>
@@ -749,6 +810,11 @@ onMounted(async () => {
 
     <section v-if="savedMessage || copiedMessage" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-black text-emerald-700">
       {{ savedMessage || copiedMessage }}
+    </section>
+
+    <section v-if="isPlatformTemplateMode" class="rounded-3xl border border-orange-200 bg-orange-50 p-5 text-sm font-bold leading-6 text-orange-800">
+      <span class="font-black">目前是平台輪盤模板模式。</span>
+      這裡改的是「遊戲模板中心 / 輪盤模組」的預設外觀，不會修改 A 商家、campaignId=3 或任何已存在的商家活動。
     </section>
 
     <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
@@ -1170,14 +1236,14 @@ onMounted(async () => {
         <section v-show="activeCategory === 'frontend'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">前台設定</p>
           <h2 class="mt-2 text-2xl font-black text-slate-950">玩家網址與預覽操作</h2>
-          <p class="mt-2 text-sm font-bold text-slate-500">這裡協助商家複製正式玩家網址、開啟玩家頁或下載目前設定。</p>
+          <p class="mt-2 text-sm font-bold text-slate-500">{{ isPlatformTemplateMode ? '這裡協助平台管理員複製模板預覽網址、開啟模板預覽或下載目前模板草稿。' : '這裡協助商家複製正式玩家網址、開啟玩家頁或下載目前設定。' }}</p>
 
           <div class="mt-5 rounded-3xl border border-orange-100 bg-orange-50 p-5">
-            <p class="text-xs font-black text-orange-500">正式玩家網址</p>
+            <p class="text-xs font-black text-orange-500">{{ isPlatformTemplateMode ? '模板預覽網址' : '正式玩家網址' }}</p>
             <p class="mt-2 break-all font-mono text-sm font-black leading-7 text-slate-800">{{ playerUrl }}</p>
             <div class="mt-4 flex flex-wrap gap-3">
-              <button type="button" class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white" @click="openPlayer">開啟玩家頁</button>
-              <button type="button" class="rounded-2xl border border-orange-200 bg-white px-5 py-3 text-sm font-black text-orange-700" @click="copyText(playerUrl, '已複製輪盤玩家網址')">複製網址</button>
+              <button type="button" class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white" @click="openPlayer">{{ isPlatformTemplateMode ? '開啟模板預覽' : '開啟玩家頁' }}</button>
+              <button type="button" class="rounded-2xl border border-orange-200 bg-white px-5 py-3 text-sm font-black text-orange-700" @click="copyText(playerUrl, isPlatformTemplateMode ? '已複製輪盤模板預覽網址' : '已複製輪盤玩家網址')">複製網址</button>
               <button type="button" class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600" @click="downloadJson">下載設定 JSON</button>
             </div>
           </div>
@@ -1251,7 +1317,7 @@ onMounted(async () => {
             <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-200">Live Player Preview</p>
             <h2 class="mt-2 text-xl font-black">右側正式玩家頁預覽</h2>
             <p class="mt-2 text-xs font-bold leading-5 text-white/60">
-              這裡改成直接載入 WheelGameView 正式玩家頁，不再使用簡易模擬畫面。修改左側設定後會自動儲存草稿並重新載入預覽。
+              {{ isPlatformTemplateMode ? '平台模板模式：右側用模板預覽網址展示外觀，不會連到商家活動資料。' : '這裡直接載入 WheelGameView 正式玩家頁。修改左側設定後會自動儲存草稿並重新載入預覽。' }}
             </p>
           </div>
 
@@ -1271,7 +1337,7 @@ onMounted(async () => {
 
             <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl" style="max-width: 390px;">
               <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
-                正式玩家頁 iframe 預覽
+                {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}
               </div>
 
               <iframe
