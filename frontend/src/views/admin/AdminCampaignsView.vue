@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 41601～42000 批：正式對客網址避免 localhost 交付修正版
+// 第 42001～42050 批：AdminCampaignsView build syntax 小修正版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminCampaignsView.vue
@@ -2090,7 +2090,7 @@ onMounted(() => {
         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p class="text-sm font-black text-emerald-600">
-              正式商家交付中心｜第 41601～42000 批
+              正式商家交付中心｜第 42001～42050 批
             </p>
             <h2 class="mt-1 text-2xl font-black text-slate-950">
               三遊戲正式玩家網址、客服文字與營運狀態
