@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 40001～40400 批：商家後台操作流程精緻化與交付導引版
+// 第 41601～42000 批：正式對客網址避免 localhost 交付修正版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminCampaignsView.vue
@@ -499,21 +499,41 @@ const apiBaseUrl = computed(() => {
   return String(http?.defaults?.baseURL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '')
 })
 
+const PRODUCTION_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
+
+const normalizePublicFrontendUrl = (value = '') => {
+  return String(value || '').trim().replace(/\/$/, '')
+}
+
+const isLocalFrontendOrigin = (value = '') => {
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
+}
+
 const frontOrigin = computed(() => {
-  // 第 25501～25900 批：
-  // 正式上線時請在 Render / Vercel / Netlify 設定 VITE_PUBLIC_FRONTEND_URL。
-  // 例如：https://your-domain.com
-  // 沒設定時才使用目前瀏覽器 origin，方便本機開發。
-  const publicFrontendUrl = String(import.meta.env.VITE_PUBLIC_FRONTEND_URL || '').trim().replace(/\/$/, '')
+  // 第 41601～42000 批：
+  // 「正式玩家網址」是要給客人手機開的，所以不能複製 localhost。
+  // 優先使用 Vercel 環境變數；沒有設定時，正式交付區固定回到正式站網址。
+  const publicFrontendUrl = normalizePublicFrontendUrl(
+    import.meta.env.VITE_PUBLIC_FRONTEND_URL ||
+      import.meta.env.VITE_FRONTEND_URL ||
+      import.meta.env.VITE_APP_FRONTEND_URL ||
+      ''
+  )
 
   if (publicFrontendUrl) {
     return publicFrontendUrl
   }
 
-  if (typeof window === 'undefined') return 'http://localhost:5173'
+  if (typeof window === 'undefined') return PRODUCTION_FRONTEND_URL
 
-  return window.location.origin
-})
+  const currentOrigin = normalizePublicFrontendUrl(window.location.origin)
+
+  if (isLocalFrontendOrigin(currentOrigin)) {
+    return PRODUCTION_FRONTEND_URL
+  }
+
+  return currentOrigin || PRODUCTION_FRONTEND_URL
+}
 
 const getCampaignDisplayStatus = (campaign) => {
   const id = String(campaign?.id || '')
@@ -1618,7 +1638,7 @@ const getPlayerUrl = (campaign) => {
   // 這些網址可以直接給客人遠端開啟，並由前台依 tenantSlug / campaignId 從資料庫讀活動。
   if (type === 'GRID') {
     if (tenantSlug) {
-      return `${frontOrigin.value}/play/${tenantSlug}/premium-grid`
+      return `${frontOrigin.value}/play/${tenantSlug}/premium-grid${campaign?.id ? `?campaignId=${campaign.id}` : ''}`
     }
 
     return `${frontOrigin.value}/games/premium-grid`
@@ -1626,7 +1646,7 @@ const getPlayerUrl = (campaign) => {
 
   if (type === 'WHEEL') {
     if (tenantSlug) {
-      return `${frontOrigin.value}/play/${tenantSlug}/wheel`
+      return `${frontOrigin.value}/play/${tenantSlug}/wheel${campaign?.id ? `?campaignId=${campaign.id}` : ''}`
     }
 
     return `${frontOrigin.value}/games/wheel`
@@ -1634,7 +1654,7 @@ const getPlayerUrl = (campaign) => {
 
   if (type === 'GOLDEN_EGG') {
     if (tenantSlug) {
-      return `${frontOrigin.value}/play/${tenantSlug}/golden-egg`
+      return `${frontOrigin.value}/play/${tenantSlug}/golden-egg${campaign?.id ? `?campaignId=${campaign.id}` : ''}`
     }
 
     return `${frontOrigin.value}/games/golden-egg`
@@ -2070,13 +2090,13 @@ onMounted(() => {
         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p class="text-sm font-black text-emerald-600">
-              正式商家交付中心｜第 33201～33600 批
+              正式商家交付中心｜第 41601～42000 批
             </p>
             <h2 class="mt-1 text-2xl font-black text-slate-950">
               三遊戲正式玩家網址、客服文字與營運狀態
             </h2>
             <p class="mt-2 max-w-4xl text-sm font-bold leading-7 text-slate-500">
-              這裡整理輪盤、九宮格、砸金蛋三個正式網址。商家可以一鍵複製網址、一鍵開啟玩家頁，也可以直接複製客服發送文字。
+              這裡整理輪盤、九宮格、砸金蛋三個正式網址。商家可以一鍵複製網址、一鍵開啟玩家頁，也可以直接複製客服發送文字。注意：localhost 不能給手機客人開啟，正式交付網址會自動使用 Vercel 正式網域。
             </p>
           </div>
           <div class="flex flex-wrap gap-2">

@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 41201～41600 批：商家序號管理獨立頁精緻版
+// 第 41601～42000 批：正式對客網址避免 localhost 交付修正版
 //
 // 建議放置位置：
 // frontend/src/views/admin/AdminMerchantGameCenterView.vue
@@ -464,10 +464,11 @@ const goCampaigns = (item = null) => {
 
 const goSerials = (item) => {
   router.push({
-    path: '/admin/my-serials',
+    path: '/admin/campaigns',
     query: {
-      game: item.key,
-      campaignId: item.campaignId || ''
+      campaignId: item.campaignId || '',
+      gameType: item.type,
+      panel: 'serials'
     }
   })
 }
@@ -573,7 +574,7 @@ onMounted(() => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Game Center｜第 41201～41600 批
+              Merchant Game Center｜第 41601～42000 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               商家遊戲中心
@@ -620,7 +621,7 @@ onMounted(() => {
         <div class="rounded-3xl bg-white p-4 shadow-sm">
           <p class="text-xs font-black text-slate-400">建議操作</p>
           <p class="mt-1 text-sm font-bold leading-6 text-slate-600">
-            建立活動 → 到我的序號管理建立序號 → 設定獎項 → 複製玩家網址 → 查看報表。
+            建立活動 → 建立序號 → 設定獎項 → 複製玩家網址 → 查看報表。
           </p>
         </div>
       </div>

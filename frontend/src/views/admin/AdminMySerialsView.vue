@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 41201～41600 批：商家序號管理獨立頁精緻版
+// 第 41601～42000 批：正式對客網址避免 localhost 交付修正版
 //
 // 新增位置：
 // frontend/src/views/admin/AdminMySerialsView.vue
@@ -47,6 +47,39 @@ const GAME_DEFINITIONS = [
     accent: 'rose'
   }
 ]
+
+const PRODUCTION_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
+
+const normalizePublicFrontendUrl = (value = '') => {
+  return String(value || '').trim().replace(/\/$/, '')
+}
+
+const isLocalFrontendOrigin = (value = '') => {
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
+}
+
+const publicFrontendOrigin = computed(() => {
+  const envUrl = normalizePublicFrontendUrl(
+    import.meta.env.VITE_PUBLIC_FRONTEND_URL ||
+      import.meta.env.VITE_FRONTEND_URL ||
+      import.meta.env.VITE_APP_FRONTEND_URL ||
+      ''
+  )
+
+  if (envUrl) {
+    return envUrl
+  }
+
+  if (typeof window === 'undefined') return PRODUCTION_FRONTEND_URL
+
+  const currentOrigin = normalizePublicFrontendUrl(window.location.origin)
+
+  if (isLocalFrontendOrigin(currentOrigin)) {
+    return PRODUCTION_FRONTEND_URL
+  }
+
+  return currentOrigin || PRODUCTION_FRONTEND_URL
+})
 
 const campaigns = ref([])
 const serialCodes = ref([])
@@ -142,7 +175,7 @@ const selectedCampaignTitle = computed(() => {
 const selectedPlayerUrl = computed(() => {
   if (!selectedCampaign.value?.id) return ''
 
-  return `${window.location.origin}/play/${tenantSlug.value}/${currentGame.value.path}?campaignId=${selectedCampaign.value.id}`
+  return `${publicFrontendOrigin.value}/play/${tenantSlug.value}/${currentGame.value.path}?campaignId=${selectedCampaign.value.id}`
 })
 
 const filteredSerialCodes = computed(() => {
@@ -582,7 +615,7 @@ onMounted(async () => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Serials｜第 41201～41600 批
+              Merchant Serials｜第 41601～42000 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               我的序號管理
