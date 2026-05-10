@@ -1,4 +1,4 @@
-// 第 49601～50000 批：輪盤設定分類內容分流修正版
+// 第 50001～50400 批：輪盤預覽對齊、獎項圖片與品牌連結設定版
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -128,6 +128,12 @@ const defaultSettings = () => ({
   pageTitle: '幸運輪盤抽獎',
   brandName: 'Multi Game Platform',
   brandSubtitle: '打造專屬互動抽獎體驗',
+  brandLogoUrl: '',
+  brandLinkUrl: '',
+  brandLinkText: '官方品牌',
+  brandLogoSize: 64,
+  brandTitleSize: 20,
+  brandTextColor: '#ffffff',
   headline: '幸運輪盤抽獎',
   subtitle: '轉出你的專屬驚喜',
   badgeText: '輸入序號後即可轉盤抽獎',
@@ -167,6 +173,7 @@ const defaultSettings = () => ({
     prizeTextSize: 13,
     prizeIconSize: 38,
     cellGap: 2,
+    prizeLabelRadius: 34,
     showPrizeIcon: true,
     showPrizeName: true,
     showSliceBorder: true
@@ -187,10 +194,10 @@ const defaultSettings = () => ({
     footerNote: '請依照活動規則參加抽獎；獎項與兌換方式以主辦單位公告為準。'
   },
   prizes: [
-    { id: 1, icon: '🎁', name: '50 元折價券', weight: 35, color: '#facc15' },
-    { id: 2, icon: '🎫', name: '100 元折價券', weight: 25, color: '#fb7185' },
-    { id: 3, icon: '🏆', name: '200 元折價券', weight: 15, color: '#fb923c' },
-    { id: 4, icon: '😊', name: '未中獎', weight: 25, color: '#ef4444' }
+    { id: 1, icon: '🎁', imageUrl: '', linkUrl: '', name: '50 元折價券', weight: 35, color: '#facc15' },
+    { id: 2, icon: '🎫', imageUrl: '', linkUrl: '', name: '100 元折價券', weight: 25, color: '#fb7185' },
+    { id: 3, icon: '🏆', imageUrl: '', linkUrl: '', name: '200 元折價券', weight: 15, color: '#fb923c' },
+    { id: 4, icon: '😊', imageUrl: '', linkUrl: '', name: '未中獎', weight: 25, color: '#ef4444' }
   ]
 })
 
@@ -214,6 +221,41 @@ const conicGradient = computed(() => {
   })
 
   return `conic-gradient(${parts.join(', ')})`
+})
+
+const wheelSegments = computed(() => {
+  const list = previewPrizes.value.length ? previewPrizes.value : defaultSettings().prizes
+  const total = list.length || 1
+
+  return list.map((item, index) => {
+    const mid = (index + 0.5) * (360 / total) - 90
+    const radius = Number(settings.wheelStyle.prizeLabelRadius || 34)
+    const x = 50 + Math.cos((mid * Math.PI) / 180) * radius
+    const y = 50 + Math.sin((mid * Math.PI) / 180) * radius
+
+    return {
+      ...item,
+      labelX: x,
+      labelY: y,
+      rotate: mid + 90
+    }
+  })
+})
+
+const getPrizeImageSrc = (prize = {}) => String(prize.imageUrl || '').trim()
+
+const getPrizeDisplayIcon = (prize = {}) => {
+  if (settings.display.hidePrizesBeforeDraw) return '🎁'
+  return prize.icon || '🎁'
+}
+
+const getPrizeDisplayName = (prize = {}) => {
+  if (settings.display.hidePrizesBeforeDraw) return '神秘獎品'
+  return prize.name || '獎項'
+}
+
+const previewRemainingText = computed(() => {
+  return settings.display.showRemainingChance ? '剩餘次數 99｜可轉盤' : ''
 })
 
 const safePreviewUrl = computed(() => {
@@ -308,6 +350,8 @@ const addPrize = () => {
   settings.prizes.push({
     id: Date.now(),
     icon: '🎁',
+    imageUrl: '',
+    linkUrl: '',
     name: '新獎項',
     weight: 10,
     color: '#f59e0b'
@@ -347,7 +391,7 @@ onMounted(() => {
       <div class="grid gap-0 xl:grid-cols-[1fr_0.72fr]">
         <div class="bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 p-6 text-white">
           <p class="text-xs font-black uppercase tracking-[0.24em] text-orange-200">
-            Wheel Admin Center｜第 49601～50000 批
+            Wheel Admin Center｜第 50001～50400 批
           </p>
           <h1 class="mt-3 text-3xl font-black">
             輪盤單一活動設定
@@ -511,6 +555,44 @@ onMounted(() => {
               <input v-model="settings.verifyButtonText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
             </label>
           </div>
+
+          <div class="mt-6 rounded-3xl border border-orange-100 bg-orange-50 p-5">
+            <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">品牌格子設定</p>
+            <h3 class="mt-2 text-lg font-black text-slate-950">上方品牌格子 / LOGO / 超連結</h3>
+            <p class="mt-1 text-sm font-bold text-slate-500">可放商家 LOGO 圖片網址，點擊後連到官網、LINE 或活動頁。</p>
+
+            <div class="mt-4 grid gap-4 md:grid-cols-2">
+              <label class="grid gap-2 text-sm font-black text-slate-700">
+                品牌 LOGO 圖片網址
+                <input v-model="settings.brandLogoUrl" placeholder="https://..." class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              </label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">
+                品牌超連結
+                <input v-model="settings.brandLinkUrl" placeholder="https:// 或 LINE 官方帳號連結" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              </label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">
+                品牌連結文字
+                <input v-model="settings.brandLinkText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              </label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">
+                品牌文字顏色
+                <div class="flex gap-2">
+                  <input v-model="settings.brandTextColor" type="color" class="h-12 w-14 rounded-xl border border-slate-200 bg-white p-1" />
+                  <input v-model="settings.brandTextColor" class="min-w-0 flex-1 rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400" />
+                </div>
+              </label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">
+                LOGO 大小
+                <input v-model.number="settings.brandLogoSize" type="range" min="40" max="96" class="w-full" />
+                <span class="text-xs font-bold text-slate-400">{{ settings.brandLogoSize }} px</span>
+              </label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">
+                品牌標題文字大小
+                <input v-model.number="settings.brandTitleSize" type="range" min="14" max="34" class="w-full" />
+                <span class="text-xs font-bold text-slate-400">{{ settings.brandTitleSize }} px</span>
+              </label>
+            </div>
+          </div>
         </section>
 
         <section v-show="activeCategory === 'theme'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
@@ -570,6 +652,12 @@ onMounted(() => {
               獎項圖示大小
               <input v-model.number="settings.wheelStyle.prizeIconSize" type="range" min="24" max="54" class="w-full" />
               <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeIconSize }} px</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              獎項離中心距離
+              <input v-model.number="settings.wheelStyle.prizeLabelRadius" type="range" min="20" max="42" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeLabelRadius }} %</span>
             </label>
           </div>
 
@@ -776,7 +864,7 @@ onMounted(() => {
             <div>
               <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">Prize Wheel</p>
               <h2 class="mt-2 text-2xl font-black text-slate-950">輪盤獎項</h2>
-              <p class="mt-2 text-sm font-bold text-slate-500">這裡先提供商家設定 UI，正式機率仍以後端獎項資料為準。</p>
+              <p class="mt-2 text-sm font-bold text-slate-500">可設定獎項名稱、emoji、圖片網址、連結、權重與色塊；圖片會自動縮放成適合輪盤的大小。</p>
             </div>
             <button type="button" class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white" @click="addPrize">
               新增獎項
@@ -784,14 +872,18 @@ onMounted(() => {
           </div>
 
           <div class="grid gap-3">
-            <article v-for="(prize, index) in settings.prizes" :key="prize.id" class="grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 md:grid-cols-[80px_1fr_120px_120px_auto] md:items-end">
+            <article v-for="(prize, index) in settings.prizes" :key="prize.id" class="grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 xl:grid-cols-[92px_1fr_1fr_110px_110px_auto] xl:items-end">
               <label class="grid gap-2 text-xs font-black text-slate-500">
-                圖示
+                圖示 / emoji
                 <input v-model="prize.icon" class="rounded-2xl border border-slate-200 px-3 py-3 text-center text-xl" />
               </label>
               <label class="grid gap-2 text-xs font-black text-slate-500">
                 獎項名稱
                 <input v-model="prize.name" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm" />
+              </label>
+              <label class="grid gap-2 text-xs font-black text-slate-500">
+                圖片網址
+                <input v-model="prize.imageUrl" placeholder="https://...png / jpg / webp" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm" />
               </label>
               <label class="grid gap-2 text-xs font-black text-slate-500">
                 權重
@@ -804,6 +896,11 @@ onMounted(() => {
               <button type="button" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-black text-rose-600 disabled:opacity-40" :disabled="settings.prizes.length <= 2" @click="removePrize(index)">
                 刪除
               </button>
+
+              <label class="grid gap-2 text-xs font-black text-slate-500 xl:col-span-6">
+                獎項連結網址，可選
+                <input v-model="prize.linkUrl" placeholder="https:// 商品頁 / 兌換說明 / LINE 連結" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm" />
+              </label>
             </article>
           </div>
         </section>
@@ -821,11 +918,34 @@ onMounted(() => {
             <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl" style="max-width: 360px;">
               <div class="h-[680px] overflow-y-auto" :style="{ background: `linear-gradient(180deg, ${settings.theme.backgroundFrom}, ${settings.theme.backgroundTo})` }">
                 <div class="p-5 text-white">
-                  <div v-if="settings.display.showBrandCard" class="rounded-[2rem] border border-white/30 bg-white/20 p-4 shadow-inner backdrop-blur">
-                    <p class="text-xs font-black uppercase tracking-[0.18em] text-white/80">{{ settings.brandName }}</p>
-                    <h3 class="mt-2 text-xl font-black">{{ settings.pageTitle }}</h3>
-                    <p class="mt-1 text-xs font-bold text-white/75">{{ settings.brandSubtitle }}</p>
-                  </div>
+                  <component
+                    :is="settings.brandLinkUrl ? 'a' : 'div'"
+                    v-if="settings.display.showBrandCard"
+                    :href="settings.brandLinkUrl || undefined"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="flex items-center gap-3 rounded-[2rem] border border-white/30 bg-white/20 p-4 shadow-inner backdrop-blur transition hover:bg-white/25"
+                    :style="{ color: settings.brandTextColor }"
+                  >
+                    <div
+                      class="flex shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/30 text-2xl font-black shadow-inner"
+                      :style="{ width: `${settings.brandLogoSize}px`, height: `${settings.brandLogoSize}px` }"
+                    >
+                      <img
+                        v-if="settings.brandLogoUrl"
+                        :src="settings.brandLogoUrl"
+                        alt="品牌 LOGO"
+                        class="h-full w-full object-contain"
+                      />
+                      <span v-else>MG</span>
+                    </div>
+                    <div class="min-w-0">
+                      <p class="truncate text-xs font-black uppercase tracking-[0.18em] opacity-80">{{ settings.brandName }}</p>
+                      <h3 class="mt-1 truncate font-black" :style="{ fontSize: `${settings.brandTitleSize}px` }">{{ settings.pageTitle }}</h3>
+                      <p class="mt-1 truncate text-xs font-bold opacity-75">{{ settings.brandSubtitle }}</p>
+                      <p v-if="settings.brandLinkUrl" class="mt-2 text-[11px] font-black underline underline-offset-4">{{ settings.brandLinkText }}</p>
+                    </div>
+                  </component>
 
                   <div class="mt-5 rounded-[2rem] border border-white/30 bg-white/20 p-5 text-center shadow-inner backdrop-blur">
                     <div class="mx-auto inline-flex rounded-full bg-white/20 px-4 py-2 text-xs font-black">👑 {{ settings.badgeText }}</div>
@@ -834,7 +954,7 @@ onMounted(() => {
                   </div>
 
                   <div v-if="settings.display.showRemainingChance" class="mt-4 rounded-full bg-white/20 px-4 py-3 text-center text-sm font-black shadow-inner">
-                    剩餘次數 99｜可轉盤
+                    {{ previewRemainingText }}
                   </div>
 
                   <div
@@ -863,16 +983,37 @@ onMounted(() => {
                     >
                       SPIN
                     </div>
-                    <div class="grid h-full w-full place-items-center rounded-full border border-white/70 bg-white/10 text-center text-sm font-black text-white/95 backdrop-blur-[1px]">
-                      <div class="grid gap-1">
-                        <span
-                          v-for="prize in previewPrizes.slice(0, 4)"
-                          :key="prize.id"
-                          :style="{ fontSize: `${settings.wheelStyle.prizeTextSize}px` }"
-                        >
-                          {{ settings.display.hidePrizesBeforeDraw ? '神秘獎品' : `${settings.wheelStyle.showPrizeIcon ? prize.icon : ''} ${settings.wheelStyle.showPrizeName ? prize.name : ''}` }}
-                        </span>
-                      </div>
+                    <div class="absolute inset-0 rounded-full border border-white/70 bg-white/10 backdrop-blur-[1px]"></div>
+
+                    <div
+                      v-for="segment in wheelSegments"
+                      :key="segment.id"
+                      class="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center text-center font-black leading-tight"
+                      :style="{
+                        left: `${segment.labelX}%`,
+                        top: `${segment.labelY}%`,
+                        width: `${Math.max(74, settings.wheelStyle.prizeIconSize + 58)}px`,
+                        fontSize: `${settings.wheelStyle.prizeTextSize}px`,
+                        color: '#ffffff',
+                        textShadow: '0 2px 5px rgba(15, 23, 42, .48)'
+                      }"
+                    >
+                      <span
+                        v-if="settings.wheelStyle.showPrizeIcon"
+                        class="mb-1 flex items-center justify-center rounded-full bg-white/70 shadow"
+                        :style="{ width: `${settings.wheelStyle.prizeIconSize}px`, height: `${settings.wheelStyle.prizeIconSize}px` }"
+                      >
+                        <img
+                          v-if="getPrizeImageSrc(segment)"
+                          :src="getPrizeImageSrc(segment)"
+                          :alt="segment.name"
+                          class="h-full w-full rounded-full object-contain p-1"
+                        />
+                        <span v-else>{{ getPrizeDisplayIcon(segment) }}</span>
+                      </span>
+                      <span v-if="settings.wheelStyle.showPrizeName" class="line-clamp-2">
+                        {{ getPrizeDisplayName(segment) }}
+                      </span>
                     </div>
                   </div>
 
