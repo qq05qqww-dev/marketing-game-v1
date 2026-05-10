@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Multi Game Platform V2.3 第 35601～36000 批：九宮格轉圈圈數與音效精緻化版
+ * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
  *
  * 本批只強化九宮格玩家頁抽獎演出：增加跑燈圈數、三段式減速、答答聲、成功音效與手機震動。
  * 不修改後端、不修改資料庫、不影響正式序號驗證與 play API 扣次數。
@@ -175,6 +175,22 @@ const isSavingPremiumGridState = ref(false)
 
 const isAdminMode = computed(() => {
   return route.query.mode === 'admin'
+})
+
+const frontDisplay = computed(() => {
+  const admin = Boolean(isAdminMode.value)
+
+  return {
+    showRules: admin || campaign.display?.showFrontRules !== false,
+    showPrizeInfo: admin || campaign.display?.showFrontPrizeInfo !== false,
+    showPrizeShelf: admin || campaign.display?.showFrontPrizeShelf !== false,
+    showHistoryButton: admin || campaign.display?.showFrontHistoryButton !== false,
+    showRecentRecords: admin || campaign.display?.showFrontRecentRecords === true,
+    showShareButton: admin || campaign.display?.showFrontShareButton === true,
+    showBackToGameCenter: admin || campaign.display?.showFrontBackToGameCenter === true,
+    showParticipation: admin || campaign.display?.showFrontParticipation === true,
+    showDebugInfo: admin || campaign.display?.showFrontDebugInfo === true
+  }
 })
 
 const tenantSlug = computed(() => {
@@ -1761,7 +1777,17 @@ const premiumGridSharedPlayBoardBaseSettings = computed(() => ({
     chanceSubText: '目前還有 {count} 次抽獎機會，點擊中間按鈕即可抽獎。',
     participationTitle: '活動參加方式',
     participationText: '點擊九宮格中間按鈕開始抽獎，中獎後會自動寫入遊戲紀錄。分享活動會複製活動連結並增加抽獎機會。',
-    customerServiceText: '請依照活動規則參加抽獎，獎項與兌換方式以主辦單位公告為準。'
+    customerServiceText: '請依照活動規則參加抽獎，獎項與兌換方式以主辦單位公告為準。',
+    // 第 46001～46400 批：玩家前台清潔顯示開關。
+    showFrontRules: true,
+    showFrontPrizeInfo: true,
+    showFrontPrizeShelf: true,
+    showFrontHistoryButton: true,
+    showFrontRecentRecords: false,
+    showFrontShareButton: false,
+    showFrontBackToGameCenter: false,
+    showFrontParticipation: false,
+    showFrontDebugInfo: false
   },
   footer: {
     showRules: true,
@@ -33354,12 +33380,12 @@ const toggleWheelRealFilePrep11011150 = () => {
                     </button>
                   </div>
 
-                  <p class="mt-2 text-xs font-bold leading-5 text-white/75">
+                  <p v-if="frontDisplay.showShareButton" class="mt-2 text-xs font-bold leading-5 text-white/75">
                     {{ campaign.shareHint }}，目前已分享 {{ player.sharedCount }} 次
                   </p>
 
                   <div
-                    v-if="showShareMessage"
+                    v-if="frontDisplay.showShareButton && showShareMessage"
                     class="mx-auto mt-3 max-w-xs rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-xs font-black leading-5 text-white shadow-inner backdrop-blur"
                   >
                     {{ shareMessage }}
@@ -33374,7 +33400,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                 </section>
 
                 <section
-                  v-if="!isAdminMode"
+                  v-if="frontDisplay.showParticipation"
                   class="relative mt-5 rounded-3xl bg-white/15 p-4 text-center shadow-inner backdrop-blur"
                 >
                   <p class="text-sm font-black text-white">
@@ -33391,7 +33417,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                 </section>
 
                 <section
-                  v-if="!isAdminMode && effectiveGridChances <= 0 && availablePrizeCount > 0"
+                  v-if="frontDisplay.showShareButton && effectiveGridChances <= 0 && availablePrizeCount > 0"
                   class="relative mt-4 rounded-3xl border border-white/30 bg-white/20 p-4 text-center shadow-inner backdrop-blur"
                 >
                   <p class="text-sm font-black text-white">
@@ -33425,10 +33451,10 @@ const toggleWheelRealFilePrep11011150 = () => {
                 </section>
 
                 <section
-                  v-if="!isAdminMode"
+                  v-if="frontDisplay.showRules || frontDisplay.showPrizeInfo"
                   class="relative mt-4 space-y-3"
                 >
-                  <div class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
+                  <div v-if="frontDisplay.showRules" class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
                     <button
                       type="button"
                       class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
@@ -33466,7 +33492,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                     </div>
                   </div>
 
-                  <div class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
+                  <div v-if="frontDisplay.showPrizeInfo" class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
                     <button
                       type="button"
                       class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
@@ -33505,7 +33531,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                   </div>
                 </section>
 
-                <section class="relative mt-5 overflow-hidden rounded-3xl bg-white/95 p-3 shadow-xl">
+                <section v-if="frontDisplay.showPrizeShelf" class="relative mt-5 overflow-hidden rounded-3xl bg-white/95 p-3 shadow-xl">
                   <div class="flex items-center justify-between gap-3 border-b border-slate-100 pb-2">
                     <p class="text-xs font-black text-slate-700">
                       獎品展示
@@ -33543,7 +33569,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                 </section>
 
                 <section
-                  v-if="drawLogs.length"
+                  v-if="frontDisplay.showRecentRecords && drawLogs.length"
                   class="relative mt-4 rounded-3xl bg-white/15 p-4 backdrop-blur"
                 >
                   <h3 class="text-sm font-black text-white">
@@ -34575,10 +34601,11 @@ const toggleWheelRealFilePrep11011150 = () => {
                 </section>
 
                 <section
-                  v-if="!isAdminMode"
+                  v-if="frontDisplay.showHistoryButton || frontDisplay.showBackToGameCenter"
                   class="relative mt-4 grid gap-3 sm:grid-cols-2"
                 >
                   <button
+                    v-if="frontDisplay.showHistoryButton"
                     type="button"
                     class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
                     @click="goGameHistory"
@@ -34587,6 +34614,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                   </button>
 
                   <button
+                    v-if="frontDisplay.showBackToGameCenter"
                     type="button"
                     class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
                     @click="goGamesCenter"

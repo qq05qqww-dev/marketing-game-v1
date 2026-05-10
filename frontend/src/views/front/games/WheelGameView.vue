@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Multi Game Platform V2.3 第 36001～36400 批：輪盤音效停止保護修正版
+ * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
  *
  * 修正重點：
  * 1. 輪盤轉完後強制停止轉動 loop 音效。
@@ -1832,6 +1832,17 @@ const campaign = reactive({
   ruleContent: '每日登入可獲得 1 次轉盤機會。\n分享活動可依設定增加轉盤機會。\n獎項數量有限，送完為止。',
   prizeInfoTitle: '獎品說明',
   prizeInfoContent: '中獎結果會顯示於畫面與最近轉盤紀錄。\n實際兌換方式以主辦單位公告為準。\n部分獎項可能有使用期限或資格限制。',
+  // 第 46001～46400 批：玩家前台清潔顯示開關。正式玩家頁預設簡潔，mode=admin 才顯示完整輔助資訊。
+  showFrontRules: true,
+  showFrontPrizeInfo: true,
+  showFrontPrizeShelf: false,
+  showFrontHistoryButton: true,
+  showFrontRecentRecords: false,
+  showFrontShareButton: false,
+  showFrontMemberLogin: false,
+  showFrontBackToGameCenter: false,
+  showFrontVipInfo: false,
+  showFrontDebugInfo: false,
   wheelCenterText: 'SPIN',
   wheelCenterSize: 92,
   wheelCenterTextSize: 18,
@@ -3263,30 +3274,57 @@ const playerStatusMessage = computed(() => {
   return `目前還有 ${effectiveWheelChances.value} 次轉盤機會。`
 })
 
+const frontDisplay = computed(() => {
+  const admin = Boolean(isAdminMode.value)
+
+  return {
+    showRules: admin || campaign.showFrontRules !== false,
+    showPrizeInfo: admin || campaign.showFrontPrizeInfo !== false,
+    showPrizeShelf: admin || campaign.showFrontPrizeShelf === true,
+    showHistoryButton: admin || campaign.showFrontHistoryButton !== false,
+    showRecentRecords: admin || campaign.showFrontRecentRecords === true,
+    showShareButton: admin || campaign.showFrontShareButton === true,
+    showMemberLogin: admin || campaign.showFrontMemberLogin === true,
+    showBackToGameCenter: admin || campaign.showFrontBackToGameCenter === true,
+    showVipInfo: admin || campaign.showFrontVipInfo === true,
+    showDebugInfo: admin || campaign.showFrontDebugInfo === true
+  }
+})
+
 const frontPlayerSummaryItems = computed(() => {
-  return [
+  const items = [
     {
       label: '剩餘次數',
       value: `${effectiveWheelChances.value}`,
       subText: '可轉盤',
       tone: 'yellow'
-    },
-    {
+    }
+  ]
+
+  if (frontDisplay.value.showShareButton) {
+    items.push({
       label: '分享次數',
       value: `${player.sharedCount}`,
       subText: '已分享',
       tone: 'orange'
-    },
-    {
+    })
+  }
+
+  if (frontDisplay.value.showMemberLogin) {
+    items.push({
       label: '會員狀態',
       value: isUserLoggedIn.value ? '已登入' : '未登入',
       subText: isUserLoggedIn.value ? '可領獎勵' : '需登入',
       tone: isUserLoggedIn.value ? 'green' : 'slate'
-    }
-  ]
+    })
+  }
+
+  return items
 })
 
 const frontVipFeatureItems = computed(() => {
+  if (!frontDisplay.value.showVipInfo) return []
+
   return [
     {
       icon: '👑',
@@ -8366,7 +8404,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </p>
 
                 <p
-                  v-if="!isAdminMode"
+                  v-if="frontDisplay.showVipInfo"
                   class="mx-auto mt-3 max-w-xs rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-bold leading-5 text-white/75"
                 >
                   VIP 精緻版已啟用，點擊轉盤後會自動顯示結果並寫入紀錄。
@@ -8419,7 +8457,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </div>
               </section>
 
-              <section class="premium-vip-benefits mt-3 grid gap-2 sm:grid-cols-3">
+              <section v-if="frontVipFeatureItems.length" class="premium-vip-benefits mt-3 grid gap-2 sm:grid-cols-3">
                 <article
                   v-for="item in frontVipFeatureItems"
                   :key="item.label"
@@ -8624,7 +8662,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </section>
               </section>
 
-              <section class="premium-front-action-card premium-vip-action-card relative mt-4 overflow-hidden rounded-[30px] border border-yellow-100/30 bg-white/15 p-4 text-center shadow-inner backdrop-blur">
+              <section v-if="frontDisplay.showMemberLogin || frontDisplay.showShareButton" class="premium-front-action-card premium-vip-action-card relative mt-4 overflow-hidden rounded-[30px] border border-yellow-100/30 bg-white/15 p-4 text-center shadow-inner backdrop-blur">
                 <div class="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-yellow-100/80 to-transparent"></div>
                 <div class="pointer-events-none absolute -right-10 -top-10 h-28 w-28 rounded-full bg-yellow-100/20 blur-2xl"></div>
 
@@ -8634,7 +8672,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
 
                 <div class="mt-3 flex flex-wrap items-center justify-center gap-2">
                   <button
-                    v-if="!isUserLoggedIn"
+                    v-if="frontDisplay.showMemberLogin && !isUserLoggedIn"
                     type="button"
                     class="rounded-full border border-yellow-100/80 bg-white px-4 py-2 text-xs font-black text-orange-600 shadow-lg transition hover:-translate-y-0.5 hover:bg-yellow-50"
                     @click="goLoginPage"
@@ -8643,13 +8681,14 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                   </button>
 
                   <span
-                    v-else
+                    v-else-if="frontDisplay.showMemberLogin"
                     class="inline-flex rounded-full border border-emerald-100/50 bg-emerald-100/20 px-4 py-2 text-xs font-black text-emerald-50"
                   >
                     👑 已登入，可領取 VIP 分享獎勵
                   </span>
 
                   <button
+                    v-if="frontDisplay.showShareButton"
                     type="button"
                     class="rounded-full border border-white/25 bg-white/20 px-4 py-2 text-xs font-black text-white shadow-inner transition hover:-translate-y-0.5 hover:bg-white/30"
                     @click="shareCampaign"
@@ -8785,6 +8824,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
 
               <section class="relative mt-4 grid gap-2 sm:grid-cols-2">
                 <button
+                  v-if="frontDisplay.showShareButton"
                   type="button"
                   class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
                   :class="isSpinning ? 'cursor-not-allowed opacity-60' : ''"
@@ -8795,6 +8835,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </button>
 
                 <button
+                  v-if="frontDisplay.showHistoryButton"
                   type="button"
                   class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
                   :class="isSpinning ? 'cursor-not-allowed opacity-60' : ''"
@@ -8805,6 +8846,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </button>
 
                 <button
+                  v-if="frontDisplay.showBackToGameCenter"
                   type="button"
                   class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30 sm:col-span-2"
                   :class="isSpinning ? 'cursor-not-allowed opacity-60' : ''"
@@ -8816,10 +8858,10 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
               </section>
 
               <section
-                v-if="!isAdminMode"
+                v-if="frontDisplay.showRules || frontDisplay.showPrizeInfo"
                 class="relative mt-4 space-y-3"
               >
-                <div class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
+                <div v-if="frontDisplay.showRules" class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
                   <button
                     type="button"
                     class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
@@ -8857,7 +8899,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                   </div>
                 </div>
 
-                <div class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
+                <div v-if="frontDisplay.showPrizeInfo" class="overflow-hidden rounded-3xl bg-white/95 shadow-xl">
                   <button
                     type="button"
                     class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
@@ -8896,7 +8938,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </div>
               </section>
 
-              <section class="mt-5 overflow-hidden rounded-3xl bg-white/95 p-3 shadow-xl">
+              <section v-if="frontDisplay.showRecentRecords" class="mt-5 overflow-hidden rounded-3xl bg-white/95 p-3 shadow-xl">
                 <div class="flex items-center justify-between gap-3 px-2 pt-2">
                   <div>
                     <h3 class="text-sm font-black text-slate-900">

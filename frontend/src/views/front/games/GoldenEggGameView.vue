@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Multi Game Platform V2.3 第 36001～36400 批：砸金蛋遊戲音效精緻化版
+ * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
  *
  * 修正重點：
  * 1. 砸金蛋即使沒有上傳音效網址，也會使用 Web Audio 產生敲擊、裂開、成功提示聲。
@@ -78,6 +78,10 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+
+const isAdminMode = computed(() => {
+  return route.query?.mode === 'admin' || route.query?.preview !== undefined || route.query?.adminPreview !== undefined
+})
 
 const isLegacyEggRoute = computed(() => {
   return route.query.legacyEgg === '1'
@@ -304,8 +308,8 @@ const campaign = reactive({
   activityPausedText: '活動暫停中，請稍後再回來參加。',
   activityDraftText: '活動尚未開放，請等待主辦單位公告。',
   activityRunningText: '活動進行中，請選擇一顆金蛋。',
-  showActivityTimeSection: true,
-  showActivityCountdown: true,
+  showActivityTimeSection: false,
+  showActivityCountdown: false,
   activityCountdownTitle: '活動倒數',
   activityCountdownBgColor: 'rgba(0, 0, 0, 0.16)',
   activityCountdownTextColor: '#fef3c7',
@@ -429,12 +433,12 @@ const campaign = reactive({
   shareButtonTextSize: 12,
   shareButtonGap: 8,
   shareButtonPaddingY: 12,
-  showBottomNav: true,
+  showBottomNav: false,
   lineBrowserHintCloseButtonText: '我知道了',
   lineBrowserHintCopyButtonText: '複製活動連結',
   lineBrowserHintText: '你目前可能正在 LINE 內建瀏覽器中瀏覽。若畫面、分享或互動功能不穩，請點右上角「⋯」→ 選擇「以瀏覽器開啟」。',
   lineBrowserHintTitle: '建議使用外部瀏覽器開啟',
-  showLineBrowserHint: true,
+  showLineBrowserHint: false,
   bottomNavBgColor: 'rgba(127, 29, 29, 0.72)',
   bottomNavBorderColor: '#fde68a',
   bottomNavButtonBgColor: 'rgba(255, 255, 255, 0.12)',
@@ -484,7 +488,18 @@ const campaign = reactive({
   ruleTitle: '活動規則',
   ruleContent: '請先輸入主辦單位提供的抽獎序號。\n序號驗證成功後，才會取得可用砸蛋次數。\n每次砸蛋會消耗 1 次序號機會。\n獎項數量有限，送完為止。',
   prizeInfoTitle: '獎品說明',
-  prizeInfoContent: '中獎結果會顯示於畫面與最近紀錄。\n實際兌換方式以主辦單位公告為準。\n請保留中獎畫面或截圖作為兌獎依據。'
+  prizeInfoContent: '中獎結果會顯示於畫面與最近紀錄。\n實際兌換方式以主辦單位公告為準。\n請保留中獎畫面或截圖作為兌獎依據。',
+  // 第 46001～46400 批：玩家前台清潔顯示開關。
+  showFrontRules: true,
+  showFrontPrizeInfo: true,
+  showFrontPrizeShelf: false,
+  showFrontHistoryButton: true,
+  showFrontRecentRecords: false,
+  showFrontShareButton: false,
+  showFrontActivityTime: false,
+  showFrontActivityCountdown: false,
+  showFrontBottomNav: false,
+  showFrontDebugInfo: false
 })
 
 const player = reactive({
@@ -592,6 +607,23 @@ const loadGoldenEggAdminState = () => {
   const saved = safeJsonParse(localStorage.getItem(GOLDEN_EGG_ADMIN_STATE_KEY), null)
   applyGoldenEggAdminState(saved)
 }
+
+const frontDisplay = computed(() => {
+  const admin = Boolean(isAdminMode.value)
+
+  return {
+    showRules: admin || campaign.showFrontRules !== false,
+    showPrizeInfo: admin || campaign.showFrontPrizeInfo !== false,
+    showPrizeShelf: admin || campaign.showFrontPrizeShelf === true,
+    showHistoryButton: admin || campaign.showFrontHistoryButton !== false,
+    showRecentRecords: admin || campaign.showFrontRecentRecords === true,
+    showShareButton: admin || campaign.showFrontShareButton === true,
+    showActivityTime: admin || campaign.showFrontActivityTime === true,
+    showActivityCountdown: admin || campaign.showFrontActivityCountdown === true,
+    showBottomNav: admin || campaign.showFrontBottomNav === true,
+    showDebugInfo: admin || campaign.showFrontDebugInfo === true
+  }
+})
 
 const onlineModeLabel = computed(() => {
   if (!isOnlineMode.value) return ''
@@ -3151,7 +3183,7 @@ onUnmounted(() => {
             </div>
 
             <div
-              v-if="isOnlineMode || remoteLoadMessage"
+              v-if="frontDisplay.showDebugInfo && (isOnlineMode || remoteLoadMessage)"
               class="mt-3 rounded-2xl border px-4 py-2 text-xs font-black"
               :class="onlineModeStatusClass"
             >
@@ -3183,7 +3215,7 @@ onUnmounted(() => {
             </div>
 
             <div
-              v-if="campaign.showActivityTimeSection"
+              v-if="frontDisplay.showActivityTime && campaign.showActivityTimeSection"
               class="mt-3 border text-left"
               :style="activityTimeBoxStyle"
             >
@@ -3219,7 +3251,7 @@ onUnmounted(() => {
               </div>
 
               <div
-                v-if="campaign.showActivityCountdown"
+                v-if="frontDisplay.showActivityCountdown && campaign.showActivityCountdown"
                 class="mt-3 rounded-2xl px-3 py-3 text-center"
                 :style="activityCountdownStyle"
               >
@@ -3242,7 +3274,7 @@ onUnmounted(() => {
         </section>
 
         <section
-          v-if="campaign.showMarqueeSection"
+          v-if="frontDisplay.showRecentRecords && campaign.showMarqueeSection"
           class="golden-marquee mt-4 overflow-hidden rounded-[1.25rem] border border-yellow-200/35 px-3 py-2 shadow-xl"
           :style="marqueeStyle"
         >
@@ -3266,6 +3298,7 @@ onUnmounted(() => {
             </div>
 
             <button
+              v-if="isAdminMode"
               type="button"
               class="rounded-2xl border border-yellow-200/30 bg-yellow-300 px-3 py-2 text-xs font-black text-red-700 shadow-lg transition hover:bg-yellow-200 disabled:cursor-not-allowed disabled:opacity-50"
               :disabled="isCracking"
@@ -3401,7 +3434,7 @@ onUnmounted(() => {
           </div>
 
           <div
-            v-if="campaign.showShareButtonSection && campaign.showSystemShareButton"
+            v-if="frontDisplay.showShareButton && campaign.showShareButtonSection && campaign.showSystemShareButton"
             class="mt-3 grid grid-cols-1"
             :style="shareButtonGridStyle"
           >
@@ -3416,7 +3449,7 @@ onUnmounted(() => {
           </div>
 
           <div
-            v-if="campaign.showPrizeShelfSection"
+            v-if="frontDisplay.showPrizeShelf && campaign.showPrizeShelfSection"
             class="golden-prize-shelf mt-4 rounded-[1.6rem] border border-yellow-200/45 p-3 shadow-2xl"
             :style="prizeShelfStyle"
           >
@@ -3457,7 +3490,7 @@ onUnmounted(() => {
         </section>
 
         <section
-          v-if="campaign.showRecentLogsSection"
+          v-if="frontDisplay.showRecentRecords && campaign.showRecentLogsSection"
           class="golden-collapsible-section mt-4 rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-2xl backdrop-blur"
         >
           <button
@@ -3531,11 +3564,11 @@ onUnmounted(() => {
         </section>
 
             <section
-          v-if="campaign.showRuleSection || campaign.showPrizeInfoSection"
+          v-if="frontDisplay.showRules || frontDisplay.showPrizeInfo"
           class="mt-4 grid gap-3 pb-8 md:grid-cols-2"
         >
           <div
-            v-if="campaign.showRuleSection"
+            v-if="frontDisplay.showRules && campaign.showRuleSection"
             class="golden-collapsible-section rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-xl backdrop-blur"
           >
             <button
@@ -3568,7 +3601,7 @@ onUnmounted(() => {
           </div>
 
           <div
-            v-if="campaign.showPrizeInfoSection"
+            v-if="frontDisplay.showPrizeInfo && campaign.showPrizeInfoSection"
             class="golden-collapsible-section rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-xl backdrop-blur"
           >
             <button
@@ -3604,7 +3637,7 @@ onUnmounted(() => {
     </div>
 
     <nav
-      v-if="campaign.showBottomNav"
+      v-if="frontDisplay.showBottomNav && campaign.showBottomNav"
       class="fixed left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 border p-2 shadow-2xl backdrop-blur-xl md:max-w-lg"
       :style="bottomNavStyle"
     >
@@ -3752,7 +3785,7 @@ onUnmounted(() => {
           </div>
 
           <button
-            v-if="player.chances <= 0 && campaign.showResultShareButton"
+            v-if="frontDisplay.showShareButton && player.chances <= 0 && campaign.showResultShareButton"
             type="button"
             class="mt-3 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-red-700 shadow-lg transition hover:bg-yellow-50"
             @click="shareCampaign"
