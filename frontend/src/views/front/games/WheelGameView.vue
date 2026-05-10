@@ -1,5 +1,5 @@
 <script setup>
-// 第 51601～52000 批：輪盤設定正式存資料庫與玩家頁全裝置同步版
+// 第 52001～52400 批：輪盤玩家頁 campaignId 直讀修正版
 /**
  * Multi Game Platform V2.3 第 51201～51600 批：輪盤正式玩家頁草稿同步與預覽一致延續版
  *
@@ -4571,38 +4571,71 @@ const loadTenantWheelRemoteState = async () => {
 
   try {
     const requestedCampaignId = String(route.query.campaignId || route.query.id || '').trim()
-    const payload = await formalFetchJson(`/campaigns?tenantSlug=${encodeURIComponent(routeTenantSlug.value)}`)
-    const data = unwrapFormalApiPayload(payload)
-    const campaigns = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.campaigns) ? data.campaigns : []))
-    const target = requestedCampaignId
-      ? campaigns.find((item) => String(item?.id || '') === requestedCampaignId)
-      : campaigns.find((item) => String(item?.gameType || '').toUpperCase() === 'WHEEL') || campaigns[0]
+    let target = null
+    let campaignDetail = null
+
+    // 第 52001～52400 批修正：
+    // 正式玩家網址已帶 campaignId 時，必須優先直接讀 /api/campaigns/:id。
+    // 不能先依 tenantSlug 撈列表再找 WHEEL，因為公開列表可能受 tenant / active / status 條件影響，
+    // 導致明明網址指定 campaignId=3，卻先在列表階段報「找不到 a-shop 的 WHEEL 活動」。
+    if (requestedCampaignId) {
+      try {
+        const detailPayload = await formalFetchJson(`/campaigns/${encodeURIComponent(requestedCampaignId)}`)
+        target = unwrapFormalApiPayload(detailPayload)
+        campaignDetail = target
+      } catch (error) {
+        console.warn('依 campaignId 直接讀取輪盤活動失敗，改用商家活動列表 fallback：', error)
+      }
+    }
 
     if (!target?.id) {
-      throw new Error(`找不到 ${routeTenantSlug.value} 的 WHEEL 活動`)
+      const listQuery = new URLSearchParams()
+      if (routeTenantSlug.value) listQuery.set('tenantSlug', routeTenantSlug.value)
+      listQuery.set('gameType', 'WHEEL')
+      listQuery.set('status', 'ACTIVE')
+
+      const payload = await formalFetchJson(`/campaigns?${listQuery.toString()}`)
+      const data = unwrapFormalApiPayload(payload)
+      const campaigns = Array.isArray(data)
+        ? data
+        : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.campaigns) ? data.campaigns : []))
+
+      target = requestedCampaignId
+        ? campaigns.find((item) => String(item?.id || '') === requestedCampaignId)
+        : campaigns.find((item) => String(item?.gameType || '').toUpperCase() === 'WHEEL') || campaigns[0]
+
+      if (!target?.id) {
+        throw new Error(
+          requestedCampaignId
+            ? `找不到活動 ID ${requestedCampaignId}，請確認活動是否存在或是否已部署最新後端資料`
+            : `找不到 ${routeTenantSlug.value} 的 WHEEL 活動`
+        )
+      }
+
+      campaignDetail = target
+      try {
+        const detailPayload = await formalFetchJson(`/campaigns/${encodeURIComponent(target.id)}`)
+        campaignDetail = unwrapFormalApiPayload(detailPayload) || target
+      } catch (error) {
+        console.warn('讀取輪盤活動 detail 失敗，改用列表資料：', error)
+      }
     }
 
-    let campaignDetail = target
-    try {
-      const detailPayload = await formalFetchJson(`/campaigns/${target.id}`)
-      campaignDetail = unwrapFormalApiPayload(detailPayload) || target
-    } catch (error) {
-      console.warn('讀取輪盤活動 detail 失敗，改用列表資料：', error)
-    }
+    const effectiveCampaignId = campaignDetail?.id || target?.id || requestedCampaignId
 
     try {
-      const configPayload = await formalFetchJson(`/campaigns/${target.id}/game-config`)
+      const configPayload = await formalFetchJson(`/campaigns/${encodeURIComponent(effectiveCampaignId)}/game-config`)
       const config = unwrapFormalApiPayload(configPayload)
       campaignDetail = {
         ...campaignDetail,
         gameConfig: config?.gameConfig || config,
-        settings: config?.settings || config?.gameConfig?.settings || campaignDetail.settings
+        settings: config?.settings || config?.gameConfig?.settings || campaignDetail?.settings
       }
     } catch (error) {
       console.warn('讀取輪盤 GameConfig settings 失敗，改用活動資料：', error)
     }
 
-    applyRemoteWheelCampaignData(campaignDetail)
+    applyRemoteWheelCampaignData(campaignDetail || target)
   } catch (error) {
     console.error('載入商家輪盤正式活動失敗：', error)
     remoteWheelCampaign.value = null
