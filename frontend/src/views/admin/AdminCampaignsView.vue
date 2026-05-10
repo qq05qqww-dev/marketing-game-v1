@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 42001～42050 批：AdminCampaignsView build syntax 小修正版
+// 第 44801～45200 批：商家活動管理精緻簡化與三遊戲操作導引版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminCampaignsView.vue
@@ -1761,6 +1761,144 @@ const officialDeliverySummaryCards = computed(() => {
   ]
 })
 
+const merchantCampaignDashboardCards = computed(() => {
+  const rows = merchantGameCampaigns.value
+  const active = rows.filter((campaign) => isCampaignActive(campaign)).length
+  const draft = rows.filter((campaign) => String(getCampaignDisplayStatus(campaign)).toUpperCase() === 'DRAFT').length
+  const inactive = rows.filter((campaign) => ['INACTIVE', 'ENDED', 'PAUSED'].includes(String(getCampaignDisplayStatus(campaign)).toUpperCase())).length
+
+  return [
+    {
+      label: '正式活動',
+      value: rows.length,
+      note: '輪盤 / 九宮格 / 砸金蛋',
+      icon: '🎮',
+      className: 'border-slate-200 bg-white text-slate-950'
+    },
+    {
+      label: '啟用中',
+      value: active,
+      note: '可交付客人遊玩',
+      icon: '✅',
+      className: 'border-emerald-100 bg-emerald-50 text-emerald-700'
+    },
+    {
+      label: '草稿',
+      value: draft,
+      note: '尚未正式啟用',
+      icon: '📝',
+      className: 'border-amber-100 bg-amber-50 text-amber-700'
+    },
+    {
+      label: '暫停 / 結束',
+      value: inactive,
+      note: '目前不建議交付',
+      icon: '⏸️',
+      className: 'border-rose-100 bg-rose-50 text-rose-700'
+    }
+  ]
+})
+
+const getCampaignReadinessItems = (campaign) => {
+  return [
+    {
+      label: '活動已建立',
+      done: Boolean(campaign?.id) && !isLocalDraftCampaign(campaign),
+      hint: campaign?.id ? `活動 ID：${campaign.id}` : '尚未建立'
+    },
+    {
+      label: '活動已啟用',
+      done: isCampaignActive(campaign),
+      hint: isCampaignActive(campaign) ? '可交付客人' : `目前狀態：${getCampaignStatusText(campaign)}`
+    },
+    {
+      label: '玩家網址',
+      done: Boolean(getPlayerUrl(campaign)),
+      hint: '可複製正式網址'
+    },
+    {
+      label: '序號入口',
+      done: Boolean(campaign?.id) && !isLocalDraftCampaign(campaign),
+      hint: '可前往我的序號管理'
+    },
+    {
+      label: '報表入口',
+      done: Boolean(campaign?.id) && !isLocalDraftCampaign(campaign),
+      hint: '可前往報表中心'
+    }
+  ]
+}
+
+const getCampaignReadinessPercent = (campaign) => {
+  const items = getCampaignReadinessItems(campaign)
+  const done = items.filter((item) => item.done).length
+
+  return Math.round((done / items.length) * 100)
+}
+
+const getCampaignReadinessClass = (campaign) => {
+  const percent = getCampaignReadinessPercent(campaign)
+
+  if (percent >= 80) return 'bg-emerald-500'
+  if (percent >= 50) return 'bg-amber-400'
+  return 'bg-slate-400'
+}
+
+const getCampaignCardClass = (campaign) => {
+  if (isCampaignActive(campaign)) return 'border-emerald-100 bg-emerald-50/40'
+  if (String(getCampaignDisplayStatus(campaign)).toUpperCase() === 'DRAFT') return 'border-amber-100 bg-amber-50/40'
+
+  return 'border-slate-200 bg-white'
+}
+
+const getCampaignGameEmoji = (campaign) => {
+  const type = String(campaign?.gameType || '').toUpperCase()
+  return officialGameDefinitions.find((item) => item.type === type)?.emoji || '🎮'
+}
+
+const goMerchantSerials = (campaign) => {
+  if (!campaign?.id) {
+    errorMessage.value = '請先選擇正式活動。'
+    return
+  }
+
+  const type = String(campaign.gameType || '').toUpperCase()
+  const game = type === 'WHEEL'
+    ? 'wheel'
+    : type === 'GOLDEN_EGG'
+      ? 'golden-egg'
+      : 'premium-grid'
+
+  router.push({
+    path: '/admin/my-serials',
+    query: {
+      game,
+      campaignId: campaign.id
+    }
+  })
+}
+
+const goCampaignReports = (campaign) => {
+  if (!campaign?.id) {
+    errorMessage.value = '請先選擇正式活動。'
+    return
+  }
+
+  router.push({
+    path: '/admin/reports',
+    query: {
+      campaignId: campaign.id
+    }
+  })
+}
+
+const selectCampaignAndLoadSerials = async (campaign) => {
+  if (!campaign?.id) return
+
+  selectedCampaignId.value = String(campaign.id)
+  await loadSerialList(campaign.id, false)
+}
+
 const officialCustomerServiceText = computed(() => {
   const lines = [
     '您好，這是本次活動抽獎網址：',
@@ -2021,7 +2159,7 @@ onMounted(() => {
       <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p class="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Merchant Flow</p>
-          <p class="mt-1 text-lg font-black text-emerald-950">商家提示：建立活動後，請建立序號、確認獎項，再回商家遊戲中心複製玩家網址。</p>
+          <p class="mt-1 text-lg font-black text-emerald-950">商家提示：建立活動後，先到序號管理建立序號，再複製正式玩家網址給客人。</p>
         </div>
         <button
           type="button"
@@ -2037,13 +2175,13 @@ onMounted(() => {
         <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <p class="text-sm font-black text-violet-600">
-              Multi Game Platform V2.3｜第 17501～17900 批
+              Multi Game Platform V2.3｜第 44801～45200 批
             </p>
             <h1 class="mt-2 text-3xl font-black">
-              活動管理｜正式資料庫活動列表版
+              活動管理｜三遊戲簡化操作版
             </h1>
             <p class="mt-3 max-w-4xl text-sm font-bold leading-7 text-slate-500">
-              這版活動列表只以 PostgreSQL 正式資料為準，不再混入最近建立快取，避免點進不存在資料庫的活動 ID。
+              商家只要看輪盤、九宮格、砸金蛋三個遊戲狀態，並從這裡完成編輯活動、管理序號、複製玩家網址與查看報表。
             </p>
           </div>
 
@@ -2086,11 +2224,172 @@ onMounted(() => {
         </div>
       </header>
 
+      <section class="overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-sm">
+        <div class="bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-6 text-white">
+          <div class="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.28em] text-cyan-200">
+                Merchant Campaign Console
+              </p>
+              <h2 class="mt-3 text-3xl font-black">
+                商家三遊戲活動總覽
+              </h2>
+              <p class="mt-3 max-w-4xl text-sm font-bold leading-7 text-white/70">
+                不用在複雜表格裡找資料。先看三個遊戲是否建立、是否啟用，再直接進入設定、序號、報表或複製正式玩家網址。
+              </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
+                @click="scrollToCreateForm"
+              >
+                建立新活動
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
+                @click="loadCampaigns"
+              >
+                重新整理
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid gap-4 bg-slate-50 p-6 md:grid-cols-2 xl:grid-cols-4">
+          <div
+            v-for="card in merchantCampaignDashboardCards"
+            :key="card.label"
+            class="rounded-3xl border p-5 shadow-sm"
+            :class="card.className"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] opacity-70">{{ card.label }}</p>
+                <p class="mt-3 text-4xl font-black">{{ card.value }}</p>
+                <p class="mt-2 text-xs font-bold opacity-70">{{ card.note }}</p>
+              </div>
+              <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+                {{ card.icon }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid gap-4 p-6 xl:grid-cols-3">
+          <article
+            v-for="campaign in merchantGameCampaigns"
+            :key="`merchant-campaign-card-${campaign.id}`"
+            class="rounded-[2rem] border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            :class="getCampaignCardClass(campaign)"
+          >
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <p class="text-3xl">{{ getCampaignGameEmoji(campaign) }}</p>
+                <h3 class="mt-2 text-xl font-black text-slate-950">
+                  {{ campaign.title || campaign.name || '未命名活動' }}
+                </h3>
+                <p class="mt-1 text-sm font-bold text-slate-500">
+                  {{ getGameTypeLabel(campaign.gameType) }}｜#{{ campaign.id }}
+                </p>
+              </div>
+
+              <span
+                class="rounded-full px-3 py-1 text-xs font-black"
+                :class="getCampaignStatusClass(campaign)"
+              >
+                {{ getCampaignStatusText(campaign) }}
+              </span>
+            </div>
+
+            <div class="mt-4 rounded-2xl border border-white/70 bg-white/80 p-4">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <p class="text-xs font-black text-slate-400">準備完成度</p>
+                  <p class="mt-1 text-2xl font-black text-slate-950">{{ getCampaignReadinessPercent(campaign) }}%</p>
+                </div>
+                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+                  {{ isCampaignActive(campaign) ? '可交付' : '待確認' }}
+                </span>
+              </div>
+              <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  class="h-full rounded-full transition-all"
+                  :class="getCampaignReadinessClass(campaign)"
+                  :style="{ width: `${getCampaignReadinessPercent(campaign)}%` }"
+                />
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-2">
+              <button
+                type="button"
+                class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+                @click="goGameSettings(campaign)"
+              >
+                編輯活動 / 遊戲設定
+              </button>
+
+              <div class="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  class="rounded-2xl border border-indigo-200 bg-white px-4 py-3 text-sm font-black text-indigo-700 transition hover:bg-indigo-50"
+                  @click="goMerchantSerials(campaign)"
+                >
+                  管理序號
+                </button>
+                <button
+                  type="button"
+                  class="rounded-2xl border border-blue-200 bg-white px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-50"
+                  @click="goCampaignReports(campaign)"
+                >
+                  查看報表
+                </button>
+                <button
+                  type="button"
+                  class="rounded-2xl border border-emerald-200 bg-white px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-50"
+                  @click="copyTextToClipboard(getPlayerUrl(campaign), '已複製正式玩家網址。')"
+                >
+                  複製網址
+                </button>
+                <button
+                  type="button"
+                  class="rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-50"
+                  @click="toggleCampaignStatus(campaign)"
+                >
+                  {{ isCampaignActive(campaign) ? '停用' : '啟用' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="mt-4 grid gap-2">
+              <div
+                v-for="item in getCampaignReadinessItems(campaign)"
+                :key="`${campaign.id}-${item.label}`"
+                class="rounded-2xl border px-3 py-2 text-xs font-bold leading-5"
+                :class="item.done ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-amber-100 bg-amber-50 text-amber-700'"
+              >
+                {{ item.done ? '✅' : '⚠️' }} {{ item.label }}｜{{ item.hint }}
+              </div>
+            </div>
+          </article>
+
+          <div
+            v-if="!merchantGameCampaigns.length"
+            class="rounded-[2rem] border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500 xl:col-span-3"
+          >
+            目前還沒有輪盤、九宮格或砸金蛋活動。請先點「建立新活動」。
+          </div>
+        </div>
+      </section>
+
       <section class="rounded-[32px] border border-emerald-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p class="text-sm font-black text-emerald-600">
-              正式商家交付中心｜第 42001～42050 批
+              正式商家交付中心｜第 44801～45200 批
             </p>
             <h2 class="mt-1 text-2xl font-black text-slate-950">
               三遊戲正式玩家網址、客服文字與營運狀態

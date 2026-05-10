@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-// 第 42051～42400 批：商家管理後台精緻簡化與一頁式操作版
+// 第 44801～45200 批：商家活動管理精緻簡化與三遊戲操作導引版
 
 const route = useRoute()
 const router = useRouter()
@@ -52,7 +52,7 @@ const menuItems = computed(() => {
     },
     {
       label: isPlatformAdmin.value ? '活動管理' : '我的活動',
-      description: isPlatformAdmin.value ? '平台活動' : '活動 / 序號 / 狀態',
+      description: isPlatformAdmin.value ? '平台活動' : '三遊戲 / 啟用 / 交付',
       to: '/admin/campaigns',
       icon: '📣',
       roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
