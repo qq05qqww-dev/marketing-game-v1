@@ -1,4 +1,4 @@
-// 第 51201～51600 批：輪盤設定右側正式玩家頁 iframe 即時預覽版
+// 第 51601～52000 批：輪盤設定正式存資料庫與玩家頁全裝置同步版
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -8,6 +8,17 @@ const router = useRouter()
 
 const STORAGE_PREFIX = 'mgp:wheel-admin-settings:'
 const PRODUCTION_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
+const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '')
+
+const getAuthToken = () => {
+  if (typeof localStorage === 'undefined') return ''
+  return localStorage.getItem('token') || localStorage.getItem('authToken') || ''
+}
+
+const getAuthHeaders = () => {
+  const token = getAuthToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 const campaignId = computed(() => String(route.params.id || route.query.campaignId || '').trim())
 const tenantSlug = computed(() => String(route.query.tenantSlug || 'a-shop').trim() || 'a-shop')
@@ -53,6 +64,9 @@ const playerUrl = computed(() => {
 const storageKey = computed(() => `${STORAGE_PREFIX}${tenantSlug.value}:${campaignId.value || 'draft'}`)
 const savedMessage = ref('')
 const copiedMessage = ref('')
+const saveErrorMessage = ref('')
+const remoteConfigLoaded = ref(false)
+const isSaving = ref(false)
 const previewKey = ref(0)
 const activeCategory = ref('basic')
 
@@ -286,6 +300,88 @@ const assignDeep = (target, source) => {
   })
 }
 
+const unwrapApiPayload = (payload) => {
+  if (!payload || typeof payload !== 'object') return payload
+  return payload.data ?? payload.result ?? payload
+}
+
+const fetchGameConfig = async () => {
+  if (!campaignId.value) return null
+
+  const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId.value)}/game-config`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...getAuthHeaders()
+    }
+  })
+
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || '讀取輪盤資料庫設定失敗')
+  }
+
+  const data = unwrapApiPayload(payload)
+  return data?.settings || data?.gameConfig?.settings || {}
+}
+
+const saveGameConfig = async () => {
+  if (!campaignId.value) {
+    throw new Error('缺少 campaignId，無法儲存到資料庫')
+  }
+
+  const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(campaignId.value)}/game-config`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify({
+      settings: JSON.parse(JSON.stringify(settings))
+    })
+  })
+
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || '儲存輪盤資料庫設定失敗')
+  }
+
+  return unwrapApiPayload(payload)
+}
+
+const persistLocalDraft = () => {
+  try {
+    localStorage.setItem(storageKey.value, JSON.stringify(settings))
+    previewKey.value += 1
+    return true
+  } catch (error) {
+    console.warn('暫存輪盤設定草稿失敗：', error)
+    return false
+  }
+}
+
+const loadRemoteGameConfig = async () => {
+  if (!campaignId.value) return
+
+  try {
+    const remoteSettings = await fetchGameConfig()
+    if (remoteSettings && Object.keys(remoteSettings).length) {
+      assignDeep(settings, defaultSettings())
+      assignDeep(settings, remoteSettings)
+      localStorage.setItem(storageKey.value, JSON.stringify(settings))
+      previewKey.value += 1
+    }
+    remoteConfigLoaded.value = true
+  } catch (error) {
+    console.warn('讀取輪盤資料庫設定失敗，暫用本機草稿：', error)
+    remoteConfigLoaded.value = false
+    saveErrorMessage.value = error?.message || '讀取資料庫設定失敗，暫用本機草稿。'
+  }
+}
+
 const loadSettings = () => {
   try {
     const raw = localStorage.getItem(storageKey.value)
@@ -298,21 +394,39 @@ const loadSettings = () => {
   }
 }
 
-const saveSettings = (options = {}) => {
+const saveSettings = async (options = {}) => {
   const silent = options?.silent === true
 
-  try {
-    localStorage.setItem(storageKey.value, JSON.stringify(settings))
-    previewKey.value += 1
+  saveErrorMessage.value = ''
+  persistLocalDraft()
 
+  if (options?.localOnly === true) {
     if (!silent) {
-      savedMessage.value = '已儲存，右側正式玩家頁預覽已重新載入。'
+      savedMessage.value = '已暫存本機草稿，右側預覽已重新載入。'
       window.setTimeout(() => {
         savedMessage.value = ''
       }, 2200)
     }
+    return
+  }
+
+  isSaving.value = true
+
+  try {
+    await saveGameConfig()
+    remoteConfigLoaded.value = true
+
+    if (!silent) {
+      savedMessage.value = '已正式儲存到資料庫，玩家手機重新整理後會同步看到。'
+      window.setTimeout(() => {
+        savedMessage.value = ''
+      }, 2600)
+    }
   } catch (error) {
-    savedMessage.value = '儲存失敗，請檢查瀏覽器儲存權限。'
+    saveErrorMessage.value = error?.message || '儲存到資料庫失敗，請確認後端與登入權限。'
+    savedMessage.value = ''
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -323,7 +437,7 @@ const schedulePreviewSync = () => {
 
   window.clearTimeout(previewSyncTimer)
   previewSyncTimer = window.setTimeout(() => {
-    saveSettings({ silent: true })
+    persistLocalDraft()
   }, 650)
 }
 
@@ -333,7 +447,7 @@ const resetSettings = () => {
   assignDeep(settings, fresh)
   localStorage.removeItem(storageKey.value)
   previewKey.value += 1
-  savedMessage.value = '已還原輪盤預設設定。'
+  savedMessage.value = '已還原輪盤預設設定，請按儲存設定寫入資料庫。'
 }
 
 const copyText = async (text, message = '已複製到剪貼簿') => {
@@ -416,9 +530,10 @@ watch(
   { deep: true }
 )
 
-onMounted(() => {
+onMounted(async () => {
   loadSettings()
-  saveSettings({ silent: true })
+  await loadRemoteGameConfig()
+  persistLocalDraft()
 })
 </script>
 
@@ -429,7 +544,7 @@ onMounted(() => {
         <div>
           <p class="text-xs font-black uppercase tracking-[0.18em] text-orange-500">設定操作</p>
           <p class="text-sm font-bold text-slate-500">
-            修改會自動同步右側正式玩家頁預覽；需要保存時仍可按「儲存設定」。
+            修改會先同步右側預覽；按「儲存設定」後會正式寫入資料庫，客人手機重新整理就會同步。
           </p>
         </div>
 
@@ -440,13 +555,20 @@ onMounted(() => {
           <span v-if="copiedMessage" class="rounded-full bg-blue-50 px-4 py-2 text-xs font-black text-blue-700">
             {{ copiedMessage }}
           </span>
+          <span v-if="saveErrorMessage" class="rounded-full bg-rose-50 px-4 py-2 text-xs font-black text-rose-700">
+            {{ saveErrorMessage }}
+          </span>
+          <span v-else-if="remoteConfigLoaded" class="rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600">
+            已連接資料庫設定
+          </span>
 
           <button
             type="button"
             class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:-translate-y-0.5 hover:bg-slate-800"
+            :disabled="isSaving"
             @click="saveSettings"
           >
-            儲存設定
+            {{ isSaving ? '儲存中...' : '儲存設定' }}
           </button>
           <button
             type="button"
@@ -469,7 +591,7 @@ onMounted(() => {
       <div class="grid gap-0 xl:grid-cols-[1fr_0.72fr]">
         <div class="bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 p-6 text-white">
           <p class="text-xs font-black uppercase tracking-[0.24em] text-orange-200">
-            Wheel Admin Center｜第 51201～51600 批
+            Wheel Admin Center｜第 51601～52000 批
           </p>
           <h1 class="mt-3 text-3xl font-black">
             輪盤單一活動設定

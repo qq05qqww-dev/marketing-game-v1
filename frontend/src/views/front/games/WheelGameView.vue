@@ -1,4 +1,5 @@
 <script setup>
+// 第 51601～52000 批：輪盤設定正式存資料庫與玩家頁全裝置同步版
 /**
  * Multi Game Platform V2.3 第 51201～51600 批：輪盤正式玩家頁草稿同步與預覽一致延續版
  *
@@ -4480,15 +4481,64 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
   campaign.heroTagline = settings.heroTagline || settings.brandSubtitle || campaign.heroTagline
   campaign.noticeText = settings.noticeText || apiCampaign.description || campaign.noticeText
   campaign.logoText = settings.logoText || settings.logo || campaign.logoText
-  campaign.logoImageUrl = settings.logoImageUrl || campaign.logoImageUrl
+  campaign.logoImageUrl = settings.brandLogoUrl || settings.logoImageUrl || campaign.logoImageUrl
   campaign.bannerImageUrl = settings.bannerImageUrl || campaign.bannerImageUrl
-  campaign.websiteUrl = settings.websiteUrl || settings.officialLinkUrl || campaign.websiteUrl
-  campaign.websiteText = settings.websiteText || settings.officialLinkLabel || campaign.websiteText
+  campaign.websiteUrl = settings.brandLinkUrl || settings.websiteUrl || settings.officialLinkUrl || campaign.websiteUrl
+  campaign.websiteText = settings.brandLinkText || settings.websiteText || settings.officialLinkLabel || campaign.websiteText
 
   campaign.themeStart = settings.themeStart || settings.theme?.start || settings.colors?.start || campaign.themeStart
   campaign.themeMiddle = settings.themeMiddle || settings.theme?.middle || settings.colors?.middle || campaign.themeMiddle
   campaign.themeEnd = settings.themeEnd || settings.theme?.end || settings.colors?.end || campaign.themeEnd
 
+  if (settings.theme) {
+    campaign.themeBgFrom = settings.theme.backgroundFrom || campaign.themeBgFrom
+    campaign.themeBgTo = settings.theme.backgroundTo || campaign.themeBgTo
+    campaign.themePanelColor = settings.theme.panelColor || campaign.themePanelColor
+    campaign.frameTopColor = settings.theme.backgroundFrom || campaign.frameTopColor
+    campaign.frameMiddleColor = settings.theme.backgroundTo || campaign.frameMiddleColor
+    campaign.frameBottomColor = settings.theme.backgroundTo || campaign.frameBottomColor
+    campaign.frameBorderColor = settings.theme.wheelOuterColor || campaign.frameBorderColor
+    campaign.frameHighlightColor = settings.theme.wheelOuterColor || campaign.frameHighlightColor
+    campaign.wheelPointerTopColor = settings.theme.pointerColor || campaign.wheelPointerTopColor
+    campaign.wheelPointerArrowColor = settings.theme.pointerColor || campaign.wheelPointerArrowColor
+    campaign.wheelCenterBgColor = settings.theme.spinButtonColor || campaign.wheelCenterBgColor
+    campaign.themeButtonColor = settings.theme.actionButtonFrom || campaign.themeButtonColor
+    campaign.themeButtonDarkColor = settings.theme.actionButtonTo || campaign.themeButtonDarkColor
+  }
+
+  if (settings.display) {
+    campaign.showFrontRules = settings.display.showRules !== false
+    campaign.showFrontPrizeInfo = settings.display.showPrizeInfo !== false
+    campaign.showFrontPrizeShelf = settings.display.showPrizeShelf === true
+    campaign.showFrontHistoryButton = settings.display.showHistory !== false
+    campaign.showFrontRecentRecords = settings.display.showHistory === true
+    campaign.showFrontDebugInfo = settings.display.showDebugInfo === true
+    campaign.showFrontRemainingChance = settings.display.showRemainingChance !== false
+  }
+
+  if (settings.content) {
+    campaign.ruleTitle = settings.content.rulesTitle || campaign.ruleTitle
+    campaign.ruleContent = settings.content.rulesText || campaign.ruleContent
+    campaign.prizeInfoTitle = settings.content.prizeInfoTitle || campaign.prizeInfoTitle
+    campaign.prizeInfoContent = settings.content.prizeInfoText || campaign.prizeInfoContent
+    campaign.noticeText = settings.content.footerNote || campaign.noticeText
+  }
+
+  if (settings.wheelStyle) {
+    campaign.wheelPreviewSize = Number(settings.wheelStyle.wheelSize || campaign.wheelPreviewSize || 335)
+    campaign.wheelOuterRingWidth = Number(settings.wheelStyle.outerRingWidth || campaign.wheelOuterRingWidth || 8)
+    campaign.wheelCenterSize = Number(settings.wheelStyle.centerButtonSize || campaign.wheelCenterSize || 92)
+    campaign.wheelPointerScale = Math.max(60, Math.min(180, Math.round(Number(settings.wheelStyle.pointerSize || 42) / 42 * 100)))
+    campaign.wheelPrizeTextSize = Number(settings.wheelStyle.prizeTextSize || campaign.wheelPrizeTextSize || 13)
+    campaign.wheelPrizeIconSize = Number(settings.wheelStyle.prizeIconSize || campaign.wheelPrizeIconSize || 38)
+    campaign.wheelPrizeLabelRadius = Number(settings.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
+    campaign.wheelShowPrizeIcon = settings.wheelStyle.showPrizeIcon !== false
+    campaign.wheelShowPrizeName = settings.wheelStyle.showPrizeName !== false
+    campaign.wheelShowSliceBorder = settings.wheelStyle.showSliceBorder !== false
+  }
+
+  campaign.playButtonText = settings.playButtonText || campaign.playButtonText
+  campaign.verifyButtonText = settings.verifyButtonText || campaign.verifyButtonText
   campaign.shareButtonText = settings.shareButtonText || campaign.shareButtonText
   campaign.shareHint = settings.shareHint || campaign.shareHint
   campaign.ruleTitle = settings.ruleTitle || campaign.ruleTitle
@@ -4501,7 +4551,9 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
     prizes.value = remotePrizes
   }
 
-  applyWheelAdminDraftSettings(readWheelAdminDraftSettings(remoteWheelCampaignId.value || apiCampaign.id || settings.campaignId))
+  if (route.query.adminPreviewDraft === '1') {
+    applyWheelAdminDraftSettings(readWheelAdminDraftSettings(remoteWheelCampaignId.value || apiCampaign.id || settings.campaignId))
+  }
 
   player.chances = 0
   serialVerify.verified = false
@@ -4518,10 +4570,13 @@ const loadTenantWheelRemoteState = async () => {
   remoteWheelError.value = ''
 
   try {
+    const requestedCampaignId = String(route.query.campaignId || route.query.id || '').trim()
     const payload = await formalFetchJson(`/campaigns?tenantSlug=${encodeURIComponent(routeTenantSlug.value)}`)
     const data = unwrapFormalApiPayload(payload)
     const campaigns = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.campaigns) ? data.campaigns : []))
-    const target = campaigns.find((item) => String(item?.gameType || '').toUpperCase() === 'WHEEL') || campaigns[0]
+    const target = requestedCampaignId
+      ? campaigns.find((item) => String(item?.id || '') === requestedCampaignId)
+      : campaigns.find((item) => String(item?.gameType || '').toUpperCase() === 'WHEEL') || campaigns[0]
 
     if (!target?.id) {
       throw new Error(`找不到 ${routeTenantSlug.value} 的 WHEEL 活動`)
