@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 21101～21500 批：Campaign Service 九宮格設定儲存正式寫入資料庫版
+// 第 54001～54400 批：平台輪盤模板建立新商家活動時自動複製預設設定版
 //
 // 覆蓋位置：
 // backend/src/services/campaign.service.js
@@ -311,6 +311,143 @@ const normalizeGameConfigSettings = (payload = {}) => {
   return payload
 }
 
+
+const isPlainObject = (value) => {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+const deepClone = (value) => {
+  if (!isPlainObject(value) && !Array.isArray(value)) return value
+  return JSON.parse(JSON.stringify(value))
+}
+
+const deepMergePlainObject = (base = {}, override = {}) => {
+  const merged = deepClone(base) || {}
+
+  if (!isPlainObject(override)) {
+    return merged
+  }
+
+  Object.entries(override).forEach(([key, value]) => {
+    if (isPlainObject(value) && isPlainObject(merged[key])) {
+      merged[key] = deepMergePlainObject(merged[key], value)
+      return
+    }
+
+    merged[key] = deepClone(value)
+  })
+
+  return merged
+}
+
+const hasMeaningfulSettings = (settings = {}) => {
+  return isPlainObject(settings) && Object.keys(settings).length > 0
+}
+
+const getPlatformWheelTemplateDefaults = () => ({
+  pageTitle: '幸運輪盤抽獎',
+  brandName: 'Multi Game Platform',
+  brandSubtitle: '打造專屬互動抽獎體驗',
+  brandLogoUrl: '',
+  brandLinkUrl: '',
+  brandLinkText: '官方品牌',
+  brandLogoSize: 64,
+  brandTitleSize: 20,
+  brandTextColor: '#ffffff',
+  brandButtonBgColor: '#ffffff',
+  brandButtonTextColor: '#c2410c',
+  brandButtonTextSize: 12,
+  headline: '幸運輪盤抽獎',
+  subtitle: '轉出你的專屬驚喜',
+  badgeText: '輸入序號後即可轉盤抽獎',
+  serialTitle: '輸入序號開始轉盤',
+  serialHint: '請輸入商家提供的序號，驗證成功後即可使用轉盤機會。',
+  playButtonText: '開始轉盤',
+  verifyButtonText: '驗證序號',
+  resultTitle: '恭喜中獎',
+  theme: {
+    backgroundFrom: '#fff7ed',
+    backgroundTo: '#f97316',
+    panelColor: '#fed7aa',
+    wheelOuterColor: '#f59e0b',
+    pointerColor: '#dc2626',
+    spinButtonColor: '#111827',
+    actionButtonFrom: '#fb923c',
+    actionButtonTo: '#dc2626'
+  },
+  display: {
+    showBrandCard: true,
+    showStatusCard: true,
+    showRemainingChance: true,
+    showSerialBox: true,
+    showRules: true,
+    showPrizeInfo: true,
+    showPrizeShelf: false,
+    showHistory: true,
+    hidePrizesBeforeDraw: false,
+    enableSound: true,
+    showDebugInfo: false
+  },
+  wheelStyle: {
+    wheelSize: 320,
+    outerRingWidth: 12,
+    centerButtonSize: 86,
+    pointerSize: 42,
+    prizeTextSize: 13,
+    prizeIconSize: 38,
+    cellGap: 2,
+    prizeLabelRadius: 34,
+    showPrizeIcon: true,
+    showPrizeName: true,
+    showSliceBorder: true
+  },
+  effects: {
+    enableTickSound: true,
+    enableResultSound: true,
+    enablePointerShake: true,
+    enableLightGlow: true,
+    enableConfetti: true,
+    enableSpinMask: true
+  },
+  content: {
+    rulesTitle: '活動規則',
+    rulesText: '請輸入商家提供的序號，驗證成功後即可開始轉盤。中獎後請依主辦單位公告方式兌換。',
+    prizeInfoTitle: '獎品說明',
+    prizeInfoText: '獎項、兌換方式與使用期限，以主辦單位現場或官方公告為準。',
+    footerNote: '請依照活動規則參加抽獎；獎項與兌換方式以主辦單位公告為準。'
+  },
+  prizes: [
+    { id: 1, icon: '🎁', imageUrl: '', linkUrl: '', name: '50 元折價券', weight: 35, color: '#facc15' },
+    { id: 2, icon: '🎫', imageUrl: '', linkUrl: '', name: '100 元折價券', weight: 25, color: '#fb7185' },
+    { id: 3, icon: '🏆', imageUrl: '', linkUrl: '', name: '200 元折價券', weight: 15, color: '#fb923c' },
+    { id: 4, icon: '😊', imageUrl: '', linkUrl: '', name: '未中獎', weight: 25, color: '#ef4444' }
+  ],
+  templateMeta: {
+    source: 'PLATFORM_WHEEL_TEMPLATE',
+    cloneMode: 'CREATE_CAMPAIGN_ONLY',
+    version: 'v23_batch54001_54400',
+    note: '建立新輪盤活動時複製一次；之後商家活動與平台模板互相隔離。'
+  }
+})
+
+const resolveInitialGameConfigSettings = (gameType, payload = {}) => {
+  const normalizedSettings = normalizeSettings(payload)
+
+  if (gameType !== 'WHEEL') {
+    return normalizedSettings
+  }
+
+  const platformWheelTemplate = getPlatformWheelTemplateDefaults()
+
+  if (!hasMeaningfulSettings(normalizedSettings)) {
+    return platformWheelTemplate
+  }
+
+  // 若建立活動時已有局部 settings，仍以平台模板補齊缺少欄位，
+  // 但保留呼叫端明確傳入的商家活動設定。
+  return deepMergePlainObject(platformWheelTemplate, normalizedSettings)
+}
+
 const buildCampaignPatchFromSettings = (settings = {}) => {
   const data = {}
 
@@ -395,7 +532,7 @@ export const createCampaign = async (payload = {}, user = null) => {
       gameConfig: {
         create: {
           tenantId,
-          settings: normalizeSettings(payload)
+          settings: resolveInitialGameConfigSettings(gameType, payload)
         }
       }
     },
