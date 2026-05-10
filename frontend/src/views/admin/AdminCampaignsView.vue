@@ -533,7 +533,7 @@ const frontOrigin = computed(() => {
   }
 
   return currentOrigin || PRODUCTION_FRONTEND_URL
-}
+})
 
 const getCampaignDisplayStatus = (campaign) => {
   const id = String(campaign?.id || '')
