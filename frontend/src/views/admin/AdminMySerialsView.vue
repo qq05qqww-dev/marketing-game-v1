@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 42801～43200 批：商家序號管理版面美化與操作分區優化版
+// 第 43201～43600 批：序號列表卡片化與可讀性精緻版
 //
 // 新增位置：
 // frontend/src/views/admin/AdminMySerialsView.vue
@@ -282,6 +282,60 @@ const getStatusClass = (status) => {
   if (value === 'EXPIRED') return 'bg-rose-100 text-rose-700 border-rose-200'
 
   return 'bg-slate-100 text-slate-500 border-slate-200'
+}
+
+const getSerialTotalChance = (item = {}) => {
+  return Number(item.totalChance ?? item.rewardChance ?? 1)
+}
+
+const getSerialUsedCount = (item = {}) => {
+  return Number(item.usedCount ?? item.serialUsedCount ?? 0)
+}
+
+const getSerialRemainingChance = (item = {}) => {
+  return Number(item.remainingChance ?? item.remainingSerialChances ?? item.rewardChance ?? 1)
+}
+
+const getUsagePercent = (item = {}) => {
+  const total = Math.max(getSerialTotalChance(item), 1)
+  const used = Math.max(getSerialUsedCount(item), 0)
+
+  return Math.min(100, Math.round((used / total) * 100))
+}
+
+const getRemainingPercent = (item = {}) => {
+  const total = Math.max(getSerialTotalChance(item), 1)
+  const remaining = Math.max(getSerialRemainingChance(item), 0)
+
+  return Math.min(100, Math.round((remaining / total) * 100))
+}
+
+const getUsageBarClass = (item = {}) => {
+  const remaining = getSerialRemainingChance(item)
+
+  if (remaining <= 0) return 'bg-slate-400'
+  if (remaining <= 3) return 'bg-amber-400'
+  return 'bg-emerald-500'
+}
+
+const getSerialRowClass = (item = {}) => {
+  const status = String(item.effectiveStatus || item.status || '').toUpperCase()
+  const remaining = getSerialRemainingChance(item)
+
+  if (status === 'DISABLED' || status === 'EXPIRED') return 'border-amber-100 bg-amber-50/30'
+  if (remaining <= 0 || status === 'USED') return 'border-slate-200 bg-slate-50/70'
+  return 'border-slate-100 bg-white'
+}
+
+const getSerialPrimaryHint = (item = {}) => {
+  const remaining = getSerialRemainingChance(item)
+  const status = String(item.effectiveStatus || item.status || '').toUpperCase()
+
+  if (status === 'DISABLED') return '此序號已停用'
+  if (status === 'EXPIRED') return '此序號已過期'
+  if (remaining <= 0) return '次數已用完'
+  if (remaining <= 3) return '剩餘次數偏低'
+  return '可以繼續使用'
 }
 
 const formatDate = (value) => {
@@ -722,7 +776,7 @@ onBeforeUnmount(() => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Serials｜第 42801～43200 批
+              Merchant Serials｜第 43201～43600 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               我的序號管理
@@ -1197,110 +1251,168 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-else
-          class="overflow-hidden rounded-3xl border border-slate-200"
+          v-if="selectedCampaign && filteredSerialCodes.length"
+          class="mb-4 grid gap-3 md:grid-cols-4"
         >
-          <div class="max-h-[720px] overflow-auto">
-            <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-              <thead class="sticky top-0 z-10 bg-slate-50 text-xs font-black uppercase tracking-[0.14em] text-slate-400">
-                <tr>
-                  <th class="px-4 py-3">序號</th>
-                  <th class="px-4 py-3">狀態</th>
-                  <th class="px-4 py-3">次數</th>
-                  <th class="px-4 py-3">批次 / 備註</th>
-                  <th class="px-4 py-3">建立時間</th>
-                  <th class="px-4 py-3 text-right">操作</th>
-                </tr>
-              </thead>
-
-              <tbody class="divide-y divide-slate-100 bg-white">
-                <tr
-                  v-for="item in filteredSerialCodes"
-                  :key="item.id"
-                  class="align-top"
-                >
-                  <td class="px-4 py-4">
-                    <p class="font-mono text-sm font-black text-slate-950">{{ item.code }}</p>
-                    <button
-                      type="button"
-                      class="mt-2 rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition hover:bg-slate-50"
-                      @click="copyText(item.code, '序號已複製')"
-                    >
-                      複製
-                    </button>
-                  </td>
-                  <td class="px-4 py-4">
-                    <span
-                      class="rounded-full border px-3 py-1 text-xs font-black"
-                      :class="getStatusClass(item.effectiveStatus || item.status)"
-                    >
-                      {{ getStatusText(item.effectiveStatus || item.status) }}
-                    </span>
-                    <p
-                      v-if="item.distributedAt"
-                      class="mt-2 text-xs font-bold text-slate-400"
-                    >
-                      已發放：{{ formatDate(item.distributedAt) }}
-                    </p>
-                  </td>
-                  <td class="px-4 py-4 text-xs font-bold leading-6 text-slate-500">
-                    <p>總次數：<span class="font-black text-slate-950">{{ item.totalChance ?? item.rewardChance ?? 1 }}</span></p>
-                    <p>已使用：<span class="font-black text-slate-950">{{ item.usedCount ?? 0 }}</span></p>
-                    <p>剩餘：<span class="font-black text-emerald-700">{{ item.remainingChance ?? item.rewardChance ?? 1 }}</span></p>
-                  </td>
-                  <td class="px-4 py-4 text-xs font-bold leading-6 text-slate-500">
-                    <p>{{ item.batchCode || '-' }}</p>
-                    <p>{{ item.note || '-' }}</p>
-                  </td>
-                  <td class="px-4 py-4 text-xs font-bold text-slate-500">
-                    {{ formatDate(item.createdAt) }}
-                  </td>
-                  <td class="px-4 py-4 text-right">
-                    <div class="flex flex-col items-end gap-2">
-                      <button
-                        v-if="!item.distributedAt"
-                        type="button"
-                        class="rounded-xl border border-blue-200 px-3 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
-                        :disabled="updatingId === item.id"
-                        @click="markDistributed(item)"
-                      >
-                        標記已發放
-                      </button>
-
-                      <button
-                        v-if="String(item.status).toUpperCase() !== 'DISABLED'"
-                        type="button"
-                        class="rounded-xl border border-amber-200 px-3 py-2 text-xs font-black text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
-                        :disabled="updatingId === item.id"
-                        @click="updateSerialStatus(item, 'DISABLED')"
-                      >
-                        停用
-                      </button>
-
-                      <button
-                        v-else
-                        type="button"
-                        class="rounded-xl border border-emerald-200 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50"
-                        :disabled="updatingId === item.id"
-                        @click="updateSerialStatus(item, 'UNUSED')"
-                      >
-                        恢復
-                      </button>
-
-                      <button
-                        type="button"
-                        class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
-                        :disabled="deletingId === item.id"
-                        @click="deleteSerialCode(item)"
-                      >
-                        刪除
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+            <p class="text-[11px] font-black text-slate-400">目前顯示</p>
+            <p class="mt-1 text-xl font-black text-slate-950">{{ filteredSerialCodes.length }}</p>
           </div>
+          <div class="rounded-2xl border border-emerald-100 bg-emerald-50 p-3">
+            <p class="text-[11px] font-black text-emerald-600">可用</p>
+            <p class="mt-1 text-xl font-black text-emerald-700">{{ summary.unused }}</p>
+          </div>
+          <div class="rounded-2xl border border-blue-100 bg-blue-50 p-3">
+            <p class="text-[11px] font-black text-blue-600">剩餘次數</p>
+            <p class="mt-1 text-xl font-black text-blue-700">{{ summary.remainingChance }}</p>
+          </div>
+          <div class="rounded-2xl border border-amber-100 bg-amber-50 p-3">
+            <p class="text-[11px] font-black text-amber-600">已發放</p>
+            <p class="mt-1 text-xl font-black text-amber-700">{{ summary.distributed }}</p>
+          </div>
+        </div>
+
+        <div
+          v-else
+          class="space-y-3"
+        >
+          <article
+            v-for="item in filteredSerialCodes"
+            :key="item.id"
+            class="rounded-3xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+            :class="getSerialRowClass(item)"
+          >
+            <div class="grid gap-4 xl:grid-cols-[1.15fr_1fr_1.1fr_auto] xl:items-center">
+              <div class="min-w-0">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="break-all font-mono text-base font-black tracking-tight text-slate-950">
+                    {{ item.code }}
+                  </p>
+                  <span
+                    class="rounded-full border px-3 py-1 text-xs font-black"
+                    :class="getStatusClass(item.effectiveStatus || item.status)"
+                  >
+                    {{ getStatusText(item.effectiveStatus || item.status) }}
+                  </span>
+                </div>
+
+                <div class="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+                    @click="copyText(item.code, '序號已複製')"
+                  >
+                    複製序號
+                  </button>
+
+                  <span
+                    class="rounded-xl px-3 py-2 text-xs font-black"
+                    :class="getSerialRemainingChance(item) > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'"
+                  >
+                    {{ getSerialPrimaryHint(item) }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="rounded-2xl border border-slate-100 bg-white/80 p-4">
+                <div class="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <p class="text-[11px] font-black text-slate-400">總次數</p>
+                    <p class="mt-1 text-lg font-black text-slate-950">{{ getSerialTotalChance(item) }}</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] font-black text-slate-400">已使用</p>
+                    <p class="mt-1 text-lg font-black text-slate-950">{{ getSerialUsedCount(item) }}</p>
+                  </div>
+                  <div>
+                    <p class="text-[11px] font-black text-slate-400">剩餘</p>
+                    <p
+                      class="mt-1 text-lg font-black"
+                      :class="getSerialRemainingChance(item) > 0 ? 'text-emerald-700' : 'text-slate-500'"
+                    >
+                      {{ getSerialRemainingChance(item) }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    class="h-full rounded-full transition-all"
+                    :class="getUsageBarClass(item)"
+                    :style="{ width: `${getRemainingPercent(item)}%` }"
+                  />
+                </div>
+                <p class="mt-2 text-center text-[11px] font-bold text-slate-400">
+                  已使用 {{ getUsagePercent(item) }}%｜剩餘 {{ getRemainingPercent(item) }}%
+                </p>
+              </div>
+
+              <div class="rounded-2xl border border-slate-100 bg-white/70 p-4 text-xs font-bold leading-6 text-slate-500">
+                <div class="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  <p>
+                    <span class="font-black text-slate-400">批次：</span>
+                    <span class="font-black text-slate-700">{{ item.batchCode || '-' }}</span>
+                  </p>
+                  <p>
+                    <span class="font-black text-slate-400">建立：</span>
+                    <span class="font-black text-slate-700">{{ formatDate(item.createdAt) }}</span>
+                  </p>
+                  <p class="sm:col-span-2 xl:col-span-1">
+                    <span class="font-black text-slate-400">備註：</span>
+                    <span class="text-slate-600">{{ item.note || '-' }}</span>
+                  </p>
+                  <p
+                    v-if="item.distributedAt"
+                    class="sm:col-span-2 xl:col-span-1"
+                  >
+                    <span class="font-black text-blue-500">已發放：</span>
+                    <span class="text-blue-600">{{ formatDate(item.distributedAt) }}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 xl:w-28 xl:grid-cols-1">
+                <button
+                  v-if="!item.distributedAt"
+                  type="button"
+                  class="rounded-xl border border-blue-200 bg-white px-3 py-2 text-xs font-black text-blue-700 transition hover:bg-blue-50 disabled:opacity-50"
+                  :disabled="updatingId === item.id"
+                  @click="markDistributed(item)"
+                >
+                  標記已發放
+                </button>
+
+                <button
+                  v-if="String(item.status).toUpperCase() !== 'DISABLED'"
+                  type="button"
+                  class="rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-black text-amber-700 transition hover:bg-amber-50 disabled:opacity-50"
+                  :disabled="updatingId === item.id"
+                  @click="updateSerialStatus(item, 'DISABLED')"
+                >
+                  停用
+                </button>
+
+                <button
+                  v-else
+                  type="button"
+                  class="rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50"
+                  :disabled="updatingId === item.id"
+                  @click="updateSerialStatus(item, 'UNUSED')"
+                >
+                  恢復
+                </button>
+
+                <button
+                  type="button"
+                  class="rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:opacity-50"
+                  :disabled="deletingId === item.id"
+                  @click="deleteSerialCode(item)"
+                >
+                  刪除
+                </button>
+              </div>
+            </div>
+          </article>
         </div>
         </div>
       </section>
