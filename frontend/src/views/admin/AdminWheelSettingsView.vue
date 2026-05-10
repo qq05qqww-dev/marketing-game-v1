@@ -1,4 +1,4 @@
-// 第 56801～57200 批：輪盤設定頁儲存後驗收摘要版
+// 第 57201～57600 批：輪盤設定頁儲存驗收歷史紀錄版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -99,10 +99,12 @@ const storageKey = computed(() => isPlatformTemplateMode.value
   ? `${STORAGE_PREFIX}platform-template:${templateId.value}`
   : `${STORAGE_PREFIX}${tenantSlug.value}:${campaignId.value || 'draft'}`
 )
+const saveAuditHistoryKey = computed(() => `${storageKey.value}:save-audit-history`)
 const savedMessage = ref('')
 const copiedMessage = ref('')
 const saveErrorMessage = ref('')
 const saveAuditRecord = ref(null)
+const saveAuditHistory = ref([])
 const remoteConfigLoaded = ref(false)
 const isSaving = ref(false)
 const previewKey = ref(0)
@@ -494,7 +496,7 @@ const buildSaveAuditRecord = (status = 'success', extra = {}) => {
 
   return {
     status,
-    batch: '56801-57200',
+    batch: '57201-57600',
     savedAt: new Date().toISOString(),
     mode: platformMode ? 'platform_template' : 'merchant_campaign',
     title: platformMode ? '平台輪盤模板儲存驗收' : '商家輪盤活動儲存驗收',
@@ -513,6 +515,108 @@ const buildSaveAuditRecord = (status = 'success', extra = {}) => {
     ...extra
   }
 }
+
+const normalizeSaveAuditHistoryItem = (record = {}) => ({
+  id: `${record.savedAt || new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`,
+  status: record.status || 'unknown',
+  batch: record.batch || '57201-57600',
+  savedAt: record.savedAt || new Date().toISOString(),
+  mode: record.mode || (isPlatformTemplateMode.value ? 'platform_template' : 'merchant_campaign'),
+  title: record.title || '儲存驗收紀錄',
+  target: record.target || (isPlatformTemplateMode.value
+    ? `platform-template:${templateId.value}`
+    : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`),
+  effect: record.effect || '尚未提供影響範圍',
+  templateGuard: record.templateGuard || '尚未提供隔離保護說明',
+  message: record.message || ''
+})
+
+const persistSaveAuditHistory = () => {
+  if (typeof localStorage === 'undefined') return
+
+  try {
+    localStorage.setItem(saveAuditHistoryKey.value, JSON.stringify(saveAuditHistory.value.slice(0, 8)))
+  } catch (error) {
+    console.warn('儲存輪盤設定驗收歷史失敗：', error)
+  }
+}
+
+const loadSaveAuditHistory = () => {
+  if (typeof localStorage === 'undefined') return
+
+  try {
+    const raw = localStorage.getItem(saveAuditHistoryKey.value)
+    if (!raw) {
+      saveAuditHistory.value = []
+      return
+    }
+
+    const parsed = JSON.parse(raw)
+    saveAuditHistory.value = Array.isArray(parsed)
+      ? parsed.slice(0, 8).map((item) => normalizeSaveAuditHistoryItem(item))
+      : []
+  } catch (error) {
+    console.warn('讀取輪盤設定驗收歷史失敗：', error)
+    saveAuditHistory.value = []
+  }
+}
+
+const pushSaveAuditHistory = (record = null) => {
+  if (!record) return
+
+  const normalized = normalizeSaveAuditHistoryItem({
+    ...record,
+    batch: record.batch || '57201-57600'
+  })
+
+  const nextHistory = [
+    normalized,
+    ...saveAuditHistory.value.filter((item) => item.savedAt !== normalized.savedAt)
+  ].slice(0, 8)
+
+  saveAuditHistory.value = nextHistory
+  persistSaveAuditHistory()
+}
+
+const clearSaveAuditHistory = () => {
+  saveAuditHistory.value = []
+
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(saveAuditHistoryKey.value)
+  }
+
+  copiedMessage.value = '已清除目前頁面的儲存驗收歷史紀錄。'
+  window.setTimeout(() => {
+    copiedMessage.value = ''
+  }, 2200)
+}
+
+const saveAuditHistorySummary = computed(() => {
+  const total = saveAuditHistory.value.length
+  const latest = saveAuditHistory.value[0]
+
+  return {
+    eyebrow: 'Save Audit History｜第 57201～57600 批',
+    title: isPlatformTemplateMode.value ? '平台模板儲存歷史' : '商家活動儲存歷史',
+    badge: total ? `最近 ${total} 筆` : '尚無紀錄',
+    badgeClass: total
+      ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200'
+      : 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+    desc: isPlatformTemplateMode.value
+      ? '此區只記錄目前平台輪盤模板頁面的儲存、取消與失敗驗收結果，不會寫入商家活動資料庫。'
+      : '此區只記錄目前商家輪盤活動頁面的儲存、取消與失敗驗收結果，方便確認沒有改錯模板或其他商家。',
+    latestLabel: latest ? `${formatSaveAuditTime(latest.savedAt)}｜${latest.title}` : '尚未產生本頁驗收紀錄'
+  }
+})
+
+const saveAuditHistoryItems = computed(() => saveAuditHistory.value.map((item) => ({
+  ...item,
+  savedAtLabel: formatSaveAuditTime(item.savedAt),
+  statusLabel: item.status === 'success' ? '成功' : (item.status === 'cancelled' ? '取消' : (item.status === 'failed' ? '失敗' : item.status)),
+  statusClass: item.status === 'success'
+    ? 'bg-emerald-100 text-emerald-800'
+    : (item.status === 'cancelled' ? 'bg-slate-100 text-slate-700' : 'bg-rose-100 text-rose-800')
+})))
 
 const saveResultAudit = computed(() => {
   const record = saveAuditRecord.value
@@ -566,7 +670,7 @@ const saveResultAuditItems = computed(() => [
   { label: '影響範圍', value: saveResultAudit.value.effect },
   { label: '玩家頁來源', value: saveResultAudit.value.playerSource },
   { label: '隔離保護', value: saveResultAudit.value.templateGuard },
-  { label: '驗收批次', value: '56801-57200' },
+  { label: '驗收批次', value: '57201-57600' },
   { label: '儲存時間', value: saveResultAudit.value.savedAtLabel }
 ])
 
@@ -977,7 +1081,12 @@ const handlePreviewIframeLoad = () => {
 watch(storageKey, () => {
   assignDeep(settings, defaultSettings())
   loadSettings()
+  loadSaveAuditHistory()
   previewKey.value += 1
+})
+
+watch(saveAuditRecord, (record) => {
+  pushSaveAuditHistory(record)
 })
 
 
@@ -1010,6 +1119,7 @@ watch(
 
 onMounted(async () => {
   loadSettings()
+  loadSaveAuditHistory()
   await loadRemoteGameConfig()
   persistLocalDraft()
 })
@@ -1254,6 +1364,64 @@ onMounted(async () => {
         :class="saveResultAudit.safe ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'"
       >
         {{ isPlatformTemplateMode ? '驗收重點：平台模板儲存後仍只是模板草稿，不會直接同步到任何既有商家活動。' : '驗收重點：商家活動儲存後仍是該活動自己的設定，不會回寫平台模板，也不會影響其他商家。' }}
+      </div>
+    </section>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-indigo-500">{{ saveAuditHistorySummary.eyebrow }}</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">{{ saveAuditHistorySummary.title }}</h2>
+          <p class="mt-2 max-w-4xl text-sm font-bold leading-6 text-slate-500">
+            {{ saveAuditHistorySummary.desc }}
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <span
+            class="inline-flex rounded-full px-4 py-2 text-xs font-black"
+            :class="saveAuditHistorySummary.badgeClass"
+          >
+            {{ saveAuditHistorySummary.badge }}
+          </span>
+          <button
+            type="button"
+            class="rounded-full border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
+            @click="clearSaveAuditHistory"
+          >
+            清除紀錄
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50 p-4 text-sm font-bold leading-6 text-indigo-800">
+        最近一次：{{ saveAuditHistorySummary.latestLabel }}
+      </div>
+
+      <div v-if="saveAuditHistoryItems.length" class="mt-5 space-y-3">
+        <div
+          v-for="item in saveAuditHistoryItems"
+          :key="item.id"
+          class="rounded-3xl border border-slate-100 bg-slate-50 p-4"
+        >
+          <div class="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p class="text-sm font-black text-slate-900">{{ item.title }}</p>
+              <p class="mt-1 text-xs font-bold text-slate-500">{{ item.savedAtLabel }}｜{{ item.target }}</p>
+            </div>
+            <span class="inline-flex w-fit rounded-full px-3 py-1 text-xs font-black" :class="item.statusClass">
+              {{ item.statusLabel }}
+            </span>
+          </div>
+          <div class="mt-3 grid gap-2 md:grid-cols-2">
+            <p class="rounded-2xl bg-white p-3 text-xs font-bold leading-5 text-slate-600">影響範圍：{{ item.effect }}</p>
+            <p class="rounded-2xl bg-white p-3 text-xs font-bold leading-5 text-slate-600">隔離保護：{{ item.templateGuard }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div v-else class="mt-5 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-500">
+        尚無儲存驗收歷史。完成一次儲存、取消或失敗後，這裡會保留最近 8 筆，方便你確認操作範圍。
       </div>
     </section>
 
