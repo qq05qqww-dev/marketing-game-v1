@@ -1,4 +1,6 @@
 <script setup>
+// Multi Game Platform V2.3 Tenant Edition
+// 第 43601～44000 批：商家報表中心精緻簡化、紀錄卡片化與快速篩選版
 import { computed, onMounted, ref } from 'vue'
 import {
   getReportSummaryApi,
@@ -19,6 +21,8 @@ const exporting = ref(false)
 const advancedFiltersOpen = ref(false)
 const savedQueriesOpen = ref(true)
 const savedQueries = ref([])
+const compactRecordsOpen = ref(true)
+const activeRecordsPanel = ref('play')
 
 
 const emptySummary = () => ({
@@ -353,6 +357,52 @@ const sourceStats = computed(() => {
 })
 
 
+const reportFocusCards = computed(() => [
+  {
+    label: '遊玩紀錄',
+    value: totalPlayRows.value,
+    description: '目前條件下的遊玩筆數',
+    icon: '🎮',
+    className: 'border-slate-200 bg-white text-slate-950'
+  },
+  {
+    label: '中獎紀錄',
+    value: summary.value.totalWins ?? 0,
+    description: `中獎率 ${summary.value.winRate ?? 0}%`,
+    icon: '🏆',
+    className: 'border-emerald-100 bg-emerald-50 text-emerald-700'
+  },
+  {
+    label: '待發獎',
+    value: summary.value.pendingRewards ?? 0,
+    description: '需要商家處理的獎項',
+    icon: '🎁',
+    className: 'border-amber-100 bg-amber-50 text-amber-700'
+  },
+  {
+    label: '已核銷',
+    value: summary.value.claimedRewards ?? 0,
+    description: '已完成兌獎處理',
+    icon: '✅',
+    className: 'border-blue-100 bg-blue-50 text-blue-700'
+  }
+])
+
+const recordPanelTabs = computed(() => [
+  {
+    key: 'play',
+    label: '遊玩紀錄',
+    count: totalPlayRows.value,
+    description: '玩家每一次遊玩的完整紀錄'
+  },
+  {
+    key: 'reward',
+    label: '中獎 / 發獎',
+    count: totalRewardRows.value,
+    description: '中獎後發獎與核銷狀態'
+  }
+])
+
 const latestDailyChartRows = computed(() => {
   return safeArray(dailyRows.value)
     .slice()
@@ -635,6 +685,52 @@ const getPlayResultText = (row) => (row?.isWin ? '中獎' : '未中獎')
 
 const getPlaySerialCode = (row) => row?.serialCode?.code || '—'
 
+
+const getPlayPlayer = (row) => {
+  return row?.playerName || row?.playerPhone || row?.playerEmail || '未填玩家資料'
+}
+
+const getCampaignTitle = (row) => {
+  return row?.campaign?.title || row?.campaignTitle || '未命名活動'
+}
+
+const getPrizeTitle = (row) => {
+  return row?.prize?.title || row?.prizeTitle || '未命名獎項'
+}
+
+const getPlayRowClass = (row = {}) => {
+  return row.isWin
+    ? 'border-emerald-100 bg-emerald-50/50'
+    : 'border-slate-100 bg-white'
+}
+
+const getRewardStatusClass = (status) => {
+  const value = String(status || '').toUpperCase()
+
+  if (value === 'CLAIMED') return 'bg-blue-100 text-blue-700 border-blue-200'
+  if (value === 'PENDING') return 'bg-amber-100 text-amber-700 border-amber-200'
+  if (value === 'CANCELLED') return 'bg-slate-100 text-slate-500 border-slate-200'
+
+  return 'bg-slate-100 text-slate-600 border-slate-200'
+}
+
+const getRewardRowClass = (row = {}) => {
+  const status = String(row.status || '').toUpperCase()
+
+  if (status === 'PENDING') return 'border-amber-100 bg-amber-50/50'
+  if (status === 'CLAIMED') return 'border-blue-100 bg-blue-50/40'
+  return 'border-slate-100 bg-white'
+}
+
+const getRecordSourceBadgeClass = (source = '') => {
+  const value = String(source || '').toLowerCase()
+
+  if (value.includes('line')) return 'bg-emerald-50 text-emerald-700'
+  if (value.includes('facebook')) return 'bg-blue-50 text-blue-700'
+  if (value.includes('instagram')) return 'bg-rose-50 text-rose-700'
+
+  return 'bg-slate-100 text-slate-600'
+}
 
 const getStockWarningText = (row) => {
   const remainStock = Number(row?.remainStock || 0)
@@ -1493,57 +1589,96 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-      <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+    <section
+      v-show="activeRecordsPanel === 'play'"
+      class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm"
+    >
+      <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h3 class="text-2xl font-black text-slate-900">遊玩紀錄</h3>
+          <p class="text-xs font-black uppercase tracking-[0.3em] text-slate-400">Play Records</p>
+          <h3 class="mt-2 text-2xl font-black text-slate-900">遊玩紀錄</h3>
           <p class="mt-2 text-slate-500">
             目前顯示 {{ playPageStart }} - {{ playPageEnd }} 筆，共 {{ totalPlayRows }} 筆。
           </p>
         </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+            @click="filters.isWin = 'WIN'; applyFilters()"
+          >
+            只看中獎
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            @click="filters.isWin = ''; applyFilters()"
+          >
+            全部結果
+          </button>
+        </div>
       </div>
 
-      <div class="overflow-x-auto rounded-3xl border border-slate-200">
-        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-            <tr>
-              <th class="px-5 py-4">ID</th>
-              <th class="px-5 py-4">活動</th>
-              <th class="px-5 py-4">獎項</th>
-              <th class="px-5 py-4">玩家</th>
-              <th class="px-5 py-4">序號</th>
-              <th class="px-5 py-4">來源</th>
-              <th class="px-5 py-4">結果</th>
-              <th class="px-5 py-4">遊玩時間</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 bg-white">
-            <tr v-if="loading">
-              <td colspan="8" class="px-5 py-10 text-center text-slate-500">讀取中...</td>
-            </tr>
-            <tr v-else-if="playRows.length === 0">
-              <td colspan="8" class="px-5 py-10 text-center text-slate-500">目前沒有遊玩紀錄。</td>
-            </tr>
-            <tr v-for="row in playRows" v-else :key="row.id" class="hover:bg-slate-50">
-              <td class="px-5 py-4 font-bold text-slate-900">#{{ row.id }}</td>
-              <td class="px-5 py-4">{{ row.campaign?.title || '—' }}</td>
-              <td class="px-5 py-4">{{ row.prize?.title || '—' }}</td>
-              <td class="px-5 py-4">{{ row.playerName || row.playerPhone || row.playerEmail || '—' }}</td>
-              <td class="px-5 py-4 font-mono text-xs">{{ getPlaySerialCode(row) }}</td>
-              <td class="px-5 py-4">{{ getPlaySource(row) }}</td>
-              <td class="px-5 py-4">
-                <span class="rounded-full px-3 py-1 text-xs font-black" :class="row.isWin ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'">
+      <div v-if="loading" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
+        讀取中...
+      </div>
+
+      <div v-else-if="playRows.length === 0" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
+        目前沒有遊玩紀錄。
+      </div>
+
+      <div v-else class="space-y-3">
+        <article
+          v-for="row in playRows"
+          :key="row.id"
+          class="rounded-3xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          :class="getPlayRowClass(row)"
+        >
+          <div class="grid gap-4 xl:grid-cols-[1.05fr_1fr_0.9fr_auto] xl:items-center">
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white">#{{ row.id }}</span>
+                <span
+                  class="rounded-full px-3 py-1 text-xs font-black"
+                  :class="row.isWin ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'"
+                >
                   {{ getPlayResultText(row) }}
                 </span>
-              </td>
-              <td class="px-5 py-4">{{ formatDateTime(row.playedAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
+                <span
+                  class="rounded-full px-3 py-1 text-xs font-black"
+                  :class="getRecordSourceBadgeClass(getPlaySource(row))"
+                >
+                  {{ getPlaySource(row) }}
+                </span>
+              </div>
+              <h4 class="mt-3 text-lg font-black text-slate-950">{{ getCampaignTitle(row) }}</h4>
+              <p class="mt-1 text-sm font-bold text-slate-500">{{ getPrizeTitle(row) }}</p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-100 bg-white/80 p-4">
+              <p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">序號</p>
+              <p class="mt-2 break-all font-mono text-sm font-black text-slate-950">{{ getPlaySerialCode(row) }}</p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-100 bg-white/80 p-4 text-sm font-bold leading-6 text-slate-500">
+              <p><span class="font-black text-slate-400">玩家：</span>{{ getPlayPlayer(row) }}</p>
+              <p><span class="font-black text-slate-400">時間：</span>{{ formatDateTime(row.playedAt) }}</p>
+            </div>
+
+            <button
+              type="button"
+              class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+              @click="filters.serialCode = getPlaySerialCode(row) === '—' ? '' : getPlaySerialCode(row); applyFilters()"
+            >
+              查此序號
+            </button>
+          </div>
+        </article>
       </div>
 
       <div class="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div class="text-sm text-slate-500">
+        <div class="text-sm font-bold text-slate-500">
           第 {{ playPagination.page }} / {{ playPagination.totalPages }} 頁，每頁 {{ filters.pageSize }} 筆
         </div>
         <div class="flex gap-3">
@@ -1565,57 +1700,103 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
-      <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+    <section
+      v-show="activeRecordsPanel === 'reward'"
+      class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm"
+    >
+      <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h3 class="text-2xl font-black text-slate-900">中獎 / 發獎紀錄</h3>
+          <p class="text-xs font-black uppercase tracking-[0.3em] text-amber-500">Reward Records</p>
+          <h3 class="mt-2 text-2xl font-black text-slate-900">中獎 / 發獎紀錄</h3>
           <p class="mt-2 text-slate-500">
             目前顯示 {{ rewardPageStart }} - {{ rewardPageEnd }} 筆，共 {{ totalRewardRows }} 筆。
           </p>
         </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-100"
+            @click="filters.status = 'PENDING'; applyFilters()"
+          >
+            只看待發獎
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-blue-200 bg-blue-50 px-5 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+            @click="filters.status = 'CLAIMED'; applyFilters()"
+          >
+            只看已核銷
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            @click="filters.status = ''; applyFilters()"
+          >
+            全部發獎
+          </button>
+        </div>
       </div>
 
-      <div class="overflow-x-auto rounded-3xl border border-slate-200">
-        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
-          <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-            <tr>
-              <th class="px-5 py-4">ID</th>
-              <th class="px-5 py-4">活動</th>
-              <th class="px-5 py-4">獎項</th>
-              <th class="px-5 py-4">得獎者</th>
-              <th class="px-5 py-4">序號</th>
-              <th class="px-5 py-4">來源</th>
-              <th class="px-5 py-4">狀態</th>
-              <th class="px-5 py-4">建立時間</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-slate-100 bg-white">
-            <tr v-if="loading">
-              <td colspan="8" class="px-5 py-10 text-center text-slate-500">讀取中...</td>
-            </tr>
-            <tr v-else-if="rewardRows.length === 0">
-              <td colspan="8" class="px-5 py-10 text-center text-slate-500">目前沒有發獎紀錄。</td>
-            </tr>
-            <tr v-for="row in rewardRows" v-else :key="row.id" class="hover:bg-slate-50">
-              <td class="px-5 py-4 font-bold text-slate-900">#{{ row.id }}</td>
-              <td class="px-5 py-4">{{ row.campaign?.title || '—' }}</td>
-              <td class="px-5 py-4">{{ row.prize?.title || '—' }}</td>
-              <td class="px-5 py-4">{{ getRewardWinner(row) }}</td>
-              <td class="px-5 py-4 font-mono text-xs">{{ getRewardSerialCode(row) }}</td>
-              <td class="px-5 py-4">{{ getRewardSource(row) }}</td>
-              <td class="px-5 py-4">
-                <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-700">
+      <div v-if="loading" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
+        讀取中...
+      </div>
+
+      <div v-else-if="rewardRows.length === 0" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
+        目前沒有發獎紀錄。
+      </div>
+
+      <div v-else class="space-y-3">
+        <article
+          v-for="row in rewardRows"
+          :key="row.id"
+          class="rounded-3xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+          :class="getRewardRowClass(row)"
+        >
+          <div class="grid gap-4 xl:grid-cols-[1.05fr_1fr_0.9fr_auto] xl:items-center">
+            <div>
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="rounded-full bg-slate-900 px-3 py-1 text-xs font-black text-white">#{{ row.id }}</span>
+                <span
+                  class="rounded-full border px-3 py-1 text-xs font-black"
+                  :class="getRewardStatusClass(row.status)"
+                >
                   {{ getRewardStatusText(row.status) }}
                 </span>
-              </td>
-              <td class="px-5 py-4">{{ formatDateTime(row.createdAt) }}</td>
-            </tr>
-          </tbody>
-        </table>
+                <span
+                  class="rounded-full px-3 py-1 text-xs font-black"
+                  :class="getRecordSourceBadgeClass(getRewardSource(row))"
+                >
+                  {{ getRewardSource(row) }}
+                </span>
+              </div>
+              <h4 class="mt-3 text-lg font-black text-slate-950">{{ getPrizeTitle(row) }}</h4>
+              <p class="mt-1 text-sm font-bold text-slate-500">{{ getCampaignTitle(row) }}</p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-100 bg-white/80 p-4">
+              <p class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">得獎序號</p>
+              <p class="mt-2 break-all font-mono text-sm font-black text-slate-950">{{ getRewardSerialCode(row) }}</p>
+            </div>
+
+            <div class="rounded-2xl border border-slate-100 bg-white/80 p-4 text-sm font-bold leading-6 text-slate-500">
+              <p><span class="font-black text-slate-400">得獎者：</span>{{ getRewardWinner(row) }}</p>
+              <p><span class="font-black text-slate-400">建立：</span>{{ formatDateTime(row.createdAt) }}</p>
+            </div>
+
+            <button
+              type="button"
+              class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+              @click="filters.serialCode = getRewardSerialCode(row) === '—' ? '' : getRewardSerialCode(row); applyFilters()"
+            >
+              查此序號
+            </button>
+          </div>
+        </article>
       </div>
 
       <div class="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div class="text-sm text-slate-500">
+        <div class="text-sm font-bold text-slate-500">
           第 {{ rewardPagination.page }} / {{ rewardPagination.totalPages }} 頁，每頁 {{ filters.pageSize }} 筆
         </div>
         <div class="flex gap-3">
