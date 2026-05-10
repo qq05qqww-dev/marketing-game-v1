@@ -43,6 +43,7 @@ import AdminGamePreviewView from '../views/admin/AdminGamePreviewView.vue'
 import AdminSystemStatusView from '../views/admin/AdminSystemStatusView.vue'
 import AdminGoldenEggView from '../views/admin/AdminGoldenEggView.vue'
 import AdminPremiumGridSettingsView from '../views/admin/AdminPremiumGridSettingsView.vue'
+import AdminWheelSettingsView from '../views/admin/AdminWheelSettingsView.vue'
 import AdminAccountSettingsView from '../views/admin/AdminAccountSettingsView.vue'
 import AdminMySerialsView from '../views/admin/AdminMySerialsView.vue'
 
@@ -498,6 +499,18 @@ const router = createRouter({
             requiresAuth: true,
             requiresAdmin: true,
             batch: 'V2.3-3501-3900',
+            safeAdminRoute: true
+          }
+        },
+        {
+          path: 'wheel-settings/:id?',
+          name: 'admin-wheel-settings',
+          component: AdminWheelSettingsView,
+          meta: {
+            title: '輪盤設定中心',
+            requiresAuth: true,
+            requiresAdmin: true,
+            batch: 'V2.3-48801-49200',
             safeAdminRoute: true
           }
         },

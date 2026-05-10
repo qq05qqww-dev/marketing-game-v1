@@ -2023,7 +2023,7 @@ const goGameSettings = (campaign = selectedCampaign.value) => {
       playerUrl: String(playerUrl || '')
     })
 
-    router.push(`/admin/game-settings?${query.toString()}`)
+    router.push(`/admin/wheel-settings/${campaign.id}?${query.toString()}`)
     return
   }
 
