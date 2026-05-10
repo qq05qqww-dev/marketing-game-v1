@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 41601～42000 批：正式對客網址避免 localhost 交付修正版
+// 第 45601～46000 批：商家客人交付工具、LINE 文案、客服文案與 QR Code 區塊精緻版
 //
 // 建議放置位置：
 // frontend/src/views/admin/AdminMerchantGameCenterView.vue
@@ -31,18 +31,32 @@ const savedCustomerText = ref('')
 const CUSTOMER_TEXT_STORAGE_PREFIX = 'mgp_merchant_customer_text_v1'
 
 
-const officialFrontendBase = computed(() => {
-  const envUrl = import.meta.env.VITE_PUBLIC_FRONTEND_URL || ''
+const PRODUCTION_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
 
-  if (envUrl) {
-    return String(envUrl).replace(/\/$/, '')
-  }
+const normalizeFrontendUrl = (value = '') => {
+  return String(value || '').trim().replace(/\/$/, '')
+}
+
+const isLocalFrontendUrl = (value = '') => {
+  return /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
+}
+
+const officialFrontendBase = computed(() => {
+  const envUrl = normalizeFrontendUrl(
+    import.meta.env.VITE_PUBLIC_FRONTEND_URL ||
+      import.meta.env.VITE_FRONTEND_URL ||
+      import.meta.env.VITE_APP_FRONTEND_URL ||
+      ''
+  )
+
+  if (envUrl) return envUrl
 
   if (typeof window !== 'undefined' && window.location?.origin) {
-    return window.location.origin
+    const origin = normalizeFrontendUrl(window.location.origin)
+    return isLocalFrontendUrl(origin) ? PRODUCTION_FRONTEND_URL : origin
   }
 
-  return 'https://marketing-game-v1.vercel.app'
+  return PRODUCTION_FRONTEND_URL
 })
 
 const tenantSlug = computed(() => {
@@ -95,6 +109,94 @@ const generatedCustomerText = computed(() => {
 const displayCustomerText = computed(() => {
   return savedCustomerText.value || generatedCustomerText.value
 })
+
+const activeGameCards = computed(() => {
+  return gameCards.value.filter((item) => item.hasCampaign)
+})
+
+const lineInviteText = computed(() => {
+  const lines = [
+    `您好，這是 ${tenantName.value} 的抽獎活動連結：`,
+    ''
+  ]
+
+  activeGameCards.value.forEach((item) => {
+    lines.push(`【${item.title}】`)
+    lines.push(item.playerUrl)
+    lines.push('')
+  })
+
+  if (!activeGameCards.value.length) {
+    lines.push('目前活動尚未建立完成，請稍後再確認活動網址。')
+    lines.push('')
+  }
+
+  lines.push('請輸入店家提供的序號後開始抽獎。')
+  lines.push('中獎後請截圖或出示畫面給客服兌換。')
+
+  return lines.join('\n').trim()
+})
+
+const rewardReminderText = computed(() => {
+  return [
+    `您好，恭喜您參加 ${tenantName.value} 抽獎活動中獎！`,
+    '',
+    '請保留中獎畫面截圖，並依店家公告或客服指示完成兌換。',
+    '若需要人工協助，請提供：',
+    '1. 中獎畫面截圖',
+    '2. 抽獎序號',
+    '3. 聯絡姓名 / 電話',
+    '',
+    '謝謝您的參與。'
+  ].join('\n')
+})
+
+const serialDeliveryText = computed(() => {
+  return [
+    `您好，這是 ${tenantName.value} 提供給您的抽獎序號：`,
+    '',
+    '序號：請貼上店家提供的序號',
+    '',
+    '使用方式：',
+    '1. 點開活動連結。',
+    '2. 輸入序號並按驗證。',
+    '3. 驗證成功後即可開始抽獎。',
+    '4. 中獎後請截圖給客服兌換。',
+    '',
+    '活動連結可由店家客服提供。'
+  ].join('\n')
+})
+
+const customerCopyTemplates = computed(() => [
+  {
+    key: 'invite',
+    label: '一般邀請文案',
+    description: '適合貼到 LINE、簡訊、社群貼文。',
+    icon: '📣',
+    text: lineInviteText.value
+  },
+  {
+    key: 'serial',
+    label: '序號發放文案',
+    description: '適合客服發序號給客人時使用。',
+    icon: '🎟️',
+    text: serialDeliveryText.value
+  },
+  {
+    key: 'reward',
+    label: '得獎提醒文案',
+    description: '適合客人中獎後客服回覆。',
+    icon: '🏆',
+    text: rewardReminderText.value
+  },
+  {
+    key: 'custom',
+    label: '商家自訂客服文案',
+    description: '使用下方可編輯客服文字。',
+    icon: '💬',
+    text: displayCustomerText.value
+  }
+])
 
 const role = computed(() => String(authStore.user?.role || '').toUpperCase())
 const isPlatformAdmin = computed(() => ['ADMIN', 'SUPER_ADMIN'].includes(role.value))
@@ -353,6 +455,45 @@ const getReadinessTextClass = (item = {}) => {
   return 'text-slate-500'
 }
 
+const getQrImageUrl = (item = {}) => {
+  const value = encodeURIComponent(item.playerUrl || '')
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=12&data=${value}`
+}
+
+const copyLineInviteText = (item) => {
+  const lines = [
+    `您好，這是 ${tenantName.value} 的 ${item.title} 活動連結：`,
+    item.playerUrl,
+    '',
+    '請輸入店家提供的序號後開始抽獎。',
+    '中獎後請截圖或出示畫面給客服兌換。'
+  ]
+
+  copyText(lines.join('\n'))
+}
+
+const copyCustomerServiceText = (item) => {
+  const lines = [
+    `【${tenantName.value} 客服抽獎說明】`,
+    '',
+    `活動：${item.title}`,
+    `連結：${item.playerUrl}`,
+    '',
+    '操作方式：',
+    '1. 請客人點開活動連結。',
+    '2. 請客人輸入店家提供的序號。',
+    '3. 驗證成功後即可抽獎。',
+    '4. 若顯示找不到序號，請確認是否為此活動序號。',
+    '5. 中獎後請客人截圖，並到發獎核銷確認兌換。'
+  ]
+
+  copyText(lines.join('\n'))
+}
+
+const copyTemplateText = (template) => {
+  copyText(template.text)
+}
+
 const buildHandoffPackageText = () => {
   const lines = [
     `【${tenantName.value} 抽獎活動交付包】`,
@@ -371,10 +512,19 @@ const buildHandoffPackageText = () => {
   lines.push('3. 客人輸入店家提供的序號後即可參加抽獎。')
   lines.push('4. 中獎後請依店家公告方式兌換獎品。')
   lines.push('')
-  lines.push('三、客服文案')
+  lines.push('三、LINE 邀請文案')
+  lines.push(lineInviteText.value)
+  lines.push('')
+  lines.push('四、序號發放文案')
+  lines.push(serialDeliveryText.value)
+  lines.push('')
+  lines.push('五、得獎提醒文案')
+  lines.push(rewardReminderText.value)
+  lines.push('')
+  lines.push('六、商家自訂客服文案')
   lines.push(displayCustomerText.value)
   lines.push('')
-  lines.push('四、後台操作')
+  lines.push('七、後台操作')
   lines.push('商家可到「我的遊戲中心」管理網址、序號、獎項、報表與發獎核銷。')
 
   return lines.join('\n')
@@ -464,11 +614,11 @@ const goCampaigns = (item = null) => {
 
 const goSerials = (item) => {
   router.push({
-    path: '/admin/campaigns',
+    path: '/admin/my-serials',
     query: {
       campaignId: item.campaignId || '',
       gameType: item.type,
-      panel: 'serials'
+      game: item.key
     }
   })
 }
@@ -574,7 +724,7 @@ onMounted(() => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Game Center｜第 41601～42000 批
+              Merchant Game Center｜第 45601～46000 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               商家遊戲中心
@@ -811,6 +961,169 @@ onMounted(() => {
       </div>
     </section>
 
+
+    <section class="overflow-hidden rounded-[2rem] border border-cyan-100 bg-white shadow-sm">
+      <div class="bg-gradient-to-br from-cyan-950 via-slate-950 to-indigo-950 p-6 text-white">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[0.24em] text-cyan-200">
+              Customer Delivery Tools
+            </p>
+            <h2 class="mt-3 text-2xl font-black">
+              客人交付工具
+            </h2>
+            <p class="mt-3 max-w-3xl text-sm font-bold leading-7 text-white/75">
+              商家可以直接複製玩家網址、LINE 文案、客服說明，或讓客人掃 QR Code 進入活動頁。
+            </p>
+          </div>
+
+          <div class="flex flex-wrap gap-3">
+            <button
+              type="button"
+              class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
+              @click="copyHandoffPackage"
+            >
+              複製完整交付包
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
+              @click="copyText(lineInviteText)"
+            >
+              複製 LINE 邀請文案
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid gap-4 p-6 xl:grid-cols-3">
+        <article
+          v-for="item in gameCards"
+          :key="`delivery-${item.type}`"
+          class="rounded-[2rem] border border-slate-200 bg-slate-50 p-5"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-3xl">{{ item.emoji }}</p>
+              <h3 class="mt-2 text-xl font-black text-slate-950">
+                {{ item.title }}
+              </h3>
+              <p class="mt-1 text-xs font-bold text-slate-500">
+                {{ getNextActionText(item) }}
+              </p>
+            </div>
+
+            <span :class="['rounded-full border px-3 py-1 text-xs font-black', getStatusClass(item)]">
+              {{ getStatusText(item.status) }}
+            </span>
+          </div>
+
+          <div class="mt-4 rounded-3xl border border-slate-200 bg-white p-4">
+            <p class="text-xs font-black text-slate-400">玩家網址</p>
+            <p class="mt-2 break-all font-mono text-xs font-bold leading-6 text-slate-700">
+              {{ item.playerUrl }}
+            </p>
+          </div>
+
+          <div class="mt-4 grid gap-3 md:grid-cols-[150px_1fr]">
+            <div class="rounded-3xl border border-slate-200 bg-white p-3 text-center">
+              <img
+                :src="getQrImageUrl(item)"
+                :alt="`${item.title} QR Code`"
+                class="mx-auto h-32 w-32 rounded-2xl"
+                loading="lazy"
+              >
+              <p class="mt-2 text-xs font-black text-slate-500">QR Code</p>
+            </div>
+
+            <div class="grid gap-2">
+              <button
+                type="button"
+                class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+                @click="openPlayerUrl(item)"
+              >
+                開啟玩家頁
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+                @click="copyPlayerUrl(item)"
+              >
+                複製網址
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+                @click="copyLineInviteText(item)"
+              >
+                複製 LINE 文案
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+                @click="copyCustomerServiceText(item)"
+              >
+                複製客服說明
+              </button>
+            </div>
+          </div>
+
+          <p
+            v-if="!item.hasCampaign"
+            class="mt-4 rounded-3xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-700"
+          >
+            目前尚未建立正式活動。可以先建立活動後，再把 QR Code 或網址交給客人。
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.24em] text-slate-400">
+            Copy Templates
+          </p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">
+            LINE / 客服文案產生器
+          </h2>
+          <p class="mt-2 text-sm font-bold leading-6 text-slate-500">
+            不同情境使用不同文案，商家可一鍵複製貼到 LINE、簡訊或客服對話。
+          </p>
+        </div>
+      </div>
+
+      <div class="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+        <article
+          v-for="template in customerCopyTemplates"
+          :key="template.key"
+          class="rounded-3xl border border-slate-200 bg-slate-50 p-5"
+        >
+          <div class="flex items-start gap-3">
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+              {{ template.icon }}
+            </div>
+            <div>
+              <h3 class="font-black text-slate-950">{{ template.label }}</h3>
+              <p class="mt-1 text-xs font-bold leading-5 text-slate-500">{{ template.description }}</p>
+            </div>
+          </div>
+
+          <div class="mt-4 line-clamp-6 whitespace-pre-wrap rounded-2xl bg-white p-4 text-xs font-bold leading-6 text-slate-500">
+            {{ template.text }}
+          </div>
+
+          <button
+            type="button"
+            class="mt-4 w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+            @click="copyTemplateText(template)"
+          >
+            複製文案
+          </button>
+        </article>
+      </div>
+    </section>
+
     <section class="grid gap-5 xl:grid-cols-3">
       <article
         v-for="item in gameCards"
@@ -878,6 +1191,20 @@ onMounted(() => {
               @click="copyPlayerUrl(item)"
             >
               複製網址
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+              @click="copyLineInviteText(item)"
+            >
+              LINE 文案
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+              @click="copyCustomerServiceText(item)"
+            >
+              客服說明
             </button>
           </div>
 
