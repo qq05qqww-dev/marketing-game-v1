@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 40401～40800 批：商家客服文字可編輯與交付文案精緻版
+// 第 40801～41200 批：商家遊戲中心營運儀表板、準備完成度與交付包精緻版
 //
 // 建議放置位置：
 // frontend/src/views/admin/AdminMerchantGameCenterView.vue
@@ -166,6 +166,47 @@ const gameCards = computed(() => {
 
 const activeGameCount = computed(() => gameCards.value.filter((item) => item.isActive).length)
 const createdGameCount = computed(() => gameCards.value.filter((item) => item.hasCampaign).length)
+const totalGameCount = computed(() => gameCards.value.length)
+const readyGameCount = computed(() => {
+  return gameCards.value.filter((item) => getReadinessPercent(item) >= 75).length
+})
+
+const operationOverview = computed(() => {
+  const created = createdGameCount.value
+  const active = activeGameCount.value
+  const pending = Math.max(totalGameCount.value - created, 0)
+
+  return [
+    {
+      label: '正式遊戲',
+      value: `${created} / ${totalGameCount.value}`,
+      description: '已建立活動數',
+      icon: '🎮',
+      tone: 'slate'
+    },
+    {
+      label: '啟用中',
+      value: active,
+      description: '目前可交付客人的活動',
+      icon: '✅',
+      tone: 'emerald'
+    },
+    {
+      label: '待建立',
+      value: pending,
+      description: '尚未建立正式活動',
+      icon: '🧩',
+      tone: 'amber'
+    },
+    {
+      label: '準備完成',
+      value: readyGameCount.value,
+      description: '完成度達 75% 以上',
+      icon: '🚀',
+      tone: 'blue'
+    }
+  ]
+})
 
 const notCreatedGameCount = computed(() => gameCards.value.filter((item) => !item.hasCampaign).length)
 const inactiveGameCount = computed(() => gameCards.value.filter((item) => item.hasCampaign && !item.isActive).length)
@@ -257,6 +298,90 @@ const getNextActionText = (item) => {
   if (!item.hasCampaign) return '先建立活動'
   if (!item.isActive) return '確認活動狀態'
   return '可直接交付客人'
+}
+
+const getReadinessItems = (item = {}) => {
+  return [
+    {
+      label: '活動已建立',
+      done: Boolean(item.hasCampaign),
+      hint: item.hasCampaign ? '已找到正式活動' : '請先到活動管理建立活動'
+    },
+    {
+      label: '活動已啟用',
+      done: Boolean(item.isActive),
+      hint: item.isActive ? '玩家可進入活動' : '請確認活動狀態為進行中'
+    },
+    {
+      label: '玩家網址可用',
+      done: Boolean(item.playerUrl),
+      hint: item.playerUrl ? '可複製給客人' : '缺少玩家網址'
+    },
+    {
+      label: '序號入口已備妥',
+      done: Boolean(item.hasCampaign),
+      hint: item.hasCampaign ? '可進入管理序號' : '活動建立後才能管理序號'
+    },
+    {
+      label: '報表入口已備妥',
+      done: Boolean(item.hasCampaign),
+      hint: item.hasCampaign ? '可查看遊玩與中獎紀錄' : '活動建立後才能查看報表'
+    }
+  ]
+}
+
+const getReadinessPercent = (item = {}) => {
+  const checklist = getReadinessItems(item)
+  const done = checklist.filter((step) => step.done).length
+
+  return Math.round((done / checklist.length) * 100)
+}
+
+const getReadinessClass = (item = {}) => {
+  const percent = getReadinessPercent(item)
+
+  if (percent >= 80) return 'bg-emerald-500'
+  if (percent >= 50) return 'bg-amber-400'
+  return 'bg-slate-400'
+}
+
+const getReadinessTextClass = (item = {}) => {
+  const percent = getReadinessPercent(item)
+
+  if (percent >= 80) return 'text-emerald-700'
+  if (percent >= 50) return 'text-amber-700'
+  return 'text-slate-500'
+}
+
+const buildHandoffPackageText = () => {
+  const lines = [
+    `【${tenantName.value} 抽獎活動交付包】`,
+    '',
+    '一、玩家活動網址'
+  ]
+
+  gameCards.value.forEach((item) => {
+    lines.push(`${item.title}：${item.playerUrl}`)
+  })
+
+  lines.push('')
+  lines.push('二、操作提醒')
+  lines.push('1. 請先確認活動狀態為進行中。')
+  lines.push('2. 每個活動都要建立自己的序號，不能跨活動共用。')
+  lines.push('3. 客人輸入店家提供的序號後即可參加抽獎。')
+  lines.push('4. 中獎後請依店家公告方式兌換獎品。')
+  lines.push('')
+  lines.push('三、客服文案')
+  lines.push(displayCustomerText.value)
+  lines.push('')
+  lines.push('四、後台操作')
+  lines.push('商家可到「我的遊戲中心」管理網址、序號、獎項、報表與發獎核銷。')
+
+  return lines.join('\n')
+}
+
+const copyHandoffPackage = () => {
+  copyText(buildHandoffPackageText())
 }
 
 const loadCampaigns = async () => {
@@ -449,7 +574,7 @@ onMounted(() => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Game Center｜第 40401～40800 批
+              Merchant Game Center｜第 40801～41200 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               商家遊戲中心
@@ -593,6 +718,98 @@ onMounted(() => {
     >
       {{ loadError }}
     </p>
+
+
+    <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div
+        v-for="item in operationOverview"
+        :key="item.label"
+        class="rounded-[2rem] border bg-white p-5 shadow-sm"
+        :class="{
+          'border-slate-200': item.tone === 'slate',
+          'border-emerald-100 bg-emerald-50': item.tone === 'emerald',
+          'border-amber-100 bg-amber-50': item.tone === 'amber',
+          'border-blue-100 bg-blue-50': item.tone === 'blue'
+        }"
+      >
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+              {{ item.label }}
+            </p>
+            <p class="mt-3 text-3xl font-black text-slate-950">
+              {{ item.value }}
+            </p>
+            <p class="mt-2 text-xs font-bold leading-5 text-slate-500">
+              {{ item.description }}
+            </p>
+          </div>
+          <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl shadow-sm">
+            {{ item.icon }}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="overflow-hidden rounded-[2rem] border border-indigo-100 bg-white shadow-sm">
+      <div class="grid gap-0 xl:grid-cols-[1fr_0.9fr]">
+        <div class="bg-gradient-to-br from-indigo-950 via-slate-950 to-slate-900 p-6 text-white">
+          <p class="text-xs font-black uppercase tracking-[0.24em] text-cyan-200">
+            Handoff Package
+          </p>
+          <h2 class="mt-3 text-2xl font-black">
+            一鍵複製完整交付包
+          </h2>
+          <p class="mt-3 text-sm font-bold leading-7 text-white/75">
+            交付包會包含三個遊戲玩家網址、客服文字、序號提醒與兌獎提醒。適合直接貼給商家、門市人員或客服。
+          </p>
+          <div class="mt-5 flex flex-wrap gap-3">
+            <button
+              type="button"
+              class="rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-200"
+              @click="copyHandoffPackage"
+            >
+              複製完整交付包
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
+              @click="startEditCustomerText"
+            >
+              編輯客服文案
+            </button>
+          </div>
+        </div>
+
+        <div class="space-y-3 bg-indigo-50/60 p-6">
+          <div
+            v-for="item in gameCards"
+            :key="`ready-${item.type}`"
+            class="rounded-3xl border border-white bg-white/90 p-4"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-black text-slate-950">{{ item.title }}</p>
+                <p class="mt-1 text-xs font-bold text-slate-500">{{ getNextActionText(item) }}</p>
+              </div>
+              <p
+                class="text-2xl font-black"
+                :class="getReadinessTextClass(item)"
+              >
+                {{ getReadinessPercent(item) }}%
+              </p>
+            </div>
+            <div class="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div
+                class="h-full rounded-full transition-all"
+                :class="getReadinessClass(item)"
+                :style="{ width: `${getReadinessPercent(item)}%` }"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section class="grid gap-5 xl:grid-cols-3">
       <article
@@ -784,7 +1001,7 @@ onMounted(() => {
     </section>
 
     <section class="rounded-[2rem] border border-blue-100 bg-blue-50 p-6">
-      <h2 class="text-lg font-black text-blue-950">快速流程提醒</h2>
+      <h2 class="text-lg font-black text-blue-950">新手快速流程提醒</h2>
       <div class="mt-4 grid gap-3 md:grid-cols-4">
         <div class="rounded-3xl bg-white p-4">
           <p class="text-2xl">1️⃣</p>
