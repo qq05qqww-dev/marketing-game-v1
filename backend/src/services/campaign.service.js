@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 54401～54800 批：平台輪盤模板複製追蹤標記與商家副本保護版
+// 第 54801～55200 批：平台輪盤模板複製驗收回傳補強版
 //
 // 覆蓋位置：
 // backend/src/services/campaign.service.js
@@ -430,8 +430,8 @@ const getPlatformWheelTemplateDefaults = () => ({
   templateMeta: {
     source: 'PLATFORM_WHEEL_TEMPLATE',
     cloneMode: 'CREATE_CAMPAIGN_ONLY',
-    version: 'v23_batch54401_54800',
-    cloneBatch: '54401-54800',
+    version: 'v23_batch54801_55200',
+    cloneBatch: '54801-55200',
     note: '建立新輪盤活動時複製一次；之後商家活動與平台模板互相隔離。'
   }
 })
@@ -447,8 +447,8 @@ const buildWheelTemplateCloneMeta = ({ tenantId = null, user = null, payload = {
     sourceType: 'platform_template',
     targetType: 'merchant_campaign',
     cloneMode: 'CREATE_CAMPAIGN_ONLY',
-    cloneBatch: '54401-54800',
-    version: 'v23_batch54401_54800',
+    cloneBatch: '54801-55200',
+    version: 'v23_batch54801_55200',
     isMerchantOwnedCopy: true,
     lockTemplateSync: true,
     allowAutoSyncFromPlatformTemplate: false,
@@ -496,6 +496,68 @@ const resolveInitialGameConfigSettings = (gameType, payload = {}, context = {}) 
     payload,
     usedCustomSettings: true
   })
+}
+
+
+const buildTemplateCloneAudit = (campaign = null) => {
+  const gameType = String(campaign?.gameType || '').toUpperCase()
+  const settings = campaign?.gameConfig?.settings
+  const templateMeta = isPlainObject(settings?.templateMeta) ? settings.templateMeta : {}
+
+  if (gameType !== 'WHEEL') {
+    return {
+      checked: true,
+      gameType,
+      shouldUsePlatformWheelTemplate: false,
+      clonedFromPlatformWheelTemplate: false,
+      message: '非 WHEEL 活動，不套用平台輪盤模板複製檢查。'
+    }
+  }
+
+  const clonedFromPlatformWheelTemplate = templateMeta.source === 'PLATFORM_WHEEL_TEMPLATE'
+  const isMerchantOwnedCopy = templateMeta.isMerchantOwnedCopy === true
+  const lockTemplateSync = templateMeta.lockTemplateSync === true
+  const allowAutoSyncFromPlatformTemplate = templateMeta.allowAutoSyncFromPlatformTemplate === true
+  const cloneMode = templateMeta.cloneMode || null
+
+  return {
+    checked: true,
+    gameType,
+    shouldUsePlatformWheelTemplate: true,
+    clonedFromPlatformWheelTemplate,
+    isMerchantOwnedCopy,
+    lockTemplateSync,
+    allowAutoSyncFromPlatformTemplate,
+    isSafeMerchantCopy: Boolean(
+      clonedFromPlatformWheelTemplate &&
+      isMerchantOwnedCopy &&
+      lockTemplateSync &&
+      !allowAutoSyncFromPlatformTemplate &&
+      cloneMode === 'CREATE_CAMPAIGN_ONLY'
+    ),
+    source: templateMeta.source || null,
+    sourceType: templateMeta.sourceType || null,
+    targetType: templateMeta.targetType || null,
+    cloneMode,
+    cloneBatch: templateMeta.cloneBatch || null,
+    version: templateMeta.version || null,
+    clonedAt: templateMeta.clonedAt || null,
+    clonedForTenantId: templateMeta.clonedForTenantId || null,
+    clonedByRole: templateMeta.clonedByRole || null,
+    createdFromPayloadSettings: templateMeta.createdFromPayloadSettings === true,
+    message: clonedFromPlatformWheelTemplate
+      ? '新輪盤活動已建立平台輪盤模板的一次性商家副本；後續平台模板修改不會自動同步到此活動。'
+      : '此 WHEEL 活動尚未偵測到平台輪盤模板複製標記，請檢查 createCampaign settings。'
+  }
+}
+
+const appendTemplateCloneAudit = (campaign = null) => {
+  if (!campaign) return campaign
+
+  return {
+    ...campaign,
+    templateCloneAudit: buildTemplateCloneAudit(campaign)
+  }
 }
 
 const buildCampaignPatchFromSettings = (settings = {}) => {
@@ -564,7 +626,7 @@ export const createCampaign = async (payload = {}, user = null) => {
     ? String(payload.slug).trim()
     : null
 
-  return prisma.campaign.create({
+  const createdCampaign = await prisma.campaign.create({
     data: {
       title,
       slug,
@@ -588,6 +650,8 @@ export const createCampaign = async (payload = {}, user = null) => {
     },
     include: campaignInclude
   })
+
+  return appendTemplateCloneAudit(createdCampaign)
 }
 
 export const updateCampaign = async (id, payload = {}, user = null) => {
