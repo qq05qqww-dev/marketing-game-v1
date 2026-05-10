@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 43201～43600 批：序號列表卡片化與可讀性精緻版
+// 第 43600-1 批：AdminMySerialsView template end tag 修正版
 //
 // 新增位置：
 // frontend/src/views/admin/AdminMySerialsView.vue
@@ -776,7 +776,7 @@ onBeforeUnmount(() => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Serials｜第 43201～43600 批
+              Merchant Serials｜第 43600-1 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               我的序號管理
@@ -1206,6 +1206,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
+        </div>
 
         <div class="p-6">
         <div class="mb-5 grid gap-3 md:grid-cols-[1fr_180px]">
@@ -1273,7 +1274,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div
-          v-else
+          v-if="selectedCampaign && filteredSerialCodes.length"
           class="space-y-3"
         >
           <article
