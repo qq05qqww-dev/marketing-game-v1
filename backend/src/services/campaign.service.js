@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 54001～54400 批：平台輪盤模板建立新商家活動時自動複製預設設定版
+// 第 54401～54800 批：平台輪盤模板複製追蹤標記與商家副本保護版
 //
 // 覆蓋位置：
 // backend/src/services/campaign.service.js
@@ -11,6 +11,11 @@
 // 4. ADMIN / SUPER_ADMIN 可看全部，也可用 tenantId / tenantSlug 指定商家。
 // 5. createCampaign 會同時建立 Campaign 與 GameConfig settings。
 // 6. 刪除活動時會先檢查 tenant 權限，再用 transaction 清除相關資料。
+//
+// 第 54401～54800 批補強：
+// - 新建 WHEEL 活動時，gameConfig.settings.templateMeta 會寫入 clonedAt / clonedForTenantId / clonedByRole。
+// - 平台模板複製到商家活動後，明確標記 isMerchantOwnedCopy / lockTemplateSync，避免日後誤做自動同步污染既有活動。
+// - 呼叫端若傳入 settings.templateMeta，後端仍會重新覆寫核心追蹤欄位，避免 A/B 商家模板來源混用。
 //
 // 第 19501～19900 批補強：
 // - DELETE /api/campaigns/:id 會真正同步 PostgreSQL。
@@ -425,12 +430,45 @@ const getPlatformWheelTemplateDefaults = () => ({
   templateMeta: {
     source: 'PLATFORM_WHEEL_TEMPLATE',
     cloneMode: 'CREATE_CAMPAIGN_ONLY',
-    version: 'v23_batch54001_54400',
+    version: 'v23_batch54401_54800',
+    cloneBatch: '54401-54800',
     note: '建立新輪盤活動時複製一次；之後商家活動與平台模板互相隔離。'
   }
 })
 
-const resolveInitialGameConfigSettings = (gameType, payload = {}) => {
+const buildWheelTemplateCloneMeta = ({ tenantId = null, user = null, payload = {}, usedCustomSettings = false } = {}) => {
+  const payloadTemplateMeta = isPlainObject(payload?.settings?.templateMeta)
+    ? payload.settings.templateMeta
+    : {}
+
+  return {
+    ...payloadTemplateMeta,
+    source: 'PLATFORM_WHEEL_TEMPLATE',
+    sourceType: 'platform_template',
+    targetType: 'merchant_campaign',
+    cloneMode: 'CREATE_CAMPAIGN_ONLY',
+    cloneBatch: '54401-54800',
+    version: 'v23_batch54401_54800',
+    isMerchantOwnedCopy: true,
+    lockTemplateSync: true,
+    allowAutoSyncFromPlatformTemplate: false,
+    clonedAt: new Date().toISOString(),
+    clonedForTenantId: tenantId || null,
+    clonedByRole: getUserRole(user) || null,
+    clonedByUserId: user?.id || null,
+    createdFromPayloadSettings: usedCustomSettings,
+    note: '此設定是建立商家輪盤活動時由平台輪盤模板複製的一次性商家副本；後續平台模板修改不會自動同步到此活動。'
+  }
+}
+
+const attachWheelTemplateCloneMeta = (settings = {}, context = {}) => {
+  return {
+    ...settings,
+    templateMeta: buildWheelTemplateCloneMeta(context)
+  }
+}
+
+const resolveInitialGameConfigSettings = (gameType, payload = {}, context = {}) => {
   const normalizedSettings = normalizeSettings(payload)
 
   if (gameType !== 'WHEEL') {
@@ -438,14 +476,26 @@ const resolveInitialGameConfigSettings = (gameType, payload = {}) => {
   }
 
   const platformWheelTemplate = getPlatformWheelTemplateDefaults()
+  const hasCustomSettings = hasMeaningfulSettings(normalizedSettings)
 
-  if (!hasMeaningfulSettings(normalizedSettings)) {
-    return platformWheelTemplate
+  if (!hasCustomSettings) {
+    return attachWheelTemplateCloneMeta(platformWheelTemplate, {
+      ...context,
+      payload,
+      usedCustomSettings: false
+    })
   }
 
   // 若建立活動時已有局部 settings，仍以平台模板補齊缺少欄位，
   // 但保留呼叫端明確傳入的商家活動設定。
-  return deepMergePlainObject(platformWheelTemplate, normalizedSettings)
+  // templateMeta 由後端重新標記，避免呼叫端把平台模板或其他商家活動的追蹤資訊帶進新活動。
+  const mergedSettings = deepMergePlainObject(platformWheelTemplate, normalizedSettings)
+
+  return attachWheelTemplateCloneMeta(mergedSettings, {
+    ...context,
+    payload,
+    usedCustomSettings: true
+  })
 }
 
 const buildCampaignPatchFromSettings = (settings = {}) => {
@@ -532,7 +582,7 @@ export const createCampaign = async (payload = {}, user = null) => {
       gameConfig: {
         create: {
           tenantId,
-          settings: resolveInitialGameConfigSettings(gameType, payload)
+          settings: resolveInitialGameConfigSettings(gameType, payload, { tenantId, user })
         }
       }
     },
