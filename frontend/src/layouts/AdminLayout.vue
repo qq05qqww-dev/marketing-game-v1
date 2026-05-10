@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-// 第 44801～45200 批：商家活動管理精緻簡化與三遊戲操作導引版
+// 第 45201～45600 批：商家後台首頁儀表板精緻版
 
 const route = useRoute()
 const router = useRouter()
@@ -38,11 +38,18 @@ const scopeLabel = computed(() => {
 })
 
 const adminLandingPath = computed(() => {
-  return isPlatformAdmin.value ? '/admin/tenants' : '/admin/my-games'
+  return '/admin/dashboard'
 })
 
 const menuItems = computed(() => {
   const items = [
+    {
+      label: isPlatformAdmin.value ? '後台首頁' : '商家首頁',
+      description: '今日狀態 / 下一步',
+      to: '/admin/dashboard',
+      icon: '🏠',
+      roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
+    },
     {
       label: '商家管理',
       description: '平台商家列表',

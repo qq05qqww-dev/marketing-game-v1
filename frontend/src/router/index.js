@@ -25,6 +25,7 @@ import NotFoundView from '../views/front/NotFoundView.vue'
 import MyGameHistoryView from '../views/front/MyGameHistoryView.vue'
 
 import AdminLayout from '../layouts/AdminLayout.vue'
+import AdminDashboardView from '../views/admin/AdminDashboardView.vue'
 import AdminTenantsView from '../views/admin/AdminTenantsView.vue'
 import AdminCampaignsView from '../views/admin/AdminCampaignsView.vue'
 import AdminPrizesView from '../views/admin/AdminPrizesView.vue'
@@ -312,15 +313,16 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: () => {
-            const { user } = getStoredAuth()
-            const role = String(user?.role || '').toUpperCase()
-
-            if (['MERCHANT_ADMIN', 'MERCHANT_STAFF'].includes(role)) {
-              return '/admin/my-games'
-            }
-
-            return '/admin/tenants'
+          redirect: '/admin/dashboard'
+        },
+        {
+          path: 'dashboard',
+          name: 'admin-dashboard',
+          component: AdminDashboardView,
+          meta: {
+            title: '後台首頁',
+            requiresAuth: true,
+            requiresAdmin: true
           }
         },
         {
@@ -579,13 +581,13 @@ router.beforeEach((to, from) => {
 
     if (['MERCHANT_ADMIN', 'MERCHANT_STAFF'].includes(role)) {
       return {
-        path: '/admin/my-games'
+        path: '/admin/dashboard'
       }
     }
 
     if (['ADMIN', 'SUPER_ADMIN'].includes(role)) {
       return {
-        path: '/admin/tenants'
+        path: '/admin/dashboard'
       }
     }
 
