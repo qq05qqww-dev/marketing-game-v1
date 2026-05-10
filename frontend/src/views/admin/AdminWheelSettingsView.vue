@@ -1,4 +1,4 @@
-// 第 53201～53600 批：平台輪盤模板模式與商家活動模式分流修正版
+// 第 53601～54000 批：平台模板與商家活動資料完全隔離修正版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -326,7 +326,9 @@ const safePreviewUrl = computed(() => {
     parsed.searchParams.set('adminPreview', '1')
     parsed.searchParams.set('adminPreviewDraft', '1')
     parsed.searchParams.set('previewKey', String(previewKey.value))
-    parsed.searchParams.set('tenantSlug', tenantSlug.value)
+    if (!isPlatformTemplateMode.value) {
+      parsed.searchParams.set('tenantSlug', tenantSlug.value)
+    }
     parsed.searchParams.set('adminPreviewFocus', previewFocusMode.value)
 
     if (isPlatformTemplateMode.value) {
@@ -335,7 +337,7 @@ const safePreviewUrl = computed(() => {
       parsed.searchParams.set('templateId', templateId.value)
     }
 
-    if (campaignId.value) {
+    if (!isPlatformTemplateMode.value && campaignId.value) {
       parsed.searchParams.set('campaignId', campaignId.value)
     }
 
@@ -346,9 +348,12 @@ const safePreviewUrl = computed(() => {
       adminPreview: '1',
       adminPreviewDraft: '1',
       previewKey: String(previewKey.value),
-      tenantSlug: tenantSlug.value,
       adminPreviewFocus: previewFocusMode.value
     })
+
+    if (!isPlatformTemplateMode.value) {
+      params.set('tenantSlug', tenantSlug.value)
+    }
 
     if (isPlatformTemplateMode.value) {
       params.set('templatePreview', '1')
@@ -701,7 +706,7 @@ onMounted(async () => {
         <div>
           <p class="text-xs font-black uppercase tracking-[0.18em] text-orange-500">設定操作</p>
           <p class="text-sm font-bold text-slate-500">
-            {{ isPlatformTemplateMode ? '目前是平台模板模式：修改只保存模板草稿，不會改到商家單一活動。' : '修改會先同步右側預覽；按「儲存設定」後會正式寫入資料庫，客人手機重新整理就會同步。' }}
+            {{ isPlatformTemplateMode ? '目前是平台模板模式：修改只保存平台模板草稿，不會改到任何商家既有活動。' : '修改會先同步右側預覽；按「儲存設定」後會正式寫入資料庫，客人手機重新整理就會同步。' }}
           </p>
         </div>
 
@@ -1317,7 +1322,7 @@ onMounted(async () => {
             <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-200">Live Player Preview</p>
             <h2 class="mt-2 text-xl font-black">右側正式玩家頁預覽</h2>
             <p class="mt-2 text-xs font-bold leading-5 text-white/60">
-              {{ isPlatformTemplateMode ? '平台模板模式：右側用模板預覽網址展示外觀，不會連到商家活動資料。' : '這裡直接載入 WheelGameView 正式玩家頁。修改左側設定後會自動儲存草稿並重新載入預覽。' }}
+              {{ isPlatformTemplateMode ? '平台模板模式：右側只讀平台模板草稿，不會連到商家活動資料，也不會寫入商家資料庫。' : '這裡直接載入 WheelGameView 正式玩家頁。修改左側設定後會自動儲存草稿並重新載入預覽。' }}
             </p>
           </div>
 

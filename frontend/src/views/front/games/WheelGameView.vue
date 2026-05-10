@@ -4378,8 +4378,39 @@ const normalizeWheelRemotePrizes = (apiCampaign = {}, settings = {}) => {
 
 const WHEEL_ADMIN_SETTINGS_STORAGE_PREFIX = 'mgp:wheel-admin-settings:'
 
+const isAdminDraftPreviewRoute = computed(() => route.query.adminPreviewDraft === '1')
+
+const isTemplatePreviewRoute = computed(() => {
+  return route.query.templatePreview === '1' ||
+    route.query.templateMode === '1' ||
+    route.query.templateOnly === '1'
+})
+
+const getTemplatePreviewId = () => {
+  const raw = Array.isArray(route.query.templateId) ? route.query.templateId[0] : route.query.templateId
+  return String(raw || route.query.gameId || 'wheel').split(',')[0].trim() || 'wheel'
+}
+
+const readWheelPlatformTemplateDraftSettings = () => {
+  if (typeof localStorage === 'undefined') return null
+
+  const key = `${WHEEL_ADMIN_SETTINGS_STORAGE_PREFIX}platform-template:${getTemplatePreviewId()}`
+
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch (error) {
+    console.warn('讀取平台輪盤模板草稿失敗：', error)
+    return null
+  }
+}
+
 const readWheelAdminDraftSettings = (campaignIdValue = '') => {
   if (typeof localStorage === 'undefined') return null
+  if (!isAdminDraftPreviewRoute.value) return null
+  if (isTemplatePreviewRoute.value) return readWheelPlatformTemplateDraftSettings()
 
   const tenant = routeTenantSlug.value || String(route.query.tenantSlug || '').trim() || 'a-shop'
   const campaignCandidates = [
@@ -4592,7 +4623,7 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
     prizes.value = remotePrizes
   }
 
-  if (route.query.adminPreviewDraft === '1') {
+  if (isAdminDraftPreviewRoute.value && !isTemplatePreviewRoute.value) {
     applyWheelAdminDraftSettings(readWheelAdminDraftSettings(remoteWheelCampaignId.value || apiCampaign.id || settings.campaignId))
   }
 
@@ -5555,7 +5586,14 @@ onMounted(async () => {
     await loadTenantWheelRemoteState()
   } else {
     loadPremiumWheelState()
-    applyWheelAdminDraftSettings(readWheelAdminDraftSettings(getRouteCampaignId() || currentGameId.value))
+
+    if (isAdminDraftPreviewRoute.value) {
+      if (isTemplatePreviewRoute.value) {
+        applyWheelAdminDraftSettings(readWheelPlatformTemplateDraftSettings())
+      } else {
+        applyWheelAdminDraftSettings(readWheelAdminDraftSettings(getRouteCampaignId() || currentGameId.value))
+      }
+    }
   }
 
   if (typeof window === 'undefined') return
