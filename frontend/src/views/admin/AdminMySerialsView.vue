@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 42401～42800 批：商家序號管理重新讀取與自動同步版
+// 第 42801～43200 批：商家序號管理版面美化與操作分區優化版
 //
 // 新增位置：
 // frontend/src/views/admin/AdminMySerialsView.vue
@@ -196,6 +196,29 @@ const filteredSerialCodes = computed(() => {
 
     return matchStatus && matchKeyword
   })
+})
+
+const bulkCodeCount = computed(() => {
+  return bulkForm.codesText
+    .split(/[\s,，、]+/)
+    .map((item) => normalizeCode(item))
+    .filter(Boolean).length
+})
+
+const generatePreviewText = computed(() => {
+  const count = Number(generateForm.count || 0)
+  const chance = Number(generateForm.rewardChance || 1)
+  const prefix = String(generateForm.prefix || 'MGP').trim().toUpperCase()
+
+  return `預計產生 ${count} 組，每組 ${chance} 次，前綴 ${prefix}`
+})
+
+const selectedGameHint = computed(() => {
+  if (!selectedCampaign.value?.id) {
+    return '請先建立並選擇活動後，再新增序號。'
+  }
+
+  return `目前正在管理：${currentGame.value.title}｜${selectedCampaignTitle.value}`
 })
 
 const summary = computed(() => {
@@ -699,7 +722,7 @@ onBeforeUnmount(() => {
         <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-200">
-              Merchant Serials｜第 42401～42800 批
+              Merchant Serials｜第 42801～43200 批
             </p>
             <h1 class="mt-3 text-3xl font-black tracking-tight md:text-4xl">
               我的序號管理
@@ -858,186 +881,244 @@ onBeforeUnmount(() => {
 
     <section class="grid gap-5 xl:grid-cols-[0.85fr_1.15fr]">
       <div class="space-y-5">
-        <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h2 class="text-xl font-black text-slate-950">新增單組序號</h2>
-              <p class="mt-2 text-sm font-bold text-slate-500">適合指定 VIP、門市、活動券序號。</p>
-            </div>
+        <section class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+          <div class="bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-6 text-white">
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-cyan-200">
+              Serial Builder
+            </p>
+            <h2 class="mt-2 text-2xl font-black">
+              建立序號
+            </h2>
+            <p class="mt-2 text-sm font-bold leading-6 text-white/70">
+              {{ selectedGameHint }}
+            </p>
+          </div>
+
+          <div class="grid gap-3 border-b border-slate-100 bg-slate-50 p-4 sm:grid-cols-3">
             <button
               type="button"
-              class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600"
-              @click="expandedCreate = !expandedCreate"
+              class="rounded-2xl border px-4 py-3 text-left text-sm font-black transition"
+              :class="expandedCreate ? 'border-slate-950 bg-slate-950 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'"
+              @click="expandedCreate = true; expandedBulk = false"
             >
-              {{ expandedCreate ? '收合' : '展開' }}
+              <span class="block text-lg">➕</span>
+              單組新增
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border px-4 py-3 text-left text-sm font-black transition"
+              :class="expandedBulk ? 'border-indigo-600 bg-indigo-600 text-white shadow-sm' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-100'"
+              @click="expandedBulk = true; expandedCreate = false"
+            >
+              <span class="block text-lg">📋</span>
+              批次新增
+            </button>
+            <button
+              type="button"
+              class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+              @click="expandedCreate = false; expandedBulk = false"
+            >
+              <span class="block text-lg">⚡</span>
+              自動產生
             </button>
           </div>
 
-          <div
-            v-if="expandedCreate"
-            class="mt-5 grid gap-3"
-          >
-            <input
-              v-model="manualForm.code"
-              class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black uppercase outline-none focus:border-indigo-400"
-              placeholder="輸入序號，例如 VIP001"
-              @blur="manualForm.code = normalizeCode(manualForm.code)"
+          <div class="p-6">
+            <div
+              v-if="expandedCreate"
+              class="space-y-4"
             >
+              <div class="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                <p class="text-sm font-black text-slate-950">新增單組序號</p>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+                  適合指定 VIP、門市、活動券序號。
+                </p>
+              </div>
 
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label>
-                <span class="text-xs font-black text-slate-500">可用次數</span>
+              <label class="block space-y-2">
+                <span class="text-xs font-black text-slate-500">序號代碼</span>
                 <input
-                  v-model.number="manualForm.rewardChance"
-                  type="number"
-                  min="1"
-                  max="99"
-                  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
+                  v-model="manualForm.code"
+                  class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black uppercase outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+                  placeholder="輸入序號，例如 VIP001"
+                  @blur="manualForm.code = normalizeCode(manualForm.code)"
                 >
               </label>
-              <label>
-                <span class="text-xs font-black text-slate-500">批次</span>
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block space-y-2">
+                  <span class="text-xs font-black text-slate-500">可用次數</span>
+                  <input
+                    v-model.number="manualForm.rewardChance"
+                    type="number"
+                    min="1"
+                    max="99"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+                  >
+                </label>
+                <label class="block space-y-2">
+                  <span class="text-xs font-black text-slate-500">批次</span>
+                  <input
+                    v-model="manualForm.batchCode"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+                  >
+                </label>
+              </div>
+
+              <label class="block space-y-2">
+                <span class="text-xs font-black text-slate-500">備註</span>
                 <input
-                  v-model="manualForm.batchCode"
-                  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
+                  v-model="manualForm.note"
+                  class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+                  placeholder="例如：LINE 客戶、門市發放"
                 >
               </label>
+
+              <button
+                type="button"
+                class="w-full rounded-2xl bg-slate-950 px-5 py-3.5 text-sm font-black text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                :disabled="creating || !selectedCampaign"
+                @click="createManualSerialCode"
+              >
+                {{ creating ? '建立中...' : '新增單組序號' }}
+              </button>
             </div>
 
-            <input
-              v-model="manualForm.note"
-              class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
-              placeholder="備註，例如：LINE 客戶、門市發放"
+            <div
+              v-else-if="expandedBulk"
+              class="space-y-4"
             >
+              <div class="rounded-3xl border border-indigo-100 bg-indigo-50 p-4">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-indigo-950">批次新增序號</p>
+                    <p class="mt-1 text-xs font-bold leading-5 text-indigo-600">
+                      一行一組，或用逗號、空白分隔。系統會自動整理格式。
+                    </p>
+                  </div>
+                  <span class="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-black text-indigo-700 shadow-sm">
+                    {{ bulkCodeCount }} 組
+                  </span>
+                </div>
+              </div>
 
-            <button
-              type="button"
-              class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700 disabled:opacity-60"
-              :disabled="creating || !selectedCampaign"
-              @click="createManualSerialCode"
+              <textarea
+                v-model="bulkForm.codesText"
+                rows="8"
+                class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black uppercase leading-7 outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+                placeholder="VIP001&#10;VIP002&#10;VIP003"
+              />
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block space-y-2">
+                  <span class="text-xs font-black text-slate-500">每組可用次數</span>
+                  <input
+                    v-model.number="bulkForm.rewardChance"
+                    type="number"
+                    min="1"
+                    max="99"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+                  >
+                </label>
+                <label class="block space-y-2">
+                  <span class="text-xs font-black text-slate-500">批次</span>
+                  <input
+                    v-model="bulkForm.batchCode"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none transition focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+                  >
+                </label>
+              </div>
+
+              <button
+                type="button"
+                class="w-full rounded-2xl bg-indigo-600 px-5 py-3.5 text-sm font-black text-white transition hover:bg-indigo-700 disabled:opacity-60"
+                :disabled="bulkCreating || !selectedCampaign"
+                @click="createBulkSerialCodes"
+              >
+                {{ bulkCreating ? '批次建立中...' : '批次新增序號' }}
+              </button>
+            </div>
+
+            <div
+              v-else
+              class="space-y-4"
             >
-              {{ creating ? '建立中...' : '新增序號' }}
-            </button>
+              <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
+                <p class="text-sm font-black text-emerald-950">自動產生序號</p>
+                <p class="mt-1 text-xs font-bold leading-5 text-emerald-600">
+                  適合一次產生大量隨機序號。{{ generatePreviewText }}
+                </p>
+              </div>
+
+              <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block space-y-2">
+                  <span class="text-xs font-black text-slate-500">數量</span>
+                  <input
+                    v-model.number="generateForm.count"
+                    type="number"
+                    min="1"
+                    max="500"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50"
+                  >
+                </label>
+                <label class="block space-y-2">
+                  <span class="text-xs font-black text-slate-500">每組可用次數</span>
+                  <input
+                    v-model.number="generateForm.rewardChance"
+                    type="number"
+                    min="1"
+                    max="99"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50"
+                  >
+                </label>
+                <label class="block space-y-2">
+                  <span class="text-xs font-black text-slate-500">前綴</span>
+                  <input
+                    v-model="generateForm.prefix"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black uppercase outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50"
+                  >
+                </label>
+                <label class="block space-y-2">
+                  <span class="text-xs font-black text-slate-500">批次</span>
+                  <input
+                    v-model="generateForm.batchCode"
+                    class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none transition focus:border-emerald-400 focus:ring-4 focus:ring-emerald-50"
+                  >
+                </label>
+              </div>
+
+              <button
+                type="button"
+                class="w-full rounded-2xl bg-emerald-600 px-5 py-3.5 text-sm font-black text-white transition hover:bg-emerald-700 disabled:opacity-60"
+                :disabled="generating || !selectedCampaign"
+                @click="generateSerialCodes"
+              >
+                {{ generating ? '產生中...' : '自動產生序號' }}
+              </button>
+            </div>
           </div>
         </section>
 
-        <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h2 class="text-xl font-black text-slate-950">批次新增序號</h2>
-              <p class="mt-2 text-sm font-bold text-slate-500">一行一組，或用逗號、空白分隔。</p>
-            </div>
-            <button
-              type="button"
-              class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600"
-              @click="expandedBulk = !expandedBulk"
-            >
-              {{ expandedBulk ? '收合' : '展開' }}
-            </button>
+        <section class="rounded-[2rem] border border-amber-100 bg-amber-50 p-5">
+          <p class="text-sm font-black text-amber-900">操作提醒</p>
+          <div class="mt-3 grid gap-2 text-xs font-bold leading-5 text-amber-700">
+            <p>1. 同一個序號不要跨活動共用。</p>
+            <p>2. 客人玩完後可按右側「重新讀取」同步剩餘次數。</p>
+            <p>3. 批次發放前可先用「複製目前序號」整理給門市。</p>
           </div>
-
-          <div
-            v-if="expandedBulk"
-            class="mt-5 grid gap-3"
-          >
-            <textarea
-              v-model="bulkForm.codesText"
-              rows="6"
-              class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black uppercase outline-none focus:border-indigo-400"
-              placeholder="VIP001&#10;VIP002&#10;VIP003"
-            />
-
-            <div class="grid gap-3 sm:grid-cols-2">
-              <label>
-                <span class="text-xs font-black text-slate-500">每組可用次數</span>
-                <input
-                  v-model.number="bulkForm.rewardChance"
-                  type="number"
-                  min="1"
-                  max="99"
-                  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
-                >
-              </label>
-              <label>
-                <span class="text-xs font-black text-slate-500">批次</span>
-                <input
-                  v-model="bulkForm.batchCode"
-                  class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
-                >
-              </label>
-            </div>
-
-            <button
-              type="button"
-              class="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700 disabled:opacity-60"
-              :disabled="bulkCreating || !selectedCampaign"
-              @click="createBulkSerialCodes"
-            >
-              {{ bulkCreating ? '批次建立中...' : '批次新增序號' }}
-            </button>
-          </div>
-        </section>
-
-        <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 class="text-xl font-black text-slate-950">自動產生序號</h2>
-          <p class="mt-2 text-sm font-bold text-slate-500">適合一次產生大量隨機序號。</p>
-
-          <div class="mt-5 grid gap-3 sm:grid-cols-2">
-            <label>
-              <span class="text-xs font-black text-slate-500">數量</span>
-              <input
-                v-model.number="generateForm.count"
-                type="number"
-                min="1"
-                max="500"
-                class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
-              >
-            </label>
-            <label>
-              <span class="text-xs font-black text-slate-500">每組可用次數</span>
-              <input
-                v-model.number="generateForm.rewardChance"
-                type="number"
-                min="1"
-                max="99"
-                class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
-              >
-            </label>
-            <label>
-              <span class="text-xs font-black text-slate-500">前綴</span>
-              <input
-                v-model="generateForm.prefix"
-                class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
-              >
-            </label>
-            <label>
-              <span class="text-xs font-black text-slate-500">批次</span>
-              <input
-                v-model="generateForm.batchCode"
-                class="mt-1 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
-              >
-            </label>
-          </div>
-
-          <button
-            type="button"
-            class="mt-4 w-full rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700 disabled:opacity-60"
-            :disabled="generating || !selectedCampaign"
-            @click="generateSerialCodes"
-          >
-            {{ generating ? '產生中...' : '自動產生序號' }}
-          </button>
         </section>
       </div>
 
-      <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-        <div class="mb-5 flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <h2 class="text-xl font-black text-slate-950">序號列表</h2>
-            <p class="mt-2 text-sm font-bold text-slate-500">
-              可搜尋、篩選、複製、停用、恢復或刪除序號。
-            </p>
-          </div>
+      <section class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+        <div class="border-b border-slate-100 bg-gradient-to-r from-white to-slate-50 p-6">
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Serial List</p>
+              <h2 class="mt-1 text-2xl font-black text-slate-950">序號列表</h2>
+              <p class="mt-2 text-sm font-bold text-slate-500">
+                可搜尋、篩選、複製、停用、恢復或刪除序號。
+              </p>
+            </div>
 
           <div class="flex flex-wrap gap-2">
             <button
@@ -1072,6 +1153,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
 
+        <div class="p-6">
         <div class="mb-5 grid gap-3 md:grid-cols-[1fr_180px]">
           <input
             v-model="searchKeyword"
@@ -1219,6 +1301,7 @@ onBeforeUnmount(() => {
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       </section>
     </section>
