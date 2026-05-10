@@ -494,7 +494,7 @@ const campaign = reactive({
   showFrontPrizeInfo: true,
   showFrontPrizeShelf: false,
   showFrontHistoryButton: true,
-  showFrontRecentRecords: false,
+  showFrontRecentRecords: true,
   showFrontShareButton: false,
   showFrontActivityTime: false,
   showFrontActivityCountdown: false,
@@ -3491,76 +3491,63 @@ onUnmounted(() => {
 
         <section
           v-if="frontDisplay.showRecentRecords && campaign.showRecentLogsSection"
-          class="golden-collapsible-section mt-4 rounded-[2rem] border border-white/15 bg-white/10 p-4 shadow-2xl backdrop-blur"
+          class="mt-4 rounded-3xl bg-white/95 p-4 text-slate-900 shadow-xl"
         >
-          <button
-            type="button"
-            class="flex w-full items-center justify-between gap-3 text-left"
-            @click="isRecentLogsOpen = !isRecentLogsOpen"
-          >
+          <div class="flex items-center justify-between gap-3">
             <div>
-              <p class="text-xs font-black uppercase tracking-[0.2em] text-yellow-100">
-                Recent Logs
+              <p class="text-sm font-black text-slate-900">
+                我的抽獎紀錄
               </p>
-              <h3 class="text-lg font-black text-white">
-                最近砸蛋紀錄
-              </h3>
-              <p class="mt-1 text-xs font-bold text-yellow-50/70">
-                {{ isRecentLogsOpen ? '目前顯示較多紀錄' : '目前只顯示摘要，點擊可展開' }}
+              <p class="mt-1 text-xs font-bold text-slate-400">
+                最近 {{ recentLogsPreview.length }} 筆紀錄直接顯示在前台
               </p>
-            </div>
-
-            <div class="flex shrink-0 items-center gap-2">
-              <span class="rounded-full bg-yellow-300 px-3 py-1 text-xs font-black text-red-700">
-                {{ recentLogs.length }} 筆
-              </span>
-              <span class="golden-collapse-arrow" :class="isRecentLogsOpen ? 'is-open' : ''">
-                ⌄
-              </span>
-            </div>
-          </button>
-
-          <div
-            v-if="recentLogs.length"
-            class="mt-3 space-y-2"
-          >
-            <div
-              v-for="log in recentLogsPreview"
-              :key="log.id"
-              class="flex items-center justify-between gap-3 rounded-2xl bg-black/16 px-3 py-2"
-            >
-              <div>
-                <p class="text-sm font-black text-white">
-                  {{ log.prizeName }}
-                </p>
-                <p class="text-[11px] font-bold text-yellow-100/80">
-                  金蛋 {{ log.eggNumber }}｜{{ log.createdAt }}
-                </p>
-              </div>
-              <span
-                class="rounded-full px-2 py-1 text-[10px] font-black"
-                :class="log.prizeType === 'lose' ? 'bg-slate-100 text-slate-600' : 'bg-yellow-100 text-yellow-700'"
-              >
-                {{ log.prizeType === 'lose' ? '未中獎' : '中獎' }}
-              </span>
             </div>
 
             <button
-              v-if="recentLogs.length > 2"
+              v-if="recentLogs.length > recentLogsPreview.length"
               type="button"
-              class="mt-2 w-full rounded-2xl border border-yellow-200/30 bg-white/10 px-4 py-2 text-xs font-black text-yellow-50 transition hover:bg-white/20"
+              class="rounded-full bg-yellow-50 px-3 py-1.5 text-xs font-black text-yellow-700"
               @click="isRecentLogsOpen = !isRecentLogsOpen"
             >
-              {{ sectionToggleText(isRecentLogsOpen) }}完整砸蛋紀錄
+              {{ isRecentLogsOpen ? '收合' : '全部紀錄' }}
             </button>
           </div>
 
-          <p
+          <div v-if="recentLogsPreview.length" class="mt-3 grid gap-2">
+            <article
+              v-for="log in recentLogsPreview"
+              :key="log.id"
+              class="flex items-center justify-between gap-3 rounded-2xl bg-yellow-50 px-3 py-2"
+            >
+              <div class="flex min-w-0 items-center gap-2">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-lg shadow-sm">
+                  🥚
+                </span>
+                <div class="min-w-0 text-left">
+                  <p class="truncate text-xs font-black text-slate-900">
+                    {{ log.prizeName }}
+                  </p>
+                  <p class="mt-0.5 truncate text-[11px] font-bold text-slate-400">
+                    金蛋 {{ log.eggNumber }}｜{{ log.createdAt }}
+                  </p>
+                </div>
+              </div>
+
+              <span
+                class="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-black shadow-sm"
+                :class="log.prizeType === 'lose' ? 'text-slate-500' : 'text-yellow-700'"
+              >
+                {{ log.prizeType === 'lose' ? '未中獎' : '中獎' }}
+              </span>
+            </article>
+          </div>
+
+          <div
             v-else
-            class="mt-3 rounded-2xl bg-black/16 px-3 py-3 text-sm font-bold text-yellow-50/80"
+            class="mt-3 rounded-2xl bg-yellow-50 px-4 py-4 text-center text-xs font-black leading-5 text-yellow-700"
           >
-            尚無砸蛋紀錄，點選金蛋後會顯示在這裡。
-          </p>
+            目前尚無抽獎紀錄，完成砸蛋後會直接顯示在這裡。
+          </div>
         </section>
 
             <section

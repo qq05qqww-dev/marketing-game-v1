@@ -3291,6 +3291,42 @@ const frontDisplay = computed(() => {
   }
 })
 
+const frontWheelRecordRows = computed(() => {
+  const localDrawLogs = Array.isArray(drawLogs.value) ? drawLogs.value : []
+  const savedHistory = Array.isArray(getHistoryItems()) ? getHistoryItems() : []
+  const merged = [
+    ...localDrawLogs.map((item) => ({
+      id: item.id || `wheel-log-${item.createdAt}`,
+      icon: item.prizeIcon || item.icon || '🎁',
+      prizeName: item.prizeName || item.name || '未知獎項',
+      serialCode: normalizedSerialCode.value || item.serialCode || '—',
+      resultText: item.prizeType === 'lose' ? '未中獎' : '中獎',
+      createdAt: item.createdAt || ''
+    })),
+    ...savedHistory
+      .filter((item) => String(item.gameType || '').includes('wheel'))
+      .map((item) => ({
+        id: item.id || `wheel-history-${item.createdAt}`,
+        icon: item.prizeIcon || item.icon || '🎁',
+        prizeName: item.prizeName || item.name || '未知獎項',
+        serialCode: item.serialCode || normalizedSerialCode.value || '—',
+        resultText: item.prizeType === 'lose' ? '未中獎' : '中獎',
+        createdAt: item.createdAt || ''
+      }))
+  ]
+
+  const seen = new Set()
+
+  return merged
+    .filter((item) => {
+      const key = `${item.id}-${item.prizeName}-${item.createdAt}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .slice(0, 3)
+})
+
 const frontPlayerSummaryItems = computed(() => {
   const items = [
     {
@@ -8835,17 +8871,6 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </button>
 
                 <button
-                  v-if="frontDisplay.showHistoryButton"
-                  type="button"
-                  class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30"
-                  :class="isSpinning ? 'cursor-not-allowed opacity-60' : ''"
-                  :disabled="isSpinning"
-                  @click="goGameHistory"
-                >
-                  {{ isSpinning ? '轉盤中...' : '查看我的紀錄' }}
-                </button>
-
-                <button
                   v-if="frontDisplay.showBackToGameCenter"
                   type="button"
                   class="rounded-2xl border border-white/30 bg-white/20 px-4 py-3 text-sm font-black text-white shadow-inner backdrop-blur transition hover:bg-white/30 sm:col-span-2"
@@ -8855,6 +8880,63 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 >
                   {{ isSpinning ? '轉盤中...' : '回遊戲中心' }}
                 </button>
+              </section>
+
+              <section
+                v-if="frontDisplay.showHistoryButton"
+                class="relative mt-4 rounded-3xl bg-white/95 p-4 text-slate-900 shadow-xl"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-slate-900">
+                      我的抽獎紀錄
+                    </p>
+                    <p class="mt-1 text-xs font-bold text-slate-400">
+                      最近 {{ frontWheelRecordRows.length }} 筆紀錄直接顯示在前台
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    class="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black text-orange-600"
+                    @click="goGameHistory"
+                  >
+                    全部紀錄
+                  </button>
+                </div>
+
+                <div v-if="frontWheelRecordRows.length" class="mt-3 grid gap-2">
+                  <article
+                    v-for="record in frontWheelRecordRows"
+                    :key="record.id"
+                    class="flex items-center justify-between gap-3 rounded-2xl bg-orange-50 px-3 py-2"
+                  >
+                    <div class="flex min-w-0 items-center gap-2">
+                      <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-white text-lg shadow-sm">
+                        {{ record.icon }}
+                      </span>
+                      <div class="min-w-0 text-left">
+                        <p class="truncate text-xs font-black text-slate-900">
+                          {{ record.prizeName }}
+                        </p>
+                        <p class="mt-0.5 truncate text-[11px] font-bold text-slate-400">
+                          序號：{{ record.serialCode }}
+                        </p>
+                      </div>
+                    </div>
+
+                    <span class="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-black text-orange-600 shadow-sm">
+                      {{ record.resultText }}
+                    </span>
+                  </article>
+                </div>
+
+                <div
+                  v-else
+                  class="mt-3 rounded-2xl bg-orange-50 px-4 py-4 text-center text-xs font-black leading-5 text-orange-600"
+                >
+                  目前尚無抽獎紀錄，完成轉盤後會直接顯示在這裡。
+                </div>
               </section>
 
               <section
