@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 44001～44400 批：報表中心區塊展開收合與閱讀節奏優化版
+// 第 44001-1 批：報表中心四區塊展開收合修正版
 import { computed, onMounted, ref } from 'vue'
 import {
   getReportSummaryApi,
@@ -938,6 +938,10 @@ const getSectionToggleText = (key) => {
   return reportSectionsOpen.value[key] ? '收合' : '展開'
 }
 
+const getSectionToggleIcon = (key) => {
+  return reportSectionsOpen.value[key] ? '▲' : '▼'
+}
+
 onMounted(async () => {
   loadSavedQueries()
   await fetchTenantOptions()
@@ -947,9 +951,7 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-8">
-    <section
-      v-show="reportSectionsOpen.dailyStats"
-      class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+    <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p class="text-xs font-black uppercase tracking-[0.35em] text-indigo-500">Tenant Reports</p>
@@ -959,15 +961,7 @@ onMounted(async () => {
           </p>
           <div class="mt-4 inline-flex rounded-2xl px-4 py-2 text-sm font-black" :class="isPlatformReport ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'">
             {{ isPlatformReport ? '平台總管理員報表' : '商家報表' }}
-    
-        <button
-          type="button"
-          class="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 transition hover:bg-cyan-100"
-          @click="toggleReportSection('dailyStats')"
-        >
-          {{ getSectionToggleText('dailyStats') }}
-        </button>
-      </div>
+          </div>
         </div>
 
         <div class="flex flex-wrap gap-3">
@@ -1470,15 +1464,13 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section
-      v-show="reportSectionsOpen.prizePerformance"
-      class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+    <section class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p class="text-xs font-black uppercase tracking-[0.3em] text-slate-400">Report Sections</p>
           <h3 class="mt-2 text-2xl font-black text-slate-900">報表區塊顯示控制</h3>
           <p class="mt-2 text-sm font-bold text-slate-500">
-            資料太多時，可以只展開目前要看的區塊，畫面會更清楚。
+            資料太多時，可以只展開目前要看的區塊，畫面會比較簡潔。
           </p>
         </div>
 
@@ -1533,14 +1525,6 @@ onMounted(async () => {
         >
           🏆 中獎 / 發獎紀錄｜{{ getSectionToggleText('rewardRecords') }}
         </button>
-
-        <button
-          type="button"
-          class="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-100"
-          @click="toggleReportSection('prizePerformance')"
-        >
-          {{ getSectionToggleText('prizePerformance') }}
-        </button>
       </div>
     </section>
 
@@ -1553,11 +1537,21 @@ onMounted(async () => {
             依目前商家與日期篩選統計各獎項的中獎、發放、核銷與庫存狀態。
           </p>
         </div>
-        <div class="rounded-2xl bg-violet-50 px-5 py-3 text-sm font-black text-violet-700">
-          目前顯示 {{ prizePageStart }} - {{ prizePageEnd }} 筆，共 {{ totalPrizePerformanceRows }} 筆
+        <div class="flex flex-wrap gap-2">
+          <div class="rounded-2xl bg-violet-50 px-5 py-3 text-sm font-black text-violet-700">
+            目前顯示 {{ prizePageStart }} - {{ prizePageEnd }} 筆，共 {{ totalPrizePerformanceRows }} 筆
+          </div>
+          <button
+            type="button"
+            class="rounded-2xl border border-violet-200 bg-white px-5 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-50"
+            @click="toggleReportSection('prizePerformance')"
+          >
+            {{ getSectionToggleIcon('prizePerformance') }} {{ getSectionToggleText('prizePerformance') }}
+          </button>
         </div>
       </div>
 
+      <div v-show="reportSectionsOpen.prizePerformance" class="space-y-6">
       <div v-if="!hasPrizePerformanceData && !loading" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
         目前篩選條件下沒有獎項成效資料。
       </div>
@@ -1650,6 +1644,7 @@ onMounted(async () => {
           </div>
         </div>
       </div>
+      </div>
     </section>
 
     <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
@@ -1658,9 +1653,17 @@ onMounted(async () => {
           <h3 class="text-2xl font-black text-slate-900">每日遊玩統計</h3>
           <p class="mt-2 text-slate-500">目前顯示 {{ totalDailyRows }} 天資料。</p>
         </div>
+
+        <button
+          type="button"
+          class="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 transition hover:bg-cyan-100"
+          @click="toggleReportSection('dailyStats')"
+        >
+          {{ getSectionToggleIcon('dailyStats') }} {{ getSectionToggleText('dailyStats') }}
+        </button>
       </div>
 
-      <div class="overflow-x-auto rounded-3xl border border-slate-200">
+      <div v-show="reportSectionsOpen.dailyStats" class="overflow-x-auto rounded-3xl border border-slate-200">
         <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
           <thead class="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
             <tr>
@@ -1697,7 +1700,7 @@ onMounted(async () => {
     </section>
 
     <section
-      v-show="activeRecordsPanel === 'play' && reportSectionsOpen.playRecords"
+      v-show="activeRecordsPanel === 'play'"
       class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm"
     >
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1712,12 +1715,11 @@ onMounted(async () => {
         <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+            class="rounded-2xl border border-emerald-200 bg-white px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-50"
             @click="toggleReportSection('playRecords')"
           >
-            {{ getSectionToggleText('playRecords') }}
+            {{ getSectionToggleIcon('playRecords') }} {{ getSectionToggleText('playRecords') }}
           </button>
-
           <button
             type="button"
             class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
@@ -1735,6 +1737,7 @@ onMounted(async () => {
         </div>
       </div>
 
+      <div v-show="reportSectionsOpen.playRecords" class="space-y-6">
       <div v-if="loading" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
         讀取中...
       </div>
@@ -1813,10 +1816,11 @@ onMounted(async () => {
           </button>
         </div>
       </div>
+      </div>
     </section>
 
     <section
-      v-show="activeRecordsPanel === 'reward' && reportSectionsOpen.rewardRecords"
+      v-show="activeRecordsPanel === 'reward'"
       class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm"
     >
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1831,12 +1835,11 @@ onMounted(async () => {
         <div class="flex flex-wrap gap-2">
           <button
             type="button"
-            class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-100"
+            class="rounded-2xl border border-amber-200 bg-white px-5 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-50"
             @click="toggleReportSection('rewardRecords')"
           >
-            {{ getSectionToggleText('rewardRecords') }}
+            {{ getSectionToggleIcon('rewardRecords') }} {{ getSectionToggleText('rewardRecords') }}
           </button>
-
           <button
             type="button"
             class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-100"
@@ -1861,6 +1864,7 @@ onMounted(async () => {
         </div>
       </div>
 
+      <div v-show="reportSectionsOpen.rewardRecords" class="space-y-6">
       <div v-if="loading" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
         讀取中...
       </div>
@@ -1938,6 +1942,7 @@ onMounted(async () => {
             下一頁
           </button>
         </div>
+      </div>
       </div>
     </section>
   </div>
