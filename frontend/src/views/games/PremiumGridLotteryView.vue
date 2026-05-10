@@ -1790,7 +1790,7 @@ const premiumGridSharedPlayBoardBaseSettings = computed(() => ({
     participationTitle: '活動參加方式',
     participationText: '點擊九宮格中間按鈕開始抽獎，中獎後會自動寫入遊戲紀錄。分享活動會複製活動連結並增加抽獎機會。',
     customerServiceText: '請依照活動規則參加抽獎，獎項與兌換方式以主辦單位公告為準。',
-    // 第 47201～47600 批：九宮格獎品預設隱藏與抽中後揭曉版。
+    // 第 47601～48000 批：九宮格抽選中不揭露獎品與神秘格精緻版。
     showFrontRules: true,
     showFrontPrizeInfo: true,
     showFrontPrizeShelf: true,
@@ -2466,30 +2466,46 @@ const frontGridRecordRows = computed(() => {
 const isGridPrizeRevealed = (item = {}, index = -1) => {
   if (item?.isButton) return true
   if (isAdminMode.value) return true
-  if (isDrawing.value && activeIndex.value === index) return true
 
+  // 第 47601～48000 批：
+  // 跑燈抽選中不能提前露出格子內真正獎項。
+  // 只有抽選完成、resultPrize 寫入後，最後中獎格才揭曉。
   const prize = resultPrize.value
 
-  if (!prize) return false
+  if (!prize || isDrawing.value) return false
 
   return String(prize.id || '') === String(item.id || '') || String(prize.name || '') === String(item.name || '')
 }
 
-const getGridHiddenPrizeIcon = (index = 0) => {
-  const icons = ['🎁', '💎', '🎟️', '✨', '🎁', '🎫', '🎁', '👑', '🏆']
-  return icons[index] || '🎁'
+const getGridHiddenPrizeIcon = () => {
+  return '🎁'
+}
+
+const getGridHiddenPrizeLabel = (item = {}, index = -1) => {
+  if (item?.isButton) return drawButtonText.value
+  if (isDrawing.value && activeIndex.value === index) return '抽選中'
+
+  return '神秘獎品'
+}
+
+const getGridHiddenPrizeBadge = (item = {}, index = -1) => {
+  if (item?.isButton) return ''
+  if (isDrawing.value && activeIndex.value === index) return '跑燈中'
+
+  return '抽中揭曉'
 }
 
 const getGridPrizeCellTitle = (item = {}, index = -1) => {
   if (item?.isButton) return drawButtonText.value
   if (isGridPrizeRevealed(item, index)) return item.shortName || item.name || '中獎獎品'
 
-  return '神秘獎品'
+  return getGridHiddenPrizeLabel(item, index)
 }
 
 const getGridPrizeCellAriaLabel = (item = {}, index = -1) => {
   if (item?.isButton) return drawButtonText.value
   if (isGridPrizeRevealed(item, index)) return item.name || item.shortName || '已揭曉獎品'
+  if (isDrawing.value && activeIndex.value === index) return '抽選中，獎品尚未揭曉'
 
   return '隱藏獎品，抽中後揭曉'
 }
@@ -33303,14 +33319,21 @@ const toggleWheelRealFilePrep11011150 = () => {
                       type="button"
                       :aria-label="getGridPrizeCellAriaLabel(item, index)"
                       class="relative aspect-square overflow-hidden rounded-2xl border border-orange-200/80 text-center transition duration-150 sm:rounded-3xl"
-                      :class="item.isButton
-                        ? canStartGridDraw
-                          ? 'bg-gradient-to-br from-orange-500 to-red-600 text-white'
-                          : 'bg-gradient-to-br from-slate-400 to-slate-600 text-white'
-                        : isGridPrizeRevealed(item, index)
-                          ? 'bg-gradient-to-br from-yellow-100 via-yellow-300 to-orange-300 text-orange-900'
-                          : 'bg-gradient-to-br from-yellow-200 via-orange-300 to-orange-500 text-white'
-                      "
+                      :class="[
+                        item.isButton
+                          ? canStartGridDraw
+                            ? 'bg-gradient-to-br from-orange-500 to-red-600 text-white'
+                            : 'bg-gradient-to-br from-slate-400 to-slate-600 text-white'
+                          : isGridPrizeRevealed(item, index)
+                            ? 'bg-gradient-to-br from-yellow-100 via-yellow-300 to-orange-300 text-orange-900'
+                            : 'bg-gradient-to-br from-orange-300 via-orange-400 to-red-500 text-white',
+                        !item.isButton && isDrawing && activeIndex === index
+                          ? 'ring-4 ring-yellow-200 scale-[1.03] shadow-[0_0_28px_rgba(253,224,71,.75)]'
+                          : '',
+                        !item.isButton && resultPrize && isGridPrizeRevealed(item, index)
+                          ? 'ring-4 ring-yellow-200 scale-[1.03] shadow-[0_0_30px_rgba(253,224,71,.75)]'
+                          : ''
+                      ]"
                       :style="getCellStyle(index)"
                       :disabled="item.isButton && !canStartGridDraw"
                       @click="item.isButton && canStartGridDraw ? startDraw() : null"
@@ -33364,11 +33387,11 @@ const toggleWheelRealFilePrep11011150 = () => {
                             class="font-black leading-tight text-white drop-shadow"
                             :style="getAdminPreviewTextStyle('prizeTextSize', 13)"
                           >
-                            神秘獎品
+                            {{ getGridHiddenPrizeLabel(item, index) }}
                           </span>
 
                           <span class="mt-0.5 rounded-full bg-white/25 px-2 py-0.5 text-[10px] font-black text-white/90">
-                            抽中揭曉
+                            {{ getGridHiddenPrizeBadge(item, index) }}
                           </span>
                         </template>
                       </div>
