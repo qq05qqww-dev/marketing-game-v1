@@ -1,4 +1,4 @@
-// 第 57601～58000 批：輪盤設定頁儲存驗收歷史清除與匯出版
+// 第 58001～58400 批：平台輪盤模組精緻預設與視覺升級控制版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -120,6 +120,7 @@ const previewFocusOptions = [
 ]
 
 const settingCategories = [
+  { key: 'polish', icon: '精', title: '模組精緻', desc: '一鍵套用高級輪盤視覺預設' },
   { key: 'basic', icon: '文', title: '基本文字', desc: '活動標題、副標題、提示文字' },
   { key: 'theme', icon: '色', title: '主題色彩', desc: '背景、按鈕、指針與輪盤顏色' },
   { key: 'wheel', icon: '盤', title: '輪盤樣式', desc: '輪盤外框、中心按鈕與獎項顯示' },
@@ -152,6 +153,207 @@ const themeDescriptions = {
   spinButtonColor: '輪盤中心 SPIN 按鈕顏色。',
   actionButtonFrom: '開始轉盤按鈕漸層左側顏色。',
   actionButtonTo: '開始轉盤按鈕漸層右側顏色。'
+}
+
+const wheelPolishPresets = [
+  {
+    key: 'luxuryGold',
+    name: '高級金橘豪華版',
+    badge: '推薦',
+    desc: '適合正式活動、品牌抽獎、百貨感輪盤。外框金色、背景暖橘、指針紅金。',
+    theme: {
+      backgroundFrom: '#fff7ed',
+      backgroundTo: '#ea580c',
+      panelColor: '#ffedd5',
+      wheelOuterColor: '#f59e0b',
+      pointerColor: '#dc2626',
+      spinButtonColor: '#111827',
+      actionButtonFrom: '#f97316',
+      actionButtonTo: '#b91c1c'
+    },
+    wheelStyle: {
+      wheelSize: 356,
+      outerRingWidth: 16,
+      centerButtonSize: 94,
+      pointerSize: 50,
+      prizeTextSize: 14,
+      prizeIconSize: 42,
+      prizeLabelRadius: 35,
+      showPrizeIcon: true,
+      showPrizeName: true,
+      showSliceBorder: true
+    },
+    effects: {
+      enableTickSound: true,
+      enableResultSound: true,
+      enablePointerShake: true,
+      enableLightGlow: true,
+      enableConfetti: true,
+      enableSpinMask: true
+    }
+  },
+  {
+    key: 'blackGoldVip',
+    name: '黑金 VIP 典藏版',
+    badge: '質感',
+    desc: '適合會員制、高單價品牌、VIP 抽獎。整體更沉穩，輪盤金色更突出。',
+    theme: {
+      backgroundFrom: '#18181b',
+      backgroundTo: '#78350f',
+      panelColor: '#fef3c7',
+      wheelOuterColor: '#fbbf24',
+      pointerColor: '#f43f5e',
+      spinButtonColor: '#020617',
+      actionButtonFrom: '#f59e0b',
+      actionButtonTo: '#92400e'
+    },
+    wheelStyle: {
+      wheelSize: 368,
+      outerRingWidth: 18,
+      centerButtonSize: 96,
+      pointerSize: 52,
+      prizeTextSize: 14,
+      prizeIconSize: 44,
+      prizeLabelRadius: 36,
+      showPrizeIcon: true,
+      showPrizeName: true,
+      showSliceBorder: true
+    },
+    effects: {
+      enableTickSound: true,
+      enableResultSound: true,
+      enablePointerShake: true,
+      enableLightGlow: true,
+      enableConfetti: true,
+      enableSpinMask: true
+    }
+  },
+  {
+    key: 'neonPurple',
+    name: '霓虹紫粉潮流版',
+    badge: '年輕',
+    desc: '適合社群活動、夜店感、直播互動。背景更亮眼，按鈕與輪盤更有衝擊感。',
+    theme: {
+      backgroundFrom: '#faf5ff',
+      backgroundTo: '#7e22ce',
+      panelColor: '#f3e8ff',
+      wheelOuterColor: '#a855f7',
+      pointerColor: '#ec4899',
+      spinButtonColor: '#4c1d95',
+      actionButtonFrom: '#d946ef',
+      actionButtonTo: '#7c3aed'
+    },
+    wheelStyle: {
+      wheelSize: 348,
+      outerRingWidth: 14,
+      centerButtonSize: 92,
+      pointerSize: 48,
+      prizeTextSize: 13,
+      prizeIconSize: 40,
+      prizeLabelRadius: 35,
+      showPrizeIcon: true,
+      showPrizeName: true,
+      showSliceBorder: true
+    },
+    effects: {
+      enableTickSound: true,
+      enableResultSound: true,
+      enablePointerShake: true,
+      enableLightGlow: true,
+      enableConfetti: true,
+      enableSpinMask: true
+    }
+  },
+  {
+    key: 'cleanOrange',
+    name: '清爽橘白簡潔版',
+    badge: '乾淨',
+    desc: '適合一般商家、餐飲、美容、零售。畫面清楚、按鈕明顯、手機閱讀舒服。',
+    theme: {
+      backgroundFrom: '#fff7ed',
+      backgroundTo: '#fdba74',
+      panelColor: '#ffffff',
+      wheelOuterColor: '#fb923c',
+      pointerColor: '#ea580c',
+      spinButtonColor: '#9a3412',
+      actionButtonFrom: '#fb923c',
+      actionButtonTo: '#ea580c'
+    },
+    wheelStyle: {
+      wheelSize: 336,
+      outerRingWidth: 12,
+      centerButtonSize: 88,
+      pointerSize: 44,
+      prizeTextSize: 13,
+      prizeIconSize: 38,
+      prizeLabelRadius: 34,
+      showPrizeIcon: true,
+      showPrizeName: true,
+      showSliceBorder: true
+    },
+    effects: {
+      enableTickSound: true,
+      enableResultSound: true,
+      enablePointerShake: true,
+      enableLightGlow: true,
+      enableConfetti: true,
+      enableSpinMask: true
+    }
+  }
+]
+
+const wheelPolishSummary = computed(() => ({
+  eyebrow: 'Wheel Module Polish｜第 58001～58400 批',
+  title: '輪盤模組精緻化預設',
+  desc: isPlatformTemplateMode.value
+    ? '這裡會調整平台輪盤模板的視覺預設。新輪盤活動建立時才會複製這些設定，既有商家活動不會被同步污染。'
+    : '這裡只會調整目前商家活動的輪盤視覺，不會回寫平台模板，也不會影響其他商家。',
+  target: isPlatformTemplateMode.value
+    ? `platform-template:${templateId.value}`
+    : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
+  guard: isPlatformTemplateMode.value
+    ? '只保存平台模板草稿；玩家頁不直接讀模板。'
+    : '只更新目前活動 gameConfig.settings；玩家頁讀此活動資料庫設定。'
+}))
+
+const applyWheelPolishPreset = (presetKey = '') => {
+  const preset = wheelPolishPresets.find((item) => item.key === presetKey)
+  if (!preset) return
+
+  assignDeep(settings.theme, preset.theme)
+  assignDeep(settings.wheelStyle, preset.wheelStyle)
+  assignDeep(settings.effects, preset.effects)
+  settings.display.showBrandCard = true
+  settings.display.showStatusCard = true
+  settings.display.showRemainingChance = true
+  settings.display.showSerialBox = true
+  settings.display.showHistory = true
+  settings.display.enableSound = true
+
+  if (!settings.templateMeta || typeof settings.templateMeta !== 'object' || Array.isArray(settings.templateMeta)) {
+    settings.templateMeta = {}
+  }
+
+  settings.templateMeta.visualPolish = {
+    batch: '58001-58400',
+    presetKey: preset.key,
+    presetName: preset.name,
+    appliedAt: new Date().toISOString(),
+    mode: isPlatformTemplateMode.value ? 'platform_template' : 'merchant_campaign',
+    target: isPlatformTemplateMode.value
+      ? `platform-template:${templateId.value}`
+      : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
+    isolationGuard: isPlatformTemplateMode.value
+      ? '平台模板預設只供新活動建立時複製，不自動覆蓋既有商家活動。'
+      : '商家活動視覺只保存到目前活動，不回寫平台模板。'
+  }
+
+  activeCategory.value = 'polish'
+  setPreviewFocus('wheel')
+  savedMessage.value = `已套用「${preset.name}」，請按儲存設定保存。`
+  window.setTimeout(() => {
+    savedMessage.value = ''
+  }, 2400)
 }
 
 const displayLabels = {
@@ -1589,6 +1791,74 @@ onMounted(async () => {
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_430px]">
       <div class="space-y-6">
+
+        <section v-show="activeCategory === 'polish'" class="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
+          <div class="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">{{ wheelPolishSummary.eyebrow }}</p>
+              <h2 class="mt-2 text-2xl font-black text-slate-950">{{ wheelPolishSummary.title }}</h2>
+              <p class="mt-2 max-w-4xl text-sm font-bold leading-6 text-slate-500">{{ wheelPolishSummary.desc }}</p>
+            </div>
+            <button
+              type="button"
+              class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:-translate-y-0.5 hover:bg-slate-800"
+              @click="guardedSaveSettings"
+            >
+              儲存精緻設定
+            </button>
+          </div>
+
+          <div class="grid gap-3 md:grid-cols-2">
+            <div class="rounded-3xl border border-orange-100 bg-orange-50 p-4">
+              <p class="text-xs font-black text-orange-500">套用目標</p>
+              <p class="mt-2 break-all text-sm font-black leading-6 text-orange-900">{{ wheelPolishSummary.target }}</p>
+            </div>
+            <div class="rounded-3xl border border-emerald-100 bg-emerald-50 p-4">
+              <p class="text-xs font-black text-emerald-600">隔離保護</p>
+              <p class="mt-2 text-sm font-black leading-6 text-emerald-900">{{ wheelPolishSummary.guard }}</p>
+            </div>
+          </div>
+
+          <div class="mt-5 grid gap-4 xl:grid-cols-4 md:grid-cols-2">
+            <article
+              v-for="preset in wheelPolishPresets"
+              :key="preset.key"
+              class="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4 transition hover:-translate-y-1 hover:border-orange-300 hover:bg-orange-50 hover:shadow-xl"
+            >
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <span class="inline-flex rounded-full bg-white px-3 py-1 text-xs font-black text-orange-700 ring-1 ring-orange-100">{{ preset.badge }}</span>
+                  <h3 class="mt-3 text-lg font-black text-slate-950">{{ preset.name }}</h3>
+                </div>
+                <div
+                  class="h-14 w-14 shrink-0 rounded-full border-[6px] shadow-inner"
+                  :style="{ background: `linear-gradient(135deg, ${preset.theme.backgroundFrom}, ${preset.theme.backgroundTo})`, borderColor: preset.theme.wheelOuterColor }"
+                ></div>
+              </div>
+              <p class="mt-3 min-h-[4.5rem] text-sm font-bold leading-6 text-slate-500">{{ preset.desc }}</p>
+              <div class="mt-4 flex gap-2">
+                <span
+                  v-for="color in [preset.theme.backgroundFrom, preset.theme.backgroundTo, preset.theme.wheelOuterColor, preset.theme.pointerColor]"
+                  :key="color"
+                  class="h-7 w-7 rounded-full border border-white shadow"
+                  :style="{ backgroundColor: color }"
+                ></span>
+              </div>
+              <button
+                type="button"
+                class="mt-5 w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow transition hover:bg-orange-600"
+                @click="applyWheelPolishPreset(preset.key)"
+              >
+                套用這個精緻預設
+              </button>
+            </article>
+          </div>
+
+          <div class="mt-5 rounded-3xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-800">
+            本批只新增輪盤模組的視覺預設控制。套用後仍需按「儲存設定」；平台模板模式只保存模板草稿，商家活動模式只保存目前活動。
+          </div>
+        </section>
+
         <section v-show="activeCategory === 'basic'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div class="mb-5 flex items-start justify-between gap-4">
             <div>
