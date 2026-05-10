@@ -1,4 +1,4 @@
-// 第 51601～52000 批：輪盤設定正式存資料庫與玩家頁全裝置同步版
+// 第 52401～52800 批：輪盤預覽 campaignId 去重與正式頁載入修正版
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -10,6 +10,11 @@ const STORAGE_PREFIX = 'mgp:wheel-admin-settings:'
 const PRODUCTION_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
 const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '')
 
+const normalizeSingleQueryValue = (value = '') => {
+  const raw = Array.isArray(value) ? value[0] : value
+  return String(raw || '').split(',')[0].trim()
+}
+
 const getAuthToken = () => {
   if (typeof localStorage === 'undefined') return ''
   return localStorage.getItem('token') || localStorage.getItem('authToken') || ''
@@ -20,8 +25,8 @@ const getAuthHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
-const campaignId = computed(() => String(route.params.id || route.query.campaignId || '').trim())
-const tenantSlug = computed(() => String(route.query.tenantSlug || 'a-shop').trim() || 'a-shop')
+const campaignId = computed(() => normalizeSingleQueryValue(route.params.id || route.query.campaignId || route.query.id || ''))
+const tenantSlug = computed(() => normalizeSingleQueryValue(route.query.tenantSlug || 'a-shop') || 'a-shop')
 
 const normalizeUrl = (value = '') => String(value || '').trim().replace(/\/$/, '')
 const isLocalOrigin = (value = '') => /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
@@ -45,22 +50,34 @@ const frontOrigin = computed(() => {
 })
 
 const playerUrl = computed(() => {
-  const raw = String(route.query.playerUrl || '').trim()
+  const raw = normalizeSingleQueryValue(route.query.playerUrl || '')
 
-  if (raw) {
+  const buildCleanUrl = (baseUrl) => {
     try {
-      const parsed = new URL(raw)
-      const path = `${parsed.pathname}${parsed.search || ''}`
-      return `${frontOrigin.value}${path}`
+      const parsed = new URL(baseUrl, frontOrigin.value)
+      parsed.searchParams.delete('adminPreview')
+      parsed.searchParams.delete('adminPreviewDraft')
+      parsed.searchParams.delete('previewKey')
+      parsed.searchParams.delete('tenantSlug')
+
+      if (campaignId.value) {
+        parsed.searchParams.set('campaignId', campaignId.value)
+      }
+
+      return `${frontOrigin.value}${parsed.pathname}${parsed.search || ''}`
     } catch (error) {
-      return raw.startsWith('/') ? `${frontOrigin.value}${raw}` : raw
+      const query = campaignId.value ? `?campaignId=${encodeURIComponent(campaignId.value)}` : ''
+      return `${frontOrigin.value}/play/${tenantSlug.value}/wheel${query}`
     }
   }
 
-  const query = campaignId.value ? `?campaignId=${campaignId.value}` : ''
+  if (raw) {
+    return buildCleanUrl(raw.startsWith('/') ? `${frontOrigin.value}${raw}` : raw)
+  }
+
+  const query = campaignId.value ? `?campaignId=${encodeURIComponent(campaignId.value)}` : ''
   return `${frontOrigin.value}/play/${tenantSlug.value}/wheel${query}`
 })
-
 const storageKey = computed(() => `${STORAGE_PREFIX}${tenantSlug.value}:${campaignId.value || 'draft'}`)
 const savedMessage = ref('')
 const copiedMessage = ref('')
@@ -273,21 +290,32 @@ const previewRemainingText = computed(() => {
 })
 
 const safePreviewUrl = computed(() => {
-  const separator = playerUrl.value.includes('?') ? '&' : '?'
-  const params = new URLSearchParams({
-    adminPreview: '1',
-    adminPreviewDraft: '1',
-    previewKey: String(previewKey.value),
-    tenantSlug: tenantSlug.value
-  })
+  try {
+    const parsed = new URL(playerUrl.value, frontOrigin.value)
+    parsed.searchParams.set('adminPreview', '1')
+    parsed.searchParams.set('adminPreviewDraft', '1')
+    parsed.searchParams.set('previewKey', String(previewKey.value))
+    parsed.searchParams.set('tenantSlug', tenantSlug.value)
 
-  if (campaignId.value) {
-    params.set('campaignId', campaignId.value)
+    if (campaignId.value) {
+      parsed.searchParams.set('campaignId', campaignId.value)
+    }
+
+    return `${parsed.pathname}${parsed.search}`
+  } catch (error) {
+    const separator = playerUrl.value.includes('?') ? '&' : '?'
+    const params = new URLSearchParams({
+      adminPreview: '1',
+      adminPreviewDraft: '1',
+      previewKey: String(previewKey.value),
+      tenantSlug: tenantSlug.value
+    })
+
+    if (campaignId.value) params.set('campaignId', campaignId.value)
+
+    return `${playerUrl.value}${separator}${params.toString()}`
   }
-
-  return `${playerUrl.value}${separator}${params.toString()}`
 })
-
 const assignDeep = (target, source) => {
   Object.keys(source || {}).forEach((key) => {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -591,7 +619,7 @@ onMounted(async () => {
       <div class="grid gap-0 xl:grid-cols-[1fr_0.72fr]">
         <div class="bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 p-6 text-white">
           <p class="text-xs font-black uppercase tracking-[0.24em] text-orange-200">
-            Wheel Admin Center｜第 51601～52000 批
+            Wheel Admin Center｜第 52401～52800 批
           </p>
           <h1 class="mt-3 text-3xl font-black">
             輪盤單一活動設定

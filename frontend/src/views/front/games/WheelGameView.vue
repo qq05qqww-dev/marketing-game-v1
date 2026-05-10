@@ -1,7 +1,7 @@
 <script setup>
-// 第 52001～52400 批：輪盤玩家頁 campaignId 直讀修正版
+// 第 52401～52800 批：輪盤玩家頁 campaignId 去重與正式頁載入修正版
 /**
- * Multi Game Platform V2.3 第 51201～51600 批：輪盤正式玩家頁草稿同步與預覽一致延續版
+ * Multi Game Platform V2.3 第 52401～52800 批：輪盤玩家頁 campaignId 去重與正式頁載入修正版
  *
  * 修正重點：
  * 1. 輪盤轉完後強制停止轉動 loop 音效。
@@ -40,6 +40,25 @@ const formalFetchJson = async (path, options = {}) => {
   }
 
   return payload
+}
+
+// 第 52401～52800 批：避免 iframe / 玩家網址同時帶兩個 campaignId，
+// 導致 Vue Router 讀成 Array，String(Array) 變成「3,3」，再被送成 /campaigns/3%2C3。
+const normalizeSingleQueryValue = (value = '') => {
+  const raw = Array.isArray(value) ? value[0] : value
+  return String(raw || '').split(',')[0].trim()
+}
+
+const getRouteCampaignId = () => {
+  return normalizeSingleQueryValue(route.query.campaignId || route.query.id || '')
+}
+
+const isSameCampaignId = (item = {}, id = '') => {
+  return String(item?.id ?? item?.campaignId ?? '').trim() === String(id || '').trim()
+}
+
+const isWheelCampaign = (item = {}) => {
+  return ['WHEEL', 'wheel'].includes(String(item?.gameType || item?.type || '').trim()) || String(item?.slug || item?.gameId || '').includes('wheel')
 }
 
 
@@ -99,7 +118,7 @@ const adminSourcePath = computed(() => {
 })
 
 const routeTenantSlug = computed(() => {
-  return String(route.params?.tenantSlug || route.query?.tenantSlug || '').trim()
+  return normalizeSingleQueryValue(route.params?.tenantSlug || route.query?.tenantSlug || '')
 })
 
 const isTenantWheelMode = computed(() => {
@@ -815,7 +834,7 @@ const commonWheelVerifySerialRequestPreview = computed(() => {
     endpoint: '/api/draw-engine/campaigns/:campaignId/verify-serial',
     gameType: 'WHEEL',
     tenantSlug: String(route.params?.tenantSlug || route.query.tenantSlug || '').trim() || 'preview-tenant',
-    campaignId: String(route.query.campaignId || urlGameId.value || currentGameId.value || 'preview-campaign'),
+    campaignId: String(getRouteCampaignId() || urlGameId.value || currentGameId.value || 'preview-campaign'),
     serialCode: String(route.query.serial || route.query.serialCode || '').trim(),
     trafficSource: String(route.query.from || route.query.source || 'direct').trim(),
     requestWillBeSent: isCommonWheelVerifyApiRealSendAllowed.value,
@@ -2012,10 +2031,10 @@ const effectiveWheelChances = computed(() => {
 
 const getFormalWheelCampaignId = () => {
   if (isTenantWheelMode.value) {
-    return remoteWheelCampaignId.value || route.query.campaignId || route.query.id || null
+    return remoteWheelCampaignId.value || getRouteCampaignId() || null
   }
 
-  return remoteWheelCampaignId.value || route.query.campaignId || route.query.id || campaign.id || 1
+  return remoteWheelCampaignId.value || getRouteCampaignId() || campaign.id || 1
 }
 
 const ensureTenantWheelCampaignLoaded = async () => {
@@ -2063,7 +2082,7 @@ const verifySerialCode = async () => {
         code: normalizedSerialCode.value,
         serialCode: normalizedSerialCode.value,
         gameType: 'WHEEL',
-        tenantSlug: routeTenantSlug.value || route.query.tenantSlug || '',
+        tenantSlug: routeTenantSlug.value || normalizeSingleQueryValue(route.query.tenantSlug || ''),
         source: 'formal-wheel-player'
       })
     })
@@ -4471,7 +4490,7 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
   const settings = normalizeWheelRemoteSettings(apiCampaign)
 
   remoteWheelCampaign.value = apiCampaign
-  remoteWheelCampaignId.value = Number(apiCampaign.id || settings.campaignId || route.query.campaignId || 0) || null
+  remoteWheelCampaignId.value = Number(apiCampaign.id || settings.campaignId || getRouteCampaignId() || 0) || null
 
   campaign.id = remoteWheelCampaignId.value
   campaign.pageTitle = settings.pageTitle || settings.title || apiCampaign.title || campaign.pageTitle
@@ -4570,7 +4589,7 @@ const loadTenantWheelRemoteState = async () => {
   remoteWheelError.value = ''
 
   try {
-    const requestedCampaignId = String(route.query.campaignId || route.query.id || '').trim()
+    const requestedCampaignId = getRouteCampaignId()
     let target = null
     let campaignDetail = null
 
@@ -4601,8 +4620,14 @@ const loadTenantWheelRemoteState = async () => {
         : (Array.isArray(data?.items) ? data.items : (Array.isArray(data?.campaigns) ? data.campaigns : []))
 
       target = requestedCampaignId
-        ? campaigns.find((item) => String(item?.id || '') === requestedCampaignId)
-        : campaigns.find((item) => String(item?.gameType || '').toUpperCase() === 'WHEEL') || campaigns[0]
+        ? campaigns.find((item) => isSameCampaignId(item, requestedCampaignId))
+        : campaigns.find((item) => isWheelCampaign(item)) || campaigns[0]
+
+      // 如果指定 campaignId 的 detail API 被後端權限或公開路由擋下，但公開列表仍有輪盤活動，
+      // 後台 iframe 預覽不要因為舊參數直接空白；至少回退到第一個 WHEEL 活動。
+      if (!target?.id && requestedCampaignId) {
+        target = campaigns.find((item) => isWheelCampaign(item)) || campaigns[0]
+      }
 
       if (!target?.id) {
         throw new Error(
@@ -5508,7 +5533,7 @@ onMounted(async () => {
     await loadTenantWheelRemoteState()
   } else {
     loadPremiumWheelState()
-    applyWheelAdminDraftSettings(readWheelAdminDraftSettings(route.query.campaignId || route.query.id || currentGameId.value))
+    applyWheelAdminDraftSettings(readWheelAdminDraftSettings(getRouteCampaignId() || currentGameId.value))
   }
 
   if (typeof window === 'undefined') return
