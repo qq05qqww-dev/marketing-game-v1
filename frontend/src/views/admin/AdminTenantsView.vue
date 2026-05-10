@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 38801～39200 批：商家資料編輯、商家管理員帳號與密碼建立版
+// 第 39201～39600 批：商家建立表單錯誤提示與角色中文化精緻版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminTenantsView.vue
@@ -42,6 +42,27 @@ const statusOptions = [
   { label: '停用 INACTIVE', value: 'INACTIVE' },
   { label: '暫停 SUSPENDED', value: 'SUSPENDED' }
 ]
+
+const roleOptions = [
+  { label: '商家管理員', value: 'MERCHANT_ADMIN', description: '可管理商家的活動、序號、獎項與報表。' },
+  { label: '商家員工', value: 'MERCHANT_STAFF', description: '適合給門市或客服協助查看與核銷。' }
+]
+
+const getRoleText = (role = '') => {
+  const option = roleOptions.find((item) => item.value === String(role || '').toUpperCase())
+
+  return option?.label || role || '未設定'
+}
+
+const getStatusText = (status = '') => {
+  const value = String(status || '').toUpperCase()
+
+  if (value === 'ACTIVE') return '啟用中'
+  if (value === 'INACTIVE') return '已停用'
+  if (value === 'SUSPENDED') return '已暫停'
+
+  return value || '未設定'
+}
 
 const createForm = reactive({
   name: '',
@@ -304,6 +325,7 @@ const validateCreateForm = () => {
     if (!createForm.adminEmail.trim()) return '請輸入商家登入 Email。'
     if (!createForm.adminPassword.trim()) return '請輸入商家初始密碼。'
     if (createForm.adminPassword.length < 6) return '商家初始密碼至少需要 6 個字元。'
+    if (!createForm.adminPasswordConfirm.trim()) return '請再次輸入確認密碼。'
     if (createForm.adminPassword !== createForm.adminPasswordConfirm) return '商家密碼與確認密碼不一致。'
   }
 
@@ -779,7 +801,7 @@ onMounted(() => {
 
         <div
           v-if="createForm.createAdminUser"
-          class="mt-4 grid gap-4 xl:grid-cols-4"
+          class="mt-4 grid gap-4 xl:grid-cols-5"
         >
           <label class="space-y-2">
             <span class="text-sm font-black text-slate-700">登入姓名</span>
@@ -797,6 +819,22 @@ onMounted(() => {
               class="w-full rounded-2xl border border-indigo-100 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
               placeholder="owner@example.com"
             >
+          </label>
+
+          <label class="space-y-2">
+            <span class="text-sm font-black text-slate-700">帳號角色</span>
+            <select
+              v-model="createForm.adminRole"
+              class="w-full rounded-2xl border border-indigo-100 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
+            >
+              <option
+                v-for="option in roleOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
           </label>
 
           <label class="space-y-2">
@@ -820,6 +858,20 @@ onMounted(() => {
         </div>
       </div>
 
+      <div
+        v-if="errorMessage"
+        class="mt-5 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-black text-rose-700"
+      >
+        {{ errorMessage }}
+      </div>
+
+      <div
+        v-if="message"
+        class="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700"
+      >
+        {{ message }}
+      </div>
+
       <div class="mt-5 flex justify-end">
         <button
           type="button"
@@ -827,7 +879,7 @@ onMounted(() => {
           :disabled="saving"
           @click="createTenant"
         >
-          {{ saving ? '建立中...' : '新增商家與帳號' }}
+          {{ saving ? '建立中...' : '新增商家與登入帳號' }}
         </button>
       </div>
     </section>
@@ -913,7 +965,7 @@ onMounted(() => {
                         ? 'bg-amber-100 text-amber-700'
                         : 'bg-slate-100 text-slate-500'"
                   >
-                    {{ tenant.status }}
+                    {{ getStatusText(tenant.status) }}
                   </span>
                 </td>
 
@@ -925,7 +977,7 @@ onMounted(() => {
                   >
                     <p class="text-xs font-black text-slate-700">{{ user.name }}</p>
                     <p class="text-xs font-bold text-slate-500">{{ user.email }}</p>
-                    <p class="text-[11px] font-black text-indigo-600">{{ user.role }}</p>
+                    <p class="text-[11px] font-black text-indigo-600">{{ getRoleText(user.role) }}</p>
                   </div>
                   <button
                     type="button"
@@ -1134,8 +1186,13 @@ onMounted(() => {
                         v-model="passwordForm.role"
                         class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-violet-400"
                       >
-                        <option value="MERCHANT_ADMIN">MERCHANT_ADMIN</option>
-                        <option value="MERCHANT_STAFF">MERCHANT_STAFF</option>
+                        <option
+                          v-for="option in roleOptions"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </option>
                       </select>
                       <input
                         v-model="passwordForm.password"
