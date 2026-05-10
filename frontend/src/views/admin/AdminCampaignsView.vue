@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 44801～45200 批：商家活動管理精緻簡化與三遊戲操作導引版
+// 第 58801～59200 批：商家新增活動防重複送出版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminCampaignsView.vue
@@ -10,6 +10,11 @@
 // 2. 序號列表顯示「總次數、已使用、剩餘次數」。
 // 3. 匯出 CSV 也包含總次數 / 已使用 / 剩餘次數。
 // 4. 不改 router / DB schema / draw-core。
+//
+// 第 58801～59200 批補強：
+// - 新增 creatingCampaignLock，避免快速建立與下方新增活動按鈕重複觸發。
+// - createCampaign 執行中會立即鎖定，防止快速連點、@click / @submit 重複送出造成一次新增兩筆。
+// - 按鈕建立中會 disabled，成功後只新增一筆正式活動。
 
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -31,6 +36,7 @@ const submitting = ref(false)
 const lastCreateMode = ref('')
 const deletingCampaignId = ref(null)
 const quickCreatingGameType = ref('')
+const creatingCampaignLock = ref(false)
 const serialLoading = ref(false)
 const serialListLoading = ref(false)
 const selectedCampaignId = ref('')
@@ -959,6 +965,11 @@ const prepareCampaignFormBeforeCreate = () => {
 const quickCreateGameCampaign = async (type) => {
   resetMessages()
 
+  if (creatingCampaignLock.value || submitting.value || quickCreatingGameType.value) {
+    errorMessage.value = '活動正在建立中，請稍候，不要重複點擊新增。'
+    return
+  }
+
   const normalized = String(type || 'GRID').toUpperCase()
 
   resetForm()
@@ -1076,14 +1087,21 @@ const loadCampaigns = async () => {
 
 const createCampaign = async () => {
   resetMessages()
+
+  if (creatingCampaignLock.value || submitting.value) {
+    errorMessage.value = '活動正在建立中，已阻擋重複送出。請等待目前建立完成。'
+    return
+  }
+
+  creatingCampaignLock.value = true
+  submitting.value = true
+  lastCreateMode.value = 'REMOTE'
+
   prepareCampaignFormBeforeCreate()
 
   if (String(form.gameType).toUpperCase() === 'GRID' && form.settings.gridItems.length !== 9) {
     form.settings.gridItems = defaultGridItems()
   }
-
-  submitting.value = true
-  lastCreateMode.value = 'REMOTE'
 
   const payload = buildCampaignPayload()
 
@@ -1131,17 +1149,24 @@ const createCampaign = async () => {
     resetForm()
   } finally {
     submitting.value = false
+    creatingCampaignLock.value = false
   }
 }
 
 const retryCreateLocalDraftCampaign = async (campaign) => {
   resetMessages()
 
+  if (creatingCampaignLock.value || submitting.value) {
+    errorMessage.value = '活動正在建立中，已阻擋重複送出。請等待目前建立完成。'
+    return
+  }
+
   if (!isLocalDraftCampaign(campaign)) {
     errorMessage.value = '這筆活動已經是正式資料，不需要重新送出。'
     return
   }
 
+  creatingCampaignLock.value = true
   submitting.value = true
   lastCreateMode.value = 'REMOTE_RETRY'
 
@@ -1183,6 +1208,7 @@ const retryCreateLocalDraftCampaign = async (campaign) => {
     errorMessage.value = error?.response?.data?.message || '草稿重新送出失敗，請確認後端商家自建活動 API 權限。'
   } finally {
     submitting.value = false
+    creatingCampaignLock.value = false
   }
 }
 
@@ -2570,11 +2596,11 @@ onMounted(() => {
               </button>
               <button
                 type="button"
-                :disabled="Boolean(quickCreatingGameType)"
-                class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
-                @click="quickCreateGameCampaign(option.value)"
+                :disabled="creatingCampaignLock || submitting || Boolean(quickCreatingGameType)"
+                class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                @click.prevent.stop="quickCreateGameCampaign(option.value)"
               >
-                {{ quickCreatingGameType === option.value ? '建立中...' : `建立${option.label}活動` }}
+                {{ quickCreatingGameType === option.value ? '建立中...' : (creatingCampaignLock ? '請稍候...' : `建立${option.label}活動`) }}
               </button>
             </div>
           </div>
@@ -2944,11 +2970,11 @@ onMounted(() => {
               </button>
               <button
                 type="button"
-                :disabled="submitting"
-                class="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
-                @click="createCampaign"
+                :disabled="creatingCampaignLock || submitting"
+                class="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                @click.prevent.stop="createCampaign"
               >
-                {{ submitting ? '新增中...' : '新增活動' }}
+                {{ creatingCampaignLock || submitting ? '新增中...' : '新增活動' }}
               </button>
             </div>
           </div>
