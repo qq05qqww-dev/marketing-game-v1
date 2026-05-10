@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 43601～44000 批：商家報表中心精緻簡化、紀錄卡片化與快速篩選版
+// 第 44001～44400 批：報表中心區塊展開收合與閱讀節奏優化版
 import { computed, onMounted, ref } from 'vue'
 import {
   getReportSummaryApi,
@@ -23,6 +23,12 @@ const savedQueriesOpen = ref(true)
 const savedQueries = ref([])
 const compactRecordsOpen = ref(true)
 const activeRecordsPanel = ref('play')
+const reportSectionsOpen = ref({
+  prizePerformance: true,
+  dailyStats: true,
+  playRecords: true,
+  rewardRecords: true
+})
 
 
 const emptySummary = () => ({
@@ -915,6 +921,23 @@ const queryBadges = computed(() => {
   return badges.length ? badges : ['目前未套用進階查詢條件']
 })
 
+const toggleReportSection = (key) => {
+  reportSectionsOpen.value[key] = !reportSectionsOpen.value[key]
+}
+
+const setAllReportSections = (isOpen) => {
+  reportSectionsOpen.value = {
+    prizePerformance: isOpen,
+    dailyStats: isOpen,
+    playRecords: isOpen,
+    rewardRecords: isOpen
+  }
+}
+
+const getSectionToggleText = (key) => {
+  return reportSectionsOpen.value[key] ? '收合' : '展開'
+}
+
 onMounted(async () => {
   loadSavedQueries()
   await fetchTenantOptions()
@@ -924,7 +947,9 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-8">
-    <section class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+    <section
+      v-show="reportSectionsOpen.dailyStats"
+      class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p class="text-xs font-black uppercase tracking-[0.35em] text-indigo-500">Tenant Reports</p>
@@ -934,7 +959,15 @@ onMounted(async () => {
           </p>
           <div class="mt-4 inline-flex rounded-2xl px-4 py-2 text-sm font-black" :class="isPlatformReport ? 'bg-indigo-50 text-indigo-700' : 'bg-emerald-50 text-emerald-700'">
             {{ isPlatformReport ? '平台總管理員報表' : '商家報表' }}
-          </div>
+    
+        <button
+          type="button"
+          class="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 transition hover:bg-cyan-100"
+          @click="toggleReportSection('dailyStats')"
+        >
+          {{ getSectionToggleText('dailyStats') }}
+        </button>
+      </div>
         </div>
 
         <div class="flex flex-wrap gap-3">
@@ -1437,6 +1470,80 @@ onMounted(async () => {
       </div>
     </section>
 
+    <section
+      v-show="reportSectionsOpen.prizePerformance"
+      class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.3em] text-slate-400">Report Sections</p>
+          <h3 class="mt-2 text-2xl font-black text-slate-900">報表區塊顯示控制</h3>
+          <p class="mt-2 text-sm font-bold text-slate-500">
+            資料太多時，可以只展開目前要看的區塊，畫面會更清楚。
+          </p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+            @click="setAllReportSections(true)"
+          >
+            全部展開
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            @click="setAllReportSections(false)"
+          >
+            全部收合
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <button
+          type="button"
+          class="rounded-2xl border px-4 py-3 text-left text-sm font-black transition"
+          :class="reportSectionsOpen.prizePerformance ? 'border-violet-200 bg-violet-50 text-violet-700' : 'border-slate-200 bg-white text-slate-500'"
+          @click="toggleReportSection('prizePerformance')"
+        >
+          🎁 獎項成效統計｜{{ getSectionToggleText('prizePerformance') }}
+        </button>
+        <button
+          type="button"
+          class="rounded-2xl border px-4 py-3 text-left text-sm font-black transition"
+          :class="reportSectionsOpen.dailyStats ? 'border-cyan-200 bg-cyan-50 text-cyan-700' : 'border-slate-200 bg-white text-slate-500'"
+          @click="toggleReportSection('dailyStats')"
+        >
+          📅 每日遊玩統計｜{{ getSectionToggleText('dailyStats') }}
+        </button>
+        <button
+          type="button"
+          class="rounded-2xl border px-4 py-3 text-left text-sm font-black transition"
+          :class="reportSectionsOpen.playRecords ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-500'"
+          @click="toggleReportSection('playRecords')"
+        >
+          🎮 遊玩紀錄｜{{ getSectionToggleText('playRecords') }}
+        </button>
+        <button
+          type="button"
+          class="rounded-2xl border px-4 py-3 text-left text-sm font-black transition"
+          :class="reportSectionsOpen.rewardRecords ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-slate-200 bg-white text-slate-500'"
+          @click="toggleReportSection('rewardRecords')"
+        >
+          🏆 中獎 / 發獎紀錄｜{{ getSectionToggleText('rewardRecords') }}
+        </button>
+
+        <button
+          type="button"
+          class="rounded-2xl border border-violet-200 bg-violet-50 px-5 py-3 text-sm font-black text-violet-700 transition hover:bg-violet-100"
+          @click="toggleReportSection('prizePerformance')"
+        >
+          {{ getSectionToggleText('prizePerformance') }}
+        </button>
+      </div>
+    </section>
+
     <section class="rounded-[32px] border border-violet-100 bg-white p-8 shadow-sm">
       <div class="mb-6 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
         <div>
@@ -1590,7 +1697,7 @@ onMounted(async () => {
     </section>
 
     <section
-      v-show="activeRecordsPanel === 'play'"
+      v-show="activeRecordsPanel === 'play' && reportSectionsOpen.playRecords"
       class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm"
     >
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1603,6 +1710,14 @@ onMounted(async () => {
         </div>
 
         <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+            @click="toggleReportSection('playRecords')"
+          >
+            {{ getSectionToggleText('playRecords') }}
+          </button>
+
           <button
             type="button"
             class="rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
@@ -1701,7 +1816,7 @@ onMounted(async () => {
     </section>
 
     <section
-      v-show="activeRecordsPanel === 'reward'"
+      v-show="activeRecordsPanel === 'reward' && reportSectionsOpen.rewardRecords"
       class="rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm"
     >
       <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1714,6 +1829,14 @@ onMounted(async () => {
         </div>
 
         <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-100"
+            @click="toggleReportSection('rewardRecords')"
+          >
+            {{ getSectionToggleText('rewardRecords') }}
+          </button>
+
           <button
             type="button"
             class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-700 transition hover:bg-amber-100"
