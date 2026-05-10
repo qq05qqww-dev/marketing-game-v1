@@ -1,4 +1,4 @@
-// 第 55601～56000 批：輪盤設定頁平台模板與商家活動操作範圍明確分區版
+// 第 56401～56800 批：輪盤設定頁儲存前防呆確認版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -435,6 +435,40 @@ const editScopeChecklist = computed(() => {
   ]
 })
 
+const saveScopeGuard = computed(() => {
+  if (isPlatformTemplateMode.value) {
+    return {
+      eyebrow: 'Save Guard｜第 56401～56800 批',
+      title: '儲存前確認：這次只會保存平台輪盤模板',
+      badge: '模板草稿儲存',
+      badgeClass: 'bg-orange-100 text-orange-800 ring-1 ring-orange-200',
+      targetLabel: '儲存目標',
+      targetValue: `platform-template:${templateId.value}`,
+      effectLabel: '影響範圍',
+      effectValue: '只更新平台模板草稿，不會直接修改任何商家既有活動。',
+      confirmLabel: '按下儲存時會跳出確認視窗，避免誤把商家活動與平台模板搞混。',
+      warning: '如果你想改 A 商家或 B 商家的正式玩家畫面，請回到該商家的活動設定頁。'
+    }
+  }
+
+  return {
+    eyebrow: 'Save Guard｜第 56401～56800 批',
+    title: '儲存前確認：這次只會寫入目前商家活動',
+    badge: '商家活動儲存',
+    badgeClass: templateCloneStatus.value.safe
+      ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+      : 'bg-amber-100 text-amber-800 ring-1 ring-amber-200',
+    targetLabel: '儲存目標',
+    targetValue: `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
+    effectLabel: '影響範圍',
+    effectValue: '只更新目前這個商家活動的 gameConfig.settings，不會回寫平台模板，也不會影響其他商家。',
+    confirmLabel: '按下儲存時會跳出確認視窗，確認後才正式寫入資料庫。',
+    warning: templateCloneStatus.value.safe
+      ? '此活動是平台模板建立時複製出的安全商家副本，可以放心單獨調整。'
+      : '此活動尚未確認完整 templateMeta，仍可儲存，但建議先確認目前 campaignId 與 tenantSlug 是否正確。'
+  }
+})
+
 const safePreviewUrl = computed(() => {
   try {
     const parsed = new URL(playerUrl.value, frontOrigin.value)
@@ -644,6 +678,51 @@ const saveSettings = async (options = {}) => {
   }
 }
 
+const buildSaveConfirmMessage = () => {
+  if (isPlatformTemplateMode.value) {
+    return [
+      '確認儲存平台輪盤模板？',
+      '',
+      `儲存目標：platform-template:${templateId.value}`,
+      '影響範圍：只保存平台模板草稿，不會改到任何商家既有活動。',
+      '玩家頁：不會直接讀平台模板。',
+      '',
+      '確認後才會儲存。'
+    ].join('\n')
+  }
+
+  return [
+    '確認儲存目前商家輪盤活動？',
+    '',
+    `儲存目標：tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
+    '影響範圍：只寫入目前這個活動的 gameConfig.settings。',
+    '平台模板：不會被回寫。',
+    '其他商家：不會被改動。',
+    '',
+    '確認後才會正式寫入資料庫。'
+  ].join('\n')
+}
+
+const guardedSaveSettings = async (options = {}) => {
+  if (options?.silent === true || options?.localOnly === true) {
+    return saveSettings(options)
+  }
+
+  const confirmed = typeof window === 'undefined'
+    ? true
+    : window.confirm(buildSaveConfirmMessage())
+
+  if (!confirmed) {
+    copiedMessage.value = '已取消儲存，沒有修改平台模板或商家活動。'
+    window.setTimeout(() => {
+      copiedMessage.value = ''
+    }, 2400)
+    return
+  }
+
+  return saveSettings(options)
+}
+
 
 let previewSyncTimer = null
 
@@ -843,7 +922,7 @@ onMounted(async () => {
             type="button"
             class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:-translate-y-0.5 hover:bg-slate-800"
             :disabled="isSaving"
-            @click="saveSettings"
+            @click="guardedSaveSettings"
           >
             {{ isSaving ? '儲存中...' : '儲存設定' }}
           </button>
@@ -881,7 +960,7 @@ onMounted(async () => {
             <button
               type="button"
               class="rounded-2xl bg-orange-300 px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-orange-200"
-              @click="saveSettings"
+              @click="guardedSaveSettings"
             >
               儲存設定
             </button>
@@ -988,6 +1067,40 @@ onMounted(async () => {
     <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
       <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">{{ saveScopeGuard.eyebrow }}</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">{{ saveScopeGuard.title }}</h2>
+          <p class="mt-2 max-w-4xl text-sm font-bold leading-6 text-slate-500">
+            {{ saveScopeGuard.confirmLabel }}
+          </p>
+        </div>
+
+        <span
+          class="inline-flex rounded-full px-4 py-2 text-xs font-black"
+          :class="saveScopeGuard.badgeClass"
+        >
+          {{ saveScopeGuard.badge }}
+        </span>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2">
+        <div class="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+          <p class="text-xs font-black text-slate-400">{{ saveScopeGuard.targetLabel }}</p>
+          <p class="mt-2 break-all text-sm font-black leading-6 text-slate-800">{{ saveScopeGuard.targetValue }}</p>
+        </div>
+        <div class="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+          <p class="text-xs font-black text-slate-400">{{ saveScopeGuard.effectLabel }}</p>
+          <p class="mt-2 text-sm font-black leading-6 text-slate-800">{{ saveScopeGuard.effectValue }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-3xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-800">
+        {{ saveScopeGuard.warning }}
+      </div>
+    </section>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
           <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">Template Clone Guard｜第 55201～55600 批</p>
           <h2 class="mt-2 text-2xl font-black text-slate-950">{{ templateCloneStatus.title }}</h2>
           <p class="mt-2 text-sm font-bold leading-6 text-slate-500">
@@ -1088,7 +1201,7 @@ onMounted(async () => {
               <p class="mt-2 text-sm font-bold text-slate-500">調整玩家頁標題、品牌文字與按鈕文字。</p>
             </div>
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white" @click="saveSettings">
+              <button type="button" class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white" @click="guardedSaveSettings">
                 儲存設定
               </button>
               <button type="button" class="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-500" @click="resetSettings">
@@ -1560,7 +1673,7 @@ onMounted(async () => {
               <button
                 type="button"
                 class="rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-950"
-                @click="saveSettings"
+                @click="guardedSaveSettings"
               >
                 儲存並重整預覽
               </button>
