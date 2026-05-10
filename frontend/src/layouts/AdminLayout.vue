@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-// 第 40001～40400 批：商家後台操作流程精緻化與交付導引版
+// 第 41201～41600 批：商家序號管理獨立頁精緻版
 
 const route = useRoute()
 const router = useRouter()
@@ -70,6 +70,13 @@ const menuItems = computed(() => {
       to: '/admin/game-settings',
       icon: '🎮',
       roles: ['ADMIN', 'SUPER_ADMIN']
+    },
+    {
+      label: isPlatformAdmin.value ? '商家序號管理' : '我的序號管理',
+      description: isPlatformAdmin.value ? '序號 / 次數 / 狀態' : '建立 / 停用 / 複製',
+      to: '/admin/my-serials',
+      icon: '🎟️',
+      roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
     },
     {
       label: '獎項管理',

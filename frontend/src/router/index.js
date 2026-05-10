@@ -43,6 +43,7 @@ import AdminSystemStatusView from '../views/admin/AdminSystemStatusView.vue'
 import AdminGoldenEggView from '../views/admin/AdminGoldenEggView.vue'
 import AdminPremiumGridSettingsView from '../views/admin/AdminPremiumGridSettingsView.vue'
 import AdminAccountSettingsView from '../views/admin/AdminAccountSettingsView.vue'
+import AdminMySerialsView from '../views/admin/AdminMySerialsView.vue'
 
 import { usePageProgress } from '../composables/usePageProgress'
 
@@ -402,6 +403,16 @@ const router = createRouter({
           component: AdminGameEditView,
           meta: {
             title: '編輯遊戲設定',
+            requiresAuth: true,
+            requiresAdmin: true
+          }
+        },
+        {
+          path: 'my-serials',
+          name: 'admin-my-serials',
+          component: AdminMySerialsView,
+          meta: {
+            title: '我的序號管理',
             requiresAuth: true,
             requiresAdmin: true
           }
