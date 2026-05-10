@@ -1,4 +1,4 @@
-// 第 50001～50400 批：輪盤預覽對齊、獎項圖片與品牌連結設定版
+// 第 51201～51600 批：輪盤設定右側正式玩家頁 iframe 即時預覽版
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -27,7 +27,7 @@ const frontOrigin = computed(() => {
 
   if (typeof window !== 'undefined' && window.location?.origin) {
     const origin = normalizeUrl(window.location.origin)
-    return isLocalOrigin(origin) ? PRODUCTION_FRONTEND_URL : origin
+    return origin || PRODUCTION_FRONTEND_URL
   }
 
   return PRODUCTION_FRONTEND_URL
@@ -260,7 +260,18 @@ const previewRemainingText = computed(() => {
 
 const safePreviewUrl = computed(() => {
   const separator = playerUrl.value.includes('?') ? '&' : '?'
-  return `${playerUrl.value}${separator}adminPreview=1&previewKey=${previewKey.value}`
+  const params = new URLSearchParams({
+    adminPreview: '1',
+    adminPreviewDraft: '1',
+    previewKey: String(previewKey.value),
+    tenantSlug: tenantSlug.value
+  })
+
+  if (campaignId.value) {
+    params.set('campaignId', campaignId.value)
+  }
+
+  return `${playerUrl.value}${separator}${params.toString()}`
 })
 
 const assignDeep = (target, source) => {
@@ -287,17 +298,33 @@ const loadSettings = () => {
   }
 }
 
-const saveSettings = () => {
+const saveSettings = (options = {}) => {
+  const silent = options?.silent === true
+
   try {
     localStorage.setItem(storageKey.value, JSON.stringify(settings))
     previewKey.value += 1
-    savedMessage.value = '輪盤設定已儲存。正式串接後可同步給玩家頁讀取。'
-    window.setTimeout(() => {
-      savedMessage.value = ''
-    }, 2200)
+
+    if (!silent) {
+      savedMessage.value = '已儲存，右側正式玩家頁預覽已重新載入。'
+      window.setTimeout(() => {
+        savedMessage.value = ''
+      }, 2200)
+    }
   } catch (error) {
     savedMessage.value = '儲存失敗，請檢查瀏覽器儲存權限。'
   }
+}
+
+let previewSyncTimer = null
+
+const schedulePreviewSync = () => {
+  if (typeof window === 'undefined') return
+
+  window.clearTimeout(previewSyncTimer)
+  previewSyncTimer = window.setTimeout(() => {
+    saveSettings({ silent: true })
+  }, 650)
 }
 
 const resetSettings = () => {
@@ -378,20 +405,71 @@ const downloadJson = () => {
 watch(storageKey, () => {
   assignDeep(settings, defaultSettings())
   loadSettings()
+  previewKey.value += 1
 })
+
+watch(
+  settings,
+  () => {
+    schedulePreviewSync()
+  },
+  { deep: true }
+)
 
 onMounted(() => {
   loadSettings()
+  saveSettings({ silent: true })
 })
 </script>
 
 <template>
   <div class="space-y-6">
+    <section class="sticky top-0 z-40 rounded-b-[1.75rem] border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-orange-500">設定操作</p>
+          <p class="text-sm font-bold text-slate-500">
+            修改會自動同步右側正式玩家頁預覽；需要保存時仍可按「儲存設定」。
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <span v-if="savedMessage" class="rounded-full bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700">
+            {{ savedMessage }}
+          </span>
+          <span v-if="copiedMessage" class="rounded-full bg-blue-50 px-4 py-2 text-xs font-black text-blue-700">
+            {{ copiedMessage }}
+          </span>
+
+          <button
+            type="button"
+            class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:-translate-y-0.5 hover:bg-slate-800"
+            @click="saveSettings"
+          >
+            儲存設定
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-orange-200 bg-orange-50 px-5 py-3 text-sm font-black text-orange-700 transition hover:bg-orange-100"
+            @click="openPlayer"
+          >
+            開啟玩家頁
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            @click="resetSettings"
+          >
+            還原預設
+          </button>
+        </div>
+      </div>
+    </section>
     <section class="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-sm">
       <div class="grid gap-0 xl:grid-cols-[1fr_0.72fr]">
         <div class="bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 p-6 text-white">
           <p class="text-xs font-black uppercase tracking-[0.24em] text-orange-200">
-            Wheel Admin Center｜第 50001～50400 批
+            Wheel Admin Center｜第 51201～51600 批
           </p>
           <h1 class="mt-3 text-3xl font-black">
             輪盤單一活動設定
@@ -442,6 +520,10 @@ onMounted(() => {
             >
               複製網址
             </button>
+
+            <div class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-800">
+              目前此頁先儲存「輪盤設定草稿」與右側預覽。若要讓正式玩家網址立即套用，需要下一批把 WheelGameView.vue 串接這份設定。
+            </div>
           </div>
         </div>
       </div>
@@ -516,9 +598,14 @@ onMounted(() => {
               <h2 class="mt-2 text-2xl font-black text-slate-950">基本文字</h2>
               <p class="mt-2 text-sm font-bold text-slate-500">調整玩家頁標題、品牌文字與按鈕文字。</p>
             </div>
-            <button type="button" class="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-500" @click="resetSettings">
-              還原預設
-            </button>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white" @click="saveSettings">
+                儲存設定
+              </button>
+              <button type="button" class="rounded-2xl border border-slate-200 px-4 py-2 text-xs font-black text-slate-500" @click="resetSettings">
+                還原預設
+              </button>
+            </div>
           </div>
 
           <div class="grid gap-4 md:grid-cols-2">
@@ -907,155 +994,49 @@ onMounted(() => {
       </div>
 
       <aside class="xl:sticky xl:top-5 xl:self-start">
-        <section class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-          <div class="bg-slate-950 p-5 text-white">
-            <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-200">Live Preview</p>
-            <h2 class="mt-2 text-xl font-black">右側即時預覽</h2>
-            <p class="mt-2 text-xs font-bold leading-5 text-white/60">此預覽讓商家先看輪盤視覺；玩家正式頁仍由目前 WheelGameView 顯示。</p>
+        <section class="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 shadow-sm">
+          <div class="p-5 text-white">
+            <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-200">Live Player Preview</p>
+            <h2 class="mt-2 text-xl font-black">右側正式玩家頁預覽</h2>
+            <p class="mt-2 text-xs font-bold leading-5 text-white/60">
+              這裡改成直接載入 WheelGameView 正式玩家頁，不再使用簡易模擬畫面。修改左側設定後會自動儲存草稿並重新載入預覽。
+            </p>
           </div>
 
-          <div class="bg-slate-950 px-4 pb-5">
-            <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl" style="max-width: 360px;">
-              <div class="h-[680px] overflow-y-auto" :style="{ background: `linear-gradient(180deg, ${settings.theme.backgroundFrom}, ${settings.theme.backgroundTo})` }">
-                <div class="p-5 text-white">
-                  <component
-                    :is="settings.brandLinkUrl ? 'a' : 'div'"
-                    v-if="settings.display.showBrandCard"
-                    :href="settings.brandLinkUrl || undefined"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="flex items-center gap-3 rounded-[2rem] border border-white/30 bg-white/20 p-4 shadow-inner backdrop-blur transition hover:bg-white/25"
-                    :style="{ color: settings.brandTextColor }"
-                  >
-                    <div
-                      class="flex shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-white/30 text-2xl font-black shadow-inner"
-                      :style="{ width: `${settings.brandLogoSize}px`, height: `${settings.brandLogoSize}px` }"
-                    >
-                      <img
-                        v-if="settings.brandLogoUrl"
-                        :src="settings.brandLogoUrl"
-                        alt="品牌 LOGO"
-                        class="h-full w-full object-contain"
-                      />
-                      <span v-else>MG</span>
-                    </div>
-                    <div class="min-w-0">
-                      <p class="truncate text-xs font-black uppercase tracking-[0.18em] opacity-80">{{ settings.brandName }}</p>
-                      <h3 class="mt-1 truncate font-black" :style="{ fontSize: `${settings.brandTitleSize}px` }">{{ settings.pageTitle }}</h3>
-                      <p class="mt-1 truncate text-xs font-bold opacity-75">{{ settings.brandSubtitle }}</p>
-                      <p v-if="settings.brandLinkUrl" class="mt-2 text-[11px] font-black underline underline-offset-4">{{ settings.brandLinkText }}</p>
-                    </div>
-                  </component>
-
-                  <div class="mt-5 rounded-[2rem] border border-white/30 bg-white/20 p-5 text-center shadow-inner backdrop-blur">
-                    <div class="mx-auto inline-flex rounded-full bg-white/20 px-4 py-2 text-xs font-black">👑 {{ settings.badgeText }}</div>
-                    <h2 class="mt-5 text-4xl font-black drop-shadow">{{ settings.headline }}</h2>
-                    <p class="mt-2 text-lg font-black text-white/90">{{ settings.subtitle }}</p>
-                  </div>
-
-                  <div v-if="settings.display.showRemainingChance" class="mt-4 rounded-full bg-white/20 px-4 py-3 text-center text-sm font-black shadow-inner">
-                    {{ previewRemainingText }}
-                  </div>
-
-                  <div
-                    class="relative mx-auto mt-5 aspect-square rounded-full border-white/80 p-3 shadow-2xl"
-                    :style="{
-                      background: conicGradient,
-                      maxWidth: `${settings.wheelStyle.wheelSize}px`,
-                      borderWidth: `${settings.wheelStyle.outerRingWidth}px`
-                    }"
-                  >
-                    <div
-                      class="absolute left-1/2 z-10 -translate-x-1/2"
-                      :style="{
-                        color: settings.theme.pointerColor,
-                        top: `-${Math.max(18, Math.round(settings.wheelStyle.pointerSize / 2))}px`,
-                        fontSize: `${settings.wheelStyle.pointerSize}px`
-                      }"
-                    >▼</div>
-                    <div
-                      class="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-lg font-black text-white shadow-xl"
-                      :style="{
-                        background: settings.theme.spinButtonColor,
-                        width: `${settings.wheelStyle.centerButtonSize}px`,
-                        height: `${settings.wheelStyle.centerButtonSize}px`
-                      }"
-                    >
-                      SPIN
-                    </div>
-                    <div class="absolute inset-0 rounded-full border border-white/70 bg-white/10 backdrop-blur-[1px]"></div>
-
-                    <div
-                      v-for="segment in wheelSegments"
-                      :key="segment.id"
-                      class="absolute left-1/2 top-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center text-center font-black leading-tight"
-                      :style="{
-                        left: `${segment.labelX}%`,
-                        top: `${segment.labelY}%`,
-                        width: `${Math.max(74, settings.wheelStyle.prizeIconSize + 58)}px`,
-                        fontSize: `${settings.wheelStyle.prizeTextSize}px`,
-                        color: '#ffffff',
-                        textShadow: '0 2px 5px rgba(15, 23, 42, .48)'
-                      }"
-                    >
-                      <span
-                        v-if="settings.wheelStyle.showPrizeIcon"
-                        class="mb-1 flex items-center justify-center rounded-full bg-white/70 shadow"
-                        :style="{ width: `${settings.wheelStyle.prizeIconSize}px`, height: `${settings.wheelStyle.prizeIconSize}px` }"
-                      >
-                        <img
-                          v-if="getPrizeImageSrc(segment)"
-                          :src="getPrizeImageSrc(segment)"
-                          :alt="segment.name"
-                          class="h-full w-full rounded-full object-contain p-1"
-                        />
-                        <span v-else>{{ getPrizeDisplayIcon(segment) }}</span>
-                      </span>
-                      <span v-if="settings.wheelStyle.showPrizeName" class="line-clamp-2">
-                        {{ getPrizeDisplayName(segment) }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <button class="mt-5 w-full rounded-full px-5 py-4 text-base font-black text-white shadow-xl" :style="{ background: `linear-gradient(90deg, ${settings.theme.actionButtonFrom}, ${settings.theme.actionButtonTo})` }">
-                    {{ settings.playButtonText }}
-                  </button>
-
-                  <div v-if="settings.display.showSerialBox" class="mt-5 rounded-[2rem] border border-white/30 bg-white/20 p-4 text-center shadow-inner backdrop-blur">
-                    <h3 class="font-black">{{ settings.serialTitle }}</h3>
-                    <p class="mt-2 text-xs font-bold leading-5 text-white/75">{{ settings.serialHint }}</p>
-                    <div class="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-black text-orange-600">請輸入序號</div>
-                    <div class="mt-3 rounded-2xl bg-white px-4 py-3 text-sm font-black text-orange-600">{{ settings.verifyButtonText }}</div>
-                  </div>
-
-                  <div v-if="settings.display.showHistory" class="mt-5 rounded-[2rem] bg-white/95 p-4 text-slate-900 shadow-xl">
-                    <div class="flex items-center justify-between">
-                      <div>
-                        <p class="text-sm font-black">我的抽獎紀錄</p>
-                        <p class="mt-1 text-xs font-bold text-slate-400">最近 0 筆紀錄直接顯示在前台</p>
-                      </div>
-                      <span class="rounded-full bg-orange-50 px-3 py-1 text-xs font-black text-orange-600">全部紀錄</span>
-                    </div>
-                    <div class="mt-3 rounded-2xl bg-orange-50 px-4 py-4 text-center text-xs font-black text-orange-600">完成轉盤後會直接顯示在這裡。</div>
-                  </div>
-
-                  <div class="mt-5 grid gap-3">
-                    <div v-if="settings.display.showRules" class="rounded-3xl bg-white/95 p-4 text-slate-900">
-                      <p class="font-black">{{ settings.content.rulesTitle }}</p>
-                      <p class="mt-1 text-xs font-bold text-slate-400">{{ settings.content.rulesText }}</p>
-                    </div>
-                    <div v-if="settings.display.showPrizeInfo" class="rounded-3xl bg-white/95 p-4 text-slate-900">
-                      <p class="font-black">{{ settings.content.prizeInfoTitle }}</p>
-                      <p class="mt-1 text-xs font-bold text-slate-400">{{ settings.content.prizeInfoText }}</p>
-                    </div>
-                  </div>
-                </div>
+          <div class="px-4 pb-5">
+            <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl" style="max-width: 390px;">
+              <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
+                正式玩家頁 iframe 預覽
               </div>
+
+              <iframe
+                :key="previewKey"
+                :src="safePreviewUrl"
+                title="輪盤正式玩家頁即時預覽"
+                class="h-[720px] w-full bg-white"
+                loading="eager"
+              ></iframe>
             </div>
 
             <div class="mt-4 grid grid-cols-2 gap-2">
-              <button type="button" class="rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-950" @click="previewKey += 1">重新整理預覽</button>
-              <button type="button" class="rounded-2xl border border-white/20 px-4 py-3 text-xs font-black text-white" @click="downloadJson">下載設定 JSON</button>
+              <button
+                type="button"
+                class="rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-950"
+                @click="saveSettings"
+              >
+                儲存並重整預覽
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl border border-white/20 px-4 py-3 text-xs font-black text-white"
+                @click="openPlayer"
+              >
+                開啟正式玩家頁
+              </button>
+            </div>
+
+            <div class="mt-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-xs font-bold leading-6 text-amber-100">
+              注意：這個預覽會與目前瀏覽器的設定草稿同步。若要讓其他客人的手機也看到同樣設定，下一階段要把輪盤設定存進資料庫 API。
             </div>
           </div>
         </section>
