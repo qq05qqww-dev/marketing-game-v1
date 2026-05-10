@@ -1,7 +1,7 @@
 <script setup>
-// 第 52401～52800 批：輪盤玩家頁 campaignId 去重與正式頁載入修正版
+// 第 52801～53200 批：輪盤獎項位置、預覽定位與品牌按鈕同步版
 /**
- * Multi Game Platform V2.3 第 52401～52800 批：輪盤玩家頁 campaignId 去重與正式頁載入修正版
+ * Multi Game Platform V2.3 第 52801～53200 批：輪盤獎項位置、預覽定位與品牌按鈕同步版
  *
  * 修正重點：
  * 1. 輪盤轉完後強制停止轉動 loop 音效。
@@ -1827,6 +1827,9 @@ const campaign = reactive({
   brandTextColor: '#ffffff',
   brandLogoSize: 56,
   brandTitleSize: 16,
+  websiteButtonBgColor: '#ffffff',
+  websiteButtonTextColor: '#c2410c',
+  websiteButtonTextSize: 12,
   themeStart: '#f97316',
   themeMiddle: '#ef4444',
   themeEnd: '#7c2d12',
@@ -3485,11 +3488,24 @@ const getWheelSliceFill = (index) => {
   return index % 2 === 0 ? 'url(#wheelGoldGradient)' : 'url(#wheelRoseGradient)'
 }
 
+
+const normalizeWheelPrizeLabelRadius = (value) => {
+  const raw = Number(value || 0)
+
+  // 後台滑桿使用百分比 20～42；SVG 座標需要實際半徑 px。
+  // 若直接把 28 當 px，獎項會全部擠到中心，所以這裡統一轉換。
+  if (raw > 0 && raw <= 50) {
+    return Math.min(132, Math.max(64, Math.round(160 * (raw / 100))))
+  }
+
+  return Math.min(132, Math.max(64, raw || 92))
+}
+
 const getWheelSvgLabelPosition = (index) => {
   const total = Math.max(1, activePrizes.value.length)
   const angle = 360 / total
   const middleAngle = index * angle + angle / 2
-  const point = polarToCartesian(160, 160, Number(campaign.wheelPrizeLabelRadius || 92), middleAngle)
+  const point = polarToCartesian(160, 160, normalizeWheelPrizeLabelRadius(campaign.wheelPrizeLabelRadius), middleAngle)
 
   return {
     x: point.x,
@@ -4407,6 +4423,9 @@ const applyWheelAdminDraftSettings = (draft = null) => {
   campaign.brandTextColor = draft.brandTextColor || campaign.brandTextColor
   campaign.brandLogoSize = Number(draft.brandLogoSize || campaign.brandLogoSize || 56)
   campaign.brandTitleSize = Number(draft.brandTitleSize || campaign.brandTitleSize || 16)
+  campaign.websiteButtonBgColor = draft.brandButtonBgColor || campaign.websiteButtonBgColor
+  campaign.websiteButtonTextColor = draft.brandButtonTextColor || campaign.websiteButtonTextColor
+  campaign.websiteButtonTextSize = Number(draft.brandButtonTextSize || campaign.websiteButtonTextSize || 12)
 
   if (draft.theme) {
     campaign.themeBgFrom = draft.theme.backgroundFrom || campaign.themeBgFrom
@@ -4444,7 +4463,7 @@ const applyWheelAdminDraftSettings = (draft = null) => {
     campaign.wheelPointerScale = Math.max(60, Math.min(180, Math.round(Number(draft.wheelStyle.pointerSize || 42) / 42 * 100)))
     campaign.wheelPrizeTextSize = Number(draft.wheelStyle.prizeTextSize || campaign.wheelPrizeTextSize || 13)
     campaign.wheelPrizeIconSize = Number(draft.wheelStyle.prizeIconSize || campaign.wheelPrizeIconSize || 38)
-    campaign.wheelPrizeLabelRadius = Number(draft.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
+    campaign.wheelPrizeLabelRadius = normalizeWheelPrizeLabelRadius(draft.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
     campaign.wheelShowPrizeIcon = draft.wheelStyle.showPrizeIcon !== false
     campaign.wheelShowPrizeName = draft.wheelStyle.showPrizeName !== false
     campaign.wheelShowSliceBorder = draft.wheelStyle.showSliceBorder !== false
@@ -4504,6 +4523,9 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
   campaign.bannerImageUrl = settings.bannerImageUrl || campaign.bannerImageUrl
   campaign.websiteUrl = settings.brandLinkUrl || settings.websiteUrl || settings.officialLinkUrl || campaign.websiteUrl
   campaign.websiteText = settings.brandLinkText || settings.websiteText || settings.officialLinkLabel || campaign.websiteText
+  campaign.websiteButtonBgColor = settings.brandButtonBgColor || settings.websiteButtonBgColor || campaign.websiteButtonBgColor
+  campaign.websiteButtonTextColor = settings.brandButtonTextColor || settings.websiteButtonTextColor || campaign.websiteButtonTextColor
+  campaign.websiteButtonTextSize = Number(settings.brandButtonTextSize || settings.websiteButtonTextSize || campaign.websiteButtonTextSize || 12)
 
   campaign.themeStart = settings.themeStart || settings.theme?.start || settings.colors?.start || campaign.themeStart
   campaign.themeMiddle = settings.themeMiddle || settings.theme?.middle || settings.colors?.middle || campaign.themeMiddle
@@ -4550,7 +4572,7 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
     campaign.wheelPointerScale = Math.max(60, Math.min(180, Math.round(Number(settings.wheelStyle.pointerSize || 42) / 42 * 100)))
     campaign.wheelPrizeTextSize = Number(settings.wheelStyle.prizeTextSize || campaign.wheelPrizeTextSize || 13)
     campaign.wheelPrizeIconSize = Number(settings.wheelStyle.prizeIconSize || campaign.wheelPrizeIconSize || 38)
-    campaign.wheelPrizeLabelRadius = Number(settings.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
+    campaign.wheelPrizeLabelRadius = normalizeWheelPrizeLabelRadius(settings.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
     campaign.wheelShowPrizeIcon = settings.wheelStyle.showPrizeIcon !== false
     campaign.wheelShowPrizeName = settings.wheelStyle.showPrizeName !== false
     campaign.wheelShowSliceBorder = settings.wheelStyle.showSliceBorder !== false
@@ -8685,7 +8707,12 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                     :href="safeWebsiteUrl"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex w-full shrink-0 items-center justify-center rounded-full border border-yellow-100/70 bg-white px-4 py-2.5 text-xs font-black text-orange-600 shadow-lg transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:w-auto"
+                    class="inline-flex w-full shrink-0 items-center justify-center rounded-full border border-yellow-100/70 px-4 py-2.5 font-black shadow-lg transition hover:-translate-y-0.5 sm:w-auto"
+                    :style="{
+                      background: campaign.websiteButtonBgColor || '#ffffff',
+                      color: campaign.websiteButtonTextColor || '#c2410c',
+                      fontSize: `${campaign.websiteButtonTextSize || 12}px`
+                    }"
                   >
                     {{ websiteButtonText }}
                   </a>
@@ -8860,14 +8887,14 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                       />
 
                       <g
-                        v-for="(prize, index) in prizes"
+                        v-for="(prize, index) in activePrizes"
                         :key="`${prize.id}-svg-label`"
                         class="premium-wheel-svg-label"
                         :class="getWheelLabelClass(index)"
                       >
                         <foreignObject
                           :x="getWheelSvgLabelPosition(index).x - Math.round(Number(campaign.wheelPrizeIconSize || 38) / 2)"
-                          :y="getWheelSvgLabelPosition(index).y - Math.round(Number(campaign.wheelPrizeIconSize || 38) / 2) - 12"
+                          :y="getWheelSvgLabelPosition(index).y - Math.round(Number(campaign.wheelPrizeIconSize || 38) / 2) - 18"
                           :width="Number(campaign.wheelPrizeIconSize || 38)"
                           :height="Number(campaign.wheelPrizeIconSize || 38)"
                         >
@@ -8883,7 +8910,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
 
                         <text
                           :x="getWheelSvgLabelPosition(index).x"
-                          :y="getWheelSvgLabelPosition(index).y + 24"
+                          :y="getWheelSvgLabelPosition(index).y + Math.round(Number(campaign.wheelPrizeIconSize || 38) / 2) + 10"
                           text-anchor="middle"
                           dominant-baseline="middle"
                           v-if="campaign.wheelShowPrizeName !== false"
@@ -8923,6 +8950,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
 
                 <section
                   v-if="shouldRequireSerialCode"
+                  data-admin-preview-section="serial"
                   class="premium-wheel-serial-card mx-auto mt-4 max-w-sm rounded-[28px] border border-yellow-100/35 bg-white/15 p-4 text-center shadow-inner backdrop-blur"
                 >
                   <p class="text-sm font-black text-white">

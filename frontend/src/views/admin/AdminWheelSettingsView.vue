@@ -1,6 +1,6 @@
-// 第 52401～52800 批：輪盤預覽 campaignId 去重與正式頁載入修正版
+// 第 52801～53200 批：輪盤設定預覽定位、獎項表單與品牌按鈕修正版
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -86,7 +86,15 @@ const remoteConfigLoaded = ref(false)
 const isSaving = ref(false)
 const previewKey = ref(0)
 const activeCategory = ref('basic')
+const previewIframeRef = ref(null)
+const previewFocusMode = ref('wheel')
 
+const previewFocusOptions = [
+  { key: 'top', label: '上方' },
+  { key: 'wheel', label: '輪盤' },
+  { key: 'serial', label: '序號' },
+  { key: 'records', label: '紀錄' }
+]
 
 const settingCategories = [
   { key: 'basic', icon: '文', title: '基本文字', desc: '活動標題、副標題、提示文字' },
@@ -165,6 +173,9 @@ const defaultSettings = () => ({
   brandLogoSize: 64,
   brandTitleSize: 20,
   brandTextColor: '#ffffff',
+  brandButtonBgColor: '#ffffff',
+  brandButtonTextColor: '#c2410c',
+  brandButtonTextSize: 12,
   headline: '幸運輪盤抽獎',
   subtitle: '轉出你的專屬驚喜',
   badgeText: '輸入序號後即可轉盤抽獎',
@@ -296,6 +307,7 @@ const safePreviewUrl = computed(() => {
     parsed.searchParams.set('adminPreviewDraft', '1')
     parsed.searchParams.set('previewKey', String(previewKey.value))
     parsed.searchParams.set('tenantSlug', tenantSlug.value)
+    parsed.searchParams.set('adminPreviewFocus', previewFocusMode.value)
 
     if (campaignId.value) {
       parsed.searchParams.set('campaignId', campaignId.value)
@@ -308,7 +320,8 @@ const safePreviewUrl = computed(() => {
       adminPreview: '1',
       adminPreviewDraft: '1',
       previewKey: String(previewKey.value),
-      tenantSlug: tenantSlug.value
+      tenantSlug: tenantSlug.value,
+      adminPreviewFocus: previewFocusMode.value
     })
 
     if (campaignId.value) params.set('campaignId', campaignId.value)
@@ -544,10 +557,65 @@ const downloadJson = () => {
   URL.revokeObjectURL(url)
 }
 
+
+const getPreviewFocusSelector = () => {
+  if (previewFocusMode.value === 'wheel') return '.premium-wheel-stage, .premium-wheel-svg-wrap'
+  if (previewFocusMode.value === 'serial') return '.premium-wheel-serial-card, [data-admin-preview-section="serial"]'
+  if (previewFocusMode.value === 'records') return '[data-admin-preview-section="records"], .premium-wheel-history-panel'
+  return '.premium-vip-header-card, body'
+}
+
+const scrollPreviewToFocus = () => {
+  if (typeof window === 'undefined') return
+
+  window.setTimeout(() => {
+    try {
+      const frame = previewIframeRef.value
+      const doc = frame?.contentDocument || frame?.contentWindow?.document
+      if (!doc) return
+
+      const target = doc.querySelector(getPreviewFocusSelector()) || doc.body
+      target.scrollIntoView({ block: previewFocusMode.value === 'wheel' ? 'center' : 'start', behavior: 'auto' })
+    } catch (error) {
+      console.warn('同步右側預覽位置失敗：', error)
+    }
+  }, 420)
+}
+
+const setPreviewFocus = (mode = 'wheel') => {
+  previewFocusMode.value = mode
+  previewKey.value += 1
+  nextTick(scrollPreviewToFocus)
+}
+
+const handlePreviewIframeLoad = () => {
+  scrollPreviewToFocus()
+}
+
 watch(storageKey, () => {
   assignDeep(settings, defaultSettings())
   loadSettings()
   previewKey.value += 1
+})
+
+
+watch(activeCategory, (key) => {
+  if (['wheel', 'prizes', 'theme'].includes(key)) {
+    setPreviewFocus('wheel')
+    return
+  }
+
+  if (key === 'serial') {
+    setPreviewFocus('serial')
+    return
+  }
+
+  if (key === 'display') {
+    setPreviewFocus('records')
+    return
+  }
+
+  setPreviewFocus('top')
 })
 
 watch(
@@ -619,7 +687,7 @@ onMounted(async () => {
       <div class="grid gap-0 xl:grid-cols-[1fr_0.72fr]">
         <div class="bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 p-6 text-white">
           <p class="text-xs font-black uppercase tracking-[0.24em] text-orange-200">
-            Wheel Admin Center｜第 52401～52800 批
+            Wheel Admin Center｜第 52801～53200 批
           </p>
           <h1 class="mt-3 text-3xl font-black">
             輪盤單一活動設定
@@ -819,6 +887,20 @@ onMounted(async () => {
                 </div>
               </label>
               <label class="grid gap-2 text-sm font-black text-slate-700">
+                連結按鈕底色
+                <div class="flex gap-2">
+                  <input v-model="settings.brandButtonBgColor" type="color" class="h-12 w-14 rounded-xl border border-slate-200 bg-white p-1" />
+                  <input v-model="settings.brandButtonBgColor" class="min-w-0 flex-1 rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400" />
+                </div>
+              </label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">
+                連結按鈕文字顏色
+                <div class="flex gap-2">
+                  <input v-model="settings.brandButtonTextColor" type="color" class="h-12 w-14 rounded-xl border border-slate-200 bg-white p-1" />
+                  <input v-model="settings.brandButtonTextColor" class="min-w-0 flex-1 rounded-2xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-orange-400" />
+                </div>
+              </label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">
                 LOGO 大小
                 <input v-model.number="settings.brandLogoSize" type="range" min="40" max="96" class="w-full" />
                 <span class="text-xs font-bold text-slate-400">{{ settings.brandLogoSize }} px</span>
@@ -827,6 +909,11 @@ onMounted(async () => {
                 品牌標題文字大小
                 <input v-model.number="settings.brandTitleSize" type="range" min="14" max="34" class="w-full" />
                 <span class="text-xs font-bold text-slate-400">{{ settings.brandTitleSize }} px</span>
+              </label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">
+                連結按鈕文字大小
+                <input v-model.number="settings.brandButtonTextSize" type="range" min="10" max="22" class="w-full" />
+                <span class="text-xs font-bold text-slate-400">{{ settings.brandButtonTextSize }} px</span>
               </label>
             </div>
           </div>
@@ -1109,34 +1196,49 @@ onMounted(async () => {
           </div>
 
           <div class="grid gap-3">
-            <article v-for="(prize, index) in settings.prizes" :key="prize.id" class="grid gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4 xl:grid-cols-[92px_1fr_1fr_110px_110px_auto] xl:items-end">
-              <label class="grid gap-2 text-xs font-black text-slate-500">
-                圖示 / emoji
-                <input v-model="prize.icon" class="rounded-2xl border border-slate-200 px-3 py-3 text-center text-xl" />
-              </label>
-              <label class="grid gap-2 text-xs font-black text-slate-500">
-                獎項名稱
-                <input v-model="prize.name" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm" />
-              </label>
-              <label class="grid gap-2 text-xs font-black text-slate-500">
-                圖片網址
-                <input v-model="prize.imageUrl" placeholder="https://...png / jpg / webp" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm" />
-              </label>
-              <label class="grid gap-2 text-xs font-black text-slate-500">
-                權重
-                <input v-model.number="prize.weight" type="number" min="0" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm" />
-              </label>
-              <label class="grid gap-2 text-xs font-black text-slate-500">
-                顏色
-                <input v-model="prize.color" type="color" class="h-12 w-full rounded-2xl border border-slate-200 bg-white p-1" />
-              </label>
-              <button type="button" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-black text-rose-600 disabled:opacity-40" :disabled="settings.prizes.length <= 2" @click="removePrize(index)">
-                刪除
-              </button>
+            <article v-for="(prize, index) in settings.prizes" :key="prize.id" class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+              <div class="grid gap-4 xl:grid-cols-[88px_120px_1.3fr_1.6fr_110px_120px_80px] xl:items-end">
+                <div class="grid gap-2 text-xs font-black text-slate-500">
+                  預覽
+                  <div class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-2xl shadow-inner">
+                    <img v-if="prize.imageUrl" :src="prize.imageUrl" alt="獎項圖片" class="h-full w-full object-contain p-1" />
+                    <span v-else>{{ prize.icon || '🎁' }}</span>
+                  </div>
+                </div>
 
-              <label class="grid gap-2 text-xs font-black text-slate-500 xl:col-span-6">
+                <label class="grid gap-2 text-xs font-black text-slate-500">
+                  圖示 / emoji
+                  <input v-model="prize.icon" class="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-center text-xl" />
+                </label>
+
+                <label class="grid gap-2 text-xs font-black text-slate-500">
+                  獎項名稱
+                  <input v-model="prize.name" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+                </label>
+
+                <label class="grid gap-2 text-xs font-black text-slate-500">
+                  圖片網址
+                  <input v-model="prize.imageUrl" placeholder="https://...png / jpg / webp" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+                </label>
+
+                <label class="grid gap-2 text-xs font-black text-slate-500">
+                  權重
+                  <input v-model.number="prize.weight" type="number" min="0" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+                </label>
+
+                <label class="grid gap-2 text-xs font-black text-slate-500">
+                  顏色
+                  <input v-model="prize.color" type="color" class="h-12 w-full rounded-2xl border border-slate-200 bg-white p-1" />
+                </label>
+
+                <button type="button" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-black text-rose-600 disabled:opacity-40" :disabled="settings.prizes.length <= 2" @click="removePrize(index)">
+                  刪除
+                </button>
+              </div>
+
+              <label class="mt-3 grid gap-2 text-xs font-black text-slate-500">
                 獎項連結網址，可選
-                <input v-model="prize.linkUrl" placeholder="https:// 商品頁 / 兌換說明 / LINE 連結" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm" />
+                <input v-model="prize.linkUrl" placeholder="https:// 商品頁 / 兌換說明 / LINE 連結" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
               </label>
             </article>
           </div>
@@ -1154,17 +1256,32 @@ onMounted(async () => {
           </div>
 
           <div class="px-4 pb-5">
+            <div class="mb-3 grid grid-cols-4 gap-2">
+              <button
+                v-for="option in previewFocusOptions"
+                :key="option.key"
+                type="button"
+                class="rounded-2xl px-3 py-2 text-xs font-black transition"
+                :class="previewFocusMode === option.key ? 'bg-orange-300 text-slate-950' : 'border border-white/20 text-white hover:bg-white/10'"
+                @click="setPreviewFocus(option.key)"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+
             <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl" style="max-width: 390px;">
               <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
                 正式玩家頁 iframe 預覽
               </div>
 
               <iframe
+                ref="previewIframeRef"
                 :key="previewKey"
                 :src="safePreviewUrl"
                 title="輪盤正式玩家頁即時預覽"
                 class="h-[720px] w-full bg-white"
                 loading="eager"
+                @load="handlePreviewIframeLoad"
               ></iframe>
             </div>
 
@@ -1186,7 +1303,7 @@ onMounted(async () => {
             </div>
 
             <div class="mt-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-xs font-bold leading-6 text-amber-100">
-              注意：這個預覽會與目前瀏覽器的設定草稿同步。若要讓其他客人的手機也看到同樣設定，下一階段要把輪盤設定存進資料庫 API。
+              提示：預覽會自動跳到目前分類最相關的位置；按「輪盤」可以直接看輪盤本體，不用每次手動往下拉。
             </div>
           </div>
         </section>
