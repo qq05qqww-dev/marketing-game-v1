@@ -223,7 +223,9 @@ const commonGameModuleSummary = computed(() => {
   return getCommonGameModuleSummary()
 })
 
-const commonTemplateFormModel = reactive(
+// 第 56001～56400 批：修正 v-model 綁定 const reactive 警告
+// 這個物件會被 CommonGameTemplateForm 的 v-model 更新，必須用 let，避免 Vue compiler 警告。
+let commonTemplateFormModel = reactive(
   createDefaultCommonGameTemplate('GRID', {
     id: 'admin-common-grid-template-form-test',
     label: '後台共用模板表單測試',

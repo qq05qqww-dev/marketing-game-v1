@@ -1,4 +1,4 @@
-// 第 53601～54000 批：平台模板與商家活動資料完全隔離修正版
+// 第 55601～56000 批：輪盤設定頁平台模板與商家活動操作範圍明確分區版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -318,6 +318,121 @@ const getPrizeDisplayName = (prize = {}) => {
 
 const previewRemainingText = computed(() => {
   return settings.display.showRemainingChance ? '剩餘次數 99｜可轉盤' : ''
+})
+
+const templateMeta = computed(() => {
+  const meta = settings?.templateMeta
+
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+    return {}
+  }
+
+  return meta
+})
+
+const templateCloneStatus = computed(() => {
+  if (isPlatformTemplateMode.value) {
+    return {
+      title: '平台輪盤模板',
+      badge: '模板來源',
+      tone: 'platform',
+      sourceLabel: '平台總管理員 / 遊戲模板中心',
+      copyLabel: '這是模板本體，不是商家活動副本',
+      syncLabel: '不會直接改動 A / B 商家的既有活動',
+      batchLabel: '第 55201～55600 批顯示保護',
+      safe: true
+    }
+  }
+
+  const meta = templateMeta.value
+  const source = String(meta.source || '').trim()
+  const cloneBatch = String(meta.cloneBatch || '').trim()
+  const version = String(meta.version || '').trim()
+  const isMerchantOwnedCopy = meta.isMerchantOwnedCopy === true
+  const lockTemplateSync = meta.lockTemplateSync === true
+  const allowAutoSyncFromPlatformTemplate = meta.allowAutoSyncFromPlatformTemplate === true
+  const clonedFromPlatformWheelTemplate = source === 'PLATFORM_WHEEL_TEMPLATE' || String(meta.sourceType || '') === 'platform_template'
+  const safe = clonedFromPlatformWheelTemplate && isMerchantOwnedCopy && lockTemplateSync && !allowAutoSyncFromPlatformTemplate
+
+  return {
+    title: safe ? '平台模板複製狀態正常' : '尚未確認平台模板複製狀態',
+    badge: safe ? '安全副本' : '待檢查',
+    tone: safe ? 'safe' : 'warning',
+    sourceLabel: clonedFromPlatformWheelTemplate ? '平台輪盤模板' : '沒有找到平台模板來源標記',
+    copyLabel: isMerchantOwnedCopy ? '商家活動獨立副本' : '尚未標記為商家副本',
+    syncLabel: lockTemplateSync && !allowAutoSyncFromPlatformTemplate
+      ? '已鎖定，不允許平台模板自動覆蓋'
+      : '同步保護未完整，請檢查 templateMeta',
+    batchLabel: cloneBatch || version || '沒有批次標記',
+    safe
+  }
+})
+
+const templateCloneStatusItems = computed(() => {
+  const status = templateCloneStatus.value
+
+  return [
+    { label: '模板來源', value: status.sourceLabel },
+    { label: '副本狀態', value: status.copyLabel },
+    { label: '同步保護', value: status.syncLabel },
+    { label: '批次標記', value: status.batchLabel }
+  ]
+})
+
+const editScopeGuard = computed(() => {
+  if (isPlatformTemplateMode.value) {
+    return {
+      eyebrow: 'Scope Guard｜第 55601～56000 批',
+      title: '目前正在修改：平台輪盤模板',
+      badge: '平台模板模式',
+      badgeClass: 'bg-orange-100 text-orange-800 ring-1 ring-orange-200',
+      description: '這裡只會保存平台模板草稿，用來當新輪盤活動建立時的預設來源；不會直接覆蓋 A / B 商家的既有活動。',
+      primaryLabel: '儲存目標',
+      primaryValue: `platform-template:${templateId.value}`,
+      secondaryLabel: '玩家頁資料來源',
+      secondaryValue: '玩家頁不直接讀平台模板；玩家頁只讀商家活動資料庫設定。',
+      warning: '如果你要修改某一個商家的正式活動畫面，請回到該商家的活動設定頁，不要在模板模式直接修改。',
+      safe: true
+    }
+  }
+
+  const cloneStatus = templateCloneStatus.value
+
+  return {
+    eyebrow: 'Scope Guard｜第 55601～56000 批',
+    title: '目前正在修改：商家單一輪盤活動',
+    badge: cloneStatus.safe ? '商家安全副本' : '商家活動模式',
+    badgeClass: cloneStatus.safe
+      ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+      : 'bg-amber-100 text-amber-800 ring-1 ring-amber-200',
+    description: '這裡只會儲存目前這個商家活動的 gameConfig.settings；不會回寫平台輪盤模板，也不會同步污染其他商家活動。',
+    primaryLabel: '儲存目標',
+    primaryValue: `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
+    secondaryLabel: '玩家頁資料來源',
+    secondaryValue: remoteConfigLoaded.value ? '已連接資料庫設定，玩家頁重新整理後會讀取此活動設定。' : '尚未確認資料庫設定載入狀態，請確認 campaignId 與登入權限。',
+    warning: cloneStatus.safe
+      ? '此活動已標記為平台模板建立時複製的商家獨立副本。後續平台模板變更不會自動覆蓋它。'
+      : '這個活動可能是舊流程建立，或尚未帶有完整 templateMeta；可以繼續編輯，但請不要把它當成平台模板本體。',
+    safe: cloneStatus.safe
+  }
+})
+
+const editScopeChecklist = computed(() => {
+  if (isPlatformTemplateMode.value) {
+    return [
+      { label: '平台模板', value: '可修改', tone: 'orange' },
+      { label: '商家既有活動', value: '不會被改動', tone: 'emerald' },
+      { label: '玩家頁', value: '不直接讀模板', tone: 'slate' },
+      { label: '新活動', value: '建立時才複製', tone: 'blue' }
+    ]
+  }
+
+  return [
+    { label: '目前活動', value: campaignId.value || '未指定', tone: 'blue' },
+    { label: '目前商家', value: tenantSlug.value || '未指定', tone: 'slate' },
+    { label: '平台模板', value: '不會被回寫', tone: 'emerald' },
+    { label: '其他商家', value: '不會被改動', tone: 'emerald' }
+  ]
 })
 
 const safePreviewUrl = computed(() => {
@@ -820,6 +935,91 @@ onMounted(async () => {
     <section v-if="isPlatformTemplateMode" class="rounded-3xl border border-orange-200 bg-orange-50 p-5 text-sm font-bold leading-6 text-orange-800">
       <span class="font-black">目前是平台輪盤模板模式。</span>
       這裡改的是「遊戲模板中心 / 輪盤模組」的預設外觀，不會修改 A 商家、campaignId=3 或任何已存在的商家活動。
+    </section>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">{{ editScopeGuard.eyebrow }}</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">{{ editScopeGuard.title }}</h2>
+          <p class="mt-2 max-w-4xl text-sm font-bold leading-6 text-slate-500">
+            {{ editScopeGuard.description }}
+          </p>
+        </div>
+
+        <span
+          class="inline-flex rounded-full px-4 py-2 text-xs font-black"
+          :class="editScopeGuard.badgeClass"
+        >
+          {{ editScopeGuard.badge }}
+        </span>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2">
+        <div class="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+          <p class="text-xs font-black text-slate-400">{{ editScopeGuard.primaryLabel }}</p>
+          <p class="mt-2 break-all text-sm font-black leading-6 text-slate-800">{{ editScopeGuard.primaryValue }}</p>
+        </div>
+        <div class="rounded-3xl border border-slate-100 bg-slate-50 p-4">
+          <p class="text-xs font-black text-slate-400">{{ editScopeGuard.secondaryLabel }}</p>
+          <p class="mt-2 text-sm font-black leading-6 text-slate-800">{{ editScopeGuard.secondaryValue }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 md:grid-cols-4">
+        <div
+          v-for="item in editScopeChecklist"
+          :key="item.label"
+          class="rounded-3xl border border-slate-100 bg-white p-4"
+        >
+          <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
+          <p class="mt-2 text-sm font-black leading-6 text-slate-800">{{ item.value }}</p>
+        </div>
+      </div>
+
+      <div
+        class="mt-4 rounded-3xl border p-4 text-sm font-bold leading-6"
+        :class="editScopeGuard.safe ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'"
+      >
+        {{ editScopeGuard.warning }}
+      </div>
+    </section>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">Template Clone Guard｜第 55201～55600 批</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">{{ templateCloneStatus.title }}</h2>
+          <p class="mt-2 text-sm font-bold leading-6 text-slate-500">
+            {{ isPlatformTemplateMode ? '這張卡用來提醒：目前正在改平台模板本體，不會直接同步到任何商家既有活動。' : '這張卡會讀取活動 settings.templateMeta，用來確認此輪盤活動是否為平台模板建立時複製出來的安全商家副本。' }}
+          </p>
+        </div>
+
+        <span
+          class="inline-flex rounded-full px-4 py-2 text-xs font-black"
+          :class="templateCloneStatus.safe ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200' : 'bg-amber-50 text-amber-700 ring-1 ring-amber-200'"
+        >
+          {{ templateCloneStatus.badge }}
+        </span>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          v-for="item in templateCloneStatusItems"
+          :key="item.label"
+          class="rounded-3xl border border-slate-100 bg-slate-50 p-4"
+        >
+          <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
+          <p class="mt-2 text-sm font-black leading-6 text-slate-800">{{ item.value }}</p>
+        </div>
+      </div>
+
+      <div
+        v-if="!isPlatformTemplateMode && !templateCloneStatus.safe"
+        class="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold leading-6 text-amber-800"
+      >
+        找不到完整的 templateMeta 安全副本標記。舊活動可能是在第 54001～55200 批之前建立，這不代表活動壞掉；只代表它不是新模板複製流程建立的活動。
+      </div>
     </section>
 
     <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
