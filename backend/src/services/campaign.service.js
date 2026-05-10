@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 54801～55200 批：平台輪盤模板複製驗收回傳補強版
+// 第 58401～58800 批：平台輪盤模板最新儲存設定建立活動複製版
 //
 // 覆蓋位置：
 // backend/src/services/campaign.service.js
@@ -11,6 +11,11 @@
 // 4. ADMIN / SUPER_ADMIN 可看全部，也可用 tenantId / tenantSlug 指定商家。
 // 5. createCampaign 會同時建立 Campaign 與 GameConfig settings。
 // 6. 刪除活動時會先檢查 tenant 權限，再用 transaction 清除相關資料。
+//
+// 第 58401～58800 批補強：
+// - 平台模板模式儲存時會建立 / 更新 slug = platform-wheel-template-wheel 的平台模板 Campaign。
+// - 商家建立新的 WHEEL 活動時，後端會優先讀取這份最新平台模板 settings，再複製成商家獨立副本。
+// - 既有商家活動不會被平台模板後續修改自動污染；只有新建活動會複製一次。
 //
 // 第 54401～54800 批補強：
 // - 新建 WHEEL 活動時，gameConfig.settings.templateMeta 會寫入 clonedAt / clonedForTenantId / clonedByRole。
@@ -28,6 +33,9 @@ const PLATFORM_ADMIN_ROLES = new Set(['ADMIN', 'SUPER_ADMIN'])
 const TENANT_ADMIN_ROLES = new Set(['MERCHANT_ADMIN', 'MERCHANT_STAFF'])
 const SUPPORTED_GAME_TYPES = new Set(['WHEEL', 'SCRATCH', 'FLIP', 'GRID', 'GOLDEN_EGG'])
 const SUPPORTED_CAMPAIGN_STATUSES = new Set(['DRAFT', 'ACTIVE', 'INACTIVE', 'ENDED'])
+const PLATFORM_WHEEL_TEMPLATE_STORAGE_MODE = 'PLATFORM_WHEEL_TEMPLATE'
+const PLATFORM_WHEEL_TEMPLATE_SLUG_PREFIX = 'platform-wheel-template-'
+const PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID = 'wheel'
 
 const normalizeCampaignId = (id) => {
   const campaignId = Number(id)
@@ -247,6 +255,14 @@ const buildCampaignWhere = async (query = {}, user = null) => {
     where.gameType = normalizeGameType(query.gameType)
   }
 
+  if (query.slug) {
+    const slug = String(query.slug || '').trim()
+
+    if (slug) {
+      where.slug = slug
+    }
+  }
+
   // 前台公開讀取或平台管理員可用 tenantSlug 找活動。
   // 商家帳號登入時仍以 token 內 tenantId / tenantSlug 為準，不允許 query 覆蓋。
   if ((isPlatformAdmin(user) || !user) && query.tenantSlug) {
@@ -349,6 +365,120 @@ const hasMeaningfulSettings = (settings = {}) => {
   return isPlainObject(settings) && Object.keys(settings).length > 0
 }
 
+const normalizePlatformTemplateId = (value = '') => {
+  const normalized = String(value || PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return normalized || PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID
+}
+
+const getPlatformWheelTemplateSlug = (templateId = PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID) => {
+  return `${PLATFORM_WHEEL_TEMPLATE_SLUG_PREFIX}${normalizePlatformTemplateId(templateId)}`
+}
+
+const getPayloadTemplateId = (payload = {}) => {
+  return normalizePlatformTemplateId(
+    payload.templateId ||
+      payload.gameId ||
+      payload.templateKey ||
+      payload.templateSlug ||
+      PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID
+  )
+}
+
+const isPlatformWheelTemplateStoragePayload = (payload = {}, gameType = '') => {
+  return String(gameType || '').toUpperCase() === 'WHEEL' &&
+    String(payload.templateStorageMode || payload.platformTemplateMode || '').trim().toUpperCase() === PLATFORM_WHEEL_TEMPLATE_STORAGE_MODE
+}
+
+const buildPlatformWheelTemplateMeta = ({ user = null, payload = {}, templateId = PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID } = {}) => ({
+  ...(isPlainObject(payload?.settings?.templateMeta) ? payload.settings.templateMeta : {}),
+  source: 'PLATFORM_WHEEL_TEMPLATE',
+  sourceType: 'platform_template',
+  targetType: 'platform_template',
+  cloneMode: 'TEMPLATE_SOURCE_ONLY',
+  cloneBatch: '58401-58800',
+  version: 'v23_batch58401_58800',
+  isMerchantOwnedCopy: false,
+  lockTemplateSync: false,
+  allowAutoSyncFromPlatformTemplate: false,
+  templateId: normalizePlatformTemplateId(templateId),
+  platformTemplateSlug: getPlatformWheelTemplateSlug(templateId),
+  savedAt: new Date().toISOString(),
+  savedByRole: getUserRole(user) || null,
+  savedByUserId: user?.id || null,
+  note: '這是平台輪盤模板本體；新建輪盤活動時會複製一次成商家活動副本，既有活動不會被自動同步。'
+})
+
+const resolvePlatformWheelTemplateStorageSettings = (payload = {}, user = null) => {
+  const templateId = getPayloadTemplateId(payload)
+  const normalizedSettings = normalizeSettings(payload)
+  const baseSettings = getPlatformWheelTemplateDefaults()
+  const mergedSettings = hasMeaningfulSettings(normalizedSettings)
+    ? deepMergePlainObject(baseSettings, normalizedSettings)
+    : baseSettings
+
+  return {
+    ...mergedSettings,
+    templateMeta: buildPlatformWheelTemplateMeta({ user, payload, templateId })
+  }
+}
+
+const getPersistedPlatformWheelTemplateSettings = async (templateId = PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID) => {
+  const slug = getPlatformWheelTemplateSlug(templateId)
+
+  const templateCampaign = await prisma.campaign.findFirst({
+    where: {
+      slug,
+      gameType: 'WHEEL'
+    },
+    include: {
+      gameConfig: true
+    }
+  })
+
+  const settings = templateCampaign?.gameConfig?.settings
+
+  if (!hasMeaningfulSettings(settings)) {
+    return {
+      settings: null,
+      templateCampaignId: templateCampaign?.id || null,
+      slug,
+      templateId: normalizePlatformTemplateId(templateId),
+      found: false
+    }
+  }
+
+  return {
+    settings,
+    templateCampaignId: templateCampaign.id,
+    slug,
+    templateId: normalizePlatformTemplateId(templateId),
+    found: true
+  }
+}
+
+const resolvePlatformWheelTemplateForClone = async (payload = {}) => {
+  const templateId = getPayloadTemplateId(payload)
+  const persisted = await getPersistedPlatformWheelTemplateSettings(templateId)
+  const baseSettings = getPlatformWheelTemplateDefaults()
+  const settings = persisted.found
+    ? deepMergePlainObject(baseSettings, persisted.settings)
+    : baseSettings
+
+  return {
+    settings,
+    templateId,
+    platformTemplateSlug: persisted.slug,
+    templateCampaignId: persisted.templateCampaignId,
+    sourceMode: persisted.found ? 'persisted_platform_template_campaign' : 'static_backend_default',
+    found: persisted.found
+  }
+}
+
 const getPlatformWheelTemplateDefaults = () => ({
   pageTitle: '幸運輪盤抽獎',
   brandName: 'Multi Game Platform',
@@ -436,7 +566,7 @@ const getPlatformWheelTemplateDefaults = () => ({
   }
 })
 
-const buildWheelTemplateCloneMeta = ({ tenantId = null, user = null, payload = {}, usedCustomSettings = false } = {}) => {
+const buildWheelTemplateCloneMeta = ({ tenantId = null, user = null, payload = {}, usedCustomSettings = false, platformTemplateInfo = {} } = {}) => {
   const payloadTemplateMeta = isPlainObject(payload?.settings?.templateMeta)
     ? payload.settings.templateMeta
     : {}
@@ -447,17 +577,24 @@ const buildWheelTemplateCloneMeta = ({ tenantId = null, user = null, payload = {
     sourceType: 'platform_template',
     targetType: 'merchant_campaign',
     cloneMode: 'CREATE_CAMPAIGN_ONLY',
-    cloneBatch: '54801-55200',
-    version: 'v23_batch54801_55200',
+    cloneBatch: '58401-58800',
+    version: 'v23_batch58401_58800',
     isMerchantOwnedCopy: true,
     lockTemplateSync: true,
     allowAutoSyncFromPlatformTemplate: false,
+    templateId: platformTemplateInfo.templateId || getPayloadTemplateId(payload),
+    platformTemplateSlug: platformTemplateInfo.platformTemplateSlug || getPlatformWheelTemplateSlug(getPayloadTemplateId(payload)),
+    platformTemplateCampaignId: platformTemplateInfo.templateCampaignId || null,
+    platformTemplateSourceMode: platformTemplateInfo.sourceMode || 'static_backend_default',
     clonedAt: new Date().toISOString(),
     clonedForTenantId: tenantId || null,
     clonedByRole: getUserRole(user) || null,
     clonedByUserId: user?.id || null,
     createdFromPayloadSettings: usedCustomSettings,
-    note: '此設定是建立商家輪盤活動時由平台輪盤模板複製的一次性商家副本；後續平台模板修改不會自動同步到此活動。'
+    copiedLatestPlatformTemplate: platformTemplateInfo.sourceMode === 'persisted_platform_template_campaign',
+    note: platformTemplateInfo.sourceMode === 'persisted_platform_template_campaign'
+      ? '此設定是建立商家輪盤活動時，由最新已儲存的平台輪盤模板複製的一次性商家副本；後續平台模板修改不會自動同步到此活動。'
+      : '此設定是建立商家輪盤活動時，由後端預設平台輪盤模板複製的一次性商家副本；後續平台模板修改不會自動同步到此活動。'
   }
 }
 
@@ -468,25 +605,31 @@ const attachWheelTemplateCloneMeta = (settings = {}, context = {}) => {
   }
 }
 
-const resolveInitialGameConfigSettings = (gameType, payload = {}, context = {}) => {
+const resolveInitialGameConfigSettings = async (gameType, payload = {}, context = {}) => {
   const normalizedSettings = normalizeSettings(payload)
 
   if (gameType !== 'WHEEL') {
     return normalizedSettings
   }
 
-  const platformWheelTemplate = getPlatformWheelTemplateDefaults()
+  if (isPlatformWheelTemplateStoragePayload(payload, gameType)) {
+    return resolvePlatformWheelTemplateStorageSettings(payload, context.user)
+  }
+
+  const platformTemplateInfo = await resolvePlatformWheelTemplateForClone(payload)
+  const platformWheelTemplate = platformTemplateInfo.settings
   const hasCustomSettings = hasMeaningfulSettings(normalizedSettings)
 
   if (!hasCustomSettings) {
     return attachWheelTemplateCloneMeta(platformWheelTemplate, {
       ...context,
       payload,
-      usedCustomSettings: false
+      usedCustomSettings: false,
+      platformTemplateInfo
     })
   }
 
-  // 若建立活動時已有局部 settings，仍以平台模板補齊缺少欄位，
+  // 若建立活動時已有局部 settings，仍以最新平台模板補齊缺少欄位，
   // 但保留呼叫端明確傳入的商家活動設定。
   // templateMeta 由後端重新標記，避免呼叫端把平台模板或其他商家活動的追蹤資訊帶進新活動。
   const mergedSettings = deepMergePlainObject(platformWheelTemplate, normalizedSettings)
@@ -494,7 +637,8 @@ const resolveInitialGameConfigSettings = (gameType, payload = {}, context = {}) 
   return attachWheelTemplateCloneMeta(mergedSettings, {
     ...context,
     payload,
-    usedCustomSettings: true
+    usedCustomSettings: true,
+    platformTemplateInfo
   })
 }
 
@@ -511,6 +655,27 @@ const buildTemplateCloneAudit = (campaign = null) => {
       shouldUsePlatformWheelTemplate: false,
       clonedFromPlatformWheelTemplate: false,
       message: '非 WHEEL 活動，不套用平台輪盤模板複製檢查。'
+    }
+  }
+
+  const isPlatformTemplateSourceRecord = templateMeta.targetType === 'platform_template' || templateMeta.cloneMode === 'TEMPLATE_SOURCE_ONLY'
+
+  if (isPlatformTemplateSourceRecord) {
+    return {
+      checked: true,
+      gameType,
+      shouldUsePlatformWheelTemplate: false,
+      clonedFromPlatformWheelTemplate: false,
+      isPlatformTemplateSourceRecord: true,
+      source: templateMeta.source || null,
+      sourceType: templateMeta.sourceType || null,
+      targetType: templateMeta.targetType || null,
+      cloneMode: templateMeta.cloneMode || null,
+      cloneBatch: templateMeta.cloneBatch || null,
+      version: templateMeta.version || null,
+      platformTemplateSlug: templateMeta.platformTemplateSlug || null,
+      templateId: templateMeta.templateId || null,
+      message: '這是平台輪盤模板本體，用來提供新建輪盤活動的預設來源，不是商家活動副本。'
     }
   }
 
@@ -545,8 +710,14 @@ const buildTemplateCloneAudit = (campaign = null) => {
     clonedForTenantId: templateMeta.clonedForTenantId || null,
     clonedByRole: templateMeta.clonedByRole || null,
     createdFromPayloadSettings: templateMeta.createdFromPayloadSettings === true,
+    platformTemplateSlug: templateMeta.platformTemplateSlug || null,
+    platformTemplateCampaignId: templateMeta.platformTemplateCampaignId || null,
+    platformTemplateSourceMode: templateMeta.platformTemplateSourceMode || null,
+    copiedLatestPlatformTemplate: templateMeta.copiedLatestPlatformTemplate === true,
     message: clonedFromPlatformWheelTemplate
-      ? '新輪盤活動已建立平台輪盤模板的一次性商家副本；後續平台模板修改不會自動同步到此活動。'
+      ? (templateMeta.copiedLatestPlatformTemplate === true
+          ? '新輪盤活動已複製最新已儲存的平台輪盤模板，並建立一次性商家副本；後續平台模板修改不會自動同步到此活動。'
+          : '新輪盤活動已建立平台輪盤模板的一次性商家副本；後續平台模板修改不會自動同步到此活動。')
       : '此 WHEEL 活動尚未偵測到平台輪盤模板複製標記，請檢查 createCampaign settings。'
   }
 }
@@ -625,6 +796,7 @@ export const createCampaign = async (payload = {}, user = null) => {
   const slug = payload.slug
     ? String(payload.slug).trim()
     : null
+  const initialGameConfigSettings = await resolveInitialGameConfigSettings(gameType, payload, { tenantId, user })
 
   const createdCampaign = await prisma.campaign.create({
     data: {
@@ -644,7 +816,7 @@ export const createCampaign = async (payload = {}, user = null) => {
       gameConfig: {
         create: {
           tenantId,
-          settings: resolveInitialGameConfigSettings(gameType, payload, { tenantId, user })
+          settings: initialGameConfigSettings
         }
       }
     },

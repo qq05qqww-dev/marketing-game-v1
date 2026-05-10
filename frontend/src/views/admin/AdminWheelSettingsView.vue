@@ -1,4 +1,4 @@
-// 第 58001～58400 批：平台輪盤模組精緻預設與視覺升級控制版
+// 第 58401～58800 批：平台輪盤模板最新儲存設定建立活動複製版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -100,6 +100,9 @@ const storageKey = computed(() => isPlatformTemplateMode.value
   : `${STORAGE_PREFIX}${tenantSlug.value}:${campaignId.value || 'draft'}`
 )
 const saveAuditHistoryKey = computed(() => `${storageKey.value}:save-audit-history`)
+const platformWheelTemplateSlug = computed(() => `platform-wheel-template-${templateId.value || 'wheel'}`)
+const platformTemplateCampaignId = ref('')
+const platformTemplateRemoteLoaded = ref(false)
 const savedMessage = ref('')
 const copiedMessage = ref('')
 const saveErrorMessage = ref('')
@@ -309,7 +312,7 @@ const wheelPolishSummary = computed(() => ({
     ? '這裡會調整平台輪盤模板的視覺預設。新輪盤活動建立時才會複製這些設定，既有商家活動不會被同步污染。'
     : '這裡只會調整目前商家活動的輪盤視覺，不會回寫平台模板，也不會影響其他商家。',
   target: isPlatformTemplateMode.value
-    ? `platform-template:${templateId.value}`
+    ? platformWheelTemplateSlug.value
     : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
   guard: isPlatformTemplateMode.value
     ? '只保存平台模板草稿；玩家頁不直接讀模板。'
@@ -341,7 +344,7 @@ const applyWheelPolishPreset = (presetKey = '') => {
     appliedAt: new Date().toISOString(),
     mode: isPlatformTemplateMode.value ? 'platform_template' : 'merchant_campaign',
     target: isPlatformTemplateMode.value
-      ? `platform-template:${templateId.value}`
+      ? platformWheelTemplateSlug.value
       : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
     isolationGuard: isPlatformTemplateMode.value
       ? '平台模板預設只供新活動建立時複製，不自動覆蓋既有商家活動。'
@@ -593,7 +596,7 @@ const editScopeGuard = computed(() => {
       badgeClass: 'bg-orange-100 text-orange-800 ring-1 ring-orange-200',
       description: '這裡只會保存平台模板草稿，用來當新輪盤活動建立時的預設來源；不會直接覆蓋 A / B 商家的既有活動。',
       primaryLabel: '儲存目標',
-      primaryValue: `platform-template:${templateId.value}`,
+      primaryValue: platformWheelTemplateSlug.value,
       secondaryLabel: '玩家頁資料來源',
       secondaryValue: '玩家頁不直接讀平台模板；玩家頁只讀商家活動資料庫設定。',
       warning: '如果你要修改某一個商家的正式活動畫面，請回到該商家的活動設定頁，不要在模板模式直接修改。',
@@ -648,9 +651,9 @@ const saveScopeGuard = computed(() => {
       badge: '模板草稿儲存',
       badgeClass: 'bg-orange-100 text-orange-800 ring-1 ring-orange-200',
       targetLabel: '儲存目標',
-      targetValue: `platform-template:${templateId.value}`,
+      targetValue: platformWheelTemplateSlug.value,
       effectLabel: '影響範圍',
-      effectValue: '只更新平台模板草稿，不會直接修改任何商家既有活動。',
+      effectValue: '只更新平台模板資料庫來源，不會直接修改任何既有商家活動；新建輪盤活動才會複製一次。',
       confirmLabel: '按下儲存時會跳出確認視窗，避免誤把商家活動與平台模板搞混。',
       warning: '如果你想改 A 商家或 B 商家的正式玩家畫面，請回到該商家的活動設定頁。'
     }
@@ -703,13 +706,13 @@ const buildSaveAuditRecord = (status = 'success', extra = {}) => {
     mode: platformMode ? 'platform_template' : 'merchant_campaign',
     title: platformMode ? '平台輪盤模板儲存驗收' : '商家輪盤活動儲存驗收',
     target: platformMode
-      ? `platform-template:${templateId.value}`
+      ? platformWheelTemplateSlug.value
       : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
     effect: platformMode
-      ? '只更新平台模板草稿，不會修改任何商家既有活動。'
+      ? '只更新平台模板資料庫來源，不會修改任何既有商家活動；新建輪盤活動會複製一次。'
       : '只更新目前商家活動 gameConfig.settings，不會回寫平台模板或影響其他商家。',
     playerSource: platformMode
-      ? '玩家頁不直接讀平台模板。新輪盤活動建立時才會複製模板預設。'
+      ? '玩家頁不直接讀平台模板。新輪盤活動建立時會複製最新已儲存的平台模板。'
       : '玩家頁讀取目前商家活動資料庫設定，手機重新整理後才會看到更新。',
     templateGuard: platformMode
       ? '平台模板本體'
@@ -726,7 +729,7 @@ const normalizeSaveAuditHistoryItem = (record = {}) => ({
   mode: record.mode || (isPlatformTemplateMode.value ? 'platform_template' : 'merchant_campaign'),
   title: record.title || '儲存驗收紀錄',
   target: record.target || (isPlatformTemplateMode.value
-    ? `platform-template:${templateId.value}`
+    ? platformWheelTemplateSlug.value
     : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`),
   effect: record.effect || '尚未提供影響範圍',
   templateGuard: record.templateGuard || '尚未提供隔離保護說明',
@@ -797,7 +800,7 @@ const exportSaveAuditHistory = () => {
   const exportedAt = new Date().toISOString()
   const mode = isPlatformTemplateMode.value ? 'platform_template' : 'merchant_campaign'
   const target = isPlatformTemplateMode.value
-    ? `platform-template:${templateId.value}`
+    ? platformWheelTemplateSlug.value
     : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`
 
   const payload = {
@@ -891,7 +894,7 @@ const saveResultAudit = computed(() => {
       badgeClass: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
       statusText: '目前尚未有本次儲存結果。按下儲存並確認後，這裡會顯示儲存目標、影響範圍與隔離狀態。',
       target: isPlatformTemplateMode.value
-        ? `platform-template:${templateId.value}`
+        ? platformWheelTemplateSlug.value
         : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
       effect: isPlatformTemplateMode.value
         ? '預計只保存平台模板草稿，不會動到商家既有活動。'
@@ -1001,6 +1004,121 @@ const unwrapApiPayload = (payload) => {
   return payload.data ?? payload.result ?? payload
 }
 
+const buildPlatformTemplatePayload = () => ({
+  title: `平台輪盤模板｜${templateId.value}`,
+  slug: platformWheelTemplateSlug.value,
+  description: '平台總管理員維護的輪盤模板來源；新建輪盤活動時會複製一次成商家活動副本。',
+  gameType: 'WHEEL',
+  status: 'DRAFT',
+  templateStorageMode: 'PLATFORM_WHEEL_TEMPLATE',
+  templateId: templateId.value,
+  settings: JSON.parse(JSON.stringify(settings))
+})
+
+const fetchPlatformTemplateCampaign = async () => {
+  const response = await fetch(`${API_BASE_URL}/campaigns?gameType=WHEEL&slug=${encodeURIComponent(platformWheelTemplateSlug.value)}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/json',
+      ...getAuthHeaders()
+    }
+  })
+
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || '讀取平台輪盤模板失敗')
+  }
+
+  const data = unwrapApiPayload(payload)
+  const list = Array.isArray(data) ? data : []
+  return list.find((item) => item?.slug === platformWheelTemplateSlug.value) || null
+}
+
+const createPlatformTemplateCampaign = async () => {
+  const response = await fetch(`${API_BASE_URL}/campaigns`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify(buildPlatformTemplatePayload())
+  })
+
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || '建立平台輪盤模板來源失敗')
+  }
+
+  return unwrapApiPayload(payload)
+}
+
+const savePlatformTemplateGameConfig = async (templateCampaignId) => {
+  if (!templateCampaignId) {
+    throw new Error('缺少平台模板 campaignId，無法儲存平台模板設定')
+  }
+
+  const response = await fetch(`${API_BASE_URL}/campaigns/${encodeURIComponent(templateCampaignId)}/game-config`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      ...getAuthHeaders()
+    },
+    body: JSON.stringify({
+      settings: JSON.parse(JSON.stringify(settings))
+    })
+  })
+
+  const payload = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    throw new Error(payload?.message || payload?.error || '儲存平台輪盤模板設定失敗')
+  }
+
+  return unwrapApiPayload(payload)
+}
+
+const savePlatformTemplateRemote = async () => {
+  let templateCampaign = await fetchPlatformTemplateCampaign()
+
+  if (!templateCampaign) {
+    templateCampaign = await createPlatformTemplateCampaign()
+  }
+
+  const templateCampaignId = templateCampaign?.id || templateCampaign?.campaign?.id || templateCampaign?.data?.id
+
+  if (!templateCampaignId) {
+    throw new Error('建立平台輪盤模板來源後，無法取得 campaignId')
+  }
+
+  platformTemplateCampaignId.value = String(templateCampaignId)
+  await savePlatformTemplateGameConfig(templateCampaignId)
+  platformTemplateRemoteLoaded.value = true
+
+  return {
+    success: true,
+    mode: 'platform-template-remote-source',
+    templateCampaignId,
+    platformTemplateSlug: platformWheelTemplateSlug.value
+  }
+}
+
+const loadPlatformTemplateRemote = async () => {
+  const templateCampaign = await fetchPlatformTemplateCampaign()
+
+  if (!templateCampaign?.gameConfig?.settings) {
+    platformTemplateRemoteLoaded.value = false
+    return null
+  }
+
+  platformTemplateCampaignId.value = String(templateCampaign.id || '')
+  platformTemplateRemoteLoaded.value = true
+  return templateCampaign.gameConfig.settings
+}
+
 const fetchGameConfig = async () => {
   if (isPlatformTemplateMode.value) return null
   if (!campaignId.value) return null
@@ -1025,7 +1143,7 @@ const fetchGameConfig = async () => {
 
 const saveGameConfig = async () => {
   if (isPlatformTemplateMode.value) {
-    return { success: true, mode: 'platform-template-local-draft' }
+    return savePlatformTemplateRemote()
   }
 
   if (!campaignId.value) {
@@ -1066,7 +1184,20 @@ const persistLocalDraft = () => {
 
 const loadRemoteGameConfig = async () => {
   if (isPlatformTemplateMode.value) {
-    remoteConfigLoaded.value = false
+    try {
+      const remoteSettings = await loadPlatformTemplateRemote()
+      if (remoteSettings && Object.keys(remoteSettings).length) {
+        assignDeep(settings, defaultSettings())
+        assignDeep(settings, remoteSettings)
+        localStorage.setItem(storageKey.value, JSON.stringify(settings))
+        previewKey.value += 1
+      }
+      remoteConfigLoaded.value = platformTemplateRemoteLoaded.value
+    } catch (error) {
+      console.warn('讀取平台輪盤模板來源失敗，暫用本機草稿：', error)
+      remoteConfigLoaded.value = false
+      platformTemplateRemoteLoaded.value = false
+    }
     return
   }
 
@@ -1107,15 +1238,35 @@ const saveSettings = async (options = {}) => {
   persistLocalDraft()
 
   if (isPlatformTemplateMode.value) {
-    remoteConfigLoaded.value = false
-    saveAuditRecord.value = buildSaveAuditRecord('success', {
-      message: '平台輪盤模板草稿已儲存；本次沒有修改任何商家既有活動。'
-    })
-    if (!silent) {
-      savedMessage.value = '已儲存平台輪盤模板草稿。這不會改到商家單一活動。'
-      window.setTimeout(() => {
-        savedMessage.value = ''
-      }, 2600)
+    isSaving.value = true
+
+    try {
+      const result = await saveGameConfig()
+      remoteConfigLoaded.value = true
+      platformTemplateRemoteLoaded.value = true
+      saveAuditRecord.value = buildSaveAuditRecord('success', {
+        batch: '58401-58800',
+        message: `平台輪盤模板已儲存到資料庫來源 ${result.platformTemplateSlug || platformWheelTemplateSlug.value}；之後新建輪盤活動會複製這份最新模板一次。`,
+        effect: '只更新平台模板來源資料，不會修改任何既有商家活動；新建 WHEEL 活動時才會複製一次。',
+        templateGuard: `平台模板來源 campaignId:${result.templateCampaignId || platformTemplateCampaignId.value || '-'} / slug:${result.platformTemplateSlug || platformWheelTemplateSlug.value}`
+      })
+      if (!silent) {
+        savedMessage.value = '已儲存平台輪盤模板到資料庫。新建輪盤活動會複製這份最新模板。'
+        window.setTimeout(() => {
+          savedMessage.value = ''
+        }, 3000)
+      }
+    } catch (error) {
+      const message = error?.message || '儲存平台輪盤模板到資料庫失敗，請確認後端與平台管理員權限。'
+      saveAuditRecord.value = buildSaveAuditRecord('failed', {
+        batch: '58401-58800',
+        message,
+        effect: '本次平台模板儲存失敗，新建活動不會取得這次修改的模板內容。'
+      })
+      saveErrorMessage.value = message
+      savedMessage.value = ''
+    } finally {
+      isSaving.value = false
     }
     return
   }
@@ -1168,8 +1319,9 @@ const buildSaveConfirmMessage = () => {
     return [
       '確認儲存平台輪盤模板？',
       '',
-      `儲存目標：platform-template:${templateId.value}`,
-      '影響範圍：只保存平台模板草稿，不會改到任何商家既有活動。',
+      `儲存目標：${platformWheelTemplateSlug.value}`,
+      '影響範圍：儲存為平台模板資料庫來源，不會改到任何既有商家活動。',
+      '新建輪盤活動：建立時會複製這份最新模板一次。',
       '玩家頁：不會直接讀平台模板。',
       '',
       '確認後才會儲存。'
@@ -1355,7 +1507,7 @@ watch(saveAuditRecord, (record) => {
 
 
 watch(activeCategory, (key) => {
-  if (['wheel', 'prizes', 'theme'].includes(key)) {
+  if (['wheel', 'prizes', 'theme', 'polish'].includes(key)) {
     setPreviewFocus('wheel')
     return
   }
@@ -1411,7 +1563,7 @@ onMounted(async () => {
             {{ saveErrorMessage }}
           </span>
           <span v-else-if="remoteConfigLoaded" class="rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600">
-            {{ isPlatformTemplateMode ? '平台模板草稿模式' : '已連接資料庫設定' }}
+            {{ isPlatformTemplateMode ? (platformTemplateRemoteLoaded ? '已連接平台模板來源' : '平台模板草稿模式') : '已連接資料庫設定' }}
           </span>
 
           <button
