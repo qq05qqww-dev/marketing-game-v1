@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 12 批：商家管理員帳號修改與密碼重設版
+// 第 38801～39200 批：商家資料編輯、商家管理員帳號與密碼建立版
 //
 // 建議放置位置：
 // backend/src/services/tenant.service.js
@@ -480,6 +480,7 @@ export const getTenants = async ({ user, query = {} } = {}) => {
     contactName: tenant.contactName || '',
     contactPhone: tenant.contactPhone || '',
     contactEmail: tenant.contactEmail || '',
+    note: tenant.note || '',
     createdAt: tenant.createdAt,
     updatedAt: tenant.updatedAt,
     recentUsers: tenant.users || [],
@@ -589,7 +590,8 @@ export const createTenant = async ({ user, payload = {} } = {}) => {
         status: normalizeStatus(payload.status),
         contactName: payload.contactName ? String(payload.contactName).trim() : null,
         contactPhone: payload.contactPhone ? String(payload.contactPhone).trim() : null,
-        contactEmail: payload.contactEmail ? String(payload.contactEmail).trim().toLowerCase() : null
+        contactEmail: payload.contactEmail ? String(payload.contactEmail).trim().toLowerCase() : null,
+        note: payload.note ? String(payload.note).trim() : null
       }
     })
 
@@ -722,6 +724,10 @@ export const updateTenant = async ({ user, tenantId, payload = {} } = {}) => {
 
   if (payload.contactEmail !== undefined) {
     data.contactEmail = payload.contactEmail ? String(payload.contactEmail).trim().toLowerCase() : null
+  }
+
+  if (payload.note !== undefined) {
+    data.note = payload.note ? String(payload.note).trim() : null
   }
 
   return prisma.tenant.update({

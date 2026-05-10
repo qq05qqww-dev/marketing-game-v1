@@ -1,28 +1,66 @@
 <script setup>
-// Multi Game Platform V2.3
-// 第 16301～16700 批：平台商家管理頁基礎版
+// Multi Game Platform V2.3 Tenant Edition
+// 第 38801～39200 批：商家資料編輯、商家管理員帳號與密碼建立版
 //
-// 覆蓋 / 新增位置：
+// 覆蓋位置：
 // frontend/src/views/admin/AdminTenantsView.vue
 //
 // 本批重點：
-// 1. 補齊 /admin/tenants 對應頁面，避免左側「商家管理」點進去 404。
-// 2. 提供平台商家列表、搜尋、狀態篩選、快速複製 slug / 玩家網址。
-// 3. API 尚未完成時不會白畫面，會顯示範例資料與提示。
-// 4. 不改 DB schema / draw-core。
+// 1. 新增商家時可同步建立商家管理員帳號與初始密碼。
+// 2. 商家列表可編輯商家資料，不用刪掉重建。
+// 3. 商家列表可重設商家管理員密碼。
+// 4. 商家列表可停用 / 啟用商家。
+// 5. 每次編輯前會保存快照，可一鍵還原本次修改。
+// 6. 保留複製玩家網址 / 管理連結，方便交付商家。
 
 import { computed, onMounted, reactive, ref } from 'vue'
 import http from '../../api/http'
 
+const FRONTEND_BASE_URL = import.meta.env.VITE_FRONTEND_URL || window.location.origin
+
 const tenants = ref([])
+const summary = ref({
+  total: 0,
+  active: 0,
+  inactive: 0,
+  suspended: 0
+})
+const tenantUsers = ref({})
 const loading = ref(false)
 const saving = ref(false)
+const userSaving = ref(false)
 const message = ref('')
 const errorMessage = ref('')
 const keyword = ref('')
 const statusFilter = ref('ALL')
+const editingTenantId = ref(null)
+const resetPasswordTenantId = ref(null)
+const undoSnapshots = ref({})
 
-const form = reactive({
+const statusOptions = [
+  { label: '啟用 ACTIVE', value: 'ACTIVE' },
+  { label: '停用 INACTIVE', value: 'INACTIVE' },
+  { label: '暫停 SUSPENDED', value: 'SUSPENDED' }
+]
+
+const createForm = reactive({
+  name: '',
+  slug: '',
+  contactName: '',
+  contactPhone: '',
+  contactEmail: '',
+  status: 'ACTIVE',
+  note: '',
+  createAdminUser: true,
+  adminName: '',
+  adminEmail: '',
+  adminPassword: '',
+  adminPasswordConfirm: '',
+  adminRole: 'MERCHANT_ADMIN'
+})
+
+const editForm = reactive({
+  id: null,
   name: '',
   slug: '',
   contactName: '',
@@ -32,6 +70,16 @@ const form = reactive({
   note: ''
 })
 
+const passwordForm = reactive({
+  tenantId: null,
+  userId: null,
+  name: '',
+  email: '',
+  role: 'MERCHANT_ADMIN',
+  password: '',
+  passwordConfirm: ''
+})
+
 const fallbackTenants = [
   {
     id: 1,
@@ -39,287 +87,517 @@ const fallbackTenants = [
     slug: 'a-shop',
     status: 'ACTIVE',
     contactName: 'A 商家管理員',
-    contactPhone: '',
-    contactEmail: '',
-    campaignCount: 1,
-    note: '測試輪盤 / 九宮格活動商家'
-  },
-  {
-    id: 2,
-    name: 'B 商家測試店',
-    slug: 'b-shop',
-    status: 'ACTIVE',
-    contactName: 'B 商家管理員',
-    contactPhone: '',
-    contactEmail: '',
-    campaignCount: 1,
-    note: '測試砸金蛋活動商家'
-  },
-  {
-    id: 3,
-    name: 'Demo Shop',
-    slug: 'demo-shop',
-    status: 'ACTIVE',
-    contactName: '平台預設商家',
-    contactPhone: '',
-    contactEmail: '',
-    campaignCount: 1,
-    note: '本機開發預設商家'
+    contactPhone: '0900000001',
+    contactEmail: 'a-owner@example.com',
+    note: '正式測試商家',
+    recentUsers: [
+      {
+        id: 1,
+        name: 'A 商家管理員',
+        email: 'a-admin@example.com',
+        role: 'MERCHANT_ADMIN'
+      }
+    ],
+    counts: {
+      users: 1,
+      campaigns: 3,
+      prizes: 0,
+      serialCodes: 0,
+      playRecords: 0,
+      rewardRecords: 0
+    }
   }
 ]
 
-const resetMessages = () => {
-  message.value = ''
-  errorMessage.value = ''
-}
-
-const normalizeResponseData = (response) => {
-  const payload = response?.data
-
-  if (Array.isArray(payload)) return payload
-  if (Array.isArray(payload?.data)) return payload.data
-  if (Array.isArray(payload?.items)) return payload.items
-  if (Array.isArray(payload?.data?.items)) return payload.data.items
-
-  return []
-}
-
-const normalizeSlug = (value) => {
+const normalizeSlug = (value = '') => {
   return String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/[\s_]+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/-+/g, '-')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-_]/g, '-')
+    .replace(/-{2,}/g, '-')
     .replace(/^-|-$/g, '')
 }
 
-const frontOrigin = computed(() => {
-  if (typeof window === 'undefined') return 'http://localhost:5173'
+const unwrapData = (response) => {
+  const payload = response?.data ?? response
 
-  return window.location.origin
-})
+  return payload?.data ?? payload
+}
 
-const filteredTenants = computed(() => {
-  const search = String(keyword.value || '').trim().toLowerCase()
-  const status = String(statusFilter.value || 'ALL').toUpperCase()
+const normalizeTenant = (tenant = {}) => {
+  return {
+    id: tenant.id,
+    name: tenant.name || '',
+    slug: tenant.slug || '',
+    status: tenant.status || 'ACTIVE',
+    contactName: tenant.contactName || '',
+    contactPhone: tenant.contactPhone || '',
+    contactEmail: tenant.contactEmail || '',
+    note: tenant.note || '',
+    recentUsers: tenant.recentUsers || tenant.users || [],
+    recentCampaigns: tenant.recentCampaigns || tenant.campaigns || [],
+    counts: tenant.counts || {
+      users: tenant._count?.users || 0,
+      campaigns: tenant._count?.campaigns || 0,
+      prizes: tenant._count?.prizes || 0,
+      serialCodes: tenant._count?.serialCodes || 0,
+      playRecords: tenant._count?.playRecords || 0,
+      rewardRecords: tenant._count?.rewardRecords || 0
+    },
+    createdAt: tenant.createdAt || '',
+    updatedAt: tenant.updatedAt || ''
+  }
+}
+
+const visibleTenants = computed(() => {
+  const safeKeyword = keyword.value.trim().toLowerCase()
 
   return tenants.value.filter((tenant) => {
-    const statusText = String(tenant.status || '').toUpperCase()
-    const text = [
-      tenant.name,
-      tenant.slug,
-      tenant.contactName,
-      tenant.contactPhone,
-      tenant.contactEmail,
-      tenant.note
-    ].join(' ').toLowerCase()
+    const matchStatus = statusFilter.value === 'ALL' || tenant.status === statusFilter.value
+    const matchKeyword = !safeKeyword ||
+      tenant.name.toLowerCase().includes(safeKeyword) ||
+      tenant.slug.toLowerCase().includes(safeKeyword) ||
+      tenant.contactName.toLowerCase().includes(safeKeyword) ||
+      tenant.contactEmail.toLowerCase().includes(safeKeyword) ||
+      tenant.contactPhone.toLowerCase().includes(safeKeyword)
 
-    const matchKeyword = !search || text.includes(search)
-    const matchStatus = status === 'ALL' || statusText === status
-
-    return matchKeyword && matchStatus
+    return matchStatus && matchKeyword
   })
 })
 
-const tenantStats = computed(() => {
-  const total = tenants.value.length
-  const active = tenants.value.filter((tenant) => String(tenant.status || '').toUpperCase() === 'ACTIVE').length
-  const inactive = tenants.value.filter((tenant) => String(tenant.status || '').toUpperCase() !== 'ACTIVE').length
-
+const statusCounts = computed(() => {
   return {
-    total,
-    active,
-    inactive
+    total: tenants.value.length,
+    active: tenants.value.filter((item) => item.status === 'ACTIVE').length,
+    inactive: tenants.value.filter((item) => item.status === 'INACTIVE').length,
+    suspended: tenants.value.filter((item) => item.status === 'SUSPENDED').length
   }
 })
 
-const getTenantPlayerUrl = (tenant) => {
-  const slug = tenant?.slug || 'demo-shop'
-
-  return `${frontOrigin.value}/play/${slug}/premium-grid`
+const setMessage = (value = '') => {
+  message.value = value
+  errorMessage.value = ''
 }
 
-const copyText = async (text, successMessage = '已複製') => {
-  resetMessages()
+const setError = (value = '') => {
+  errorMessage.value = value
+  message.value = ''
+}
 
+const resetCreateForm = () => {
+  Object.assign(createForm, {
+    name: '',
+    slug: '',
+    contactName: '',
+    contactPhone: '',
+    contactEmail: '',
+    status: 'ACTIVE',
+    note: '',
+    createAdminUser: true,
+    adminName: '',
+    adminEmail: '',
+    adminPassword: '',
+    adminPasswordConfirm: '',
+    adminRole: 'MERCHANT_ADMIN'
+  })
+}
+
+const fillAdminFromContact = () => {
+  if (!createForm.adminName) {
+    createForm.adminName = createForm.contactName || `${createForm.name} 管理員`
+  }
+
+  if (!createForm.adminEmail) {
+    createForm.adminEmail = createForm.contactEmail
+  }
+}
+
+const getTenantPlayerUrl = (tenant) => {
+  return `${FRONTEND_BASE_URL}/play/${tenant.slug}/premium-grid`
+}
+
+const getTenantAdminUrl = (tenant) => {
+  return `${FRONTEND_BASE_URL}/admin/my-games?tenantSlug=${tenant.slug}`
+}
+
+const copyText = async (text, successText = '已複製') => {
   try {
     await navigator.clipboard.writeText(text)
-    message.value = successMessage
+    setMessage(successText)
   } catch (error) {
     console.error('複製失敗:', error)
-    errorMessage.value = '複製失敗，請手動複製。'
+    setError('複製失敗，請手動複製。')
+  }
+}
+
+const loadSummary = async () => {
+  try {
+    const response = await http.get('/tenants/summary')
+    const data = unwrapData(response)
+
+    summary.value = {
+      total: Number(data?.total || 0),
+      active: Number(data?.active || 0),
+      inactive: Number(data?.inactive || data?.disabled || 0),
+      suspended: Number(data?.suspended || 0)
+    }
+  } catch (error) {
+    console.warn('取得商家總覽失敗，使用本地統計:', error)
+    summary.value = statusCounts.value
   }
 }
 
 const loadTenants = async () => {
   loading.value = true
-  resetMessages()
 
-  const attempts = [
-    () => http.get('/tenants'),
-    () => http.get('/admin/tenants'),
-    () => http.get('/tenant')
-  ]
+  try {
+    const params = {}
 
-  let lastError = null
+    if (statusFilter.value !== 'ALL') params.status = statusFilter.value
+    if (keyword.value.trim()) params.keyword = keyword.value.trim()
 
-  for (const attempt of attempts) {
-    try {
-      const response = await attempt()
-      const items = normalizeResponseData(response)
+    const response = await http.get('/tenants', { params })
+    const data = unwrapData(response)
+    const list = Array.isArray(data) ? data : data?.items || data?.tenants || []
 
-      tenants.value = items.length ? items : fallbackTenants
-      message.value = items.length
-        ? `已載入 ${items.length} 個商家。`
-        : '目前 API 無資料，已顯示本機範例商家。'
-      loading.value = false
-      return
-    } catch (error) {
-      lastError = error
-
-      if (![404, 405].includes(error?.response?.status)) {
-        break
-      }
-    }
+    tenants.value = list.map((item) => normalizeTenant(item))
+    await loadSummary()
+  } catch (error) {
+    console.error('取得商家列表失敗:', error)
+    tenants.value = fallbackTenants.map((item) => normalizeTenant(item))
+    summary.value = statusCounts.value
+    setError('取得商家列表失敗，目前顯示示範資料。請確認後端 /api/tenants 是否正常。')
+  } finally {
+    loading.value = false
   }
-
-  console.warn('商家 API 尚未完成，使用前端範例資料：', lastError)
-  tenants.value = fallbackTenants
-  errorMessage.value = '後端商家列表 API 尚未完成，暫時顯示前端範例資料。'
-  loading.value = false
 }
 
-const resetForm = () => {
-  form.name = ''
-  form.slug = ''
-  form.contactName = ''
-  form.contactPhone = ''
-  form.contactEmail = ''
-  form.status = 'ACTIVE'
-  form.note = ''
+const loadTenantUsers = async (tenantId) => {
+  if (!tenantId) return []
+
+  try {
+    const response = await http.get(`/tenants/${tenantId}/users`)
+    const data = unwrapData(response)
+    const list = Array.isArray(data) ? data : data?.items || data?.users || []
+
+    tenantUsers.value = {
+      ...tenantUsers.value,
+      [tenantId]: list
+    }
+
+    return list
+  } catch (error) {
+    console.error('取得商家帳號失敗:', error)
+    setError('取得商家帳號失敗。')
+    return []
+  }
+}
+
+const validateCreateForm = () => {
+  if (!createForm.name.trim()) return '請輸入商家名稱。'
+  if (!normalizeSlug(createForm.slug || createForm.name)) return '請輸入商家代碼 slug。'
+
+  if (createForm.createAdminUser) {
+    fillAdminFromContact()
+
+    if (!createForm.adminEmail.trim()) return '請輸入商家登入 Email。'
+    if (!createForm.adminPassword.trim()) return '請輸入商家初始密碼。'
+    if (createForm.adminPassword.length < 6) return '商家初始密碼至少需要 6 個字元。'
+    if (createForm.adminPassword !== createForm.adminPasswordConfirm) return '商家密碼與確認密碼不一致。'
+  }
+
+  return ''
 }
 
 const createTenant = async () => {
-  resetMessages()
+  const validationMessage = validateCreateForm()
 
-  const name = String(form.name || '').trim()
-  const slug = normalizeSlug(form.slug || form.name)
-
-  if (!name) {
-    errorMessage.value = '請先輸入商家名稱。'
-    return
-  }
-
-  if (!slug) {
-    errorMessage.value = '請先輸入商家代碼 slug，例如 a-shop。'
+  if (validationMessage) {
+    setError(validationMessage)
     return
   }
 
   saving.value = true
 
-  const payload = {
-    name,
-    slug,
-    contactName: form.contactName || '',
-    contactPhone: form.contactPhone || '',
-    contactEmail: form.contactEmail || '',
-    status: form.status || 'ACTIVE',
-    note: form.note || ''
-  }
-
-  const attempts = [
-    () => http.post('/tenants', payload),
-    () => http.post('/admin/tenants', payload),
-    () => http.post('/tenant', payload)
-  ]
-
-  let created = null
-  let lastError = null
-
-  for (const attempt of attempts) {
-    try {
-      const response = await attempt()
-      created = response?.data?.data || response?.data || payload
-      break
-    } catch (error) {
-      lastError = error
-
-      if (![404, 405].includes(error?.response?.status)) {
-        break
-      }
-    }
-  }
-
-  if (!created) {
-    created = {
-      ...payload,
-      id: `local-${Date.now()}`,
-      campaignCount: 0
+  try {
+    const payload = {
+      name: createForm.name.trim(),
+      slug: normalizeSlug(createForm.slug || createForm.name),
+      contactName: createForm.contactName.trim(),
+      contactPhone: createForm.contactPhone.trim(),
+      contactEmail: createForm.contactEmail.trim(),
+      status: createForm.status,
+      note: createForm.note.trim(),
+      createAdminUser: createForm.createAdminUser,
+      adminName: createForm.adminName.trim() || createForm.contactName.trim() || `${createForm.name.trim()} 管理員`,
+      adminEmail: createForm.adminEmail.trim() || createForm.contactEmail.trim(),
+      adminPassword: createForm.adminPassword,
+      adminRole: createForm.adminRole
     }
 
-    errorMessage.value = '後端新增商家 API 尚未完成，已先加入前端畫面預覽。重新整理後可能消失。'
-  } else {
-    message.value = `已建立商家：${created.name || payload.name}`
+    const response = await http.post('/tenants', payload)
+    const data = unwrapData(response)
+    const tenant = data?.tenant || data
+
+    setMessage(data?.message || '商家已建立，並已同步建立商家管理員帳號。')
+    resetCreateForm()
+    await loadTenants()
+
+    if (tenant?.id) {
+      await loadTenantUsers(tenant.id)
+    }
+  } catch (error) {
+    console.error('建立商家失敗:', error)
+    setError(error?.response?.data?.message || error?.message || '建立商家失敗。')
+  } finally {
+    saving.value = false
   }
-
-  tenants.value = [
-    created,
-    ...tenants.value
-  ]
-
-  resetForm()
-  saving.value = false
 }
 
-const toggleTenantStatus = async (tenant) => {
-  resetMessages()
-
-  const id = tenant.id
-  const oldStatus = tenant.status
-  const nextStatus = String(tenant.status || '').toUpperCase() === 'ACTIVE'
-    ? 'INACTIVE'
-    : 'ACTIVE'
-  const index = tenants.value.findIndex((item) => String(item.id) === String(id))
-
-  if (index !== -1) {
-    tenants.value[index] = {
-      ...tenants.value[index],
-      status: nextStatus
-    }
+const startEditTenant = async (tenant) => {
+  undoSnapshots.value = {
+    ...undoSnapshots.value,
+    [tenant.id]: { ...tenant }
   }
 
-  message.value = `畫面已切換「${tenant.name}」為 ${nextStatus}。`
+  editingTenantId.value = tenant.id
 
-  const attempts = [
-    () => http.patch(`/tenants/${id}`, { status: nextStatus }),
-    () => http.patch(`/admin/tenants/${id}`, { status: nextStatus }),
-    () => http.patch(`/tenant/${id}`, { status: nextStatus })
-  ]
+  Object.assign(editForm, {
+    id: tenant.id,
+    name: tenant.name,
+    slug: tenant.slug,
+    contactName: tenant.contactName,
+    contactPhone: tenant.contactPhone,
+    contactEmail: tenant.contactEmail,
+    status: tenant.status,
+    note: tenant.note || ''
+  })
 
-  for (const attempt of attempts) {
-    try {
-      await attempt()
-      message.value = `已同步商家狀態：${nextStatus}`
+  await loadTenantUsers(tenant.id)
+}
+
+const cancelEditTenant = () => {
+  editingTenantId.value = null
+  Object.assign(editForm, {
+    id: null,
+    name: '',
+    slug: '',
+    contactName: '',
+    contactPhone: '',
+    contactEmail: '',
+    status: 'ACTIVE',
+    note: ''
+  })
+}
+
+const updateTenant = async () => {
+  if (!editForm.id) return
+
+  if (!editForm.name.trim()) {
+    setError('商家名稱不能空白。')
+    return
+  }
+
+  if (!normalizeSlug(editForm.slug)) {
+    setError('商家 slug 不能空白。')
+    return
+  }
+
+  saving.value = true
+
+  try {
+    const payload = {
+      name: editForm.name.trim(),
+      slug: normalizeSlug(editForm.slug),
+      contactName: editForm.contactName.trim(),
+      contactPhone: editForm.contactPhone.trim(),
+      contactEmail: editForm.contactEmail.trim(),
+      status: editForm.status,
+      note: editForm.note.trim()
+    }
+
+    await http.patch(`/tenants/${editForm.id}`, payload)
+    setMessage('商家資料已更新。')
+    cancelEditTenant()
+    await loadTenants()
+  } catch (error) {
+    console.error('更新商家失敗:', error)
+    setError(error?.response?.data?.message || error?.message || '更新商家失敗。')
+  } finally {
+    saving.value = false
+  }
+}
+
+const updateTenantStatus = async (tenant, status) => {
+  undoSnapshots.value = {
+    ...undoSnapshots.value,
+    [tenant.id]: { ...tenant }
+  }
+
+  try {
+    await http.patch(`/tenants/${tenant.id}`, { status })
+    setMessage(status === 'ACTIVE' ? '商家已啟用。' : '商家已停用 / 暫停。')
+    await loadTenants()
+  } catch (error) {
+    console.error('更新商家狀態失敗:', error)
+    setError(error?.response?.data?.message || error?.message || '更新商家狀態失敗。')
+  }
+}
+
+const restoreTenant = async (tenant) => {
+  const snapshot = undoSnapshots.value[tenant.id]
+
+  if (!snapshot) {
+    setError('目前沒有可還原的修改紀錄。')
+    return
+  }
+
+  saving.value = true
+
+  try {
+    await http.patch(`/tenants/${tenant.id}`, {
+      name: snapshot.name,
+      slug: snapshot.slug,
+      contactName: snapshot.contactName,
+      contactPhone: snapshot.contactPhone,
+      contactEmail: snapshot.contactEmail,
+      status: snapshot.status,
+      note: snapshot.note || ''
+    })
+
+    const nextSnapshots = { ...undoSnapshots.value }
+    delete nextSnapshots[tenant.id]
+    undoSnapshots.value = nextSnapshots
+
+    setMessage('已還原商家資料到上一次修改前。')
+    await loadTenants()
+  } catch (error) {
+    console.error('還原商家失敗:', error)
+    setError(error?.response?.data?.message || error?.message || '還原商家失敗。')
+  } finally {
+    saving.value = false
+  }
+}
+
+const getPrimaryMerchantAdmin = async (tenant) => {
+  const users = tenantUsers.value[tenant.id] || tenant.recentUsers || []
+  let adminUser = users.find((item) => String(item.role || '').toUpperCase() === 'MERCHANT_ADMIN')
+
+  if (!adminUser) {
+    const loadedUsers = await loadTenantUsers(tenant.id)
+    adminUser = loadedUsers.find((item) => String(item.role || '').toUpperCase() === 'MERCHANT_ADMIN') || loadedUsers[0]
+  }
+
+  return adminUser || null
+}
+
+const startResetPassword = async (tenant) => {
+  const user = await getPrimaryMerchantAdmin(tenant)
+
+  resetPasswordTenantId.value = tenant.id
+
+  Object.assign(passwordForm, {
+    tenantId: tenant.id,
+    userId: user?.id || null,
+    name: user?.name || tenant.contactName || `${tenant.name} 管理員`,
+    email: user?.email || tenant.contactEmail || '',
+    role: user?.role || 'MERCHANT_ADMIN',
+    password: '',
+    passwordConfirm: ''
+  })
+}
+
+const cancelResetPassword = () => {
+  resetPasswordTenantId.value = null
+  Object.assign(passwordForm, {
+    tenantId: null,
+    userId: null,
+    name: '',
+    email: '',
+    role: 'MERCHANT_ADMIN',
+    password: '',
+    passwordConfirm: ''
+  })
+}
+
+const saveTenantUser = async () => {
+  if (!passwordForm.tenantId) return
+
+  if (!passwordForm.name.trim()) {
+    setError('請輸入商家帳號姓名。')
+    return
+  }
+
+  if (!passwordForm.email.trim()) {
+    setError('請輸入商家登入 Email。')
+    return
+  }
+
+  if (!passwordForm.userId && !passwordForm.password.trim()) {
+    setError('建立新商家帳號時必須輸入密碼。')
+    return
+  }
+
+  if (passwordForm.password.trim()) {
+    if (passwordForm.password.length < 6) {
+      setError('密碼至少需要 6 個字元。')
       return
-    } catch (error) {
-      if (![404, 405].includes(error?.response?.status)) {
-        console.error('更新商家狀態失敗:', error)
-        errorMessage.value = error?.response?.data?.message || '更新商家狀態失敗。'
+    }
 
-        if (index !== -1) {
-          tenants.value[index] = {
-            ...tenants.value[index],
-            status: oldStatus
-          }
-        }
-
-        return
-      }
+    if (passwordForm.password !== passwordForm.passwordConfirm) {
+      setError('密碼與確認密碼不一致。')
+      return
     }
   }
 
-  errorMessage.value = '後端商家狀態 API 尚未完成，畫面已先切換。'
+  userSaving.value = true
+
+  try {
+    const payload = {
+      name: passwordForm.name.trim(),
+      email: passwordForm.email.trim(),
+      role: passwordForm.role
+    }
+
+    if (passwordForm.password.trim()) {
+      payload.password = passwordForm.password
+    }
+
+    if (passwordForm.userId) {
+      await http.patch(`/tenants/${passwordForm.tenantId}/users/${passwordForm.userId}`, payload)
+      setMessage('商家登入帳號已更新。')
+    } else {
+      await http.post(`/tenants/${passwordForm.tenantId}/users`, {
+        ...payload,
+        password: passwordForm.password
+      })
+      setMessage('商家登入帳號已建立。')
+    }
+
+    await loadTenantUsers(passwordForm.tenantId)
+    cancelResetPassword()
+    await loadTenants()
+  } catch (error) {
+    console.error('儲存商家帳號失敗:', error)
+    setError(error?.response?.data?.message || error?.message || '儲存商家帳號失敗。')
+  } finally {
+    userSaving.value = false
+  }
+}
+
+const copyLoginInfo = async (tenant) => {
+  const user = await getPrimaryMerchantAdmin(tenant)
+
+  const text = [
+    `商家後台：${getTenantAdminUrl(tenant)}`,
+    `登入網址：${FRONTEND_BASE_URL}/login`,
+    `商家：${tenant.name}`,
+    `登入 Email：${user?.email || tenant.contactEmail || '尚未建立，請先建立商家帳號'}`,
+    '密碼：請使用建立商家時設定的密碼，或請平台管理員重設'
+  ].join('\n')
+
+  await copyText(text, '商家登入資訊已複製。')
 }
 
 onMounted(() => {
@@ -329,263 +607,582 @@ onMounted(() => {
 
 <template>
   <div class="space-y-6">
-    <header class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
-      <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <p class="text-sm font-black text-violet-600">
-            Multi Game Platform V2.3｜第 16301～16700 批
-          </p>
-          <h1 class="mt-2 text-3xl font-black text-slate-950">
-            商家管理｜平台商家列表
+    <section class="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
+      <div class="grid gap-0 xl:grid-cols-[1.05fr_0.95fr]">
+        <div class="bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 p-8 text-white">
+          <div class="inline-flex rounded-full bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.28em] text-cyan-100">
+            Tenant Admin
+          </div>
+
+          <h1 class="mt-5 text-3xl font-black md:text-4xl">
+            商家管理
           </h1>
-          <p class="mt-3 max-w-4xl text-sm font-bold leading-7 text-slate-500">
-            平台總管理員可在這裡管理商家資料、商家代碼 slug、狀態與玩家專屬網址。
+
+          <p class="mt-3 max-w-2xl text-sm font-bold leading-7 text-white/75">
+            建立商家資料、同步建立商家登入帳號、管理商家狀態與複製交付連結。
+            商家登入後可進入「商家遊戲中心」管理自己的活動與玩家網址。
           </p>
+
+          <div class="mt-6 flex flex-wrap gap-3">
+            <button
+              type="button"
+              class="rounded-2xl bg-white px-5 py-3 text-sm font-black text-slate-950 transition hover:bg-cyan-50"
+              @click="copyText(`${FRONTEND_BASE_URL}/login`, '登入網址已複製')"
+            >
+              複製登入網址
+            </button>
+
+            <button
+              type="button"
+              class="rounded-2xl border border-white/20 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10"
+              @click="loadTenants"
+            >
+              重新載入商家
+            </button>
+          </div>
         </div>
 
-        <button
-          type="button"
-          class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
-          @click="loadTenants"
-        >
-          重新載入商家
-        </button>
-      </div>
+        <div class="grid gap-4 bg-slate-50 p-6 md:grid-cols-3">
+          <div class="rounded-3xl border border-slate-200 bg-white p-5">
+            <p class="text-xs font-black uppercase tracking-[0.2em] text-slate-400">商家總數</p>
+            <p class="mt-3 text-4xl font-black text-slate-950">{{ summary.total || statusCounts.total }}</p>
+          </div>
 
-      <div
-        v-if="message"
-        class="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700"
-      >
-        {{ message }}
-      </div>
-      <div
-        v-if="errorMessage"
-        class="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700"
-      >
-        {{ errorMessage }}
-      </div>
-    </header>
+          <div class="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
+            <p class="text-xs font-black uppercase tracking-[0.2em] text-emerald-600">啟用中</p>
+            <p class="mt-3 text-4xl font-black text-emerald-700">{{ summary.active || statusCounts.active }}</p>
+          </div>
 
-    <section class="grid gap-4 md:grid-cols-3">
-      <div class="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
-        <p class="text-xs font-black text-slate-400">商家總數</p>
-        <p class="mt-2 text-4xl font-black text-slate-950">{{ tenantStats.total }}</p>
-      </div>
-      <div class="rounded-[28px] border border-emerald-200 bg-emerald-50 p-5 shadow-sm">
-        <p class="text-xs font-black text-emerald-600">啟用中</p>
-        <p class="mt-2 text-4xl font-black text-emerald-700">{{ tenantStats.active }}</p>
-      </div>
-      <div class="rounded-[28px] border border-amber-200 bg-amber-50 p-5 shadow-sm">
-        <p class="text-xs font-black text-amber-600">暫停 / 停用</p>
-        <p class="mt-2 text-4xl font-black text-amber-700">{{ tenantStats.inactive }}</p>
+          <div class="rounded-3xl border border-amber-200 bg-amber-50 p-5">
+            <p class="text-xs font-black uppercase tracking-[0.2em] text-amber-600">停用 / 暫停</p>
+            <p class="mt-3 text-4xl font-black text-amber-700">
+              {{ (summary.inactive || statusCounts.inactive) + (summary.suspended || statusCounts.suspended) }}
+            </p>
+          </div>
+        </div>
       </div>
     </section>
 
-    <section class="rounded-[32px] border border-violet-100 bg-white p-6 shadow-sm">
-      <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    <div
+      v-if="message || errorMessage"
+      class="rounded-3xl border px-5 py-4 text-sm font-black"
+      :class="message ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'"
+    >
+      {{ message || errorMessage }}
+    </div>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p class="text-sm font-black text-violet-600">新增商家</p>
-          <h2 class="mt-1 text-2xl font-black text-slate-950">建立商家資料與專屬 slug</h2>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-violet-500">
+            新增商家
+          </p>
+          <h2 class="mt-1 text-2xl font-black text-slate-950">
+            建立商家資料與登入帳號
+          </h2>
+          <p class="mt-2 text-sm font-bold text-slate-500">
+            建立商家時可以同時建立 MERCHANT_ADMIN 帳號，商家才能登入後台。
+          </p>
         </div>
+
         <button
           type="button"
-          class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-          @click="resetForm"
+          class="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-500 transition hover:bg-slate-50"
+          @click="resetCreateForm"
         >
           清空表單
         </button>
       </div>
 
-      <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div class="grid gap-4 xl:grid-cols-4">
         <label class="space-y-2">
           <span class="text-sm font-black text-slate-700">商家名稱</span>
           <input
-            v-model="form.name"
-            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+            v-model="createForm.name"
+            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
             placeholder="例如 A 商家測試店"
-          />
+            @input="!createForm.slug && (createForm.slug = normalizeSlug(createForm.name))"
+          >
         </label>
+
         <label class="space-y-2">
           <span class="text-sm font-black text-slate-700">商家代碼 slug</span>
           <input
-            v-model="form.slug"
-            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none focus:border-violet-400 focus:ring-4 focus:ring-violet-100"
+            v-model="createForm.slug"
+            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
             placeholder="例如 a-shop"
-            @blur="form.slug = normalizeSlug(form.slug)"
-          />
+            @blur="createForm.slug = normalizeSlug(createForm.slug)"
+          >
         </label>
+
         <label class="space-y-2">
           <span class="text-sm font-black text-slate-700">聯絡人</span>
           <input
-            v-model="form.contactName"
-            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none"
-          />
+            v-model="createForm.contactName"
+            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+            @blur="fillAdminFromContact"
+          >
         </label>
+
         <label class="space-y-2">
           <span class="text-sm font-black text-slate-700">狀態</span>
           <select
-            v-model="form.status"
-            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none"
+            v-model="createForm.status"
+            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
           >
-            <option value="ACTIVE">啟用 ACTIVE</option>
-            <option value="INACTIVE">暫停 INACTIVE</option>
+            <option
+              v-for="option in statusOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
           </select>
         </label>
+
         <label class="space-y-2">
           <span class="text-sm font-black text-slate-700">電話</span>
           <input
-            v-model="form.contactPhone"
-            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none"
-          />
+            v-model="createForm.contactPhone"
+            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+          >
         </label>
+
         <label class="space-y-2">
           <span class="text-sm font-black text-slate-700">Email</span>
           <input
-            v-model="form.contactEmail"
-            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none"
-          />
+            v-model="createForm.contactEmail"
+            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+            @blur="fillAdminFromContact"
+          >
         </label>
+
         <label class="space-y-2 xl:col-span-2">
           <span class="text-sm font-black text-slate-700">備註</span>
           <input
-            v-model="form.note"
-            class="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none"
-          />
+            v-model="createForm.note"
+            class="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+            placeholder="例如：主約、測試商家、到期日..."
+          >
         </label>
+      </div>
+
+      <div class="mt-6 rounded-3xl border border-indigo-100 bg-indigo-50/70 p-5">
+        <label class="inline-flex items-center gap-3 text-sm font-black text-indigo-800">
+          <input
+            v-model="createForm.createAdminUser"
+            type="checkbox"
+            class="h-5 w-5 rounded border-indigo-300"
+          >
+          同步建立商家管理員登入帳號
+        </label>
+
+        <div
+          v-if="createForm.createAdminUser"
+          class="mt-4 grid gap-4 xl:grid-cols-4"
+        >
+          <label class="space-y-2">
+            <span class="text-sm font-black text-slate-700">登入姓名</span>
+            <input
+              v-model="createForm.adminName"
+              class="w-full rounded-2xl border border-indigo-100 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+              placeholder="商家管理員"
+            >
+          </label>
+
+          <label class="space-y-2">
+            <span class="text-sm font-black text-slate-700">登入 Email</span>
+            <input
+              v-model="createForm.adminEmail"
+              class="w-full rounded-2xl border border-indigo-100 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+              placeholder="owner@example.com"
+            >
+          </label>
+
+          <label class="space-y-2">
+            <span class="text-sm font-black text-slate-700">初始密碼</span>
+            <input
+              v-model="createForm.adminPassword"
+              type="password"
+              class="w-full rounded-2xl border border-indigo-100 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+              placeholder="至少 6 碼"
+            >
+          </label>
+
+          <label class="space-y-2">
+            <span class="text-sm font-black text-slate-700">確認密碼</span>
+            <input
+              v-model="createForm.adminPasswordConfirm"
+              type="password"
+              class="w-full rounded-2xl border border-indigo-100 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+            >
+          </label>
+        </div>
       </div>
 
       <div class="mt-5 flex justify-end">
         <button
           type="button"
+          class="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white transition hover:bg-indigo-700 disabled:opacity-60"
           :disabled="saving"
-          class="rounded-2xl bg-slate-950 px-6 py-3 text-sm font-black text-white shadow-sm transition hover:bg-slate-800 disabled:opacity-50"
           @click="createTenant"
         >
-          {{ saving ? '建立中...' : '新增商家' }}
+          {{ saving ? '建立中...' : '新增商家與帳號' }}
         </button>
       </div>
     </section>
 
-    <section class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
-      <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+      <div class="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 class="text-2xl font-black text-slate-950">商家列表</h2>
           <p class="mt-2 text-sm font-bold text-slate-500">
-            可搜尋商家名稱、slug、聯絡資訊，並複製玩家專屬九宮格網址。
+            可搜尋商家名稱、slug、聯絡資訊，並直接編輯、重設密碼、停用或還原。
           </p>
         </div>
 
-        <div class="grid w-full gap-3 md:grid-cols-[1fr_180px] xl:max-w-xl">
+        <div class="flex flex-wrap gap-3">
           <input
             v-model="keyword"
-            class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none"
+            class="w-72 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
             placeholder="搜尋商家 / slug / 聯絡人"
-          />
+            @keyup.enter="loadTenants"
+          >
+
           <select
             v-model="statusFilter"
-            class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 outline-none"
+            class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
+            @change="loadTenants"
           >
             <option value="ALL">全部狀態</option>
             <option value="ACTIVE">啟用</option>
-            <option value="INACTIVE">暫停</option>
+            <option value="INACTIVE">停用</option>
+            <option value="SUSPENDED">暫停</option>
           </select>
+
+          <button
+            type="button"
+            class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+            @click="loadTenants"
+          >
+            查詢
+          </button>
         </div>
       </div>
 
-      <div
-        v-if="loading"
-        class="mt-6 rounded-3xl bg-slate-50 px-6 py-12 text-center text-sm font-black text-slate-500"
-      >
-        載入商家中...
-      </div>
-
-      <div
-        v-else-if="!filteredTenants.length"
-        class="mt-6 rounded-3xl bg-slate-50 px-6 py-12 text-center text-sm font-black text-slate-500"
-      >
-        沒有符合條件的商家。
-      </div>
-
-      <div
-        v-else
-        class="mt-6 overflow-hidden rounded-3xl border border-slate-200"
-      >
-        <table class="w-full min-w-[980px] text-left text-sm">
-          <thead class="bg-slate-50 text-xs font-black uppercase tracking-wide text-slate-500">
+      <div class="overflow-hidden rounded-3xl border border-slate-200">
+        <table class="min-w-full divide-y divide-slate-200 text-left text-sm">
+          <thead class="bg-slate-50 text-xs font-black uppercase tracking-[0.16em] text-slate-400">
             <tr>
               <th class="px-4 py-3">商家</th>
-              <th class="px-4 py-3">slug</th>
+              <th class="px-4 py-3">Slug</th>
               <th class="px-4 py-3">狀態</th>
+              <th class="px-4 py-3">登入帳號</th>
               <th class="px-4 py-3">聯絡資訊</th>
-              <th class="px-4 py-3">玩家網址</th>
-              <th class="px-4 py-3">操作</th>
+              <th class="px-4 py-3">玩家 / 管理連結</th>
+              <th class="px-4 py-3 text-right">操作</th>
             </tr>
           </thead>
-          <tbody>
-            <tr
-              v-for="tenant in filteredTenants"
-              :key="tenant.id || tenant.slug"
-              class="border-t border-slate-100 align-top"
+
+          <tbody class="divide-y divide-slate-100 bg-white">
+            <template
+              v-for="tenant in visibleTenants"
+              :key="tenant.id"
             >
-              <td class="px-4 py-4">
-                <p class="font-black text-slate-950">{{ tenant.name }}</p>
-                <p class="mt-1 text-xs font-bold text-slate-500">{{ tenant.note || '沒有備註' }}</p>
-              </td>
-              <td class="px-4 py-4">
-                <button
-                  type="button"
-                  class="rounded-xl bg-slate-100 px-3 py-2 font-mono text-xs font-black text-slate-700 transition hover:bg-slate-200"
-                  @click="copyText(tenant.slug, '已複製商家 slug')"
-                >
-                  {{ tenant.slug }}
-                </button>
-              </td>
-              <td class="px-4 py-4">
-                <span
-                  :class="[
-                    'rounded-full px-3 py-1 text-xs font-black',
-                    String(tenant.status).toUpperCase() === 'ACTIVE'
+              <tr>
+                <td class="px-4 py-4 align-top">
+                  <div class="font-black text-slate-950">{{ tenant.name }}</div>
+                  <div class="mt-1 text-xs font-bold text-slate-400">{{ tenant.note || '沒有備註' }}</div>
+                  <div class="mt-2 text-xs font-black text-slate-500">
+                    活動 {{ tenant.counts.campaigns || 0 }}｜帳號 {{ tenant.counts.users || 0 }}
+                  </div>
+                </td>
+
+                <td class="px-4 py-4 align-top">
+                  <span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">
+                    {{ tenant.slug }}
+                  </span>
+                </td>
+
+                <td class="px-4 py-4 align-top">
+                  <span
+                    class="rounded-full px-3 py-1 text-xs font-black"
+                    :class="tenant.status === 'ACTIVE'
                       ? 'bg-emerald-100 text-emerald-700'
-                      : 'bg-amber-100 text-amber-700'
-                  ]"
-                >
-                  {{ tenant.status || 'ACTIVE' }}
-                </span>
-              </td>
-              <td class="px-4 py-4 text-xs font-bold leading-6 text-slate-500">
-                <p>{{ tenant.contactName || '-' }}</p>
-                <p>{{ tenant.contactPhone || '-' }}</p>
-                <p>{{ tenant.contactEmail || '-' }}</p>
-              </td>
-              <td class="px-4 py-4">
-                <p class="max-w-[260px] truncate text-xs font-bold text-indigo-700">
-                  {{ getTenantPlayerUrl(tenant) }}
-                </p>
-                <button
-                  type="button"
-                  class="mt-2 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
-                  @click="copyText(getTenantPlayerUrl(tenant), '已複製商家玩家網址')"
-                >
-                  複製玩家網址
-                </button>
-              </td>
-              <td class="px-4 py-4">
-                <div class="grid gap-2">
+                      : tenant.status === 'SUSPENDED'
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-slate-100 text-slate-500'"
+                  >
+                    {{ tenant.status }}
+                  </span>
+                </td>
+
+                <td class="px-4 py-4 align-top">
+                  <div
+                    v-for="user in (tenantUsers[tenant.id] || tenant.recentUsers || []).slice(0, 2)"
+                    :key="user.id"
+                    class="mb-2 rounded-2xl bg-slate-50 px-3 py-2"
+                  >
+                    <p class="text-xs font-black text-slate-700">{{ user.name }}</p>
+                    <p class="text-xs font-bold text-slate-500">{{ user.email }}</p>
+                    <p class="text-[11px] font-black text-indigo-600">{{ user.role }}</p>
+                  </div>
                   <button
                     type="button"
-                    class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-700 transition hover:bg-slate-50"
-                    @click="toggleTenantStatus(tenant)"
+                    class="text-xs font-black text-indigo-600 hover:text-indigo-800"
+                    @click="loadTenantUsers(tenant.id)"
                   >
-                    {{ String(tenant.status).toUpperCase() === 'ACTIVE' ? '暫停商家' : '啟用商家' }}
+                    重新載入帳號
                   </button>
-                  <button
-                    type="button"
-                    class="rounded-xl border border-violet-200 bg-white px-3 py-2 text-xs font-black text-violet-700 transition hover:bg-violet-50"
-                    @click="copyText(`/admin/campaigns?tenantSlug=${tenant.slug}`, '已複製活動管理查詢連結')"
-                  >
-                    複製管理連結
-                  </button>
-                </div>
+                </td>
+
+                <td class="px-4 py-4 align-top text-xs font-bold leading-6 text-slate-500">
+                  <div>{{ tenant.contactName || '-' }}</div>
+                  <div>{{ tenant.contactPhone || '-' }}</div>
+                  <div>{{ tenant.contactEmail || '-' }}</div>
+                </td>
+
+                <td class="px-4 py-4 align-top">
+                  <div class="space-y-2">
+                    <button
+                      type="button"
+                      class="rounded-xl border border-emerald-200 px-3 py-2 text-xs font-black text-emerald-700 transition hover:bg-emerald-50"
+                      @click="copyText(getTenantPlayerUrl(tenant), '玩家網址已複製')"
+                    >
+                      複製玩家網址
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-xl border border-indigo-200 px-3 py-2 text-xs font-black text-indigo-700 transition hover:bg-indigo-50"
+                      @click="copyText(getTenantAdminUrl(tenant), '管理連結已複製')"
+                    >
+                      複製管理連結
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+                      @click="copyLoginInfo(tenant)"
+                    >
+                      複製登入資訊
+                    </button>
+                  </div>
+                </td>
+
+                <td class="px-4 py-4 align-top text-right">
+                  <div class="flex flex-col items-end gap-2">
+                    <button
+                      type="button"
+                      class="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black text-slate-600 transition hover:bg-slate-50"
+                      @click="startEditTenant(tenant)"
+                    >
+                      編輯商家
+                    </button>
+
+                    <button
+                      type="button"
+                      class="rounded-xl border border-violet-200 px-3 py-2 text-xs font-black text-violet-700 transition hover:bg-violet-50"
+                      @click="startResetPassword(tenant)"
+                    >
+                      帳號 / 密碼
+                    </button>
+
+                    <button
+                      type="button"
+                      class="rounded-xl border px-3 py-2 text-xs font-black transition"
+                      :class="tenant.status === 'ACTIVE'
+                        ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                        : 'border-emerald-200 text-emerald-700 hover:bg-emerald-50'"
+                      @click="updateTenantStatus(tenant, tenant.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE')"
+                    >
+                      {{ tenant.status === 'ACTIVE' ? '停用商家' : '啟用商家' }}
+                    </button>
+
+                    <button
+                      type="button"
+                      class="rounded-xl border border-rose-200 px-3 py-2 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:opacity-40"
+                      :disabled="!undoSnapshots[tenant.id]"
+                      @click="restoreTenant(tenant)"
+                    >
+                      還原
+                    </button>
+                  </div>
+                </td>
+              </tr>
+
+              <tr
+                v-if="editingTenantId === tenant.id"
+                class="bg-indigo-50/50"
+              >
+                <td
+                  colspan="7"
+                  class="px-5 py-5"
+                >
+                  <div class="rounded-3xl border border-indigo-100 bg-white p-5">
+                    <div class="mb-4 flex items-center justify-between">
+                      <h3 class="text-lg font-black text-slate-950">
+                        編輯商家資料：{{ tenant.name }}
+                      </h3>
+                      <button
+                        type="button"
+                        class="text-sm font-black text-slate-500 hover:text-slate-800"
+                        @click="cancelEditTenant"
+                      >
+                        關閉
+                      </button>
+                    </div>
+
+                    <div class="grid gap-4 xl:grid-cols-4">
+                      <input
+                        v-model="editForm.name"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                        placeholder="商家名稱"
+                      >
+                      <input
+                        v-model="editForm.slug"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                        placeholder="slug"
+                        @blur="editForm.slug = normalizeSlug(editForm.slug)"
+                      >
+                      <input
+                        v-model="editForm.contactName"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                        placeholder="聯絡人"
+                      >
+                      <select
+                        v-model="editForm.status"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
+                      >
+                        <option
+                          v-for="option in statusOptions"
+                          :key="option.value"
+                          :value="option.value"
+                        >
+                          {{ option.label }}
+                        </option>
+                      </select>
+                      <input
+                        v-model="editForm.contactPhone"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                        placeholder="電話"
+                      >
+                      <input
+                        v-model="editForm.contactEmail"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                        placeholder="Email"
+                      >
+                      <input
+                        v-model="editForm.note"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400 xl:col-span-2"
+                        placeholder="備註"
+                      >
+                    </div>
+
+                    <div class="mt-4 flex justify-end gap-3">
+                      <button
+                        type="button"
+                        class="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                        @click="cancelEditTenant"
+                      >
+                        取消
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700"
+                        @click="updateTenant"
+                      >
+                        儲存變更
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+
+              <tr
+                v-if="resetPasswordTenantId === tenant.id"
+                class="bg-violet-50/50"
+              >
+                <td
+                  colspan="7"
+                  class="px-5 py-5"
+                >
+                  <div class="rounded-3xl border border-violet-100 bg-white p-5">
+                    <div class="mb-4 flex items-center justify-between">
+                      <h3 class="text-lg font-black text-slate-950">
+                        商家登入帳號 / 密碼：{{ tenant.name }}
+                      </h3>
+                      <button
+                        type="button"
+                        class="text-sm font-black text-slate-500 hover:text-slate-800"
+                        @click="cancelResetPassword"
+                      >
+                        關閉
+                      </button>
+                    </div>
+
+                    <div class="grid gap-4 xl:grid-cols-5">
+                      <input
+                        v-model="passwordForm.name"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
+                        placeholder="帳號姓名"
+                      >
+                      <input
+                        v-model="passwordForm.email"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
+                        placeholder="登入 Email"
+                      >
+                      <select
+                        v-model="passwordForm.role"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black outline-none focus:border-violet-400"
+                      >
+                        <option value="MERCHANT_ADMIN">MERCHANT_ADMIN</option>
+                        <option value="MERCHANT_STAFF">MERCHANT_STAFF</option>
+                      </select>
+                      <input
+                        v-model="passwordForm.password"
+                        type="password"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
+                        placeholder="新密碼，至少 6 碼"
+                      >
+                      <input
+                        v-model="passwordForm.passwordConfirm"
+                        type="password"
+                        class="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
+                        placeholder="確認新密碼"
+                      >
+                    </div>
+
+                    <p class="mt-3 text-xs font-bold text-slate-500">
+                      若商家尚未有帳號，儲存時會建立新帳號；若已有帳號，會更新 Email / 姓名 / 角色，輸入新密碼時會重設密碼。
+                    </p>
+
+                    <div class="mt-4 flex justify-end gap-3">
+                      <button
+                        type="button"
+                        class="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                        @click="cancelResetPassword"
+                      >
+                        取消
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:opacity-60"
+                        :disabled="userSaving"
+                        @click="saveTenantUser"
+                      >
+                        {{ userSaving ? '儲存中...' : passwordForm.userId ? '更新帳號 / 密碼' : '建立登入帳號' }}
+                      </button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </template>
+
+            <tr v-if="!loading && !visibleTenants.length">
+              <td
+                colspan="7"
+                class="px-5 py-10 text-center text-sm font-black text-slate-400"
+              >
+                目前沒有符合條件的商家。
               </td>
             </tr>
           </tbody>

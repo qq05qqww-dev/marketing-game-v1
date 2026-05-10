@@ -127,6 +127,13 @@ export const loginUser = async ({ email, password }) => {
     throw new Error('帳號不存在')
   }
 
+  const tenantStatus = String(user.tenant?.status || '').toUpperCase()
+  const role = String(user.role || '').toUpperCase()
+
+  if (['MERCHANT_ADMIN', 'MERCHANT_STAFF'].includes(role) && tenantStatus && tenantStatus !== 'ACTIVE') {
+    throw new Error('商家已停用或暫停，請聯絡平台管理員')
+  }
+
   const isMatch = await bcrypt.compare(password, user.password || '')
 
   if (!isMatch) {
