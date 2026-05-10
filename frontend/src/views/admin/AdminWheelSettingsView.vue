@@ -1,4 +1,4 @@
-// 第 57201～57600 批：輪盤設定頁儲存驗收歷史紀錄版
+// 第 57601～58000 批：輪盤設定頁儲存驗收歷史清除與匯出版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -496,7 +496,7 @@ const buildSaveAuditRecord = (status = 'success', extra = {}) => {
 
   return {
     status,
-    batch: '57201-57600',
+    batch: '57601-58000',
     savedAt: new Date().toISOString(),
     mode: platformMode ? 'platform_template' : 'merchant_campaign',
     title: platformMode ? '平台輪盤模板儲存驗收' : '商家輪盤活動儲存驗收',
@@ -519,7 +519,7 @@ const buildSaveAuditRecord = (status = 'success', extra = {}) => {
 const normalizeSaveAuditHistoryItem = (record = {}) => ({
   id: `${record.savedAt || new Date().toISOString()}-${Math.random().toString(36).slice(2, 8)}`,
   status: record.status || 'unknown',
-  batch: record.batch || '57201-57600',
+  batch: record.batch || '57601-58000',
   savedAt: record.savedAt || new Date().toISOString(),
   mode: record.mode || (isPlatformTemplateMode.value ? 'platform_template' : 'merchant_campaign'),
   title: record.title || '儲存驗收紀錄',
@@ -566,7 +566,7 @@ const pushSaveAuditHistory = (record = null) => {
 
   const normalized = normalizeSaveAuditHistoryItem({
     ...record,
-    batch: record.batch || '57201-57600'
+    batch: record.batch || '57601-58000'
   })
 
   const nextHistory = [
@@ -591,20 +591,80 @@ const clearSaveAuditHistory = () => {
   }, 2200)
 }
 
+const exportSaveAuditHistory = () => {
+  const exportedAt = new Date().toISOString()
+  const mode = isPlatformTemplateMode.value ? 'platform_template' : 'merchant_campaign'
+  const target = isPlatformTemplateMode.value
+    ? `platform-template:${templateId.value}`
+    : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`
+
+  const payload = {
+    product: 'Multi Game Platform V2.3',
+    batch: '57601-58000',
+    page: 'AdminWheelSettingsView',
+    mode,
+    target,
+    tenantSlug: tenantSlug.value,
+    campaignId: campaignId.value || null,
+    templateId: templateId.value,
+    storageKey: saveAuditHistoryKey.value,
+    exportedAt,
+    isolationGuard: isPlatformTemplateMode.value
+      ? '平台模板匯出只包含本機驗收歷史，不會修改任何商家既有活動。'
+      : '商家活動匯出只包含目前活動本機驗收歷史，不會回寫平台模板或其他商家。',
+    total: saveAuditHistory.value.length,
+    records: saveAuditHistory.value.map((item) => ({
+      status: item.status,
+      batch: item.batch,
+      savedAt: item.savedAt,
+      mode: item.mode,
+      title: item.title,
+      target: item.target,
+      effect: item.effect,
+      templateGuard: item.templateGuard,
+      message: item.message || ''
+    }))
+  }
+
+  const fileSafeTarget = String(target)
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80) || 'wheel-save-audit'
+  const fileName = `wheel-save-audit-history-${fileSafeTarget}-${exportedAt.slice(0, 10)}.json`
+  const json = JSON.stringify(payload, null, 2)
+  const blob = new Blob([json], { type: 'application/json;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+
+  link.href = url
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+
+  copiedMessage.value = saveAuditHistory.value.length
+    ? `已匯出 ${saveAuditHistory.value.length} 筆儲存驗收歷史 JSON。`
+    : '目前沒有歷史紀錄，已匯出空白驗收 JSON。'
+  window.setTimeout(() => {
+    copiedMessage.value = ''
+  }, 2600)
+}
+
 const saveAuditHistorySummary = computed(() => {
   const total = saveAuditHistory.value.length
   const latest = saveAuditHistory.value[0]
 
   return {
-    eyebrow: 'Save Audit History｜第 57201～57600 批',
+    eyebrow: 'Save Audit History｜第 57601～58000 批',
     title: isPlatformTemplateMode.value ? '平台模板儲存歷史' : '商家活動儲存歷史',
     badge: total ? `最近 ${total} 筆` : '尚無紀錄',
     badgeClass: total
       ? 'bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200'
       : 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
     desc: isPlatformTemplateMode.value
-      ? '此區只記錄目前平台輪盤模板頁面的儲存、取消與失敗驗收結果，不會寫入商家活動資料庫。'
-      : '此區只記錄目前商家輪盤活動頁面的儲存、取消與失敗驗收結果，方便確認沒有改錯模板或其他商家。',
+      ? '此區只記錄目前平台輪盤模板頁面的儲存、取消與失敗驗收結果，可清除或匯出 JSON，不會寫入商家活動資料庫。'
+      : '此區只記錄目前商家輪盤活動頁面的儲存、取消與失敗驗收結果，可清除或匯出 JSON，方便確認沒有改錯模板或其他商家。',
     latestLabel: latest ? `${formatSaveAuditTime(latest.savedAt)}｜${latest.title}` : '尚未產生本頁驗收紀錄'
   }
 })
@@ -641,6 +701,7 @@ const saveResultAudit = computed(() => {
         ? '平台模板本體'
         : templateCloneStatus.value.syncLabel,
       savedAtLabel: '尚未儲存',
+      batch: '56801-57200',
       safe: true
     }
   }
@@ -661,6 +722,7 @@ const saveResultAudit = computed(() => {
     playerSource: record.playerSource,
     templateGuard: record.templateGuard,
     savedAtLabel: formatSaveAuditTime(record.savedAt),
+    batch: record.batch || '57601-58000',
     safe: isSuccess || isCancelled
   }
 })
@@ -670,7 +732,7 @@ const saveResultAuditItems = computed(() => [
   { label: '影響範圍', value: saveResultAudit.value.effect },
   { label: '玩家頁來源', value: saveResultAudit.value.playerSource },
   { label: '隔離保護', value: saveResultAudit.value.templateGuard },
-  { label: '驗收批次', value: '57201-57600' },
+  { label: '驗收批次', value: saveResultAudit.value.batch || '57601-58000' },
   { label: '儲存時間', value: saveResultAudit.value.savedAtLabel }
 ])
 
@@ -1386,6 +1448,13 @@ onMounted(async () => {
           </span>
           <button
             type="button"
+            class="rounded-full border border-indigo-200 bg-white px-4 py-2 text-xs font-black text-indigo-700 hover:bg-indigo-50"
+            @click="exportSaveAuditHistory"
+          >
+            匯出 JSON
+          </button>
+          <button
+            type="button"
             class="rounded-full border border-slate-200 px-4 py-2 text-xs font-black text-slate-600 hover:bg-slate-50"
             @click="clearSaveAuditHistory"
           >
@@ -1421,7 +1490,7 @@ onMounted(async () => {
       </div>
 
       <div v-else class="mt-5 rounded-3xl border border-slate-100 bg-slate-50 p-4 text-sm font-bold text-slate-500">
-        尚無儲存驗收歷史。完成一次儲存、取消或失敗後，這裡會保留最近 8 筆，方便你確認操作範圍。
+        尚無儲存驗收歷史。完成一次儲存、取消或失敗後，這裡會保留最近 8 筆；也可以匯出 JSON 留存驗收紀錄。
       </div>
     </section>
 
