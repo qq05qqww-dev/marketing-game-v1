@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
-// 第 39601～40000 批：商家我的帳號與自行修改密碼版
+// 第 40001～40400 批：商家後台操作流程精緻化與交付導引版
 
 const route = useRoute()
 const router = useRouter()
@@ -37,6 +37,10 @@ const scopeLabel = computed(() => {
   return '尚未綁定商家'
 })
 
+const adminLandingPath = computed(() => {
+  return isPlatformAdmin.value ? '/admin/tenants' : '/admin/my-games'
+})
+
 const menuItems = computed(() => {
   const items = [
     {
@@ -48,14 +52,14 @@ const menuItems = computed(() => {
     },
     {
       label: isPlatformAdmin.value ? '活動管理' : '我的活動',
-      description: isPlatformAdmin.value ? '平台活動' : '建立 / 修改遊戲',
+      description: isPlatformAdmin.value ? '平台活動' : '活動 / 序號 / 狀態',
       to: '/admin/campaigns',
       icon: '📣',
       roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
     },
     {
       label: isPlatformAdmin.value ? '商家遊戲中心' : '我的遊戲中心',
-      description: isPlatformAdmin.value ? '商家交付入口' : '網址 / 序號 / 報表',
+      description: isPlatformAdmin.value ? '商家交付入口' : '複製網址 / 開始操作',
       to: '/admin/my-games',
       icon: '🎯',
       roles: ['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN', 'MERCHANT_STAFF']
@@ -167,7 +171,7 @@ const logout = () => {
       <div class="flex h-full flex-col">
         <div class="border-b border-slate-100 p-5">
           <RouterLink
-            to="/"
+            :to="adminLandingPath"
             class="flex items-center gap-3"
           >
             <div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-lg font-black text-white">
@@ -249,7 +253,7 @@ const logout = () => {
       <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 px-4 py-3 shadow-sm backdrop-blur xl:hidden">
         <div class="flex items-center justify-between gap-3">
           <RouterLink
-            to="/admin"
+            :to="adminLandingPath"
             class="flex items-center gap-2"
           >
             <div class="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-950 text-sm font-black text-white">

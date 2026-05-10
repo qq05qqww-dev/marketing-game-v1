@@ -311,7 +311,16 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/admin/campaigns'
+          redirect: () => {
+            const { user } = getStoredAuth()
+            const role = String(user?.role || '').toUpperCase()
+
+            if (['MERCHANT_ADMIN', 'MERCHANT_STAFF'].includes(role)) {
+              return '/admin/my-games'
+            }
+
+            return '/admin/tenants'
+          }
         },
         {
           path: 'tenants',
@@ -555,6 +564,20 @@ router.beforeEach((to, from) => {
   }
 
   if (to.meta.guestOnly && isLoggedIn) {
+    const role = String(user?.role || '').toUpperCase()
+
+    if (['MERCHANT_ADMIN', 'MERCHANT_STAFF'].includes(role)) {
+      return {
+        path: '/admin/my-games'
+      }
+    }
+
+    if (['ADMIN', 'SUPER_ADMIN'].includes(role)) {
+      return {
+        path: '/admin/tenants'
+      }
+    }
+
     return {
       path: '/'
     }

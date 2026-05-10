@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 35201～35600 批：後台序號總次數、已使用、剩餘次數同步顯示版
+// 第 40001～40400 批：商家後台操作流程精緻化與交付導引版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminCampaignsView.vue
@@ -1997,6 +1997,21 @@ onMounted(() => {
 
 <template>
   <div class="min-h-screen bg-slate-100 px-4 py-6 text-slate-900">
+    <section class="mb-6 rounded-[2rem] border border-emerald-100 bg-emerald-50 p-5 text-sm font-bold leading-7 text-emerald-800">
+      <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-emerald-600">Merchant Flow</p>
+          <p class="mt-1 text-lg font-black text-emerald-950">商家提示：建立活動後，請建立序號、確認獎項，再回商家遊戲中心複製玩家網址。</p>
+        </div>
+        <button
+          type="button"
+          class="rounded-2xl bg-emerald-600 px-5 py-3 text-sm font-black text-white transition hover:bg-emerald-700"
+          @click="router.push('/admin/my-games')"
+        >
+          回商家遊戲中心
+        </button>
+      </div>
+    </section>
     <div class="mx-auto max-w-7xl space-y-6">
       <header class="rounded-[32px] border border-slate-200 bg-white p-6 shadow-sm">
         <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
