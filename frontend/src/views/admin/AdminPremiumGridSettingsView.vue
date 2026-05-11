@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 82001～82400 批：九宮格平台模板預覽來源與儲存一致修正版
+// 第 82401～82800 批：九宮格平台模板草稿尺寸儲存不回彈修正版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -732,7 +732,8 @@ const setInlineSaveFeedback = (message = '', type = 'success') => {
 const saveTemplateDraftLocally = () => {
   if (typeof window === 'undefined') return
 
-  const payload = buildSettingsSavePayload()
+  const settingsPayload = buildSettingsSavePayload()
+  const previewDraftPayload = buildAdminPreviewDraftPayload()
   const storageKeys = [
     'mgp:premium-grid-platform-template-draft',
     'mgp:premium-grid-platform-template-saved',
@@ -743,14 +744,18 @@ const saveTemplateDraftLocally = () => {
   ]
 
   storageKeys.forEach((key) => {
-    window.localStorage.setItem(key, JSON.stringify(payload))
+    // 第 82401～82800 批修正：
+    // iframe 預覽讀 draftKey 時需要 { settings: ... } 外層格式；
+    // 平台模板保存鍵則保留純 settings，方便未來新建活動複製模板。
+    const value = key === adminPreviewDraftKey.value ? previewDraftPayload : settingsPayload
+    window.localStorage.setItem(key, JSON.stringify(value))
   })
 
   configSavedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
   configModeMessage.value = '已儲存九宮格平台模板草稿：此畫面是商家建立新九宮格活動時要複製的模板預覽，不是 A 商家的正式活動。既有商家活動不會被自動覆蓋。'
   syncDraftToPreviewStorage({ refresh: false })
-  window.setTimeout(() => postDraftToPreviewIframe(payload), 60)
-  setInlineSaveFeedback('已儲存九宮格平台模板草稿，右側模板預覽已鎖定目前修改內容；商家新建九宮格活動時才會複製此模板。')
+  window.setTimeout(() => postDraftToPreviewIframe(previewDraftPayload), 60)
+  setInlineSaveFeedback('已儲存九宮格平台模板草稿，右側模板預覽已鎖定目前修改內容；重新整理後文字大小與獎項尺寸不會回彈。')
 }
 
 const mergeSettingsIntoDraft = (incoming = {}) => {

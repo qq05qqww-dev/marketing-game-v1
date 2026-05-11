@@ -484,7 +484,11 @@ const applyAdminPreviewDraftToCampaign = () => {
     if (!rawDraft) return false
 
     const draft = JSON.parse(rawDraft)
-    const mappedSettings = normalizeAdminPreviewDraftSettings(draft.settings || {})
+    // 第 82401～82800 批修正：
+    // 舊版平台模板草稿曾直接存 settings；新版 iframe 草稿存 { settings }。
+    // 兩種格式都要能讀，避免儲存 / 重新整理後字體大小與獎項尺寸回到預設值。
+    const draftSettings = draft?.settings || draft || {}
+    const mappedSettings = normalizeAdminPreviewDraftSettings(draftSettings)
 
     Object.entries(mappedSettings.campaign).forEach(([key, value]) => {
       if (value !== undefined && value !== null && key in campaign) {
@@ -509,7 +513,9 @@ const applyAdminPreviewDraftToCampaign = () => {
 }
 
 const applyAdminPreviewDraftPayloadToCampaign = (draft = {}) => {
-  const mappedSettings = normalizeAdminPreviewDraftSettings(draft.settings || {})
+  // 第 82401～82800 批修正：postMessage 可能傳 { settings }，也可能傳純 settings。
+  const draftSettings = draft?.settings || draft || {}
+  const mappedSettings = normalizeAdminPreviewDraftSettings(draftSettings)
 
   Object.entries(mappedSettings.campaign).forEach(([key, value]) => {
     if (value !== undefined && value !== null && key in campaign) {
@@ -537,7 +543,7 @@ const handlePremiumGridAdminDraftMessage = (event) => {
   if (routeDraftKey && eventDraftKey && routeDraftKey !== eventDraftKey) return
 
   const payload = event.data?.payload || {}
-  if (!payload?.settings) return
+  if (!payload || typeof payload !== 'object') return
 
   applyAdminPreviewDraftPayloadToCampaign(payload)
 }
