@@ -445,6 +445,7 @@ const normalizeAdminPreviewDraftSettings = (settings = {}) => {
       officialLinkBackgroundColor: settings.officialLink?.backgroundColor
     },
     textSize: settings.textSize || {},
+    resultModal: settings.resultModal || {},
     prizes: Array.isArray(settings.prizes) ? settings.prizes : []
   }
 }
@@ -494,6 +495,13 @@ const applyAdminPreviewDraftToCampaign = () => {
       ...adminPreviewTextSize,
       ...(mappedSettings.textSize || {})
     })
+
+    if (mappedSettings.resultModal && Object.keys(mappedSettings.resultModal).length) {
+      premiumGridGameConfigSettings.value = mergePremiumGridSettingsForSharedBoard(
+        premiumGridGameConfigSettings.value || {},
+        { resultModal: mappedSettings.resultModal }
+      )
+    }
 
     applyAdminPreviewPrizeDraftToGrid(mappedSettings.prizes)
   } catch (error) {
@@ -1800,6 +1808,27 @@ const premiumGridSharedPlayBoardBaseSettings = computed(() => ({
     showFrontBackToGameCenter: false,
     showFrontParticipation: false,
     showFrontDebugInfo: false
+  },
+  resultModal: {
+    winTitle: '恭喜中獎！',
+    loseTitle: '再接再厲',
+    confirmText: '關閉結果',
+    continueText: '繼續抽獎',
+    rewardHint: '請依商家公告方式兌換獎品。',
+    winImageUrl: '',
+    loseImageUrl: '',
+    imageSize: 96,
+    modalBackgroundColor: '#ffffff',
+    headerFromColor: '#fb923c',
+    headerToColor: '#dc2626',
+    titleTextSize: 24,
+    titleTextColor: '#ffffff',
+    prizeTextSize: 18,
+    prizeTextColor: '#fef3c7',
+    hintTextSize: 14,
+    hintTextColor: '#64748b',
+    buttonColor: '#ea580c',
+    buttonTextColor: '#ffffff'
   },
   footer: {
     showRules: true,
@@ -3489,6 +3518,10 @@ const goGamesCenter = () => {
 }
 
 const getResultModalHint = () => {
+  const customHint = premiumGridResultModalSettings.value.rewardHint
+
+  if (customHint) return customHint
+
   if (isAdminMode.value) {
     return '這是前台精緻版抽獎效果示範；目前可接後台活動資料、獎項庫存、抽獎紀錄與本機保存。'
   }
@@ -3499,6 +3532,76 @@ const getResultModalHint = () => {
 
   return '獎項已寫入我的遊戲紀錄。你目前沒有剩餘抽獎機會，可先查看紀錄或分享活動增加次數。'
 }
+
+const premiumGridResultModalSettings = computed(() => {
+  return premiumGridSharedPlayBoardSettings.value?.resultModal || {}
+})
+
+const isResultModalWin = computed(() => {
+  const prize = resultPrize.value || {}
+  const name = String(prize.name || prize.title || prize.shortName || '')
+
+  return prize.isWin !== false && !name.includes('未中獎') && !name.includes('銘謝')
+})
+
+const resultModalDisplayImage = computed(() => {
+  const settings = premiumGridResultModalSettings.value
+  const customImage = isResultModalWin.value ? settings.winImageUrl : settings.loseImageUrl
+
+  return customImage || resultPrize.value?.imageUrl || ''
+})
+
+const resultModalTitleText = computed(() => {
+  const settings = premiumGridResultModalSettings.value
+  return isResultModalWin.value
+    ? (settings.winTitle || '恭喜中獎！')
+    : (settings.loseTitle || '再接再厲')
+})
+
+const resultModalPrimaryButtonText = computed(() => {
+  const settings = premiumGridResultModalSettings.value
+  return effectiveGridChances.value > 0
+    ? (settings.continueText || '繼續抽獎')
+    : (settings.confirmText || '關閉結果')
+})
+
+const resultModalCardStyle = computed(() => ({
+  backgroundColor: premiumGridResultModalSettings.value.modalBackgroundColor || '#ffffff'
+}))
+
+const resultModalHeaderStyle = computed(() => ({
+  background: `linear-gradient(135deg, ${premiumGridResultModalSettings.value.headerFromColor || '#fb923c'}, ${premiumGridResultModalSettings.value.headerToColor || '#dc2626'})`
+}))
+
+const resultModalImageBoxStyle = computed(() => {
+  const size = Math.max(56, Math.min(180, Number(premiumGridResultModalSettings.value.imageSize || 96)))
+
+  return {
+    width: `${size}px`,
+    height: `${size}px`,
+    fontSize: `${Math.round(size * 0.58)}px`
+  }
+})
+
+const resultModalTitleStyle = computed(() => ({
+  fontSize: `${Math.max(16, Number(premiumGridResultModalSettings.value.titleTextSize || 24))}px`,
+  color: premiumGridResultModalSettings.value.titleTextColor || '#ffffff'
+}))
+
+const resultModalPrizeStyle = computed(() => ({
+  fontSize: `${Math.max(14, Number(premiumGridResultModalSettings.value.prizeTextSize || 18))}px`,
+  color: premiumGridResultModalSettings.value.prizeTextColor || '#fef3c7'
+}))
+
+const resultModalHintStyle = computed(() => ({
+  fontSize: `${Math.max(12, Number(premiumGridResultModalSettings.value.hintTextSize || 14))}px`,
+  color: premiumGridResultModalSettings.value.hintTextColor || '#64748b'
+}))
+
+const resultModalPrimaryButtonStyle = computed(() => ({
+  backgroundColor: premiumGridResultModalSettings.value.buttonColor || '#ea580c',
+  color: premiumGridResultModalSettings.value.buttonTextColor || '#ffffff'
+}))
 
 const getCellStyle = (index) => {
   const isActive = activeIndex.value === index
@@ -35070,12 +35173,12 @@ const toggleWheelRealFilePrep11011150 = () => {
         v-if="showResultModal && resultPrize"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
       >
-        <div class="w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl">
-          <div class="bg-gradient-to-br from-orange-400 to-red-600 px-6 py-8 text-center text-white">
-            <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-white/20 text-6xl shadow-inner">
+        <div class="w-full max-w-sm overflow-hidden rounded-[32px] shadow-2xl" :style="resultModalCardStyle">
+          <div class="px-6 py-8 text-center text-white" :style="resultModalHeaderStyle">
+            <div class="mx-auto flex items-center justify-center rounded-3xl bg-white/20 shadow-inner" :style="resultModalImageBoxStyle">
               <img
-                v-if="resultPrize.imageUrl"
-                :src="resultPrize.imageUrl"
+                v-if="resultModalDisplayImage"
+                :src="resultModalDisplayImage"
                 :alt="resultPrize.name"
                 class="h-full w-full rounded-3xl object-cover"
               />
@@ -35085,27 +35188,28 @@ const toggleWheelRealFilePrep11011150 = () => {
               </span>
             </div>
 
-            <h2 class="mt-5 text-2xl font-black">
-              恭喜中獎！
+            <h2 class="mt-5 font-black" :style="resultModalTitleStyle">
+              {{ resultModalTitleText }}
             </h2>
 
-            <p class="mt-2 text-lg font-black text-yellow-100">
+            <p class="mt-2 font-black" :style="resultModalPrizeStyle">
               {{ resultPrize.name }}
             </p>
           </div>
 
           <div class="p-6 text-center">
-            <p class="text-sm leading-6 text-slate-500">
+            <p class="leading-6" :style="resultModalHintStyle">
               {{ getResultModalHint() }}
             </p>
 
             <div class="mt-5 grid gap-3">
               <button
                 type="button"
-                class="w-full rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white transition hover:bg-orange-700"
+                class="w-full rounded-2xl px-5 py-3 text-sm font-black shadow-sm transition hover:brightness-95"
+                :style="resultModalPrimaryButtonStyle"
                 @click="closeResultAndContinue"
               >
-                {{ effectiveGridChances > 0 ? '繼續抽獎' : '關閉結果' }}
+                {{ resultModalPrimaryButtonText }}
               </button>
 
               <button
