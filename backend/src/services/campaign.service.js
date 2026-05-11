@@ -36,6 +36,9 @@ const SUPPORTED_CAMPAIGN_STATUSES = new Set(['DRAFT', 'ACTIVE', 'INACTIVE', 'END
 const PLATFORM_WHEEL_TEMPLATE_STORAGE_MODE = 'PLATFORM_WHEEL_TEMPLATE'
 const PLATFORM_WHEEL_TEMPLATE_SLUG_PREFIX = 'platform-wheel-template-'
 const PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID = 'wheel'
+const PLATFORM_PREMIUM_GRID_TEMPLATE_STORAGE_MODE = 'PLATFORM_PREMIUM_GRID_TEMPLATE'
+const PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG_PREFIX = 'platform-premium-grid-template-'
+const PLATFORM_PREMIUM_GRID_TEMPLATE_DEFAULT_ID = 'premium-grid'
 
 const normalizeCampaignId = (id) => {
   const campaignId = Number(id)
@@ -605,41 +608,277 @@ const attachWheelTemplateCloneMeta = (settings = {}, context = {}) => {
   }
 }
 
+
+const normalizePlatformPremiumGridTemplateId = (value = '') => {
+  const normalized = String(value || PLATFORM_PREMIUM_GRID_TEMPLATE_DEFAULT_ID)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return normalized || PLATFORM_PREMIUM_GRID_TEMPLATE_DEFAULT_ID
+}
+
+const getPlatformPremiumGridTemplateSlug = (templateId = PLATFORM_PREMIUM_GRID_TEMPLATE_DEFAULT_ID) => {
+  return `${PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG_PREFIX}${normalizePlatformPremiumGridTemplateId(templateId)}`
+}
+
+const getPayloadPremiumGridTemplateId = (payload = {}) => {
+  return normalizePlatformPremiumGridTemplateId(
+    payload.templateId ||
+      payload.gameId ||
+      payload.templateKey ||
+      payload.templateSlug ||
+      PLATFORM_PREMIUM_GRID_TEMPLATE_DEFAULT_ID
+  )
+}
+
+const isPlatformPremiumGridTemplateStoragePayload = (payload = {}, gameType = '') => {
+  return String(gameType || '').toUpperCase() === 'GRID' &&
+    String(payload.templateStorageMode || payload.platformTemplateMode || '').trim().toUpperCase() === PLATFORM_PREMIUM_GRID_TEMPLATE_STORAGE_MODE
+}
+
+const buildPlatformPremiumGridTemplateMeta = ({ user = null, payload = {}, templateId = PLATFORM_PREMIUM_GRID_TEMPLATE_DEFAULT_ID } = {}) => ({
+  ...(isPlainObject(payload?.settings?.templateMeta) ? payload.settings.templateMeta : {}),
+  source: 'PLATFORM_PREMIUM_GRID_TEMPLATE',
+  sourceType: 'platform_template',
+  targetType: 'platform_template',
+  cloneMode: 'TEMPLATE_SOURCE_ONLY',
+  cloneBatch: '83601-84000',
+  version: 'v23_batch83601_84000',
+  isMerchantOwnedCopy: false,
+  lockTemplateSync: false,
+  allowAutoSyncFromPlatformTemplate: false,
+  templateId: normalizePlatformPremiumGridTemplateId(templateId),
+  platformTemplateSlug: getPlatformPremiumGridTemplateSlug(templateId),
+  savedAt: new Date().toISOString(),
+  savedByRole: getUserRole(user) || null,
+  savedByUserId: user?.id || null,
+  note: '這是九宮格平台模板本體；商家新建九宮格活動時會複製一次成商家活動副本，既有活動不會被自動同步。'
+})
+
+const getPlatformPremiumGridTemplateDefaults = () => ({
+  basicText: {
+    pageTitle: '精緻九宮格抽獎',
+    brandName: 'Multi Game Platform',
+    brandSubtitle: '打造專屬互動抽獎體驗',
+    headline: '豪華九宮格',
+    subtitle: '每日登入抽好禮',
+    badgeText: '輸入序號後即可抽獎',
+    playButtonText: '開始抽獎'
+  },
+  textSize: {
+    headlineSize: 36,
+    subtitleSize: 28,
+    brandNameSize: 16,
+    buttonTextSize: 16,
+    prizeTextSize: 13
+  },
+  display: {
+    showBrandCard: true,
+    showStatusCard: true,
+    showRules: true,
+    showPrizeInfo: true,
+    showHistory: true
+  },
+  prizes: [
+    { id: 1, position: 1, icon: '🎁', imageUrl: '', title: '神秘獎品', weight: 20, probabilityPercent: 20, enabled: true },
+    { id: 2, position: 2, icon: '🎁', imageUrl: '', title: '神秘獎品', weight: 20, probabilityPercent: 20, enabled: true },
+    { id: 3, position: 3, icon: '🎁', imageUrl: '', title: '神秘獎品', weight: 12, probabilityPercent: 12, enabled: true },
+    { id: 4, position: 4, icon: '🎁', imageUrl: '', title: '神秘獎品', weight: 10, probabilityPercent: 10, enabled: true },
+    { id: 5, position: 5, icon: '✨', imageUrl: '', title: '點擊抽選', weight: 0, probabilityPercent: 0, enabled: true, isCenter: true },
+    { id: 6, position: 6, icon: '🎁', imageUrl: '', title: '神秘獎品', weight: 25, probabilityPercent: 25, enabled: true },
+    { id: 7, position: 7, icon: '🎁', imageUrl: '', title: '神秘獎品', weight: 8, probabilityPercent: 8, enabled: true },
+    { id: 8, position: 8, icon: '🎁', imageUrl: '', title: '神秘獎品', weight: 4, probabilityPercent: 4, enabled: true },
+    { id: 9, position: 9, icon: '🎁', imageUrl: '', title: '神秘獎品', weight: 1, probabilityPercent: 1, enabled: true }
+  ],
+  gridItems: []
+})
+
+const resolvePlatformPremiumGridTemplateStorageSettings = (payload = {}, user = null) => {
+  const templateId = getPayloadPremiumGridTemplateId(payload)
+  const normalizedSettings = normalizeSettings(payload)
+  const baseSettings = getPlatformPremiumGridTemplateDefaults()
+  const mergedSettings = hasMeaningfulSettings(normalizedSettings)
+    ? deepMergePlainObject(baseSettings, normalizedSettings)
+    : baseSettings
+
+  return {
+    ...mergedSettings,
+    templateMeta: buildPlatformPremiumGridTemplateMeta({ user, payload, templateId })
+  }
+}
+
+const getPersistedPlatformPremiumGridTemplateSettings = async (templateId = PLATFORM_PREMIUM_GRID_TEMPLATE_DEFAULT_ID) => {
+  const slug = getPlatformPremiumGridTemplateSlug(templateId)
+
+  const templateCampaign = await prisma.campaign.findFirst({
+    where: {
+      slug,
+      gameType: 'GRID'
+    },
+    include: {
+      gameConfig: true
+    }
+  })
+
+  const settings = templateCampaign?.gameConfig?.settings
+
+  if (!hasMeaningfulSettings(settings)) {
+    return {
+      settings: null,
+      templateCampaignId: templateCampaign?.id || null,
+      slug,
+      templateId: normalizePlatformPremiumGridTemplateId(templateId),
+      found: false
+    }
+  }
+
+  return {
+    settings,
+    templateCampaignId: templateCampaign.id,
+    slug,
+    templateId: normalizePlatformPremiumGridTemplateId(templateId),
+    found: true
+  }
+}
+
+const resolvePlatformPremiumGridTemplateForClone = async (payload = {}) => {
+  const templateId = getPayloadPremiumGridTemplateId(payload)
+  const persisted = await getPersistedPlatformPremiumGridTemplateSettings(templateId)
+  const baseSettings = getPlatformPremiumGridTemplateDefaults()
+  const settings = persisted.found
+    ? deepMergePlainObject(baseSettings, persisted.settings)
+    : baseSettings
+
+  return {
+    settings,
+    templateId,
+    platformTemplateSlug: persisted.slug,
+    templateCampaignId: persisted.templateCampaignId,
+    sourceMode: persisted.found ? 'persisted_platform_template_campaign' : 'static_backend_default',
+    found: persisted.found
+  }
+}
+
+const buildPremiumGridTemplateCloneMeta = ({ tenantId = null, user = null, payload = {}, usedCustomSettings = false, platformTemplateInfo = {} } = {}) => {
+  const payloadTemplateMeta = isPlainObject(payload?.settings?.templateMeta)
+    ? payload.settings.templateMeta
+    : {}
+
+  return {
+    ...payloadTemplateMeta,
+    source: 'PLATFORM_PREMIUM_GRID_TEMPLATE',
+    sourceType: 'platform_template',
+    targetType: 'merchant_campaign',
+    cloneMode: 'CREATE_CAMPAIGN_ONLY',
+    cloneBatch: '83601-84000',
+    version: 'v23_batch83601_84000',
+    isMerchantOwnedCopy: true,
+    lockTemplateSync: true,
+    allowAutoSyncFromPlatformTemplate: false,
+    templateId: platformTemplateInfo.templateId || getPayloadPremiumGridTemplateId(payload),
+    platformTemplateSlug: platformTemplateInfo.platformTemplateSlug || getPlatformPremiumGridTemplateSlug(getPayloadPremiumGridTemplateId(payload)),
+    platformTemplateCampaignId: platformTemplateInfo.templateCampaignId || null,
+    platformTemplateSourceMode: platformTemplateInfo.sourceMode || 'static_backend_default',
+    clonedAt: new Date().toISOString(),
+    clonedForTenantId: tenantId || null,
+    clonedByRole: getUserRole(user) || null,
+    clonedByUserId: user?.id || null,
+    createdFromPayloadSettings: usedCustomSettings,
+    copiedLatestPlatformTemplate: platformTemplateInfo.sourceMode === 'persisted_platform_template_campaign',
+    note: platformTemplateInfo.sourceMode === 'persisted_platform_template_campaign'
+      ? '此設定是建立商家九宮格活動時，由最新已儲存的平台九宮格模板複製的一次性商家副本；後續平台模板修改不會自動同步到此活動。'
+      : '此設定是建立商家九宮格活動時，由後端預設平台九宮格模板複製的一次性商家副本；後續平台模板修改不會自動同步到此活動。'
+  }
+}
+
+const attachPremiumGridTemplateCloneMeta = (settings = {}, context = {}) => {
+  return {
+    ...settings,
+    templateMeta: buildPremiumGridTemplateCloneMeta(context)
+  }
+}
+
+const pickMerchantGridRuntimeOverrides = (settings = {}) => {
+  const overrides = {}
+
+  ;['operationMode', 'requireSerialCode', 'serialPrefix', 'playerHint'].forEach((key) => {
+    if (settings[key] !== undefined) overrides[key] = settings[key]
+  })
+
+  // 商家建立活動頁以前會送出一組舊版 gridItems；這些是建立頁預設值，不是平台模板。
+  // 這裡刻意不讓舊版 gridItems / textSize 覆蓋最新平台模板，避免新建活動字級、獎項又回到舊預設。
+  return overrides
+}
+
 const resolveInitialGameConfigSettings = async (gameType, payload = {}, context = {}) => {
   const normalizedSettings = normalizeSettings(payload)
 
-  if (gameType !== 'WHEEL') {
-    return normalizedSettings
-  }
+  if (gameType === 'WHEEL') {
+    if (isPlatformWheelTemplateStoragePayload(payload, gameType)) {
+      return resolvePlatformWheelTemplateStorageSettings(payload, context.user)
+    }
 
-  if (isPlatformWheelTemplateStoragePayload(payload, gameType)) {
-    return resolvePlatformWheelTemplateStorageSettings(payload, context.user)
-  }
+    const platformTemplateInfo = await resolvePlatformWheelTemplateForClone(payload)
+    const platformWheelTemplate = platformTemplateInfo.settings
+    const hasCustomSettings = hasMeaningfulSettings(normalizedSettings)
 
-  const platformTemplateInfo = await resolvePlatformWheelTemplateForClone(payload)
-  const platformWheelTemplate = platformTemplateInfo.settings
-  const hasCustomSettings = hasMeaningfulSettings(normalizedSettings)
+    if (!hasCustomSettings) {
+      return attachWheelTemplateCloneMeta(platformWheelTemplate, {
+        ...context,
+        payload,
+        usedCustomSettings: false,
+        platformTemplateInfo
+      })
+    }
 
-  if (!hasCustomSettings) {
-    return attachWheelTemplateCloneMeta(platformWheelTemplate, {
+    // 若建立活動時已有局部 settings，仍以最新平台模板補齊缺少欄位，
+    // 但保留呼叫端明確傳入的商家活動設定。
+    // templateMeta 由後端重新標記，避免呼叫端把平台模板或其他商家活動的追蹤資訊帶進新活動。
+    const mergedSettings = deepMergePlainObject(platformWheelTemplate, normalizedSettings)
+
+    return attachWheelTemplateCloneMeta(mergedSettings, {
       ...context,
       payload,
-      usedCustomSettings: false,
+      usedCustomSettings: true,
       platformTemplateInfo
     })
   }
 
-  // 若建立活動時已有局部 settings，仍以最新平台模板補齊缺少欄位，
-  // 但保留呼叫端明確傳入的商家活動設定。
-  // templateMeta 由後端重新標記，避免呼叫端把平台模板或其他商家活動的追蹤資訊帶進新活動。
-  const mergedSettings = deepMergePlainObject(platformWheelTemplate, normalizedSettings)
+  if (gameType === 'GRID') {
+    if (isPlatformPremiumGridTemplateStoragePayload(payload, gameType)) {
+      return resolvePlatformPremiumGridTemplateStorageSettings(payload, context.user)
+    }
 
-  return attachWheelTemplateCloneMeta(mergedSettings, {
-    ...context,
-    payload,
-    usedCustomSettings: true,
-    platformTemplateInfo
-  })
+    const platformTemplateInfo = await resolvePlatformPremiumGridTemplateForClone(payload)
+    const platformGridTemplate = platformTemplateInfo.settings
+    const hasCustomSettings = hasMeaningfulSettings(normalizedSettings)
+    const merchantRuntimeOverrides = pickMerchantGridRuntimeOverrides(normalizedSettings)
+
+    if (!hasCustomSettings) {
+      return attachPremiumGridTemplateCloneMeta(platformGridTemplate, {
+        ...context,
+        payload,
+        usedCustomSettings: false,
+        platformTemplateInfo
+      })
+    }
+
+    // 第 83601～84000 批：商家新建九宮格活動必須完整套用平台模板。
+    // 建立頁送出的 gridItems / textSize 多半是舊版本地預設，不能覆蓋平台模板已儲存的字級、獎項與版面。
+    // 只保留 operationMode / requireSerialCode / serialPrefix / playerHint 這類活動執行欄位。
+    const mergedSettings = deepMergePlainObject(platformGridTemplate, merchantRuntimeOverrides)
+
+    return attachPremiumGridTemplateCloneMeta(mergedSettings, {
+      ...context,
+      payload,
+      usedCustomSettings: true,
+      platformTemplateInfo
+    })
+  }
+
+  return normalizedSettings
 }
 
 
