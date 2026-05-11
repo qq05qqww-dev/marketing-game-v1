@@ -1,4 +1,4 @@
-// 第 66001～66400 批：輪盤精緻預設微調面板版
+// 第 66401～66800 批：輪盤右側預覽平滑更新不重載版
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -208,6 +208,8 @@ const lastChangedAt = ref('')
 const lastSavedAt = ref('')
 const settingsSnapshotAfterSave = ref('')
 const unsavedChangeReason = ref('尚未偵測到本次修改')
+const previewSmoothSyncStatus = ref('平滑預覽待命')
+const previewSmoothSyncAt = ref('')
 
 const previewFocusOptions = [
   { key: 'top', label: '上方' },
@@ -248,14 +250,18 @@ const previewIframeScaleStyle = computed(() => ({
 }))
 
 const setPreviewDeviceMode = (mode = 'phone') => {
+  // 第 66401～66800 批：裝置框架只改外層尺寸，不重載 iframe，避免右側白畫面閃爍。
   previewDeviceMode.value = mode
-  previewKey.value += 1
+  previewSmoothSyncStatus.value = `已切換預覽裝置：${previewDeviceProfile.value.label}`
+  previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
   nextTick(scrollPreviewToFocus)
 }
 
 const setPreviewZoomMode = (mode = '100') => {
+  // 第 66401～66800 批：縮放只套用 CSS，不重載 iframe。
   previewZoomMode.value = mode
-  previewKey.value += 1
+  previewSmoothSyncStatus.value = `已切換預覽縮放：${previewZoomProfile.value.label}`
+  previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
   nextTick(scrollPreviewToFocus)
 }
 
@@ -651,7 +657,7 @@ const applyWheelPolishPreset = (presetKey = '') => {
     window.clearTimeout(previewSyncTimer)
   }
 
-  persistLocalDraft()
+  persistLocalDraft('settings-update')
   previewFocusMode.value = 'wheel'
   nextTick(scrollPreviewToFocus)
 
@@ -797,7 +803,7 @@ const setWheelFineTuneValue = (key = '', value = '') => {
     window.clearTimeout(previewSyncTimer)
   }
 
-  persistLocalDraft()
+  persistLocalDraft('settings-update')
   previewFocusMode.value = 'wheel'
   nextTick(scrollPreviewToFocus)
 
@@ -1604,6 +1610,54 @@ const safePreviewUrl = computed(() => {
     return `${playerUrl.value}${separator}${params.toString()}`
   }
 })
+
+const buildPreviewDraftSyncPayload = (reason = 'settings-update') => ({
+  type: 'MGP_WHEEL_ADMIN_DRAFT_UPDATE',
+  source: 'AdminWheelSettingsView',
+  batch: '66401-66800',
+  reason,
+  storageKey: storageKey.value,
+  settings: JSON.parse(JSON.stringify(settings)),
+  route: {
+    isPlatformTemplateMode: isPlatformTemplateMode.value,
+    templateId: templateId.value,
+    tenantSlug: tenantSlug.value,
+    campaignId: campaignId.value || '',
+    previewFocusMode: previewFocusMode.value
+  },
+  updatedAt: new Date().toISOString()
+})
+
+const postPreviewDraftUpdate = (reason = 'settings-update') => {
+  if (typeof window === 'undefined') return false
+
+  const frameWindow = previewIframeRef.value?.contentWindow
+  if (!frameWindow) {
+    previewSmoothSyncStatus.value = '預覽尚未載入，草稿已先保存。'
+    previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
+    return false
+  }
+
+  try {
+    frameWindow.postMessage(buildPreviewDraftSyncPayload(reason), window.location.origin)
+    previewSmoothSyncStatus.value = '右側預覽已平滑更新，沒有重新載入 iframe。'
+    previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
+    return true
+  } catch (error) {
+    console.warn('同步輪盤右側預覽失敗，保留草稿等待下次重載：', error)
+    previewSmoothSyncStatus.value = '平滑同步失敗，已保存草稿；必要時可手動重整預覽。'
+    previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
+    return false
+  }
+}
+
+const forcePreviewReload = (reason = 'manual-reload') => {
+  previewKey.value += 1
+  previewSmoothSyncStatus.value = `已重載預覽：${reason}`
+  previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
+  nextTick(scrollPreviewToFocus)
+}
+
 const assignDeep = (target, source) => {
   Object.keys(source || {}).forEach((key) => {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
@@ -1788,10 +1842,12 @@ const saveGameConfig = async () => {
   return unwrapApiPayload(payload)
 }
 
-const persistLocalDraft = () => {
+const persistLocalDraft = (reason = 'settings-update') => {
   try {
     localStorage.setItem(storageKey.value, JSON.stringify(settings))
-    previewKey.value += 1
+    // 第 66401～66800 批：一般設定變更只透過 postMessage 推送到右側 iframe，
+    // 不再增加 previewKey，避免 iframe 整頁重載造成白畫面與跳動。
+    postPreviewDraftUpdate(reason)
     return true
   } catch (error) {
     console.warn('暫存輪盤設定草稿失敗：', error)
@@ -1806,8 +1862,8 @@ const loadRemoteGameConfig = async () => {
       if (remoteSettings && Object.keys(remoteSettings).length) {
         assignDeep(settings, defaultSettings())
         assignDeep(settings, remoteSettings)
-        localStorage.setItem(storageKey.value, JSON.stringify(settings))
-        previewKey.value += 1
+        persistLocalDraft('platform-template-remote-loaded')
+        forcePreviewReload('平台模板資料載入')
       }
       remoteConfigLoaded.value = platformTemplateRemoteLoaded.value
     } catch (error) {
@@ -1825,8 +1881,8 @@ const loadRemoteGameConfig = async () => {
     if (remoteSettings && Object.keys(remoteSettings).length) {
       assignDeep(settings, defaultSettings())
       assignDeep(settings, remoteSettings)
-      localStorage.setItem(storageKey.value, JSON.stringify(settings))
-      previewKey.value += 1
+      persistLocalDraft('merchant-remote-loaded')
+      forcePreviewReload('商家活動資料載入')
     }
     remoteConfigLoaded.value = true
   } catch (error) {
@@ -1852,7 +1908,7 @@ const saveSettings = async (options = {}) => {
   const silent = options?.silent === true
 
   saveErrorMessage.value = ''
-  persistLocalDraft()
+  persistLocalDraft('settings-update')
 
   if (isPlatformTemplateMode.value) {
     isSaving.value = true
@@ -1993,7 +2049,7 @@ const schedulePreviewSync = () => {
 
   window.clearTimeout(previewSyncTimer)
   previewSyncTimer = window.setTimeout(() => {
-    persistLocalDraft()
+    persistLocalDraft('settings-update')
   }, 650)
 }
 
@@ -2114,7 +2170,7 @@ const resetSectionToDefault = (sectionKey = activeCategory.value) => {
   }
 
   activeCategory.value = sectionKey
-  persistLocalDraft()
+  persistLocalDraft('settings-update')
   previewFocusMode.value = ['theme', 'wheel', 'polish', 'prizes'].includes(sectionKey) ? 'wheel' : 'top'
   nextTick(scrollPreviewToFocus)
   markSettingsDirty(`已執行「${label}」，尚未儲存`)
@@ -2227,8 +2283,9 @@ const scrollPreviewToFocus = () => {
 }
 
 const setPreviewFocus = (mode = 'wheel') => {
+  // 第 66401～66800 批：切換焦點只捲動 iframe 內既有內容，不重載頁面。
   previewFocusMode.value = mode
-  previewKey.value += 1
+  postPreviewDraftUpdate('preview-focus-change')
   nextTick(scrollPreviewToFocus)
 }
 
@@ -2241,7 +2298,7 @@ watch(storageKey, () => {
   assignDeep(settings, defaultSettings())
   loadSettings()
   loadSaveAuditHistory()
-  previewKey.value += 1
+  forcePreviewReload('切換活動或模板')
   markSettingsSaved('已切換頁面並載入目前設定')
   nextTick(() => {
     isSettingsHydrating.value = false
@@ -2286,7 +2343,7 @@ onMounted(async () => {
   loadSettings()
   loadSaveAuditHistory()
   await loadRemoteGameConfig()
-  persistLocalDraft()
+  persistLocalDraft('settings-update')
   markSettingsSaved('頁面已載入目前設定')
   window.addEventListener('beforeunload', handleBeforeUnload)
   nextTick(() => {
@@ -3685,10 +3742,13 @@ onBeforeUnmount(() => {
               <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
                 {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}｜{{ previewDeviceProfile.label }}｜{{ previewZoomProfile.label }}
               </div>
+              <div class="border-b border-slate-100 bg-emerald-50 px-4 py-2 text-center text-[11px] font-black text-emerald-700">
+                Smooth Preview Sync｜第 66401～66800 批：{{ previewSmoothSyncStatus }}<span v-if="previewSmoothSyncAt">｜{{ previewSmoothSyncAt }}</span>
+              </div>
 
               <iframe
                 ref="previewIframeRef"
-                :key="`${previewKey}-${previewDeviceMode}-${previewZoomMode}`"
+                :key="`preview-${previewKey}`"
                 :src="safePreviewUrl"
                 title="輪盤正式玩家頁即時預覽"
                 class="w-full bg-white"
@@ -3705,7 +3765,7 @@ onBeforeUnmount(() => {
                 class="rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-950"
                 @click="guardedSaveSettings"
               >
-                儲存並重整預覽
+                儲存設定
               </button>
               <button
                 type="button"

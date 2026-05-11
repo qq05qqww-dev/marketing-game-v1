@@ -1,5 +1,5 @@
 <script setup>
-// 第 62001～62400 批：輪盤精緻玩家頁視覺細節強化版
+// 第 66401～66800 批：輪盤右側預覽平滑更新不重載版
 /**
  * Multi Game Platform V2.3 第 62001～62400 批：輪盤精緻玩家頁視覺細節強化版
  *
@@ -3720,6 +3720,27 @@ const handlePremiumWheelStorageSync = (event) => {
   }
 }
 
+
+const handleWheelAdminDraftMessage = (event) => {
+  if (typeof window === 'undefined') return
+  if (!event?.data || typeof event.data !== 'object') return
+  if (event.origin !== window.location.origin) return
+  if (event.data.type !== 'MGP_WHEEL_ADMIN_DRAFT_UPDATE') return
+  if (!isAdminDraftPreviewRoute.value) return
+
+  const draft = event.data.settings
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return
+
+  try {
+    applyWheelAdminDraftSettings(draft)
+    updateChanceText()
+    lastSyncAt.value = new Date().toLocaleString('zh-TW')
+    lastSyncMessage.value = '已收到管理版平滑預覽同步，畫面已更新且沒有重新載入。'
+  } catch (error) {
+    console.warn('接收管理版平滑預覽同步失敗：', error)
+  }
+}
+
 const syncPremiumWheelToPlayer = () => {
   savePremiumWheelState()
   pingPremiumWheelSync()
@@ -5705,6 +5726,7 @@ onMounted(async () => {
   if (typeof window === 'undefined') return
 
   window.addEventListener('storage', handlePremiumWheelStorageSync)
+  window.addEventListener('message', handleWheelAdminDraftMessage)
 })
 
 onBeforeUnmount(() => {
@@ -5718,6 +5740,7 @@ onBeforeUnmount(() => {
   if (typeof window === 'undefined') return
 
   window.removeEventListener('storage', handlePremiumWheelStorageSync)
+  window.removeEventListener('message', handleWheelAdminDraftMessage)
 })
 
 watch(
