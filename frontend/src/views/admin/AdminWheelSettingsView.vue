@@ -196,6 +196,7 @@ const remoteConfigLoaded = ref(false)
 const isSaving = ref(false)
 const previewKey = ref(0)
 const activeCategory = ref('basic')
+const categoryPanelCollapsed = ref(false)
 const previewIframeRef = ref(null)
 const previewFocusMode = ref('wheel')
 const previewDeviceMode = ref('phone')
@@ -264,6 +265,44 @@ const settingCategories = [
   { key: 'frontend', icon: '設', title: '前台設定', desc: '玩家網址、預覽與公開顯示' },
   { key: 'prizes', icon: '獎', title: '輪盤獎項', desc: '獎項名稱、權重與顏色' }
 ]
+
+
+const quickSettingCategoryKeys = ['polish', 'basic', 'theme', 'wheel', 'prizes']
+
+const quickSettingCategories = computed(() => {
+  return settingCategories.filter((category) => quickSettingCategoryKeys.includes(category.key))
+})
+
+const currentSettingCategory = computed(() => {
+  return settingCategories.find((category) => category.key === activeCategory.value) || settingCategories[0]
+})
+
+const categoryPanelSummary = computed(() => {
+  const current = currentSettingCategory.value
+
+  return {
+    eyebrow: 'Quick Category Guard｜第 63601～64000 批',
+    title: categoryPanelCollapsed.value ? `目前編輯：${current.title}` : '輪盤設定分類',
+    desc: categoryPanelCollapsed.value
+      ? `分類清單已收合，左側只保留常用設定與目前分類：${current.desc}`
+      : '設定分類與模組精緻集中在左側，右側固定顯示輪盤玩家預覽。可收合分類清單，避免左側過長、修改時一直上下滑。',
+    activeTitle: current.title,
+    activeDesc: current.desc,
+    activeIcon: current.icon
+  }
+})
+
+const collapseCategoryPanel = () => {
+  categoryPanelCollapsed.value = true
+}
+
+const expandCategoryPanel = () => {
+  categoryPanelCollapsed.value = false
+}
+
+const toggleCategoryPanel = () => {
+  categoryPanelCollapsed.value = !categoryPanelCollapsed.value
+}
 
 const themeLabels = {
   backgroundFrom: '背景起始色',
@@ -2212,57 +2251,97 @@ onMounted(async () => {
         <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">設定分類｜第 62401～62800 批</p>
-              <h2 class="mt-2 text-2xl font-black text-slate-950">輪盤設定分類</h2>
-              <p class="mt-2 text-sm font-bold text-slate-500">設定分類與模組精緻集中在左側，右側固定顯示輪盤玩家預覽，修改時不用再上下找畫面。</p>
+              <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">{{ categoryPanelSummary.eyebrow }}</p>
+              <h2 class="mt-2 text-2xl font-black text-slate-950">{{ categoryPanelSummary.title }}</h2>
+              <p class="mt-2 text-sm font-bold text-slate-500">{{ categoryPanelSummary.desc }}</p>
             </div>
 
-        <div class="flex flex-wrap gap-2">
-          <button
-            type="button"
-            class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"
-            @click="activeCategory = 'basic'"
-          >
-            回到簡易模式
-          </button>
-          <button
-            type="button"
-            class="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
-            @click="resetSettings"
-          >
-            重設
-          </button>
-        </div>
-      </div>
-
-      <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
-        <button
-          v-for="category in settingCategories"
-          :key="category.key"
-          type="button"
-          class="group rounded-[1.6rem] border p-4 text-left transition"
-          :class="activeCategory === category.key
-            ? 'border-orange-300 bg-gradient-to-br from-orange-500 to-purple-600 text-white shadow-xl shadow-orange-200/70'
-            : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-orange-200 hover:bg-orange-50'
-          "
-          @click="setCategory(category.key)"
-        >
-          <div class="flex items-center gap-3">
-            <span
-              class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-black shadow-sm"
-              :class="activeCategory === category.key ? 'bg-white/20 text-white' : 'bg-white text-slate-700'"
-            >
-              {{ category.icon }}
-            </span>
-            <div>
-              <p class="text-base font-black">{{ category.title }}</p>
-              <p :class="['mt-1 text-xs font-bold leading-5', activeCategory === category.key ? 'text-white/80' : 'text-slate-400']">
-                {{ category.desc }}
-              </p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"
+                @click="setCategory('basic')"
+              >
+                回到簡易模式
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl border border-orange-200 bg-orange-50 px-5 py-3 text-sm font-black text-orange-700 transition hover:bg-orange-100"
+                @click="toggleCategoryPanel"
+              >
+                {{ categoryPanelCollapsed ? '展開分類' : '收合分類' }}
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                @click="resetSettings"
+              >
+                重設
+              </button>
             </div>
           </div>
-        </button>
-      </div>
+
+          <div class="mb-4 rounded-[1.5rem] border border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 p-4">
+            <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div class="flex items-center gap-3">
+                <span class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-sm font-black text-orange-700 shadow-sm">
+                  {{ categoryPanelSummary.activeIcon }}
+                </span>
+                <div>
+                  <p class="text-sm font-black text-slate-900">目前分類：{{ categoryPanelSummary.activeTitle }}</p>
+                  <p class="mt-1 text-xs font-bold leading-5 text-slate-500">{{ categoryPanelSummary.activeDesc }}</p>
+                </div>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="category in quickSettingCategories"
+                  :key="`quick-${category.key}`"
+                  type="button"
+                  class="rounded-full px-4 py-2 text-xs font-black transition"
+                  :class="activeCategory === category.key
+                    ? 'bg-slate-950 text-white shadow'
+                    : 'bg-white text-slate-600 ring-1 ring-orange-100 hover:bg-orange-100 hover:text-orange-700'
+                  "
+                  @click="setCategory(category.key)"
+                >
+                  {{ category.title }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-show="!categoryPanelCollapsed" class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            <button
+              v-for="category in settingCategories"
+              :key="category.key"
+              type="button"
+              class="group rounded-[1.6rem] border p-4 text-left transition"
+              :class="activeCategory === category.key
+                ? 'border-orange-300 bg-gradient-to-br from-orange-500 to-purple-600 text-white shadow-xl shadow-orange-200/70'
+                : 'border-slate-200 bg-slate-50 text-slate-700 hover:border-orange-200 hover:bg-orange-50'
+              "
+              @click="setCategory(category.key)"
+            >
+              <div class="flex items-center gap-3">
+                <span
+                  class="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-black shadow-sm"
+                  :class="activeCategory === category.key ? 'bg-white/20 text-white' : 'bg-white text-slate-700'"
+                >
+                  {{ category.icon }}
+                </span>
+                <div>
+                  <p class="text-base font-black">{{ category.title }}</p>
+                  <p :class="['mt-1 text-xs font-bold leading-5', activeCategory === category.key ? 'text-white/80' : 'text-slate-400']">
+                    {{ category.desc }}
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <div v-show="categoryPanelCollapsed" class="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500">
+            分類清單已收合。你可以用上方常用設定快速切換，或按「展開分類」查看全部設定分類。
+          </div>
         </section>
 
         <section v-show="activeCategory === 'polish'" class="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
