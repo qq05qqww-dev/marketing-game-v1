@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 82401～82800 批：九宮格平台模板草稿尺寸儲存不回彈修正版
+// 第 83201～83600 批：九宮格平台模板正式資料庫儲存版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -15,6 +15,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCampaignGameConfigApi, saveCampaignGameConfigApi } from '../../api/campaign'
+import http from '../../api/http'
 
 const route = useRoute()
 const router = useRouter()
@@ -135,6 +136,52 @@ const normalizedCampaignId = computed(() => {
 
 const canUseGameConfigApi = computed(() => Boolean(normalizedCampaignId.value))
 const isTemplateDraftMode = computed(() => !canUseGameConfigApi.value)
+
+const PLATFORM_PREMIUM_GRID_TEMPLATE_ID = 'premium-grid'
+const PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG = 'platform-premium-grid-template-premium-grid'
+const PLATFORM_PREMIUM_GRID_TEMPLATE_MODE = 'PLATFORM_PREMIUM_GRID_TEMPLATE'
+
+
+const normalizeApiList = (payload = null) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.items)) return payload.items
+  if (Array.isArray(payload?.rows)) return payload.rows
+  if (Array.isArray(payload?.campaigns)) return payload.campaigns
+  return []
+}
+
+const findSavedPlatformPremiumGridTemplate = async () => {
+  const response = await http.get('/campaigns', {
+    params: {
+      slug: PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG,
+      gameType: 'GRID'
+    }
+  })
+
+  const list = normalizeApiList(unwrapApiPayload(response))
+  return list.find((item) => String(item?.slug || '') === PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG) || list[0] || null
+}
+
+const buildPlatformPremiumGridTemplateSettings = () => {
+  const settingsPayload = buildSettingsSavePayload()
+
+  return {
+    ...settingsPayload,
+    templateMeta: {
+      ...(settingsPayload.templateMeta || {}),
+      source: 'PLATFORM_PREMIUM_GRID_TEMPLATE',
+      sourceType: 'platform_template',
+      targetType: 'platform_template',
+      cloneMode: 'CREATE_CAMPAIGN_ONLY',
+      templateId: PLATFORM_PREMIUM_GRID_TEMPLATE_ID,
+      platformTemplateSlug: PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG,
+      savedAt: new Date().toISOString(),
+      version: 'v23_batch83201_83600',
+      batch: '83201-83600',
+      note: '這是九宮格平台模板正式資料庫設定；商家建立新九宮格活動時應複製此模板，既有商家活動不會被自動覆蓋。'
+    }
+  }
+}
 
 const formalPlayerPreviewUrl = computed(() => {
   // 第 82001～82400 批：平台模板中心不能再用 /play/a-shop/premium-grid 當預覽來源，
@@ -729,11 +776,19 @@ const setInlineSaveFeedback = (message = '', type = 'success') => {
   savedMessage.value = message
 }
 
-const saveTemplateDraftLocally = () => {
+const syncPlatformTemplateToLocalPreviewCache = (settingsPayload = null) => {
   if (typeof window === 'undefined') return
 
-  const settingsPayload = buildSettingsSavePayload()
-  const previewDraftPayload = buildAdminPreviewDraftPayload()
+  const settingsToStore = settingsPayload || buildPlatformPremiumGridTemplateSettings()
+  const previewDraftPayload = {
+    settings: settingsToStore,
+    meta: {
+      source: 'PLATFORM_PREMIUM_GRID_TEMPLATE_DATABASE_PREVIEW',
+      templateSlug: PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG,
+      syncedAt: new Date().toISOString()
+    }
+  }
+
   const storageKeys = [
     'mgp:premium-grid-platform-template-draft',
     'mgp:premium-grid-platform-template-saved',
@@ -744,18 +799,117 @@ const saveTemplateDraftLocally = () => {
   ]
 
   storageKeys.forEach((key) => {
-    // 第 82401～82800 批修正：
-    // iframe 預覽讀 draftKey 時需要 { settings: ... } 外層格式；
-    // 平台模板保存鍵則保留純 settings，方便未來新建活動複製模板。
-    const value = key === adminPreviewDraftKey.value ? previewDraftPayload : settingsPayload
+    const value = key === adminPreviewDraftKey.value ? previewDraftPayload : settingsToStore
     window.localStorage.setItem(key, JSON.stringify(value))
   })
 
-  configSavedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
-  configModeMessage.value = '已儲存九宮格平台模板草稿：此畫面是商家建立新九宮格活動時要複製的模板預覽，不是 A 商家的正式活動。既有商家活動不會被自動覆蓋。'
   syncDraftToPreviewStorage({ refresh: false })
   window.setTimeout(() => postDraftToPreviewIframe(previewDraftPayload), 60)
-  setInlineSaveFeedback('已儲存九宮格平台模板草稿，右側模板預覽已鎖定目前修改內容；重新整理後文字大小與獎項尺寸不會回彈。')
+}
+
+const savePlatformTemplateToDatabase = async () => {
+  configSaving.value = true
+  savedMessage.value = ''
+  warningMessage.value = ''
+  inlineSaveMessage.value = '儲存中，正在寫入九宮格平台模板資料庫...'
+
+  try {
+    const settingsPayload = buildPlatformPremiumGridTemplateSettings()
+    const title = settingsPayload?.basicText?.pageTitle || settingsPayload?.basicText?.headline || '九宮格平台模板'
+    const existing = await findSavedPlatformPremiumGridTemplate()
+
+    let templateCampaign = existing
+
+    if (existing?.id) {
+      await http.patch(`/campaigns/${existing.id}`, {
+        title,
+        name: title,
+        slug: PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG,
+        gameType: 'GRID',
+        status: 'ACTIVE',
+        templateStorageMode: PLATFORM_PREMIUM_GRID_TEMPLATE_MODE,
+        settings: settingsPayload,
+        gameConfig: {
+          settings: settingsPayload
+        }
+      })
+
+      await http.put(`/campaigns/${existing.id}/game-config`, {
+        settings: settingsPayload,
+        gameConfig: {
+          settings: settingsPayload
+        },
+        templateStorageMode: PLATFORM_PREMIUM_GRID_TEMPLATE_MODE,
+        source: 'AdminPremiumGridSettingsView',
+        savedAt: new Date().toISOString()
+      })
+    } else {
+      const createResponse = await http.post('/campaigns', {
+        title,
+        name: title,
+        slug: PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG,
+        gameType: 'GRID',
+        status: 'ACTIVE',
+        templateStorageMode: PLATFORM_PREMIUM_GRID_TEMPLATE_MODE,
+        settings: settingsPayload,
+        gameConfig: {
+          settings: settingsPayload
+        }
+      })
+
+      templateCampaign = unwrapApiPayload(createResponse)
+    }
+
+    const savedTemplate = templateCampaign?.id
+      ? await findSavedPlatformPremiumGridTemplate()
+      : await findSavedPlatformPremiumGridTemplate()
+
+    const savedSettings = savedTemplate?.gameConfig?.settings || settingsPayload
+    mergeSettingsIntoDraft(savedSettings)
+    syncPlatformTemplateToLocalPreviewCache(savedSettings)
+
+    configSavedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
+    configLoadedAt.value = configSavedAt.value
+    configModeMessage.value = '已儲存九宮格平台模板到線上資料庫：商家之後建立新九宮格活動時，應套用這份平台模板；既有商家活動不會被自動覆蓋。'
+    setInlineSaveFeedback('儲存完成：九宮格平台模板已寫入線上資料庫，右側模板預覽已同步，重新整理後不會回彈。')
+  } catch (error) {
+    console.error('儲存九宮格平台模板失敗:', error)
+    const message = error?.response?.data?.message || error?.message || '儲存九宮格平台模板失敗，請確認登入權限與 Render API。'
+    warningMessage.value = message
+    inlineSaveMessage.value = message
+  } finally {
+    configSaving.value = false
+  }
+}
+
+const loadPlatformTemplateFromDatabase = async () => {
+  configLoading.value = true
+  savedMessage.value = ''
+  warningMessage.value = ''
+  inlineSaveMessage.value = ''
+
+  try {
+    const templateCampaign = await findSavedPlatformPremiumGridTemplate()
+    const savedSettings = templateCampaign?.gameConfig?.settings
+
+    if (isSettingsObjectValid(savedSettings)) {
+      mergeSettingsIntoDraft(savedSettings)
+      configLoadedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
+      configModeMessage.value = '已讀取線上資料庫中的九宮格平台模板。按「儲存設定」會直接更新平台模板，不再存成草稿。'
+      savedMessage.value = '已載入九宮格平台模板資料庫設定。'
+      syncPlatformTemplateToLocalPreviewCache(savedSettings)
+    } else {
+      configLoadedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
+      configModeMessage.value = '尚未建立九宮格平台模板資料庫設定。按「儲存設定」會建立正式平台模板。'
+      savedMessage.value = '尚未找到九宮格平台模板，已使用目前預設值。'
+      syncPlatformTemplateToLocalPreviewCache(buildPlatformPremiumGridTemplateSettings())
+    }
+  } catch (error) {
+    console.error('讀取九宮格平台模板失敗:', error)
+    warningMessage.value = error?.response?.data?.message || '讀取九宮格平台模板失敗，請確認後端與權限。'
+  } finally {
+    configLoading.value = false
+  }
 }
 
 const mergeSettingsIntoDraft = (incoming = {}) => {
@@ -785,7 +939,7 @@ const mergeSettingsIntoDraft = (incoming = {}) => {
 
 const loadSettingsFromGameConfig = async () => {
   if (!canUseGameConfigApi.value) {
-    warningMessage.value = '目前網址沒有有效活動 ID，請用 /admin/premium-grid-settings/活動ID 進入。'
+    warningMessage.value = '目前是平台模板模式，會儲存到九宮格平台模板資料庫。'
     return
   }
 
@@ -831,7 +985,7 @@ const saveSettingsToGameConfig = async () => {
   inlineSaveMessage.value = ''
 
   if (!canUseGameConfigApi.value) {
-    saveTemplateDraftLocally()
+    await savePlatformTemplateToDatabase()
     return
   }
 
@@ -935,7 +1089,7 @@ const syncDraftToPreviewStorage = ({ refresh = false } = {}) => {
     }
   } catch (error) {
     console.error('同步九宮格即時預覽草稿失敗：', error)
-    warningMessage.value = '即時預覽草稿同步失敗，請改用儲存設定後重新載入預覽。'
+    warningMessage.value = '即時預覽同步失敗，請改用儲存設定後重新載入預覽。'
   }
 }
 
@@ -1104,14 +1258,14 @@ const setActiveSection = (key) => {
 }
 
 const markDraftSaved = () => {
-  savedMessage.value = '已暫存於目前頁面。若要重新整理後不消失，請使用「儲存設定」。'
+  savedMessage.value = '這裡不再提供草稿儲存；已改為正式儲存平台模板。需要備份請用「複製設定 JSON」。'
   warningMessage.value = ''
 }
 
 const copyDraftJson = async () => {
   try {
     await navigator.clipboard.writeText(exportDraftJson.value)
-    savedMessage.value = '已複製目前九宮格設定 JSON 草稿。'
+    savedMessage.value = '已複製目前九宮格設定 JSON 備份。'
   } catch (error) {
     warningMessage.value = '複製失敗，請手動複製 JSON。'
   }
@@ -1173,6 +1327,8 @@ watch(
 onMounted(() => {
   if (canUseGameConfigApi.value) {
     loadSettingsFromGameConfig()
+  } else {
+    loadPlatformTemplateFromDatabase()
   }
 
   syncDraftToPreviewStorage({ refresh: true })
@@ -1235,7 +1391,7 @@ onMounted(() => {
               複製設定 JSON
             </button>
             <button type="button" class="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-slate-800" @click="markDraftSaved">
-              暫存草稿
+              複製備份 JSON
             </button>
           </div>
         </div>
@@ -1251,7 +1407,7 @@ onMounted(() => {
           </div>
           <div class="rounded-2xl bg-amber-50 px-4 py-3">
             <p class="text-xs font-black text-amber-500">設定 API</p>
-            <p class="mt-1 text-lg font-black text-amber-800">{{ canUseGameConfigApi ? '資料庫儲存' : '模板草稿儲存' }}</p>
+            <p class="mt-1 text-lg font-black text-amber-800">{{ canUseGameConfigApi ? '資料庫儲存' : '平台模板資料庫' }}</p>
           </div>
           <div class="rounded-2xl bg-blue-50 px-4 py-3">
             <p class="text-xs font-black text-blue-500">讀取 / 儲存</p>
@@ -1595,7 +1751,7 @@ onMounted(() => {
                   class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   @click="markDraftSaved"
                 >
-                  暫存草稿
+                  複製備份 JSON
                 </button>
               </div>
               <p
@@ -2113,13 +2269,13 @@ onMounted(() => {
 
               <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-800">
                 {{ isTemplateDraftMode
-                  ? '目前是九宮格平台模板預覽：右側不是 A 商家正式活動，而是商家建立新九宮格活動時會看到的模板草稿。按「儲存設定」會保存這份模板草稿。'
+                  ? '目前是九宮格平台模板預覽：右側不是 A 商家正式活動，而是商家建立新九宮格活動時會看到的平台模板。按「儲存設定」會保存這份平台模板。'
                   : '這裡直接顯示真正玩家網址，不再用 PremiumGridPlayBoard.vue 模仿。左側修改會先同步到右側 iframe 預覽，不影響正式客人頁。' }}
               </div>
 
               <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                 <label class="flex items-center justify-between gap-3 text-sm font-black text-emerald-800">
-                  <span>即時預覽草稿同步</span>
+                  <span>即時預覽同步</span>
                   <input
                     v-model="livePreviewEnabled"
                     type="checkbox"
@@ -2184,7 +2340,7 @@ onMounted(() => {
               <p class="rounded-2xl bg-slate-50 px-4 py-3 text-xs font-bold leading-6 text-slate-500">
                 目前預覽網址：<span class="font-black text-slate-700">{{ formalPlayerPreviewUrl }}</span><br />
                 {{ isTemplateDraftMode
-                  ? '右側會讀取已儲存的九宮格平台模板草稿；這是商家新建九宮格活動時要套用的畫面，不是既有商家活動。'
+                  ? '右側會讀取已儲存的九宮格平台平台模板；這是商家新建九宮格活動時要套用的畫面，不是既有商家活動。'
                   : '右側 iframe 會讀取後台即時草稿；修改文字、顏色、獎項後會用平滑同步更新，不再每次重載畫面。正式客人頁只讀已儲存設定。' }}
               </p>
             </div>

@@ -104,6 +104,18 @@ import { useDrawHistory } from '../../composables/useDrawHistory'
 import { getTenantPremiumGridCampaignApi, playDrawEngineCampaignApi, getCampaignGameConfigApi } from '../../api/campaign'
 
 import http from '../../api/http'
+
+const PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG = 'platform-premium-grid-template-premium-grid'
+
+const unwrapApiPayload = (response = {}) => response?.data?.data ?? response?.data ?? response ?? null
+
+const normalizeApiList = (payload = null) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.items)) return payload.items
+  if (Array.isArray(payload?.rows)) return payload.rows
+  if (Array.isArray(payload?.campaigns)) return payload.campaigns
+  return []
+}
 // 第 3501-1 批：玩家正式頁預設隱藏所有批次驗收 / 開發說明面板。
 // 需要內部檢查時，可在網址加 ?gridDevPanels=1 才顯示。
 const showPremiumGridDevPanels = new URLSearchParams(window.location.search).get('gridDevPanels') === '1'
@@ -414,7 +426,7 @@ const getAdminPreviewTextStyle = (key, fallbackPx) => {
   }
 }
 
-// 第 82801～83200 批：正式玩家頁字型大小套用修正。
+// 第 83201～83600 批：九宮格平台模板正式資料庫讀取版。
 // 後台儲存的 textSize 不只要給 iframe 草稿預覽，也要在正式玩家頁讀取 GameConfig.settings 後套用。
 // 否則商家後台右側預覽會變大，但玩家手機正式頁仍會維持預設小字。
 const normalizePremiumGridTextSizeSettings = (settings = {}) => {
@@ -2992,6 +3004,43 @@ const premiumGridBackendProbabilitySummary = computed(() => {
   }
 })
 
+const shouldLoadPlatformPremiumGridTemplate = computed(() => {
+  return !isTenantPremiumGridMode.value && !tenantCampaignId.value && route.query.adminPreviewDraft !== '1'
+})
+
+const loadPlatformPremiumGridTemplateSettings = async () => {
+  if (!shouldLoadPlatformPremiumGridTemplate.value) return
+
+  premiumGridGameConfigLoading.value = true
+  premiumGridGameConfigError.value = ''
+
+  try {
+    const response = await http.get('/campaigns', {
+      params: {
+        slug: PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG,
+        gameType: 'GRID'
+      }
+    })
+
+    const list = normalizeApiList(unwrapApiPayload(response))
+    const templateCampaign = list.find((item) => String(item?.slug || '') === PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG) || list[0] || null
+    const settings = templateCampaign?.gameConfig?.settings || templateCampaign?.settings || templateCampaign?.gameConfig?.data?.settings || null
+
+    if (settings && typeof settings === 'object') {
+      applyPremiumGridGameConfigSettingsToLiveState(settings)
+      campaign.templateSource = 'PLATFORM_PREMIUM_GRID_TEMPLATE_DATABASE'
+      campaign.templateSourceLabel = '已讀取線上九宮格平台模板'
+      premiumGridGameConfigLoadedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
+    }
+  } catch (error) {
+    console.warn('讀取九宮格平台模板設定失敗，改用預設模板：', error)
+    premiumGridGameConfigError.value = error?.response?.data?.message || ''
+  } finally {
+    premiumGridGameConfigLoading.value = false
+    applyAdminPreviewDraftToCampaign()
+  }
+}
+
 const loadPremiumGridGameConfigSettings = async (campaignId) => {
   // 第 30701～31100 批：
   // 正式遠端玩家頁也要讀 PostgreSQL GameConfig.settings，
@@ -3787,6 +3836,8 @@ onMounted(() => {
     loadTenantPremiumGridCampaign()
   } else if (tenantCampaignId.value) {
     loadPremiumGridGameConfigSettings(tenantCampaignId.value)
+  } else {
+    loadPlatformPremiumGridTemplateSettings()
   }
 
   applyAdminPreviewDraftToCampaign()
@@ -3803,6 +3854,9 @@ watch(
   () => route.fullPath,
   () => {
     loadPremiumGridState()
+    if (shouldLoadPlatformPremiumGridTemplate.value) {
+      loadPlatformPremiumGridTemplateSettings()
+    }
     applyAdminPreviewDraftToCampaign()
   }
 )
