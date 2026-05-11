@@ -210,6 +210,8 @@ const settingsSnapshotAfterSave = ref('')
 const unsavedChangeReason = ref('尚未偵測到本次修改')
 const previewSmoothSyncStatus = ref('平滑預覽待命')
 const previewSmoothSyncAt = ref('')
+const previewSmoothSyncCount = ref(0)
+const previewSmoothSyncMode = ref('idle')
 
 const previewFocusOptions = [
   { key: 'top', label: '上方' },
@@ -253,6 +255,7 @@ const setPreviewDeviceMode = (mode = 'phone') => {
   // 第 66401～66800 批：裝置框架只改外層尺寸，不重載 iframe，避免右側白畫面閃爍。
   previewDeviceMode.value = mode
   previewSmoothSyncStatus.value = `已切換預覽裝置：${previewDeviceProfile.value.label}`
+  previewSmoothSyncMode.value = 'frame'
   previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
   nextTick(scrollPreviewToFocus)
 }
@@ -261,6 +264,7 @@ const setPreviewZoomMode = (mode = '100') => {
   // 第 66401～66800 批：縮放只套用 CSS，不重載 iframe。
   previewZoomMode.value = mode
   previewSmoothSyncStatus.value = `已切換預覽縮放：${previewZoomProfile.value.label}`
+  previewSmoothSyncMode.value = 'frame'
   previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
   nextTick(scrollPreviewToFocus)
 }
@@ -1634,6 +1638,7 @@ const postPreviewDraftUpdate = (reason = 'settings-update') => {
   const frameWindow = previewIframeRef.value?.contentWindow
   if (!frameWindow) {
     previewSmoothSyncStatus.value = '預覽尚未載入，草稿已先保存。'
+    previewSmoothSyncMode.value = 'pending'
     previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
     return false
   }
@@ -1641,11 +1646,14 @@ const postPreviewDraftUpdate = (reason = 'settings-update') => {
   try {
     frameWindow.postMessage(buildPreviewDraftSyncPayload(reason), window.location.origin)
     previewSmoothSyncStatus.value = '右側預覽已平滑更新，沒有重新載入 iframe。'
+    previewSmoothSyncMode.value = 'smooth'
+    previewSmoothSyncCount.value += 1
     previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
     return true
   } catch (error) {
     console.warn('同步輪盤右側預覽失敗，保留草稿等待下次重載：', error)
     previewSmoothSyncStatus.value = '平滑同步失敗，已保存草稿；必要時可手動重整預覽。'
+    previewSmoothSyncMode.value = 'warning'
     previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
     return false
   }
@@ -1654,8 +1662,24 @@ const postPreviewDraftUpdate = (reason = 'settings-update') => {
 const forcePreviewReload = (reason = 'manual-reload') => {
   previewKey.value += 1
   previewSmoothSyncStatus.value = `已重載預覽：${reason}`
+  previewSmoothSyncMode.value = 'reload'
   previewSmoothSyncAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
   nextTick(scrollPreviewToFocus)
+}
+
+// 第 66801～67200 批：右側預覽平滑同步監控與手動重整保險。
+// 平常使用 postMessage 平滑同步，不白屏；若 iframe 因瀏覽器限制或跨環境沒有接到訊息，可手動重整一次。
+const previewSmoothSyncToneClass = computed(() => {
+  if (previewSmoothSyncMode.value === 'smooth') return 'bg-emerald-50 text-emerald-700'
+  if (previewSmoothSyncMode.value === 'warning') return 'bg-amber-50 text-amber-700'
+  if (previewSmoothSyncMode.value === 'pending') return 'bg-blue-50 text-blue-700'
+  if (previewSmoothSyncMode.value === 'reload') return 'bg-orange-50 text-orange-700'
+  return 'bg-slate-50 text-slate-600'
+})
+
+const manualRefreshPreview = () => {
+  persistLocalDraft('manual-preview-refresh')
+  forcePreviewReload('手動重整預覽')
 }
 
 const assignDeep = (target, source) => {
@@ -3742,8 +3766,22 @@ onBeforeUnmount(() => {
               <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
                 {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}｜{{ previewDeviceProfile.label }}｜{{ previewZoomProfile.label }}
               </div>
-              <div class="border-b border-slate-100 bg-emerald-50 px-4 py-2 text-center text-[11px] font-black text-emerald-700">
-                Smooth Preview Sync｜第 66401～66800 批：{{ previewSmoothSyncStatus }}<span v-if="previewSmoothSyncAt">｜{{ previewSmoothSyncAt }}</span>
+              <div class="border-b border-slate-100 px-4 py-2 text-[11px] font-black" :class="previewSmoothSyncToneClass">
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <div class="min-w-0 text-left">
+                    <p class="uppercase tracking-[0.16em] opacity-70">Smooth Preview Guard｜第 66801～67200 批</p>
+                    <p class="mt-1 truncate">
+                      {{ previewSmoothSyncStatus }}<span v-if="previewSmoothSyncAt">｜{{ previewSmoothSyncAt }}</span><span v-if="previewSmoothSyncCount">｜平滑更新 {{ previewSmoothSyncCount }} 次</span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    class="rounded-full border border-current/20 bg-white/70 px-3 py-1 text-[11px] font-black transition hover:bg-white"
+                    @click="manualRefreshPreview"
+                  >
+                    手動重整預覽
+                  </button>
+                </div>
               </div>
 
               <iframe
