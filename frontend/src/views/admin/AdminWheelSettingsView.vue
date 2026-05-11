@@ -729,6 +729,42 @@ const polishFineTuneControls = [
     max: 58,
     step: 1,
     desc: '控制獎項 emoji 或圖片圖示大小。'
+  },
+  {
+    key: 'prizeLabelRadius',
+    label: '獎項半徑',
+    unit: '%',
+    min: 24,
+    max: 46,
+    step: 1,
+    desc: '控制獎項在每格扇形內的位置。數字越大越靠外圈。'
+  },
+  {
+    key: 'prizeLabelOffsetY',
+    label: '獎項上下校正',
+    unit: 'px',
+    min: -24,
+    max: 24,
+    step: 1,
+    desc: '微調獎項文字與圖示上下位置，讓它更貼近自己的格子中心。'
+  },
+  {
+    key: 'prizeTextBoxWidth',
+    label: '獎項文字寬',
+    unit: 'px',
+    min: 48,
+    max: 112,
+    step: 2,
+    desc: '控制每個獎項文字的可用寬度，避免文字跨到隔壁格。'
+  },
+  {
+    key: 'pointerHitCorrection',
+    label: '指針命中校正',
+    unit: '°',
+    min: -10,
+    max: 10,
+    step: 1,
+    desc: '如果實際停點看起來偏左或偏右，可微調指針命中角度。'
   }
 ]
 
@@ -900,6 +936,11 @@ const defaultSettings = () => ({
     prizeIconSize: 38,
     cellGap: 2,
     prizeLabelRadius: 34,
+    // 第 67601～68000 批：獎項標籤置中與指針命中校正。
+    prizeLabelOffsetX: 0,
+    prizeLabelOffsetY: 0,
+    prizeTextBoxWidth: 82,
+    pointerHitCorrection: 0,
     showPrizeIcon: true,
     showPrizeName: true,
     showSliceBorder: true
@@ -3723,9 +3764,9 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="grid gap-3">
+          <div class="grid gap-4">
             <article v-for="(prize, index) in settings.prizes" :key="prize.id" class="rounded-3xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
-              <div class="grid gap-4 xl:grid-cols-[88px_120px_1.3fr_1.6fr_110px_120px_80px] xl:items-end">
+              <div class="grid gap-4 2xl:grid-cols-[72px_minmax(120px,0.75fr)_minmax(220px,1.3fr)_minmax(240px,1.45fr)_96px_118px_76px] 2xl:items-end">
                 <div class="grid gap-2 text-xs font-black text-slate-500">
                   預覽
                   <div class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white text-2xl shadow-inner">
@@ -3734,39 +3775,39 @@ onBeforeUnmount(() => {
                   </div>
                 </div>
 
-                <label class="grid gap-2 text-xs font-black text-slate-500">
+                <label class="grid min-w-0 gap-2 text-xs font-black text-slate-500">
                   圖示 / emoji
-                  <input v-model="prize.icon" class="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-center text-xl" />
+                  <input v-model="prize.icon" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-3 text-center text-xl" />
                 </label>
 
-                <label class="grid gap-2 text-xs font-black text-slate-500">
+                <label class="grid min-w-0 gap-2 text-xs font-black text-slate-500">
                   獎項名稱
-                  <input v-model="prize.name" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+                  <input v-model="prize.name" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold" />
                 </label>
 
-                <label class="grid gap-2 text-xs font-black text-slate-500">
+                <label class="grid min-w-0 gap-2 text-xs font-black text-slate-500">
                   圖片網址
-                  <input v-model="prize.imageUrl" placeholder="https://...png / jpg / webp" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+                  <input v-model="prize.imageUrl" placeholder="https://...png / jpg / webp" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm" />
                 </label>
 
-                <label class="grid gap-2 text-xs font-black text-slate-500">
+                <label class="grid min-w-0 gap-2 text-xs font-black text-slate-500">
                   權重
-                  <input v-model.number="prize.weight" type="number" min="0" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+                  <input v-model.number="prize.weight" type="number" min="0" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black" />
                 </label>
 
-                <label class="grid gap-2 text-xs font-black text-slate-500">
+                <label class="grid min-w-0 gap-2 text-xs font-black text-slate-500">
                   顏色
                   <input v-model="prize.color" type="color" class="h-12 w-full rounded-2xl border border-slate-200 bg-white p-1" />
                 </label>
 
-                <button type="button" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-black text-rose-600 disabled:opacity-40" :disabled="settings.prizes.length <= 2" @click="removePrize(index)">
+                <button type="button" class="h-12 rounded-2xl border border-rose-200 bg-rose-50 px-3 text-xs font-black text-rose-600 disabled:opacity-40" :disabled="settings.prizes.length <= 2" @click="removePrize(index)">
                   刪除
                 </button>
               </div>
 
               <label class="mt-3 grid gap-2 text-xs font-black text-slate-500">
                 獎項連結網址，可選
-                <input v-model="prize.linkUrl" placeholder="https:// 商品頁 / 兌換說明 / LINE 連結" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm" />
+                <input v-model="prize.linkUrl" placeholder="https:// 商品頁 / 兌換說明 / LINE 連結" class="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm" />
               </label>
             </article>
           </div>

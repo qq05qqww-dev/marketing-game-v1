@@ -1881,6 +1881,11 @@ const campaign = reactive({
   wheelPrizeTextSize: 13,
   wheelPrizeIconSize: 38,
   wheelPrizeLabelRadius: 92,
+  // 第 67601～68000 批：獎項置中與指針命中校正。
+  wheelPrizeLabelOffsetX: 0,
+  wheelPrizeLabelOffsetY: 0,
+  wheelPrizeTextBoxWidth: 82,
+  wheelPointerHitCorrection: 0,
   wheelShowPrizeIcon: true,
   wheelShowPrizeName: true,
   wheelShowSliceBorder: true,
@@ -3513,8 +3518,23 @@ const getWheelSvgLabelPosition = (index) => {
   const point = polarToCartesian(160, 160, normalizeWheelPrizeLabelRadius(campaign.wheelPrizeLabelRadius), middleAngle)
 
   return {
-    x: point.x,
-    y: point.y
+    x: point.x + Number(campaign.wheelPrizeLabelOffsetX || 0),
+    y: point.y + Number(campaign.wheelPrizeLabelOffsetY || 0)
+  }
+}
+
+const getWheelSvgLabelBox = (index) => {
+  const point = getWheelSvgLabelPosition(index)
+  const iconSize = Math.max(24, Math.min(64, Number(campaign.wheelPrizeIconSize || 38)))
+  const boxWidth = Math.max(48, Math.min(116, Number(campaign.wheelPrizeTextBoxWidth || 82)))
+  const boxHeight = Math.max(48, iconSize + Number(campaign.wheelPrizeTextSize || 13) + 22)
+
+  return {
+    x: point.x - boxWidth / 2,
+    y: point.y - boxHeight / 2,
+    width: boxWidth,
+    height: boxHeight,
+    iconSize
   }
 }
 
@@ -4620,6 +4640,10 @@ const applyWheelAdminDraftSettings = (draft = null) => {
     campaign.wheelPrizeTextSize = Number(draft.wheelStyle.prizeTextSize || campaign.wheelPrizeTextSize || 13)
     campaign.wheelPrizeIconSize = Number(draft.wheelStyle.prizeIconSize || campaign.wheelPrizeIconSize || 38)
     campaign.wheelPrizeLabelRadius = normalizeWheelPrizeLabelRadius(draft.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
+    campaign.wheelPrizeLabelOffsetX = Number(draft.wheelStyle.prizeLabelOffsetX ?? campaign.wheelPrizeLabelOffsetX ?? 0)
+    campaign.wheelPrizeLabelOffsetY = Number(draft.wheelStyle.prizeLabelOffsetY ?? campaign.wheelPrizeLabelOffsetY ?? 0)
+    campaign.wheelPrizeTextBoxWidth = Number(draft.wheelStyle.prizeTextBoxWidth || campaign.wheelPrizeTextBoxWidth || 82)
+    campaign.wheelPointerHitCorrection = Number(draft.wheelStyle.pointerHitCorrection ?? campaign.wheelPointerHitCorrection ?? 0)
     campaign.wheelShowPrizeIcon = draft.wheelStyle.showPrizeIcon !== false
     campaign.wheelShowPrizeName = draft.wheelStyle.showPrizeName !== false
     campaign.wheelShowSliceBorder = draft.wheelStyle.showSliceBorder !== false
@@ -4731,6 +4755,10 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
     campaign.wheelPrizeTextSize = Number(settings.wheelStyle.prizeTextSize || campaign.wheelPrizeTextSize || 13)
     campaign.wheelPrizeIconSize = Number(settings.wheelStyle.prizeIconSize || campaign.wheelPrizeIconSize || 38)
     campaign.wheelPrizeLabelRadius = normalizeWheelPrizeLabelRadius(settings.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
+    campaign.wheelPrizeLabelOffsetX = Number(settings.wheelStyle.prizeLabelOffsetX ?? campaign.wheelPrizeLabelOffsetX ?? 0)
+    campaign.wheelPrizeLabelOffsetY = Number(settings.wheelStyle.prizeLabelOffsetY ?? campaign.wheelPrizeLabelOffsetY ?? 0)
+    campaign.wheelPrizeTextBoxWidth = Number(settings.wheelStyle.prizeTextBoxWidth || campaign.wheelPrizeTextBoxWidth || 82)
+    campaign.wheelPointerHitCorrection = Number(settings.wheelStyle.pointerHitCorrection ?? campaign.wheelPointerHitCorrection ?? 0)
     campaign.wheelShowPrizeIcon = settings.wheelStyle.showPrizeIcon !== false
     campaign.wheelShowPrizeName = settings.wheelStyle.showPrizeName !== false
     campaign.wheelShowSliceBorder = settings.wheelStyle.showSliceBorder !== false
@@ -5455,8 +5483,11 @@ const startSpin = async () => {
   const targetIndex = Math.max(0, activeIndex)
   const total = Math.max(1, activePrizes.value.length)
   const angle = 360 / total
-  const pointerOffset = 360 - (targetIndex * angle + angle / 2)
+  const pointerCorrection = Number(campaign.wheelPointerHitCorrection || 0)
+  const pointerOffset = 360 - (targetIndex * angle + angle / 2) + pointerCorrection
+  const normalizedCurrentRotation = ((wheelRotation.value % 360) + 360) % 360
   const extraTurns = 360 * 6
+  const spinDelta = extraTurns + pointerOffset - normalizedCurrentRotation
 
   if (!isTenantWheelMode.value) {
     player.chances -= 1
@@ -5469,7 +5500,7 @@ const startSpin = async () => {
   resultPrize.value = null
   playSpinSound()
 
-  wheelRotation.value += extraTurns + pointerOffset
+  wheelRotation.value += spinDelta
 
   setTimeout(() => {
     finishSpin(prize, targetIndex)
@@ -9024,7 +9055,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 :class="[wheelPolishPresetClass, isSpinning ? 'premium-wheel-active' : '']"
               >
                 <div
-                  class="premium-wheel-pointer absolute left-1/2 top-[-6px] z-30"
+                  class="premium-wheel-pointer absolute left-1/2 top-[-10px] z-30"
                   :class="isSpinning ? 'premium-wheel-pointer-shake' : ''"
                   :style="wheelPointerStyle"
                 >
@@ -9099,32 +9130,33 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                         :class="getWheelLabelClass(index)"
                       >
                         <foreignObject
-                          :x="getWheelSvgLabelPosition(index).x - Math.round(Number(campaign.wheelPrizeIconSize || 38) / 2)"
-                          :y="getWheelSvgLabelPosition(index).y - Math.round(Number(campaign.wheelPrizeIconSize || 38) / 2) - 18"
-                          :width="Number(campaign.wheelPrizeIconSize || 38)"
-                          :height="Number(campaign.wheelPrizeIconSize || 38)"
+                          :x="getWheelSvgLabelBox(index).x"
+                          :y="getWheelSvgLabelBox(index).y"
+                          :width="getWheelSvgLabelBox(index).width"
+                          :height="getWheelSvgLabelBox(index).height"
                         >
-                          <div v-if="campaign.wheelShowPrizeIcon !== false" class="premium-wheel-prize-media">
-                            <img
-                              v-if="hasPrizeImage(prize)"
-                              :src="getPrizeImageUrl(prize)"
-                              alt="獎項圖片"
-                            />
-                            <span v-else>{{ prize.icon }}</span>
+                          <div class="premium-wheel-prize-badge">
+                            <div
+                              v-if="campaign.wheelShowPrizeIcon !== false"
+                              class="premium-wheel-prize-media"
+                              :style="{ width: `${getWheelSvgLabelBox(index).iconSize}px`, height: `${getWheelSvgLabelBox(index).iconSize}px` }"
+                            >
+                              <img
+                                v-if="hasPrizeImage(prize)"
+                                :src="getPrizeImageUrl(prize)"
+                                alt="獎項圖片"
+                              />
+                              <span v-else>{{ prize.icon }}</span>
+                            </div>
+                            <div
+                              v-if="campaign.wheelShowPrizeName !== false"
+                              class="premium-wheel-prize-name"
+                              :style="{ fontSize: `${campaign.wheelPrizeTextSize || 13}px` }"
+                            >
+                              {{ prize.shortName || prize.name }}
+                            </div>
                           </div>
                         </foreignObject>
-
-                        <text
-                          :x="getWheelSvgLabelPosition(index).x"
-                          :y="getWheelSvgLabelPosition(index).y + Math.round(Number(campaign.wheelPrizeIconSize || 38) / 2) + 10"
-                          text-anchor="middle"
-                          dominant-baseline="middle"
-                          v-if="campaign.wheelShowPrizeName !== false"
-                          class="premium-wheel-svg-text"
-                          :style="{ fontSize: `${campaign.wheelPrizeTextSize || 13}px` }"
-                        >
-                          {{ prize.shortName || prize.name }}
-                        </text>
                       </g>
                     </svg>
 
@@ -10833,6 +10865,37 @@ aside {
 
 
 /* 第 257 批：管理預覽跟隨 / 指針樣式可調 / 全域還原復原 */
+
+
+/* 第 67601～68000 批：獎項置中與指針命中校正。 */
+.premium-wheel-prize-badge {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.premium-wheel-prize-badge .premium-wheel-prize-media {
+  margin: 0 auto;
+  flex: 0 0 auto;
+}
+
+.premium-wheel-prize-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 950;
+  line-height: 1.05;
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow: 0 2px 5px rgba(15, 23, 42, 0.58), 0 0 10px rgba(255, 255, 255, 0.22);
+}
+
 .premium-wheel-pointer {
   --wheel-pointer-scale: 1;
   --wheel-pointer-top-color: #334155;
