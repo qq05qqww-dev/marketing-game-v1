@@ -1,6 +1,6 @@
 // 第 64001～64400 批：輪盤設定頁左側常用設定搜尋與快速定位版
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -202,6 +202,12 @@ const previewIframeRef = ref(null)
 const previewFocusMode = ref('wheel')
 const previewDeviceMode = ref('phone')
 const previewZoomMode = ref('100')
+const isSettingsHydrating = ref(true)
+const hasUnsavedChanges = ref(false)
+const lastChangedAt = ref('')
+const lastSavedAt = ref('')
+const settingsSnapshotAfterSave = ref('')
+const unsavedChangeReason = ref('尚未偵測到本次修改')
 
 const previewFocusOptions = [
   { key: 'top', label: '上方' },
@@ -940,6 +946,86 @@ const formatSaveAuditTime = (value = '') => {
   }
 }
 
+
+const serializeSettingsForDirtyCheck = () => {
+  try {
+    return JSON.stringify(settings)
+  } catch (error) {
+    return `${Date.now()}`
+  }
+}
+
+const markSettingsSaved = (message = '已儲存目前設定') => {
+  settingsSnapshotAfterSave.value = serializeSettingsForDirtyCheck()
+  hasUnsavedChanges.value = false
+  lastSavedAt.value = new Date().toISOString()
+  unsavedChangeReason.value = message
+}
+
+const markSettingsDirty = (reason = '設定已修改，尚未正式儲存') => {
+  if (isSettingsHydrating.value) return
+
+  const currentSnapshot = serializeSettingsForDirtyCheck()
+
+  if (!settingsSnapshotAfterSave.value) {
+    settingsSnapshotAfterSave.value = currentSnapshot
+    return
+  }
+
+  if (currentSnapshot === settingsSnapshotAfterSave.value) {
+    hasUnsavedChanges.value = false
+    return
+  }
+
+  hasUnsavedChanges.value = true
+  lastChangedAt.value = new Date().toISOString()
+  unsavedChangeReason.value = reason
+}
+
+const unsavedChangesGuard = computed(() => {
+  const dirty = hasUnsavedChanges.value
+  const platformMode = isPlatformTemplateMode.value
+  const target = platformMode
+    ? `platform-template:${templateId.value}`
+    : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`
+
+  return {
+    eyebrow: 'Unsaved Changes Guard｜第 64401～64800 批',
+    title: dirty ? '目前有尚未儲存的修改' : '目前設定已完成儲存檢查',
+    badge: dirty ? '尚未儲存' : '已儲存 / 未修改',
+    badgeClass: dirty
+      ? 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
+      : 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200',
+    toneClass: dirty
+      ? 'border-amber-200 bg-amber-50 text-amber-900'
+      : 'border-emerald-200 bg-emerald-50 text-emerald-900',
+    target,
+    modeLabel: platformMode ? '平台輪盤模板' : '商家單一輪盤活動',
+    changedAtLabel: lastChangedAt.value ? formatSaveAuditTime(lastChangedAt.value) : '尚未修改',
+    savedAtLabel: lastSavedAt.value ? formatSaveAuditTime(lastSavedAt.value) : '尚未完成本次儲存',
+    reason: dirty
+      ? unsavedChangeReason.value
+      : '目前右側預覽與左側設定沒有偵測到新的未儲存差異。',
+    nextAction: dirty
+      ? '右側預覽可能已更新，但正式玩家頁必須按「儲存設定」後才會同步。'
+      : '可以繼續修改設定；下一次變更後，這裡會提示尚未儲存。'
+  }
+})
+
+const unsavedChangesItems = computed(() => [
+  { label: '目前模式', value: unsavedChangesGuard.value.modeLabel },
+  { label: '儲存目標', value: unsavedChangesGuard.value.target },
+  { label: '最近修改', value: unsavedChangesGuard.value.changedAtLabel },
+  { label: '最近儲存', value: unsavedChangesGuard.value.savedAtLabel }
+])
+
+const handleBeforeUnload = (event) => {
+  if (!hasUnsavedChanges.value) return
+
+  event.preventDefault()
+  event.returnValue = '目前輪盤設定有尚未儲存的修改，離開頁面後正式玩家頁不會同步這些變更。'
+}
+
 const buildSaveAuditRecord = (status = 'success', extra = {}) => {
   const platformMode = isPlatformTemplateMode.value
 
@@ -1585,6 +1671,7 @@ const saveSettings = async (options = {}) => {
         effect: '只更新平台模板來源資料，不會修改任何既有商家活動；新建 WHEEL 活動時才會複製一次。',
         templateGuard: `平台模板來源 campaignId:${result.templateCampaignId || platformTemplateCampaignId.value || '-'} / slug:${result.platformTemplateSlug || platformWheelTemplateSlug.value}`
       })
+      markSettingsSaved('平台輪盤模板已正式儲存')
       if (!silent) {
         savedMessage.value = '已儲存平台輪盤模板到資料庫。新建輪盤活動會複製這份最新模板。'
         window.setTimeout(() => {
@@ -1612,6 +1699,7 @@ const saveSettings = async (options = {}) => {
       message: '本次只暫存本機草稿與預覽，尚未寫入後端資料庫。',
       effect: '只更新瀏覽器本機草稿與右側預覽，不會寫入平台模板或商家活動資料庫。'
     })
+    markSettingsDirty('已暫存本機草稿，但尚未正式寫入資料庫')
     if (!silent) {
       savedMessage.value = '已暫存本機草稿，右側預覽已重新載入。'
       window.setTimeout(() => {
@@ -1629,6 +1717,7 @@ const saveSettings = async (options = {}) => {
     saveAuditRecord.value = buildSaveAuditRecord('success', {
       message: '商家輪盤活動設定已正式寫入資料庫；平台模板與其他商家活動沒有被修改。'
     })
+    markSettingsSaved('商家輪盤活動已正式儲存')
 
     if (!silent) {
       savedMessage.value = '已正式儲存到資料庫，玩家手機重新整理後會同步看到。'
@@ -1719,6 +1808,7 @@ const resetSettings = () => {
   localStorage.removeItem(storageKey.value)
   previewKey.value += 1
   savedMessage.value = isPlatformTemplateMode.value ? '已還原平台輪盤模板預設，請按儲存設定保存模板草稿。' : '已還原輪盤預設設定，請按儲存設定寫入資料庫。'
+  markSettingsDirty('已還原預設，尚未儲存')
 }
 
 const copyText = async (text, message = '已複製到剪貼簿') => {
@@ -1830,10 +1920,15 @@ const handlePreviewIframeLoad = () => {
 }
 
 watch(storageKey, () => {
+  isSettingsHydrating.value = true
   assignDeep(settings, defaultSettings())
   loadSettings()
   loadSaveAuditHistory()
   previewKey.value += 1
+  markSettingsSaved('已切換頁面並載入目前設定')
+  nextTick(() => {
+    isSettingsHydrating.value = false
+  })
 })
 
 watch(saveAuditRecord, (record) => {
@@ -1864,15 +1959,26 @@ watch(
   settings,
   () => {
     schedulePreviewSync()
+    markSettingsDirty('設定已修改，右側預覽已更新但尚未正式儲存')
   },
   { deep: true }
 )
 
 onMounted(async () => {
+  isSettingsHydrating.value = true
   loadSettings()
   loadSaveAuditHistory()
   await loadRemoteGameConfig()
   persistLocalDraft()
+  markSettingsSaved('頁面已載入目前設定')
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  nextTick(() => {
+    isSettingsHydrating.value = false
+  })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', handleBeforeUnload)
 })
 </script>
 
@@ -1899,6 +2005,12 @@ onMounted(async () => {
           </span>
           <span v-else-if="remoteConfigLoaded" class="rounded-full bg-slate-100 px-4 py-2 text-xs font-black text-slate-600">
             {{ isPlatformTemplateMode ? (platformTemplateRemoteLoaded ? '已連接平台模板來源' : '平台模板草稿模式') : '已連接資料庫設定' }}
+          </span>
+          <span
+            class="rounded-full px-4 py-2 text-xs font-black"
+            :class="hasUnsavedChanges ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'"
+          >
+            {{ hasUnsavedChanges ? '尚未儲存' : '已儲存' }}
           </span>
 
           <button
@@ -1992,6 +2104,44 @@ onMounted(async () => {
 
     <section v-if="savedMessage || copiedMessage" class="rounded-3xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-black text-emerald-700">
       {{ savedMessage || copiedMessage }}
+    </section>
+
+    <section class="rounded-[2rem] border p-5 shadow-sm" :class="unsavedChangesGuard.toneClass">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] opacity-70">{{ unsavedChangesGuard.eyebrow }}</p>
+          <h2 class="mt-2 text-2xl font-black">{{ unsavedChangesGuard.title }}</h2>
+          <p class="mt-2 max-w-4xl text-sm font-bold leading-6 opacity-80">
+            {{ unsavedChangesGuard.reason }}
+          </p>
+        </div>
+        <span class="inline-flex rounded-full px-4 py-2 text-xs font-black" :class="unsavedChangesGuard.badgeClass">
+          {{ unsavedChangesGuard.badge }}
+        </span>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          v-for="item in unsavedChangesItems"
+          :key="item.label"
+          class="rounded-3xl border border-white/50 bg-white/70 p-4"
+        >
+          <p class="text-xs font-black opacity-60">{{ item.label }}</p>
+          <p class="mt-2 break-all text-sm font-black leading-6">{{ item.value }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 flex flex-col gap-3 rounded-3xl border border-white/50 bg-white/70 p-4 text-sm font-bold leading-6 lg:flex-row lg:items-center lg:justify-between">
+        <p>{{ unsavedChangesGuard.nextAction }}</p>
+        <button
+          type="button"
+          class="rounded-2xl bg-slate-950 px-5 py-3 text-xs font-black text-white shadow transition hover:-translate-y-0.5 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          :disabled="isSaving || !hasUnsavedChanges"
+          @click="guardedSaveSettings"
+        >
+          {{ isSaving ? '儲存中...' : '立即儲存設定' }}
+        </button>
+      </div>
     </section>
 
     <section v-if="isPlatformTemplateMode" class="rounded-3xl border border-orange-200 bg-orange-50 p-5 text-sm font-bold leading-6 text-orange-800">
