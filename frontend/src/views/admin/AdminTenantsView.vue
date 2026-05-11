@@ -1,6 +1,7 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
 // 第 42051～42400 批：商家管理後台精緻簡化與一頁式操作版
+// 第 78401～78800 批：商家帳號狀態提示統一強化版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminTenantsView.vue
@@ -13,7 +14,7 @@
 // 5. 每次編輯前會保存快照，可一鍵還原本次修改。
 // 6. 保留複製玩家網址 / 管理連結，方便交付商家。
 
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import http from '../../api/http'
 
 const PRODUCTION_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
@@ -363,6 +364,46 @@ const getPrimaryAccountText = (tenant = {}) => {
   return adminUser?.email || tenant.contactEmail || '尚未建立帳號'
 }
 
+const getTenantAccountState = (tenant = {}) => {
+  const hasAccount = hasMerchantAccount(tenant)
+  const users = tenantUsers.value[tenant.id] || tenant.recentUsers || []
+  const adminUser = users.find((user) => String(user.role || '').toUpperCase() === 'MERCHANT_ADMIN') || users[0]
+
+  if (hasAccount) {
+    return {
+      hasAccount: true,
+      icon: '✅',
+      badge: '已有帳號',
+      title: '已建立商家登入帳號',
+      heading: '更新商家登入帳號 / 密碼',
+      actionLabel: '更新帳號 / 密碼',
+      buttonLabel: '更新帳號 / 密碼',
+      summary: `${adminUser?.name || tenant.contactName || tenant.name || '商家管理員'}｜${adminUser?.email || tenant.contactEmail || '未填 Email'}｜${getRoleText(adminUser?.role || 'MERCHANT_ADMIN')}`,
+      description: '此商家已有後台登入帳號。你可以修改姓名、Email、角色；只有輸入新密碼時才會重設密碼。',
+      className: 'border-emerald-200 bg-emerald-50 text-emerald-800',
+      badgeClass: 'bg-emerald-100 text-emerald-700 ring-1 ring-emerald-200'
+    }
+  }
+
+  return {
+    hasAccount: false,
+    icon: '⚠️',
+    badge: '尚未建立',
+    title: '尚未建立商家登入帳號',
+    heading: '建立商家登入帳號',
+    actionLabel: '建立帳號',
+    buttonLabel: '建立登入帳號',
+    summary: tenant.contactEmail ? `建議使用：${tenant.contactEmail}` : '尚未設定登入 Email，請先輸入 Email。',
+    description: '此商家目前還不能登入後台。請建立商家管理員帳號，並輸入至少 6 碼的新密碼與確認密碼。',
+    className: 'border-amber-200 bg-amber-50 text-amber-800',
+    badgeClass: 'bg-amber-100 text-amber-700 ring-1 ring-amber-200'
+  }
+}
+
+const getTenantAccountActionLabel = (tenant = {}) => {
+  return getTenantAccountState(tenant).actionLabel
+}
+
 const getTenantReadinessItems = (tenant = {}) => {
   return [
     {
@@ -547,30 +588,12 @@ const createTenant = async () => {
   }
 }
 
-
-const getTenantActionPanelId = (tenantId, type = 'edit') => {
-  return `tenant-${type}-panel-${tenantId}`
-}
-
-const scrollToTenantActionPanel = async (tenantId, type = 'edit') => {
-  await nextTick()
-
-  window.setTimeout(() => {
-    const panel = document.getElementById(getTenantActionPanelId(tenantId, type))
-
-    if (panel) {
-      panel.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }, 80)
-}
-
 const startEditTenant = async (tenant) => {
   undoSnapshots.value = {
     ...undoSnapshots.value,
     [tenant.id]: { ...tenant }
   }
 
-  resetPasswordTenantId.value = null
   editingTenantId.value = tenant.id
 
   Object.assign(editForm, {
@@ -585,8 +608,6 @@ const startEditTenant = async (tenant) => {
   })
 
   await loadTenantUsers(tenant.id)
-  setMessage(`已開啟「${tenant.name}」編輯區，畫面會自動定位到表單。`)
-  await scrollToTenantActionPanel(tenant.id, 'edit')
 }
 
 const cancelEditTenant = () => {
@@ -707,7 +728,6 @@ const getPrimaryMerchantAdmin = async (tenant) => {
 const startResetPassword = async (tenant) => {
   const user = await getPrimaryMerchantAdmin(tenant)
 
-  editingTenantId.value = null
   resetPasswordTenantId.value = tenant.id
 
   Object.assign(passwordForm, {
@@ -719,9 +739,6 @@ const startResetPassword = async (tenant) => {
     password: '',
     passwordConfirm: ''
   })
-
-  setMessage(`已開啟「${tenant.name}」帳號 / 密碼區，畫面會自動定位到表單。`)
-  await scrollToTenantActionPanel(tenant.id, 'password')
 }
 
 const cancelResetPassword = () => {
@@ -1339,7 +1356,7 @@ onMounted(() => {
               class="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-3 text-xs font-black text-violet-700 transition hover:bg-violet-100"
               @click="startResetPassword(tenant)"
             >
-              帳號 / 密碼
+              {{ getTenantAccountActionLabel(tenant) }}
             </button>
             <button
               type="button"
@@ -1354,165 +1371,11 @@ onMounted(() => {
           </div>
 
           <div
-            v-if="editingTenantId === tenant.id"
-            :id="getTenantActionPanelId(tenant.id, 'edit')"
-            class="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50/70 p-4 ring-2 ring-indigo-100"
+            class="mt-4 rounded-2xl border px-4 py-3 text-xs font-bold leading-5"
+            :class="getTenantAccountState(tenant).className"
           >
-            <div class="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <p class="text-xs font-black uppercase tracking-[0.18em] text-indigo-500">Tenant Edit</p>
-                <h3 class="mt-1 text-lg font-black text-slate-950">編輯商家資料：{{ tenant.name }}</h3>
-              </div>
-              <button
-                type="button"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-800"
-                @click="cancelEditTenant"
-              >
-                關閉
-              </button>
-            </div>
-
-            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
-              <input
-                v-model="editForm.name"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
-                placeholder="商家名稱"
-              >
-              <input
-                v-model="editForm.slug"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
-                placeholder="slug"
-                @blur="editForm.slug = normalizeSlug(editForm.slug)"
-              >
-              <input
-                v-model="editForm.contactName"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
-                placeholder="聯絡人"
-              >
-              <select
-                v-model="editForm.status"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
-              >
-                <option
-                  v-for="option in statusOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-              <input
-                v-model="editForm.contactPhone"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
-                placeholder="電話"
-              >
-              <input
-                v-model="editForm.contactEmail"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
-                placeholder="Email"
-              >
-              <input
-                v-model="editForm.note"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400 xl:col-span-2"
-                placeholder="備註"
-              >
-            </div>
-
-            <div class="mt-4 flex justify-end gap-3">
-              <button
-                type="button"
-                class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
-                @click="cancelEditTenant"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                class="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700"
-                @click="updateTenant"
-              >
-                儲存變更
-              </button>
-            </div>
-          </div>
-
-          <div
-            v-if="resetPasswordTenantId === tenant.id"
-            :id="getTenantActionPanelId(tenant.id, 'password')"
-            class="mt-5 rounded-3xl border border-violet-100 bg-violet-50/70 p-4 ring-2 ring-violet-100"
-          >
-            <div class="mb-4 flex items-center justify-between gap-3">
-              <div>
-                <p class="text-xs font-black uppercase tracking-[0.18em] text-violet-500">Account / Password</p>
-                <h3 class="mt-1 text-lg font-black text-slate-950">商家登入帳號 / 密碼：{{ tenant.name }}</h3>
-              </div>
-              <button
-                type="button"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-800"
-                @click="cancelResetPassword"
-              >
-                關閉
-              </button>
-            </div>
-
-            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-5">
-              <input
-                v-model="passwordForm.name"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
-                placeholder="帳號姓名"
-              >
-              <input
-                v-model="passwordForm.email"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
-                placeholder="登入 Email"
-              >
-              <select
-                v-model="passwordForm.role"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black outline-none focus:border-violet-400"
-              >
-                <option
-                  v-for="option in roleOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-              <input
-                v-model="passwordForm.password"
-                type="password"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
-                placeholder="新密碼，至少 6 碼"
-              >
-              <input
-                v-model="passwordForm.passwordConfirm"
-                type="password"
-                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
-                placeholder="確認新密碼"
-              >
-            </div>
-
-            <p class="mt-3 text-xs font-bold text-slate-500">
-              若商家尚未有帳號，儲存時會建立新帳號；若已有帳號，會更新 Email / 姓名 / 角色，輸入新密碼時會重設密碼。
-            </p>
-
-            <div class="mt-4 flex justify-end gap-3">
-              <button
-                type="button"
-                class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
-                @click="cancelResetPassword"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                class="rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:opacity-60"
-                :disabled="userSaving"
-                @click="saveTenantUser"
-              >
-                {{ userSaving ? '儲存中...' : passwordForm.userId ? '更新帳號 / 密碼' : '建立登入帳號' }}
-              </button>
-            </div>
+            <span class="font-black">{{ getTenantAccountState(tenant).icon }} {{ getTenantAccountState(tenant).title }}</span>
+            <p class="mt-1 opacity-80">{{ getTenantAccountState(tenant).summary }}</p>
           </div>
         </article>
       </div>
@@ -1633,7 +1496,7 @@ onMounted(() => {
                       class="rounded-xl border border-violet-200 px-3 py-2 text-xs font-black text-violet-700 transition hover:bg-violet-50"
                       @click="startResetPassword(tenant)"
                     >
-                      帳號 / 密碼
+                      {{ getTenantAccountActionLabel(tenant) }}
                     </button>
 
                     <button
@@ -1661,7 +1524,6 @@ onMounted(() => {
 
               <tr
                 v-if="editingTenantId === tenant.id"
-                :id="getTenantActionPanelId(tenant.id, 'edit')"
                 class="bg-indigo-50/50"
               >
                 <td
@@ -1750,7 +1612,6 @@ onMounted(() => {
 
               <tr
                 v-if="resetPasswordTenantId === tenant.id"
-                :id="getTenantActionPanelId(tenant.id, 'password')"
                 class="bg-violet-50/50"
               >
                 <td
@@ -1759,9 +1620,14 @@ onMounted(() => {
                 >
                   <div class="rounded-3xl border border-violet-100 bg-white p-5">
                     <div class="mb-4 flex items-center justify-between">
-                      <h3 class="text-lg font-black text-slate-950">
-                        商家登入帳號 / 密碼：{{ tenant.name }}
-                      </h3>
+                      <div>
+                        <p class="text-xs font-black uppercase tracking-[0.28em] text-violet-500">
+                          Account Status｜第 78401～78800 批
+                        </p>
+                        <h3 class="mt-1 text-lg font-black text-slate-950">
+                          {{ getTenantAccountState(tenant).heading }}：{{ tenant.name }}
+                        </h3>
+                      </div>
                       <button
                         type="button"
                         class="text-sm font-black text-slate-500 hover:text-slate-800"
@@ -1769,6 +1635,36 @@ onMounted(() => {
                       >
                         關閉
                       </button>
+                    </div>
+
+                    <div
+                      class="mb-4 rounded-3xl border p-4"
+                      :class="getTenantAccountState(tenant).className"
+                    >
+                      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div class="flex items-start gap-3">
+                          <span class="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-white/70 text-xl shadow-sm">
+                            {{ getTenantAccountState(tenant).icon }}
+                          </span>
+                          <div>
+                            <div class="flex flex-wrap items-center gap-2">
+                              <p class="text-sm font-black">{{ getTenantAccountState(tenant).title }}</p>
+                              <span
+                                class="rounded-full px-3 py-1 text-[11px] font-black"
+                                :class="getTenantAccountState(tenant).badgeClass"
+                              >
+                                {{ getTenantAccountState(tenant).badge }}
+                              </span>
+                            </div>
+                            <p class="mt-1 text-xs font-bold leading-5 opacity-90">
+                              {{ getTenantAccountState(tenant).summary }}
+                            </p>
+                            <p class="mt-2 text-xs font-bold leading-5 opacity-80">
+                              {{ getTenantAccountState(tenant).description }}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
 
                     <div class="grid gap-4 xl:grid-cols-5">
@@ -1809,7 +1705,9 @@ onMounted(() => {
                     </div>
 
                     <p class="mt-3 text-xs font-bold text-slate-500">
-                      若商家尚未有帳號，儲存時會建立新帳號；若已有帳號，會更新 Email / 姓名 / 角色，輸入新密碼時會重設密碼。
+                      {{ getTenantAccountState(tenant).hasAccount
+                        ? '已有登入帳號：不填新密碼時只更新姓名、Email 與角色；填入新密碼才會重設密碼。'
+                        : '尚未建立登入帳號：請輸入 Email、角色、新密碼與確認密碼，儲存後商家即可登入後台。' }}
                     </p>
 
                     <div class="mt-4 flex justify-end gap-3">
@@ -1826,7 +1724,7 @@ onMounted(() => {
                         :disabled="userSaving"
                         @click="saveTenantUser"
                       >
-                        {{ userSaving ? '儲存中...' : passwordForm.userId ? '更新帳號 / 密碼' : '建立登入帳號' }}
+                        {{ userSaving ? '儲存中...' : getTenantAccountState(tenant).buttonLabel }}
                       </button>
                     </div>
                   </div>
