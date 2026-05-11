@@ -1,17 +1,15 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 28701～29100 批：Draw Engine GameConfig settings 獎項 fallback 版
+// 第 79201～79600 批：九宮格正式後端百分比抽獎對齊版
 //
-// 建議放置位置：
+// 覆蓋位置：
 // backend/src/services/drawEngine.service.js
 //
-// 補強重點：
-// 1. verify-serial 也檢查活動狀態 / 時間
-// 2. 抽獎時活動必須 ACTIVE 且在時間內
-// 3. 序號 rewardChance 多次抽獎以 PlayRecord 次數計算
-// 4. 中獎獎項扣庫存加入 updateMany 條件保護，降低同時抽獎超賣風險
-// 5. 庫存不足時不建立中獎紀錄
-// 6. 錯誤訊息統一中文
-// 7. Campaign.prizes 為空時，支援從 GameConfig.settings.gridItems / prizes / rewards 產生虛擬獎項抽獎。
+// 本批重點：
+// 1. GRID / PREMIUM_GRID 正式抽獎優先讀取 GameConfig.settings.prizes / gridItems。
+// 2. 後台九宮格「機率 %」會寫入 probabilityPercent / weight / probability，後端抽獎統一正規化後計算。
+// 3. 玩家前台只呼叫 /api/draw-engine/campaigns/:id/play，不在前端自行決定正式中獎結果。
+// 4. 保留原本 Prize table fallback，避免舊活動沒有 GameConfig settings 時無法抽獎。
+// 5. 不改 DB schema / router。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -49,7 +47,6 @@ const normalizeGameType = (value) => {
 
   return 'GOLDEN_EGG'
 }
-
 
 const normalizeGameConfigPrizeType = (value) => {
   const rawType = String(value || '').toUpperCase()
@@ -91,7 +88,17 @@ const normalizeGameConfigPrizeStock = (item = {}) => {
 }
 
 const normalizeGameConfigPrizeProbability = (item = {}) => {
-  return Number(item.probability ?? item.weight ?? item.chance ?? item.rate ?? 1)
+  const probability = Number(
+    item.probabilityPercent ??
+      item.percent ??
+      item.probability ??
+      item.weight ??
+      item.chance ??
+      item.rate ??
+      0
+  )
+
+  return Math.max(0, probability)
 }
 
 const isGameConfigItemEnabled = (item = {}) => {
@@ -101,14 +108,15 @@ const isGameConfigItemEnabled = (item = {}) => {
   if (String(item.status || '').toUpperCase() === 'DISABLED') return false
   if (String(item.rewardType || '').toUpperCase() === 'BUTTON') return false
   if (String(item.type || '').toUpperCase() === 'BUTTON') return false
+  if (item.isButton === true) return false
 
   return true
 }
 
 const extractGameConfigPrizeItems = (settings = {}) => {
   const candidates = [
-    settings.gridItems,
     settings.prizes,
+    settings.gridItems,
     settings.rewards,
     settings.rewardItems,
     settings.items,
@@ -167,11 +175,20 @@ const buildGameConfigPrizePool = (campaign = {}) => {
 }
 
 const getCampaignPrizePool = (campaign = {}) => {
+  const gameType = normalizeGameType(campaign.gameType)
+  const gameConfigPool = buildGameConfigPrizePool(campaign)
+
+  // 第 79201～79600 批：九宮格正式抽獎必須以後台 GameConfig settings 的百分比為準。
+  // 若同一活動仍有舊 Prize table 資料，也不能蓋過商家後台九宮格設定。
+  if (gameType === 'GRID' && gameConfigPool.length) {
+    return gameConfigPool
+  }
+
   if (Array.isArray(campaign.prizes) && campaign.prizes.length) {
     return campaign.prizes
   }
 
-  return buildGameConfigPrizePool(campaign)
+  return gameConfigPool
 }
 
 const toResponsePrize = (prize = null) => {
@@ -187,6 +204,7 @@ const toResponsePrize = (prize = null) => {
     type: prize.type,
     status: prize.status,
     probability: prize.probability,
+    probabilityPercent: prize.probability,
     remainStock: prize.remainStock,
     stockTotal: prize.stockTotal,
     stockUsed: prize.stockUsed,
@@ -202,7 +220,6 @@ const getPrizeIdForWrite = (prize = null) => {
 
   return normalizeId(prize.id)
 }
-
 
 const normalizeTrafficSource = (value = '') => {
   const source = String(value || '').trim().toLowerCase()
@@ -594,8 +611,6 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
     let updatedPrize = prize
 
     if (isWin) {
-      // 必須先保留 / 扣除庫存，再建立中獎紀錄。
-      // updateMany 條件可避免多人同時抽獎時把庫存扣成負數。
       updatedPrize = await reserveWinningPrizeStock(tx, prize)
     }
 
@@ -627,7 +642,9 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
           referrer: trafficPayload.referrer,
           selectedPrizeId: prize.id,
           selectedPrizeTitle: prize.title,
+          selectedPrizeProbability: prize.probability,
           selectedPrizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
+          probabilityMode: 'BACKEND_DRAW_ENGINE',
           virtualPrize: prize.isVirtualGameConfigPrize ? prizeForResponse : null
         }
       },
@@ -665,16 +682,6 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       serialRemainingChance
     } = await updateSerialCodeAfterDraw(tx, serialCode, serialUsageInfo, payload)
 
-    const serialResponse = updatedSerialCode
-      ? {
-          ...updatedSerialCode,
-          rewardChance: serialUsageInfo?.rewardChance || updatedSerialCode.rewardChance || 0,
-          usedCount: serialUsedCountAfterThisDraw,
-          remainingChance: serialRemainingChance,
-          remainingSerialChances: serialRemainingChance
-        }
-      : null
-
     return {
       campaign: {
         id: campaign.id,
@@ -684,14 +691,18 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       },
       playRecord,
       rewardRecord,
-      serialCode: serialResponse,
-      remainingChance: serialRemainingChance,
-      remainingSerialChances: serialRemainingChance,
+      serialCode: updatedSerialCode,
       prize: updatedPrize?.isVirtualGameConfigPrize ? prizeForResponse : updatedPrize,
       tracking: {
         source: trafficPayload.source,
         tenantSlug: trafficPayload.tenantSlug,
         frontUrl: trafficPayload.frontUrl
+      },
+      probability: {
+        mode: 'BACKEND_DRAW_ENGINE',
+        source: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
+        selectedProbability: prize.probability,
+        totalProbability: prizePool.reduce((sum, item) => sum + Math.max(0, Number(item.probability || 0)), 0)
       },
       result: {
         isWin,
@@ -699,11 +710,12 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         prizeTitle: prize.title,
         prizeType: prize.type,
         prizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
+        prizeProbability: prize.probability,
+        probabilityMode: 'BACKEND_DRAW_ENGINE',
         virtualPrize: prize.isVirtualGameConfigPrize ? prizeForResponse : null,
         serialCodeUsed: !!serialCode,
         rewardChance: serialUsageInfo?.rewardChance || serialCode?.rewardChance || 0,
         serialUsedCount: serialUsedCountAfterThisDraw,
-        remainingChance: serialRemainingChance,
         remainingSerialChances: serialRemainingChance
       }
     }
@@ -757,13 +769,15 @@ export const previewDrawPool = async (campaignId) => {
       availability: isCampaignAvailable(campaign)
     },
     totalProbability,
-    prizeSource: Array.isArray(campaign.prizes) && campaign.prizes.length ? 'PRIZE_TABLE' : 'GAME_CONFIG_SETTINGS',
+    probabilityMode: 'BACKEND_DRAW_ENGINE',
+    prizeSource: getCampaignPrizePool(campaign).some((prize) => prize.isVirtualGameConfigPrize) ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
     prizes: prizePool.map((prize) => ({
       id: prize.id,
       title: prize.title,
       type: prize.type,
       status: prize.status,
       probability: prize.probability,
+      probabilityPercent: prize.probability,
       remainStock: prize.remainStock,
       stockTotal: prize.stockTotal,
       stockUsed: prize.stockUsed,
@@ -856,11 +870,8 @@ export const verifySerialCodeForDraw = async (campaignId, code) => {
       rewardChance: usageInfo.rewardChance,
       usedCount: usageInfo.usedCount,
       remainingChance: usageInfo.remainingChance,
-      remainingSerialChances: usageInfo.remainingChance,
       batchCode: serialCode.batchCode,
       expireAt: serialCode.expireAt
-    },
-    remainingChance: usageInfo.remainingChance,
-    remainingSerialChances: usageInfo.remainingChance
+    }
   }
 }

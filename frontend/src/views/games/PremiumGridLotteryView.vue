@@ -58,6 +58,7 @@
  *
  * 操作驗收路線：
  * - 正式頁：/play/a-shop/premium-grid
+ * - 第 79201～79600 批：正式玩家抽獎結果由後端 Draw Engine 依後台 GameConfig 百分比計算
  * - 測試區：/play/a-shop/premium-grid?commonGrid=1
  * - 回退：/play/a-shop/premium-grid?legacyGrid=1
  */
@@ -445,7 +446,6 @@ const normalizeAdminPreviewDraftSettings = (settings = {}) => {
       officialLinkBackgroundColor: settings.officialLink?.backgroundColor
     },
     textSize: settings.textSize || {},
-    resultModal: settings.resultModal || {},
     prizes: Array.isArray(settings.prizes) ? settings.prizes : []
   }
 }
@@ -495,13 +495,6 @@ const applyAdminPreviewDraftToCampaign = () => {
       ...adminPreviewTextSize,
       ...(mappedSettings.textSize || {})
     })
-
-    if (mappedSettings.resultModal && Object.keys(mappedSettings.resultModal).length) {
-      premiumGridGameConfigSettings.value = mergePremiumGridSettingsForSharedBoard(
-        premiumGridGameConfigSettings.value || {},
-        { resultModal: mappedSettings.resultModal }
-      )
-    }
 
     applyAdminPreviewPrizeDraftToGrid(mappedSettings.prizes)
   } catch (error) {
@@ -1809,27 +1802,6 @@ const premiumGridSharedPlayBoardBaseSettings = computed(() => ({
     showFrontParticipation: false,
     showFrontDebugInfo: false
   },
-  resultModal: {
-    winTitle: '恭喜中獎！',
-    loseTitle: '再接再厲',
-    confirmText: '關閉結果',
-    continueText: '繼續抽獎',
-    rewardHint: '請依商家公告方式兌換獎品。',
-    winImageUrl: '',
-    loseImageUrl: '',
-    imageSize: 96,
-    modalBackgroundColor: '#ffffff',
-    headerFromColor: '#fb923c',
-    headerToColor: '#dc2626',
-    titleTextSize: 24,
-    titleTextColor: '#ffffff',
-    prizeTextSize: 18,
-    prizeTextColor: '#fef3c7',
-    hintTextSize: 14,
-    hintTextColor: '#64748b',
-    buttonColor: '#ea580c',
-    buttonTextColor: '#ffffff'
-  },
   footer: {
     showRules: true,
     showRewards: true,
@@ -2853,6 +2825,80 @@ const loadTenantPremiumGridCampaign = async () => {
   }
 }
 
+
+const normalizePremiumGridPrizeProbability = (prize = {}) => {
+  return Number(prize.probabilityPercent ?? prize.probability ?? prize.weight ?? prize.chance ?? 0)
+}
+
+const applyPremiumGridGameConfigSettingsToLiveState = (settings = {}) => {
+  if (!settings || typeof settings !== 'object') return
+
+  const prizeSettings = Array.isArray(settings.prizes)
+    ? settings.prizes
+    : (Array.isArray(settings.gridItems) ? settings.gridItems : [])
+
+  if (prizeSettings.length) {
+    gridItems.value = defaultGridItems.map((item, index) => {
+      if (item.isButton) return item
+
+      const prize = prizeSettings[index]
+
+      if (!prize || prize.enabled === false || prize.isEnabled === false) {
+        return {
+          ...item,
+          weight: 0,
+          probabilityPercent: 0,
+          quantity: 0
+        }
+      }
+
+      const probability = normalizePremiumGridPrizeProbability(prize)
+
+      return {
+        ...item,
+        id: prize.id || item.id,
+        name: prize.title || prize.name || item.name,
+        title: prize.title || prize.name || item.title || item.name,
+        shortName: prize.shortName || prize.title || prize.name || item.shortName,
+        icon: prize.icon || prize.emoji || item.icon,
+        imageUrl: prize.imageUrl || prize.image || prize.prizeImageUrl || '',
+        weight: probability,
+        probabilityPercent: probability,
+        quantity: Number(prize.quantity ?? prize.remainStock ?? prize.stock ?? item.quantity ?? 0),
+        backendPrize: prize,
+        backendProbabilitySource: 'GAME_CONFIG_SETTINGS'
+      }
+    })
+  }
+
+  const basic = settings.basicText || {}
+  if (basic.pageTitle) campaign.pageTitle = basic.pageTitle
+  if (basic.brandName) campaign.brandName = basic.brandName
+  if (basic.headline) campaign.mainTitle = basic.headline
+  if (basic.subtitle) campaign.subTitle = basic.subtitle
+  if (basic.badgeText) campaign.heroTagline = basic.badgeText
+  if (basic.playButtonText) campaign.buttonText = basic.playButtonText
+
+  if (settings.display?.chanceText) campaign.chanceText = settings.display.chanceText
+
+  updateChanceText()
+}
+
+const premiumGridBackendProbabilitySummary = computed(() => {
+  const items = gridItems.value.filter((item) => !item.isButton && item.enabled !== false && Number(item.weight || 0) > 0)
+  const total = items.reduce((sum, item) => sum + Number(item.weight || 0), 0)
+
+  return {
+    source: isTenantPremiumGridMode.value ? 'BACKEND_DRAW_ENGINE' : 'LOCAL_PREVIEW_ONLY',
+    sourceLabel: isTenantPremiumGridMode.value
+      ? '正式玩家結果由後端 Draw Engine 依後台百分比計算'
+      : '目前是模板 / 本機預覽，才使用前端試算',
+    totalProbability: Number(total.toFixed(2)),
+    itemCount: items.length,
+    campaignId: tenantCampaignId.value || remoteGridCampaignId.value || ''
+  }
+})
+
 const loadPremiumGridGameConfigSettings = async (campaignId) => {
   // 第 30701～31100 批：
   // 正式遠端玩家頁也要讀 PostgreSQL GameConfig.settings，
@@ -2867,6 +2913,11 @@ const loadPremiumGridGameConfigSettings = async (campaignId) => {
     const settings = unwrapGameConfigSettings(response)
 
     premiumGridGameConfigSettings.value = settings && Object.keys(settings).length ? settings : null
+
+    if (premiumGridGameConfigSettings.value) {
+      applyPremiumGridGameConfigSettingsToLiveState(premiumGridGameConfigSettings.value)
+    }
+
     premiumGridGameConfigLoadedAt.value = new Date().toLocaleString('zh-TW')
   } catch (error) {
     console.error('載入九宮格 GameConfig settings 失敗：', error)
@@ -2895,7 +2946,9 @@ const playTenantPremiumGridDraw = async () => {
       source: getRouteTrafficSource(),
       tenantSlug: tenantSlug.value,
       frontUrl: getShareUrl(),
-      template: 'premium-grid'
+      template: 'premium-grid',
+      probabilitySource: 'GAME_CONFIG_SETTINGS',
+      probabilityMode: 'BACKEND_DRAW_ENGINE'
     }
   })
 
@@ -2927,7 +2980,13 @@ const playTenantPremiumGridDraw = async () => {
     return String(item.id) === String(selectedPrizeId) || String(item.name) === String(selectedPrizeTitle)
   })
 
-  if (matchedPrize) return matchedPrize
+  if (matchedPrize) {
+    return {
+      ...matchedPrize,
+      backendProbabilitySource: result?.prizeSource || payload?.result?.prizeSource || 'DRAW_ENGINE',
+      backendProbabilityMode: 'BACKEND_DRAW_ENGINE'
+    }
+  }
 
   const apiPrize = payload?.prize || result?.prize || payload?.playRecord?.prize || {}
   const apiPrizeTitle = selectedPrizeTitle || apiPrize.title || apiPrize.name
@@ -2941,7 +3000,9 @@ const playTenantPremiumGridDraw = async () => {
       imageUrl: apiPrize.imageUrl || '',
       weight: Number(apiPrize.weight || apiPrize.probability || 1),
       quantity: Number(apiPrize.quantity || apiPrize.stock || 9999),
-      backendPrize: apiPrize
+      backendPrize: apiPrize,
+      backendProbabilitySource: result?.prizeSource || payload?.result?.prizeSource || 'DRAW_ENGINE',
+      backendProbabilityMode: 'BACKEND_DRAW_ENGINE'
     }
   }
 
@@ -3518,10 +3579,6 @@ const goGamesCenter = () => {
 }
 
 const getResultModalHint = () => {
-  const customHint = premiumGridResultModalSettings.value.rewardHint
-
-  if (customHint) return customHint
-
   if (isAdminMode.value) {
     return '這是前台精緻版抽獎效果示範；目前可接後台活動資料、獎項庫存、抽獎紀錄與本機保存。'
   }
@@ -3532,76 +3589,6 @@ const getResultModalHint = () => {
 
   return '獎項已寫入我的遊戲紀錄。你目前沒有剩餘抽獎機會，可先查看紀錄或分享活動增加次數。'
 }
-
-const premiumGridResultModalSettings = computed(() => {
-  return premiumGridSharedPlayBoardSettings.value?.resultModal || {}
-})
-
-const isResultModalWin = computed(() => {
-  const prize = resultPrize.value || {}
-  const name = String(prize.name || prize.title || prize.shortName || '')
-
-  return prize.isWin !== false && !name.includes('未中獎') && !name.includes('銘謝')
-})
-
-const resultModalDisplayImage = computed(() => {
-  const settings = premiumGridResultModalSettings.value
-  const customImage = isResultModalWin.value ? settings.winImageUrl : settings.loseImageUrl
-
-  return customImage || resultPrize.value?.imageUrl || ''
-})
-
-const resultModalTitleText = computed(() => {
-  const settings = premiumGridResultModalSettings.value
-  return isResultModalWin.value
-    ? (settings.winTitle || '恭喜中獎！')
-    : (settings.loseTitle || '再接再厲')
-})
-
-const resultModalPrimaryButtonText = computed(() => {
-  const settings = premiumGridResultModalSettings.value
-  return effectiveGridChances.value > 0
-    ? (settings.continueText || '繼續抽獎')
-    : (settings.confirmText || '關閉結果')
-})
-
-const resultModalCardStyle = computed(() => ({
-  backgroundColor: premiumGridResultModalSettings.value.modalBackgroundColor || '#ffffff'
-}))
-
-const resultModalHeaderStyle = computed(() => ({
-  background: `linear-gradient(135deg, ${premiumGridResultModalSettings.value.headerFromColor || '#fb923c'}, ${premiumGridResultModalSettings.value.headerToColor || '#dc2626'})`
-}))
-
-const resultModalImageBoxStyle = computed(() => {
-  const size = Math.max(56, Math.min(180, Number(premiumGridResultModalSettings.value.imageSize || 96)))
-
-  return {
-    width: `${size}px`,
-    height: `${size}px`,
-    fontSize: `${Math.round(size * 0.58)}px`
-  }
-})
-
-const resultModalTitleStyle = computed(() => ({
-  fontSize: `${Math.max(16, Number(premiumGridResultModalSettings.value.titleTextSize || 24))}px`,
-  color: premiumGridResultModalSettings.value.titleTextColor || '#ffffff'
-}))
-
-const resultModalPrizeStyle = computed(() => ({
-  fontSize: `${Math.max(14, Number(premiumGridResultModalSettings.value.prizeTextSize || 18))}px`,
-  color: premiumGridResultModalSettings.value.prizeTextColor || '#fef3c7'
-}))
-
-const resultModalHintStyle = computed(() => ({
-  fontSize: `${Math.max(12, Number(premiumGridResultModalSettings.value.hintTextSize || 14))}px`,
-  color: premiumGridResultModalSettings.value.hintTextColor || '#64748b'
-}))
-
-const resultModalPrimaryButtonStyle = computed(() => ({
-  backgroundColor: premiumGridResultModalSettings.value.buttonColor || '#ea580c',
-  color: premiumGridResultModalSettings.value.buttonTextColor || '#ffffff'
-}))
 
 const getCellStyle = (index) => {
   const isActive = activeIndex.value === index
@@ -35173,12 +35160,12 @@ const toggleWheelRealFilePrep11011150 = () => {
         v-if="showResultModal && resultPrize"
         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-sm"
       >
-        <div class="w-full max-w-sm overflow-hidden rounded-[32px] shadow-2xl" :style="resultModalCardStyle">
-          <div class="px-6 py-8 text-center text-white" :style="resultModalHeaderStyle">
-            <div class="mx-auto flex items-center justify-center rounded-3xl bg-white/20 shadow-inner" :style="resultModalImageBoxStyle">
+        <div class="w-full max-w-sm overflow-hidden rounded-[32px] bg-white shadow-2xl">
+          <div class="bg-gradient-to-br from-orange-400 to-red-600 px-6 py-8 text-center text-white">
+            <div class="mx-auto flex h-24 w-24 items-center justify-center rounded-3xl bg-white/20 text-6xl shadow-inner">
               <img
-                v-if="resultModalDisplayImage"
-                :src="resultModalDisplayImage"
+                v-if="resultPrize.imageUrl"
+                :src="resultPrize.imageUrl"
                 :alt="resultPrize.name"
                 class="h-full w-full rounded-3xl object-cover"
               />
@@ -35188,28 +35175,27 @@ const toggleWheelRealFilePrep11011150 = () => {
               </span>
             </div>
 
-            <h2 class="mt-5 font-black" :style="resultModalTitleStyle">
-              {{ resultModalTitleText }}
+            <h2 class="mt-5 text-2xl font-black">
+              恭喜中獎！
             </h2>
 
-            <p class="mt-2 font-black" :style="resultModalPrizeStyle">
+            <p class="mt-2 text-lg font-black text-yellow-100">
               {{ resultPrize.name }}
             </p>
           </div>
 
           <div class="p-6 text-center">
-            <p class="leading-6" :style="resultModalHintStyle">
+            <p class="text-sm leading-6 text-slate-500">
               {{ getResultModalHint() }}
             </p>
 
             <div class="mt-5 grid gap-3">
               <button
                 type="button"
-                class="w-full rounded-2xl px-5 py-3 text-sm font-black shadow-sm transition hover:brightness-95"
-                :style="resultModalPrimaryButtonStyle"
+                class="w-full rounded-2xl bg-orange-600 px-5 py-3 text-sm font-black text-white transition hover:bg-orange-700"
                 @click="closeResultAndContinue"
               >
-                {{ resultModalPrimaryButtonText }}
+                {{ effectiveGridChances > 0 ? '繼續抽獎' : '關閉結果' }}
               </button>
 
               <button

@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 21500-2 批：九宮格設定不存在資料庫活動防呆版
+// 第 79201～79600 批：九宮格後台百分比與正式後端抽獎對齊版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -34,6 +34,9 @@ const previewRefreshKey = ref(1)
 const previewMode = ref('formal')
 const currentCampaignTitle = ref('')
 const operationGuideOpen = ref(true)
+const probabilitySimulationCount = ref(1000)
+const probabilitySimulationResults = ref([])
+const probabilityBackendGuardOpen = ref(true)
 
 const simpleMode = ref(true)
 const quickStatusOpen = ref(true)
@@ -454,21 +457,7 @@ const settings = reactive({
     loseTitle: '再接再厲',
     confirmText: '關閉結果',
     continueText: '繼續抽獎',
-    rewardHint: '請依商家公告方式兌換獎品。',
-    winImageUrl: '',
-    loseImageUrl: '',
-    imageSize: 96,
-    modalBackgroundColor: '#ffffff',
-    headerFromColor: '#fb923c',
-    headerToColor: '#dc2626',
-    titleTextSize: 24,
-    titleTextColor: '#ffffff',
-    prizeTextSize: 18,
-    prizeTextColor: '#fef3c7',
-    hintTextSize: 14,
-    hintTextColor: '#64748b',
-    buttonColor: '#ea580c',
-    buttonTextColor: '#ffffff'
+    rewardHint: '請依商家公告方式兌換獎品。'
   },
   effects: {
     soundEnabled: true,
@@ -540,6 +529,86 @@ const probabilityStatusClass = computed(() => {
   return 'border-rose-200 bg-rose-50 text-rose-700'
 })
 
+const probabilityBackendGuard = computed(() => {
+  const total = Number(totalProbabilityPercent.value || 0)
+  const ok = Math.abs(total - 100) < 0.001
+
+  return {
+    ok,
+    badge: ok ? '後端可準確依 100% 抽選' : '請先修正到 100%',
+    title: '正式玩家抽獎由後端 Draw Engine 計算',
+    description: '商家後台儲存後，九宮格玩家頁會呼叫 /api/draw-engine/campaigns/:id/play，由後端讀取 GameConfig settings.prizes 的 probabilityPercent / weight 來加權抽選；玩家前台不自行決定中獎結果。',
+    source: canUseGameConfigApi.value ? `campaignId: ${normalizedCampaignId.value} / GameConfig settings` : '目前沒有正式活動 ID，僅能做模板與預覽。',
+    totalText: `目前機率總和：${total}%`
+  }
+})
+
+const probabilitySimulationItems = computed(() => {
+  return settings.prizes
+    .filter((item) => item && !item.isButton && item.enabled !== false)
+    .map((item, index) => {
+      const percent = Number(item.probabilityPercent ?? item.weight ?? 0)
+      return {
+        id: item.id || `grid-prize-${index + 1}`,
+        title: item.title || item.name || `第 ${index + 1} 格`,
+        icon: item.icon || '🎁',
+        percent: Math.max(0, percent)
+      }
+    })
+    .filter((item) => item.percent > 0)
+})
+
+const probabilitySimulationSummary = computed(() => {
+  const total = probabilitySimulationItems.value.reduce((sum, item) => sum + item.percent, 0)
+  return {
+    total,
+    totalText: `${Number(total.toFixed(2))}%`,
+    itemCount: probabilitySimulationItems.value.length
+  }
+})
+
+const runProbabilitySimulation = () => {
+  const items = probabilitySimulationItems.value
+  const total = probabilitySimulationSummary.value.total
+  const count = Math.min(10000, Math.max(100, Number(probabilitySimulationCount.value || 1000)))
+  probabilitySimulationCount.value = count
+
+  if (!items.length || total <= 0) {
+    probabilitySimulationResults.value = []
+    warningMessage.value = '目前沒有可試算的九宮格獎項，請確認獎項已啟用且機率大於 0。'
+    return
+  }
+
+  const hitMap = new Map(items.map((item) => [item.id, 0]))
+
+  for (let i = 0; i < count; i += 1) {
+    let point = Math.random() * total
+    let picked = items[items.length - 1]
+
+    for (const item of items) {
+      point -= item.percent
+      if (point <= 0) {
+        picked = item
+        break
+      }
+    }
+
+    hitMap.set(picked.id, Number(hitMap.get(picked.id) || 0) + 1)
+  }
+
+  probabilitySimulationResults.value = items.map((item) => {
+    const hits = Number(hitMap.get(item.id) || 0)
+    return {
+      ...item,
+      theoreticalPercent: total > 0 ? Number(((item.percent / total) * 100).toFixed(2)) : 0,
+      hits,
+      simulatedPercent: Number(((hits / count) * 100).toFixed(2))
+    }
+  })
+
+  savedMessage.value = `已完成 ${count} 次九宮格機率試算；正式玩家抽獎仍以後端 draw-engine 實際結果為準。`
+}
+
 const exportDraftJson = computed(() => {
   return JSON.stringify(settings, null, 2)
 })
@@ -590,8 +659,18 @@ const normalizeGameConfigMeta = (response) => {
 }
 
 const buildSettingsSavePayload = () => {
+  const payload = cloneJson(settings)
+  payload.prizes = Array.isArray(payload.prizes)
+    ? payload.prizes.map((item) => ({
+        ...item,
+        probabilityPercent: Number(item.probabilityPercent ?? item.weight ?? 0),
+        weight: Number(item.probabilityPercent ?? item.weight ?? 0),
+        probability: Number(item.probabilityPercent ?? item.weight ?? 0)
+      }))
+    : []
+
   return {
-    ...cloneJson(settings),
+    ...payload,
     __meta: {
       source: 'AdminPremiumGridSettingsView',
       savedAt: new Date().toISOString(),
@@ -859,7 +938,9 @@ const normalizeProbabilityTo100 = () => {
 }
 
 const syncPrizeWeightFromPercent = (item) => {
-  item.weight = Number(item.probabilityPercent || 0)
+  item.probabilityPercent = Number(item.probabilityPercent || 0)
+  item.weight = item.probabilityPercent
+  probabilitySimulationResults.value = []
 }
 
 const runCommonMerchantAction = (action) => {
@@ -948,38 +1029,6 @@ const handlePreviewEvent = (label) => {
 
 const getInputClass = () => {
   return 'w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-100'
-}
-
-// 第 78801～79200 批：九宮格結果彈窗本機圖片轉成 Data URL，方便商家不需先上傳圖片也能預覽與儲存。
-const handleResultModalImageFile = (event, targetKey) => {
-  const file = event?.target?.files?.[0]
-  if (!file) return
-
-  if (!String(file.type || '').startsWith('image/')) {
-    window.alert('請選擇圖片檔案。')
-    event.target.value = ''
-    return
-  }
-
-  if (file.size > 1024 * 1024 * 1.5) {
-    window.alert('圖片建議小於 1.5MB，避免設定資料過大。請先壓縮圖片後再選擇。')
-    event.target.value = ''
-    return
-  }
-
-  const reader = new FileReader()
-  reader.onload = () => {
-    settings.resultModal[targetKey] = String(reader.result || '')
-    savedMessage.value = targetKey === 'winImageUrl'
-      ? '已套用本機中獎圖片，請儲存設定後同步到正式玩家頁。'
-      : '已套用本機未中獎圖片，請儲存設定後同步到正式玩家頁。'
-  }
-  reader.readAsDataURL(file)
-}
-
-const clearResultModalImage = (targetKey) => {
-  settings.resultModal[targetKey] = ''
-  savedMessage.value = targetKey === 'winImageUrl' ? '已清除中獎圖片。' : '已清除未中獎圖片。'
 }
 
 watch(
@@ -1541,6 +1590,59 @@ onMounted(() => {
                 {{ probabilityStatusText }}
               </div>
 
+              <div class="rounded-[28px] border border-indigo-100 bg-indigo-50 p-5">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p class="text-xs font-black uppercase tracking-[0.22em] text-indigo-500">Backend Probability Guard｜第 79201～79600 批</p>
+                    <h3 class="mt-2 text-xl font-black text-slate-950">{{ probabilityBackendGuard.title }}</h3>
+                    <p class="mt-2 text-sm font-bold leading-6 text-indigo-700">{{ probabilityBackendGuard.description }}</p>
+                    <p class="mt-2 text-xs font-black text-indigo-500">{{ probabilityBackendGuard.source }}</p>
+                  </div>
+                  <div class="rounded-3xl bg-white px-5 py-4 text-center shadow-sm">
+                    <p class="text-xs font-black text-slate-400">後端機率狀態</p>
+                    <p class="mt-1 text-sm font-black" :class="probabilityBackendGuard.ok ? 'text-emerald-700' : 'text-rose-700'">{{ probabilityBackendGuard.badge }}</p>
+                    <p class="mt-1 text-xs font-bold text-slate-500">{{ probabilityBackendGuard.totalText }}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rounded-[28px] border border-slate-200 bg-white p-5">
+                <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p class="text-xs font-black uppercase tracking-[0.22em] text-fuchsia-500">Percent Simulator</p>
+                    <h3 class="mt-2 text-lg font-black text-slate-950">九宮格機率試算器</h3>
+                    <p class="mt-1 text-sm font-bold text-slate-500">此處用同一組後台百分比模擬；正式玩家抽獎仍由後端 Draw Engine 計算。</p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <input v-model.number="probabilitySimulationCount" type="number" min="100" max="10000" step="100" class="w-32 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black" />
+                    <button type="button" class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white" @click="runProbabilitySimulation">開始試算</button>
+                  </div>
+                </div>
+
+                <div v-if="probabilitySimulationResults.length" class="mt-4 overflow-hidden rounded-2xl border border-slate-100">
+                  <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-950 text-white">
+                      <tr>
+                        <th class="px-4 py-3">獎項</th>
+                        <th class="px-4 py-3">設定%</th>
+                        <th class="px-4 py-3">理論命中</th>
+                        <th class="px-4 py-3">模擬命中</th>
+                        <th class="px-4 py-3">次數</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 bg-white">
+                      <tr v-for="item in probabilitySimulationResults" :key="item.id">
+                        <td class="px-4 py-3 font-black text-slate-800">{{ item.icon }} {{ item.title }}</td>
+                        <td class="px-4 py-3 font-black text-slate-600">{{ item.percent }}%</td>
+                        <td class="px-4 py-3 font-black text-indigo-700">{{ item.theoreticalPercent }}%</td>
+                        <td class="px-4 py-3 font-black text-emerald-700">{{ item.simulatedPercent }}%</td>
+                        <td class="px-4 py-3 font-black text-slate-500">{{ item.hits }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
               <div class="flex flex-wrap gap-2">
                 <button type="button" class="rounded-2xl bg-slate-950 px-4 py-2 text-sm font-black text-white" @click="normalizeProbabilityTo100">
                   平均分配成 100%
@@ -1765,47 +1867,10 @@ onMounted(() => {
             </div>
 
             <div v-else-if="activeSection === 'resultModal'" class="mt-6 grid gap-4 md:grid-cols-2">
-              <div class="rounded-[28px] border border-violet-100 bg-violet-50/70 p-5 md:col-span-2">
-                <p class="text-xs font-black uppercase tracking-[0.24em] text-violet-500">Result Modal Media｜第 78801～79200 批</p>
-                <h3 class="mt-2 text-lg font-black text-slate-900">結果彈窗圖片與文字樣式</h3>
-                <p class="mt-2 text-sm font-bold leading-6 text-slate-500">可貼網路圖片網址，也可選擇本機圖片轉成 Data URL；正式玩家手機要看得到，請按「儲存設定」同步到線上資料庫。</p>
-              </div>
-
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">中獎標題</span><input v-model="settings.resultModal.winTitle" :class="getInputClass()" /></label>
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">未中獎標題</span><input v-model="settings.resultModal.loseTitle" :class="getInputClass()" /></label>
-
-              <div class="space-y-3 rounded-[24px] border border-slate-100 bg-white p-4">
-                <label class="space-y-2"><span class="text-sm font-black text-slate-700">中獎圖片網址</span><input v-model="settings.resultModal.winImageUrl" :class="getInputClass()" placeholder="https://... 或選擇本機圖片" /></label>
-                <div class="flex flex-wrap items-center gap-2">
-                  <label class="cursor-pointer rounded-2xl bg-violet-600 px-4 py-2 text-xs font-black text-white shadow-sm">選擇本機中獎圖<input type="file" accept="image/*" class="hidden" @change="handleResultModalImageFile($event, 'winImageUrl')" /></label>
-                  <button type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600" @click="clearResultModalImage('winImageUrl')">清除</button>
-                </div>
-              </div>
-
-              <div class="space-y-3 rounded-[24px] border border-slate-100 bg-white p-4">
-                <label class="space-y-2"><span class="text-sm font-black text-slate-700">未中獎圖片網址</span><input v-model="settings.resultModal.loseImageUrl" :class="getInputClass()" placeholder="https://... 或選擇本機圖片" /></label>
-                <div class="flex flex-wrap items-center gap-2">
-                  <label class="cursor-pointer rounded-2xl bg-violet-600 px-4 py-2 text-xs font-black text-white shadow-sm">選擇本機未中獎圖<input type="file" accept="image/*" class="hidden" @change="handleResultModalImageFile($event, 'loseImageUrl')" /></label>
-                  <button type="button" class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-600" @click="clearResultModalImage('loseImageUrl')">清除</button>
-                </div>
-              </div>
-
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">圖片大小</span><input v-model.number="settings.resultModal.imageSize" type="range" min="56" max="180" step="2" class="w-full" /><p class="text-sm font-black text-slate-500">{{ settings.resultModal.imageSize }} px</p></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">彈窗背景色</span><input v-model="settings.resultModal.modalBackgroundColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">上方漸層起始色</span><input v-model="settings.resultModal.headerFromColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">上方漸層結束色</span><input v-model="settings.resultModal.headerToColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">標題文字大小</span><input v-model.number="settings.resultModal.titleTextSize" type="range" min="16" max="42" step="1" class="w-full" /><p class="text-sm font-black text-slate-500">{{ settings.resultModal.titleTextSize }} px</p></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">標題文字顏色</span><input v-model="settings.resultModal.titleTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">獎項文字大小</span><input v-model.number="settings.resultModal.prizeTextSize" type="range" min="14" max="36" step="1" class="w-full" /><p class="text-sm font-black text-slate-500">{{ settings.resultModal.prizeTextSize }} px</p></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">獎項文字顏色</span><input v-model="settings.resultModal.prizeTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">提示文字大小</span><input v-model.number="settings.resultModal.hintTextSize" type="range" min="12" max="24" step="1" class="w-full" /><p class="text-sm font-black text-slate-500">{{ settings.resultModal.hintTextSize }} px</p></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">提示文字顏色</span><input v-model="settings.resultModal.hintTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">確認按鈕</span><input v-model="settings.resultModal.confirmText" :class="getInputClass()" /></label>
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">繼續按鈕</span><input v-model="settings.resultModal.continueText" :class="getInputClass()" /></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">按鈕顏色</span><input v-model="settings.resultModal.buttonColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">按鈕文字顏色</span><input v-model="settings.resultModal.buttonTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
               <label class="space-y-2 md:col-span-2"><span class="text-sm font-black text-slate-700">兌換提醒</span><input v-model="settings.resultModal.rewardHint" :class="getInputClass()" /></label>
             </div>
 
