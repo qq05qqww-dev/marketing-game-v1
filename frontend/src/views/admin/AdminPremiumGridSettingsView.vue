@@ -31,6 +31,7 @@ const configSavedAt = ref('')
 const configModeMessage = ref('目前是正式資料庫模式。若網址包含活動 ID，例如 /admin/premium-grid-settings/1，儲存會寫入 GameConfig settings 並重新讀取確認。')
 const previewTenantSlug = ref('a-shop')
 const previewRefreshKey = ref(1)
+const formalPreviewIframeRef = ref(null)
 const previewMode = ref('formal')
 const currentCampaignTitle = ref('')
 const operationGuideOpen = ref(true)
@@ -842,17 +843,35 @@ const buildAdminPreviewDraftPayload = () => {
   }
 }
 
-const syncDraftToPreviewStorage = ({ refresh = true } = {}) => {
+const postDraftToPreviewIframe = (payload = null) => {
+  if (typeof window === 'undefined') return
+
+  const iframeWindow = formalPreviewIframeRef.value?.contentWindow
+  if (!iframeWindow) return
+
+  iframeWindow.postMessage({
+    type: 'MGP_PREMIUM_GRID_ADMIN_DRAFT_UPDATE',
+    draftKey: adminPreviewDraftKey.value,
+    payload: payload || buildAdminPreviewDraftPayload()
+  }, window.location.origin)
+}
+
+const syncDraftToPreviewStorage = ({ refresh = false } = {}) => {
   if (!livePreviewEnabled.value || typeof window === 'undefined') return
 
   try {
-    window.localStorage.setItem(adminPreviewDraftKey.value, JSON.stringify(buildAdminPreviewDraftPayload()))
+    const payload = buildAdminPreviewDraftPayload()
+    window.localStorage.setItem(adminPreviewDraftKey.value, JSON.stringify(payload))
     livePreviewLastSyncedAt.value = new Date().toLocaleTimeString('zh-TW', {
       hour12: false,
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit'
     })
+
+    // 第 80801～81200 批：一般欄位修改改用 postMessage 更新 iframe，
+    // 不再每次刷新 src，避免先閃遠端 A 商家資料再跳回草稿。
+    postDraftToPreviewIframe(payload)
 
     if (refresh) {
       refreshFormalPreview()
@@ -868,8 +887,8 @@ const scheduleDraftPreviewSync = () => {
 
   window.clearTimeout(livePreviewDebounceTimer.value)
   livePreviewDebounceTimer.value = window.setTimeout(() => {
-    syncDraftToPreviewStorage({ refresh: true })
-  }, 180)
+    syncDraftToPreviewStorage({ refresh: false })
+  }, 120)
 }
 
 const refreshFormalPreview = () => {
@@ -2099,13 +2118,14 @@ onMounted(() => {
 
               <p class="rounded-2xl bg-slate-50 px-4 py-3 text-xs font-bold leading-6 text-slate-500">
                 目前預覽網址：<span class="font-black text-slate-700">{{ formalPlayerPreviewUrl }}</span><br />
-                右側 iframe 會讀取後台即時草稿；修改文字、顏色、獎項後會自動同步預覽，不必先儲存。正式客人頁只讀已儲存設定。
+                右側 iframe 會讀取後台即時草稿；修改文字、顏色、獎項後會用平滑同步更新，不再每次重載畫面。正式客人頁只讀已儲存設定。
               </p>
             </div>
 
             <div class="mx-auto max-w-[560px] overflow-hidden rounded-[40px] border-[12px] border-slate-950 bg-slate-950 shadow-2xl">
               <iframe
-                :key="formalPlayerPreviewSrc"
+                ref="formalPreviewIframeRef"
+                :key="previewRefreshKey"
                 :src="formalPlayerPreviewSrc"
                 title="九宮格正式玩家頁預覽"
                 class="h-[860px] w-full rounded-[28px] border-0 bg-white"

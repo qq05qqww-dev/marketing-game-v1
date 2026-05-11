@@ -508,6 +508,41 @@ const applyAdminPreviewDraftToCampaign = () => {
   }
 }
 
+const applyAdminPreviewDraftPayloadToCampaign = (draft = {}) => {
+  const mappedSettings = normalizeAdminPreviewDraftSettings(draft.settings || {})
+
+  Object.entries(mappedSettings.campaign).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && key in campaign) {
+      campaign[key] = value
+    }
+  })
+
+  Object.assign(adminPreviewTextSize, {
+    ...adminPreviewTextSize,
+    ...(mappedSettings.textSize || {})
+  })
+
+  applyAdminPreviewPrizeDraftToGrid(mappedSettings.prizes)
+  return true
+}
+
+const handlePremiumGridAdminDraftMessage = (event) => {
+  if (typeof window === 'undefined') return
+  if (route.query.adminPreviewDraft !== '1') return
+  if (event.origin !== window.location.origin) return
+  if (event.data?.type !== 'MGP_PREMIUM_GRID_ADMIN_DRAFT_UPDATE') return
+
+  const routeDraftKey = String(route.query.draftKey || '')
+  const eventDraftKey = String(event.data?.draftKey || '')
+  if (routeDraftKey && eventDraftKey && routeDraftKey !== eventDraftKey) return
+
+  const payload = event.data?.payload || {}
+  if (!payload?.settings) return
+
+  applyAdminPreviewDraftPayloadToCampaign(payload)
+}
+
+
 const player = reactive({
   chances: 97,
   sharedCount: 0
@@ -3717,6 +3752,7 @@ onMounted(() => {
   if (typeof window === 'undefined') return
 
   window.addEventListener('storage', handlePremiumGridStorageSync)
+  window.addEventListener('message', handlePremiumGridAdminDraftMessage)
 
   if (isTenantPremiumGridMode.value) {
     loadTenantPremiumGridCampaign()
@@ -3731,6 +3767,7 @@ onBeforeUnmount(() => {
   if (typeof window === 'undefined') return
 
   window.removeEventListener('storage', handlePremiumGridStorageSync)
+  window.removeEventListener('message', handlePremiumGridAdminDraftMessage)
 })
 
 watch(
