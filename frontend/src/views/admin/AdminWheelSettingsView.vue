@@ -1568,6 +1568,79 @@ const onlineSaveSyncItems = computed(() => [
   { label: '儲存時間', value: onlineSaveSyncCheck.value.savedAtLabel }
 ])
 
+
+// 第 67201～67600 批：右側預覽狀態收斂與正式儲存導引。
+// 把「預覽只是草稿 / 是否已儲存 / 目前 API 是否會同步正式玩家頁」集中在右側預覽區，避免商家誤以為右側即時預覽已等於正式玩家頁更新。
+const previewSaveGuidance = computed(() => {
+  const env = apiEnvironmentGuard.value
+  const save = onlineSaveSyncCheck.value
+  const dirty = hasUnsavedChanges.value
+  const isOfficialOnline = env.safe === true
+  const isLocalApi = isLocalOrigin(env.apiValue)
+  const previewReady = previewSmoothSyncMode.value === 'smooth' || previewSmoothSyncMode.value === 'reload'
+
+  let title = '右側是即時預覽草稿'
+  let badge = dirty ? '尚未儲存' : '已儲存'
+  let badgeClass = dirty
+    ? 'bg-amber-300 text-slate-950'
+    : 'bg-emerald-300 text-slate-950'
+  let toneClass = dirty
+    ? 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+    : 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
+  let summary = dirty
+    ? '左側設定已更新右側預覽，但還沒有正式寫入資料庫。請按「儲存設定」後，正式玩家頁才會同步。'
+    : '目前沒有尚未儲存的設定變更。右側預覽與最近一次保存狀態已收斂。'
+  let officialHint = isOfficialOnline
+    ? '目前是 Vercel 前端 + Render API，儲存成功後正式玩家頁會讀同一套線上資料庫。'
+    : (isLocalApi
+        ? '目前 API 是 localhost，本機修改不會同步到 Vercel 正式玩家頁。'
+        : '目前 API 環境需確認，請先看 API Environment Guard。')
+
+  if (env.mismatch) {
+    title = '登入商家與網址商家不一致'
+    badge = '先停止操作'
+    badgeClass = 'bg-rose-300 text-slate-950'
+    toneClass = 'border-rose-300/30 bg-rose-300/10 text-rose-100'
+    summary = '目前登入商家與網址 tenantSlug 不一致。請從「我的活動」重新進入正確活動，避免改錯商家。'
+  } else if (dirty && isOfficialOnline) {
+    title = '預覽已更新，等待儲存到正式資料庫'
+    badge = '待正式儲存'
+  } else if (!dirty && isOfficialOnline && save.officialCanSync) {
+    title = '已儲存到線上正式資料庫'
+    badge = '正式頁可同步'
+    badgeClass = 'bg-emerald-300 text-slate-950'
+    toneClass = 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100'
+    summary = '最近一次儲存已寫入 Render 線上資料庫。請重新整理正式玩家頁確認。'
+  } else if (isLocalApi) {
+    title = dirty ? '本機預覽已變更，尚未儲存' : '目前是本機測試環境'
+    badge = dirty ? '本機草稿' : '本機模式'
+    badgeClass = 'bg-amber-300 text-slate-950'
+    toneClass = 'border-amber-300/30 bg-amber-300/10 text-amber-100'
+  }
+
+  return {
+    eyebrow: 'Preview Save Guidance｜第 67201～67600 批',
+    title,
+    badge,
+    badgeClass,
+    toneClass,
+    summary,
+    officialHint,
+    previewStatus: previewReady ? previewSmoothSyncStatus.value : '預覽尚未完成平滑同步',
+    unsavedLabel: dirty ? '尚未儲存' : '已儲存',
+    apiLabel: env.apiValue,
+    playerUrl: playerUrl.value,
+    showPlayerActions: Boolean(!isPlatformTemplateMode.value && playerUrl.value)
+  }
+})
+
+const previewSaveGuidanceItems = computed(() => [
+  { label: '預覽狀態', value: previewSaveGuidance.value.previewStatus },
+  { label: '儲存狀態', value: previewSaveGuidance.value.unsavedLabel },
+  { label: '目前 API', value: previewSaveGuidance.value.apiLabel },
+  { label: '正式玩家頁', value: previewSaveGuidance.value.playerUrl }
+])
+
 const safePreviewUrl = computed(() => {
   try {
     const parsed = new URL(playerUrl.value, frontOrigin.value)
@@ -3706,7 +3779,7 @@ onBeforeUnmount(() => {
             <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-200">Live Player Preview</p>
             <h2 class="mt-2 text-xl font-black">右側正式玩家頁預覽</h2>
             <p class="mt-2 text-xs font-bold leading-5 text-white/60">
-              {{ isPlatformTemplateMode ? '平台模板模式：右側只讀平台模板草稿，不會連到商家活動資料，也不會寫入商家資料庫。' : '這裡直接載入 WheelGameView 正式玩家頁。修改左側設定後會自動儲存草稿並重新載入預覽。' }}
+              {{ isPlatformTemplateMode ? '平台模板模式：右側只讀平台模板草稿，不會連到商家活動資料，也不會寫入商家資料庫。' : '這裡直接載入 WheelGameView 正式玩家頁。修改左側設定後會平滑同步到右側預覽；按儲存設定後才會正式寫入資料庫。' }}
             </p>
           </div>
 
@@ -3758,6 +3831,49 @@ onBeforeUnmount(() => {
                   @click="setPreviewZoomMode(zoom.key)"
                 >
                   {{ zoom.label }}
+                </button>
+              </div>
+            </div>
+
+            <div class="mb-3 rounded-2xl border p-3" :class="previewSaveGuidance.toneClass">
+              <div class="flex flex-wrap items-start justify-between gap-2">
+                <div class="min-w-0">
+                  <p class="text-[11px] font-black uppercase tracking-[0.18em] opacity-70">{{ previewSaveGuidance.eyebrow }}</p>
+                  <h3 class="mt-1 text-sm font-black">{{ previewSaveGuidance.title }}</h3>
+                  <p class="mt-1 text-[11px] font-bold leading-5 opacity-90">{{ previewSaveGuidance.summary }}</p>
+                </div>
+                <span class="shrink-0 rounded-full px-3 py-1 text-[11px] font-black" :class="previewSaveGuidance.badgeClass">
+                  {{ previewSaveGuidance.badge }}
+                </span>
+              </div>
+
+              <div class="mt-3 grid gap-2 sm:grid-cols-2">
+                <div
+                  v-for="item in previewSaveGuidanceItems"
+                  :key="item.label"
+                  class="rounded-2xl border border-white/10 bg-black/10 px-3 py-2"
+                >
+                  <p class="text-[10px] font-black uppercase tracking-[0.14em] opacity-60">{{ item.label }}</p>
+                  <p class="mt-1 break-all text-[11px] font-black leading-5">{{ item.value }}</p>
+                </div>
+              </div>
+
+              <p class="mt-3 text-[11px] font-bold leading-5 opacity-90">{{ previewSaveGuidance.officialHint }}</p>
+
+              <div v-if="previewSaveGuidance.showPlayerActions" class="mt-3 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  class="rounded-2xl bg-white px-3 py-2 text-[11px] font-black text-slate-950 transition hover:bg-white/90"
+                  @click="openPlayer"
+                >
+                  開啟正式玩家頁
+                </button>
+                <button
+                  type="button"
+                  class="rounded-2xl border border-white/20 px-3 py-2 text-[11px] font-black transition hover:bg-white/10"
+                  @click="copyText(playerUrl, '已複製正式玩家頁網址')"
+                >
+                  複製玩家網址
                 </button>
               </div>
             </div>
