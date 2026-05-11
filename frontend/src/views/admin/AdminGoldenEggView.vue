@@ -9993,6 +9993,91 @@ watch(
         </div>
 
         <section
+          v-if="activeSection === 'prizes'"
+          class="mb-4 rounded-[2rem] border-2 border-amber-200 bg-gradient-to-br from-amber-50 via-white to-yellow-50 p-5 shadow-xl shadow-amber-100/60"
+        >
+          <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p class="text-[11px] font-black uppercase tracking-[0.24em] text-amber-600">
+                Golden Egg Percent Simulator｜第 85601～86000 批｜強制置頂
+              </p>
+              <h2 class="mt-1 text-xl font-black text-slate-950">
+                金蛋機率試算器
+              </h2>
+              <p class="mt-1 text-sm font-bold leading-6 text-amber-800">
+                這一區固定顯示在「獎項百分比」最上方，不會被列表、還原區或收合區塊藏住。正式玩家抽獎仍由後端 Draw Engine 讀後台百分比計算。
+              </p>
+              <p class="mt-2 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black text-emerald-700 ring-1 ring-emerald-100">
+                目前百分比總和：{{ probabilityTotal }}%｜{{ probabilityHintText }}
+              </p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                v-model.number="eggProbabilitySimulatorRuns"
+                type="number"
+                min="100"
+                max="10000"
+                step="100"
+                class="w-32 rounded-2xl border border-amber-200 bg-white px-4 py-3 text-sm font-black text-slate-900 outline-none focus:border-amber-400 focus:ring-4 focus:ring-amber-100"
+              />
+              <button
+                type="button"
+                class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-200 transition hover:-translate-y-0.5"
+                @click="runEggProbabilitySimulator"
+              >
+                開始試算
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl bg-white px-5 py-3 text-sm font-black text-amber-700 ring-1 ring-amber-200 transition hover:bg-amber-50"
+                @click="eggProbabilitySimulatorOpen = !eggProbabilitySimulatorOpen"
+              >
+                {{ eggProbabilitySimulatorOpen ? '收合試算器' : '展開試算器' }}
+              </button>
+            </div>
+          </div>
+
+          <p v-if="eggProbabilitySimulationAt" class="mt-4 rounded-2xl bg-white/80 px-4 py-3 text-xs font-black text-amber-700 ring-1 ring-amber-100">
+            {{ eggProbabilitySimulationAt }}
+          </p>
+
+          <div
+            v-if="eggProbabilitySimulatorOpen"
+            class="mt-4 max-h-80 overflow-auto rounded-3xl border border-amber-100 bg-white shadow-inner"
+          >
+            <table class="w-full min-w-[560px] text-left text-xs">
+              <thead class="sticky top-0 bg-slate-950 text-white">
+                <tr>
+                  <th class="px-4 py-3">獎項</th>
+                  <th class="px-4 py-3">設定%</th>
+                  <th class="px-4 py-3">理論%</th>
+                  <th class="px-4 py-3">模擬%</th>
+                  <th class="px-4 py-3">次數</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="item in eggProbabilitySimulationRows"
+                  :key="item.key"
+                  class="border-b border-slate-100 last:border-0"
+                >
+                  <td class="px-4 py-3 font-black text-slate-800">{{ item.label }}</td>
+                  <td class="px-4 py-3 font-black text-slate-600">{{ item.settingPercent }}%</td>
+                  <td class="px-4 py-3 font-black text-indigo-700">{{ item.theoryPercent }}%</td>
+                  <td class="px-4 py-3 font-black text-emerald-700">{{ item.simulatedPercentText }}</td>
+                  <td class="px-4 py-3 font-black text-slate-500">{{ item.hitCountText }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p class="mt-3 text-xs font-bold leading-5 text-amber-800">
+            若這裡有出現，就代表目前檔案已經套用第 85601～86000 批；如果線上還看不到，請確認已 git add / commit / push，並等待 Vercel 部署完成。
+          </p>
+        </section>
+
+        <section
           v-if="activeSection === 'basic'"
           class="space-y-4"
         >
