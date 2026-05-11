@@ -1551,7 +1551,7 @@ onMounted(() => {
                 <label class="space-y-2"><span class="text-sm font-black text-slate-700">主標 headline</span><input v-model="settings.basicText.headline" :class="getInputClass()" /></label>
                 <label class="space-y-2"><span class="text-sm font-black text-slate-700">副標 subtitle</span><input v-model="settings.basicText.subtitle" :class="getInputClass()" /></label>
                 <label class="space-y-2"><span class="text-sm font-black text-slate-700">標籤文字 badgeText</span><input v-model="settings.basicText.badgeText" :class="getInputClass()" /></label>
-                <label class="space-y-2"><span class="text-sm font-black text-slate-700">抽獎按鈕文字 playButtonText</span><input v-model="settings.basicText.playButtonText" :class="getInputClass()" /></label>
+                <label class="space-y-2"><span class="text-sm font-black text-slate-700">抽獎按鈕文字 playButtonText</span><input v-model="settings.basicText.playButtonText" :class="getInputClass()" /><span class="block text-xs font-bold text-slate-400">同步控制九宮格中間紅色按鈕與下方白色開始按鈕文字。</span></label>
               </div>
 
               <div class="rounded-3xl border border-violet-100 bg-violet-50 p-5">
@@ -1568,8 +1568,9 @@ onMounted(() => {
                 <div class="mt-4 grid gap-4 md:grid-cols-2">
                   <label class="space-y-2"><span class="text-sm font-black text-slate-700">主標大小 headlineSize：{{ settings.textSize.headlineSize }}px</span><input v-model.number="settings.textSize.headlineSize" type="range" min="24" max="56" class="w-full" /></label>
                   <label class="space-y-2"><span class="text-sm font-black text-slate-700">副標大小 subtitleSize：{{ settings.textSize.subtitleSize }}px</span><input v-model.number="settings.textSize.subtitleSize" type="range" min="18" max="44" class="w-full" /></label>
-                  <label class="space-y-2"><span class="text-sm font-black text-slate-700">品牌名稱大小 brandNameSize：{{ settings.textSize.brandNameSize }}px</span><input v-model.number="settings.textSize.brandNameSize" type="range" min="12" max="28" class="w-full" /></label>
-                  <label class="space-y-2"><span class="text-sm font-black text-slate-700">獎品文字大小 prizeTextSize：{{ settings.textSize.prizeTextSize }}px</span><input v-model.number="settings.textSize.prizeTextSize" type="range" min="10" max="20" class="w-full" /></label>
+                  <label class="space-y-2"><span class="text-sm font-black text-slate-700">品牌名稱大小 brandNameSize：{{ settings.textSize.brandNameSize }}px</span><input v-model.number="settings.textSize.brandNameSize" type="range" min="12" max="32" class="w-full" /></label>
+                  <label class="space-y-2"><span class="text-sm font-black text-slate-700">抽獎按鈕文字大小 buttonTextSize：{{ settings.textSize.buttonTextSize }}px</span><input v-model.number="settings.textSize.buttonTextSize" type="range" min="12" max="32" class="w-full" /></label>
+                  <label class="space-y-2"><span class="text-sm font-black text-slate-700">獎品文字大小 prizeTextSize：{{ settings.textSize.prizeTextSize }}px</span><input v-model.number="settings.textSize.prizeTextSize" type="range" min="10" max="24" class="w-full" /></label>
                 </div>
               </div>
 

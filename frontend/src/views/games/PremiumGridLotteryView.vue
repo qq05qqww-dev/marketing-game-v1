@@ -2474,7 +2474,7 @@ const drawButtonText = computed(() => {
 
   if (availablePrizeCount.value <= 0) return '獎品已抽完'
 
-  return '點擊抽選'
+  return campaign.buttonText || '點擊抽選'
 })
 
 const playerStatusMessage = computed(() => {
@@ -33342,7 +33342,10 @@ const toggleWheelRealFilePrep11011150 = () => {
                           </div>
 
                       <div class="max-w-full">
-                        <p class="text-sm font-black text-white/80">
+                        <p
+                          class="font-black text-white/80"
+                          :style="getAdminPreviewTextStyle('brandNameSize', 16)"
+                        >
                           {{ campaign.brandName }}
                         </p>
 
@@ -33391,7 +33394,10 @@ const toggleWheelRealFilePrep11011150 = () => {
                           </div>
 
                         <div class="min-w-0 flex-1 text-left">
-                          <p class="truncate text-sm font-black text-white/80">
+                          <p
+                            class="truncate font-black text-white/80"
+                            :style="getAdminPreviewTextStyle('brandNameSize', 16)"
+                          >
                             {{ campaign.brandName }}
                           </p>
 
@@ -33437,7 +33443,10 @@ const toggleWheelRealFilePrep11011150 = () => {
                           </div>
 
                         <div class="min-w-0 flex-1 text-left">
-                          <p class="truncate text-sm font-black text-white/80">
+                          <p
+                            class="truncate font-black text-white/80"
+                            :style="getAdminPreviewTextStyle('brandNameSize', 16)"
+                          >
                             {{ campaign.brandName }}
                           </p>
 
@@ -33580,7 +33589,7 @@ const toggleWheelRealFilePrep11011150 = () => {
 
                           <span
                             class="font-black leading-tight text-white"
-                            :style="getAdminPreviewTextStyle('prizeTextSize', 13)"
+                            :style="getAdminPreviewTextStyle('buttonTextSize', 16)"
                           >
                             {{ drawButtonText }}
                           </span>
