@@ -1910,7 +1910,12 @@ const campaign = reactive({
   frameBottomColor: '#7c2d12',
   frameBorderColor: '#fdba74',
   frameHighlightColor: '#facc15',
-  brandPreset: 'orange-gold'
+  brandPreset: 'orange-gold',
+  // 第 59601～60000 批：平台輪盤模組精緻預設接入玩家頁。
+  // 由平台模板 / 商家活動 settings.templateMeta.visualPolish.presetKey 控制玩家端實際渲染風格。
+  visualPolishPresetKey: 'luxuryGold',
+  visualPolishPresetName: '高級金橘豪華版',
+  visualPolishBatch: '59601-60000'
 })
 
 const player = reactive({
@@ -3539,6 +3544,28 @@ const wheelStyle = computed(() => {
   }
 })
 
+// 第 59601～60000 批：輪盤模組精緻預設實際套用到玩家頁外觀。
+const normalizeWheelPolishPresetKey = (value = '') => {
+  const key = String(value || '').trim()
+
+  return ['luxuryGold', 'blackGoldVip', 'neonPurple', 'cleanOrange'].includes(key)
+    ? key
+    : 'luxuryGold'
+}
+
+const getWheelPolishPresetClass = (presetKey = '') => {
+  const key = normalizeWheelPolishPresetKey(presetKey)
+
+  return {
+    luxuryGold: 'premium-wheel-polish-preset-luxury-gold',
+    blackGoldVip: 'premium-wheel-polish-preset-black-gold-vip',
+    neonPurple: 'premium-wheel-polish-preset-neon-purple',
+    cleanOrange: 'premium-wheel-polish-preset-clean-orange'
+  }[key]
+}
+
+const wheelPolishPresetClass = computed(() => getWheelPolishPresetClass(campaign.visualPolishPresetKey))
+
 const getPrizeTypeLabel = (type) => {
   return type === 'lose' ? '未中獎' : '中獎'
 }
@@ -4439,8 +4466,24 @@ const readWheelAdminDraftSettings = (campaignIdValue = '') => {
   return null
 }
 
+const applyWheelVisualPolishMeta = (settings = {}) => {
+  const visualPolish = settings?.templateMeta?.visualPolish || settings?.visualPolish || {}
+  const presetKey = normalizeWheelPolishPresetKey(visualPolish?.presetKey || settings?.visualPolishPresetKey || '')
+
+  campaign.visualPolishPresetKey = presetKey
+  campaign.visualPolishPresetName = visualPolish?.presetName || ({
+    luxuryGold: '高級金橘豪華版',
+    blackGoldVip: '黑金 VIP 典藏版',
+    neonPurple: '霓虹紫粉潮流版',
+    cleanOrange: '清爽橘白簡潔版'
+  }[presetKey] || '高級金橘豪華版')
+  campaign.visualPolishBatch = visualPolish?.batch || settings?.templateMeta?.cloneBatch || '59601-60000'
+}
+
 const applyWheelAdminDraftSettings = (draft = null) => {
   if (!draft || typeof draft !== 'object') return
+
+  applyWheelVisualPolishMeta(draft)
 
   campaign.pageTitle = draft.pageTitle || campaign.pageTitle
   campaign.brandName = draft.brandName || campaign.brandName
@@ -4538,6 +4581,8 @@ const applyWheelAdminDraftSettings = (draft = null) => {
 
 const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
   const settings = normalizeWheelRemoteSettings(apiCampaign)
+
+  applyWheelVisualPolishMeta(settings)
 
   remoteWheelCampaign.value = apiCampaign
   remoteWheelCampaignId.value = Number(apiCampaign.id || settings.campaignId || getRouteCampaignId() || 0) || null
@@ -8853,6 +8898,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
 
               <section
                 class="premium-wheel-stage premium-vip-wheel-stage premium-original-wheel-polish relative mx-auto mt-6 w-full max-w-[356px] rounded-[38px] border border-yellow-100/70 bg-gradient-to-br from-yellow-50 via-orange-50 to-orange-200 p-3 shadow-[0_30px_70px_rgba(78,29,4,.48)] sm:max-w-[430px] sm:p-4 lg:max-w-[500px] lg:p-5"
+                :class="wheelPolishPresetClass"
                 :class="isSpinning ? 'premium-wheel-active' : ''"
               >
                 <div
@@ -11296,6 +11342,118 @@ aside {
 .premium-wheel-serial-card button {
   min-height: 54px;
   border-radius: 22px;
+}
+
+/* 第 59601～60000 批：輪盤模組精緻預設實際玩家頁渲染。
+   由 settings.templateMeta.visualPolish.presetKey 控制，不影響抽獎流程與 API。 */
+.premium-wheel-polish-preset-luxury-gold {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.86), transparent 32%),
+    radial-gradient(circle at 20% 18%, rgba(254, 243, 199, 0.76), transparent 24%),
+    linear-gradient(155deg, #fff7ed 0%, #fed7aa 42%, #f97316 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    inset 0 -28px 44px rgba(154, 52, 18, 0.18),
+    0 26px 64px rgba(124, 45, 18, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.42) !important;
+}
+
+.premium-wheel-polish-preset-luxury-gold .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 34% 20%, rgba(255, 255, 255, 0.98), transparent 18%),
+    conic-gradient(from -18deg, #fef3c7 0deg, #ffffff 36deg, #facc15 78deg, #fb923c 134deg, #fde68a 190deg, #ffffff 250deg, #f59e0b 310deg, #fef3c7 360deg) !important;
+}
+
+.premium-wheel-polish-preset-black-gold-vip {
+  border-color: rgba(251, 191, 36, 0.42) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(251, 191, 36, 0.28), transparent 34%),
+    radial-gradient(circle at 50% 52%, rgba(253, 230, 138, 0.18), transparent 45%),
+    linear-gradient(155deg, #020617 0%, #18181b 48%, #78350f 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -28px 46px rgba(0, 0, 0, 0.4),
+    0 30px 76px rgba(0, 0, 0, 0.48),
+    0 0 34px rgba(251, 191, 36, 0.2) !important;
+}
+
+.premium-wheel-polish-preset-black-gold-vip .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 36% 22%, rgba(255, 255, 255, 0.72), transparent 16%),
+    conic-gradient(from -22deg, #f59e0b 0deg, #fef3c7 38deg, #92400e 82deg, #fbbf24 128deg, #111827 184deg, #fde68a 238deg, #78350f 304deg, #f59e0b 360deg) !important;
+  box-shadow:
+    inset 0 14px 22px rgba(255, 255, 255, 0.28),
+    inset 0 -22px 32px rgba(0, 0, 0, 0.42),
+    0 20px 42px rgba(0, 0, 0, 0.5),
+    0 0 0 7px rgba(251, 191, 36, 0.2) !important;
+}
+
+.premium-wheel-polish-preset-black-gold-vip .premium-wheel-svg-text {
+  fill: #fef3c7;
+  stroke: rgba(2, 6, 23, 0.86);
+}
+
+.premium-wheel-polish-preset-black-gold-vip .premium-wheel-pointer-head {
+  background: linear-gradient(180deg, #fb7185 0%, #e11d48 52%, #881337 100%) !important;
+}
+
+.premium-wheel-polish-preset-black-gold-vip .premium-wheel-pointer-arrow {
+  border-top-color: #e11d48 !important;
+}
+
+.premium-wheel-polish-preset-neon-purple {
+  border-color: rgba(216, 180, 254, 0.46) !important;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(236, 72, 153, 0.38), transparent 25%),
+    radial-gradient(circle at 84% 18%, rgba(59, 130, 246, 0.28), transparent 28%),
+    linear-gradient(155deg, #faf5ff 0%, #c084fc 42%, #7e22ce 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.58),
+    inset 0 -24px 46px rgba(88, 28, 135, 0.28),
+    0 26px 72px rgba(88, 28, 135, 0.42),
+    0 0 38px rgba(236, 72, 153, 0.28) !important;
+}
+
+.premium-wheel-polish-preset-neon-purple .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.9), transparent 18%),
+    conic-gradient(from -18deg, #f0abfc 0deg, #c084fc 42deg, #ec4899 88deg, #7c3aed 134deg, #22d3ee 196deg, #f9a8d4 250deg, #a855f7 312deg, #f0abfc 360deg) !important;
+  box-shadow:
+    inset 0 12px 20px rgba(255, 255, 255, 0.48),
+    inset 0 -18px 30px rgba(76, 29, 149, 0.32),
+    0 20px 44px rgba(88, 28, 135, 0.38),
+    0 0 0 7px rgba(216, 180, 254, 0.22) !important;
+}
+
+.premium-wheel-polish-preset-neon-purple .premium-wheel-pointer-head {
+  background: linear-gradient(180deg, #f9a8d4 0%, #ec4899 52%, #be185d 100%) !important;
+}
+
+.premium-wheel-polish-preset-neon-purple .premium-wheel-pointer-arrow {
+  border-top-color: #ec4899 !important;
+}
+
+.premium-wheel-polish-preset-clean-orange {
+  border-color: rgba(251, 146, 60, 0.24) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.92), transparent 34%),
+    linear-gradient(155deg, #ffffff 0%, #fff7ed 54%, #fdba74 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.96),
+    inset 0 -18px 32px rgba(251, 146, 60, 0.1),
+    0 22px 52px rgba(154, 52, 18, 0.2),
+    0 0 0 1px rgba(251, 146, 60, 0.12) !important;
+}
+
+.premium-wheel-polish-preset-clean-orange .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 34% 20%, rgba(255, 255, 255, 0.98), transparent 18%),
+    conic-gradient(from -18deg, #ffffff 0deg, #ffedd5 48deg, #fb923c 96deg, #fed7aa 144deg, #ffffff 206deg, #fdba74 268deg, #f97316 320deg, #ffffff 360deg) !important;
+}
+
+.premium-wheel-polish-preset-clean-orange .premium-wheel-svg-text {
+  fill: #7c2d12;
+  stroke: rgba(255, 255, 255, 0.96);
 }
 
 @media (max-width: 420px) {
