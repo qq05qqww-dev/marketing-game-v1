@@ -1,4 +1,4 @@
-// 第 60401～60800 批：輪盤模組精緻預設右側預覽即時同步修正版
+// 第 60801～61200 批：輪盤設定頁 API 環境辨識與商家網址防混淆提示版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -39,6 +39,24 @@ const isPlatformTemplateMode = computed(() => {
 const campaignId = computed(() => (isPlatformTemplateMode.value ? '' : routeRecordId.value))
 const tenantSlug = computed(() => normalizeSingleQueryValue(route.query.tenantSlug || 'a-shop') || 'a-shop')
 
+const getStoredAuthUser = () => {
+  if (typeof localStorage === 'undefined') return {}
+
+  try {
+    const raw = localStorage.getItem('user') || localStorage.getItem('authUser') || ''
+    return raw ? JSON.parse(raw) : {}
+  } catch (error) {
+    return {}
+  }
+}
+
+const getWindowOrigin = () => {
+  if (typeof window === 'undefined') return ''
+  return String(window.location?.origin || '')
+}
+
+const normalizeTenantScopeSlug = (value = '') => normalizeSingleQueryValue(value).toLowerCase()
+
 const normalizeUrl = (value = '') => String(value || '').trim().replace(/\/$/, '')
 const isLocalOrigin = (value = '') => /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
 
@@ -59,6 +77,72 @@ const frontOrigin = computed(() => {
 
   return PRODUCTION_FRONTEND_URL
 })
+
+const apiEnvironmentGuard = computed(() => {
+  const currentFrontendOrigin = normalizeUrl(getWindowOrigin()) || frontOrigin.value
+  const currentApiBase = normalizeUrl(API_BASE_URL)
+  const frontendIsLocal = isLocalOrigin(currentFrontendOrigin)
+  const apiIsLocal = isLocalOrigin(currentApiBase)
+  const apiIsRender = /onrender\.com/i.test(currentApiBase)
+  const frontendIsVercel = /vercel\.app/i.test(currentFrontendOrigin)
+  const user = getStoredAuthUser()
+  const loggedTenantSlug = normalizeTenantScopeSlug(
+    user?.tenantSlug ||
+      user?.merchantSlug ||
+      user?.tenant?.slug ||
+      user?.tenant?.tenantSlug ||
+      ''
+  )
+  const urlTenantSlug = normalizeTenantScopeSlug(tenantSlug.value)
+  const role = String(user?.role || '').toUpperCase()
+  const isTenantMismatch = Boolean(
+    !isPlatformTemplateMode.value &&
+      loggedTenantSlug &&
+      urlTenantSlug &&
+      loggedTenantSlug !== urlTenantSlug
+  )
+  const willSyncOfficialPlayer = frontendIsVercel && apiIsRender && !isTenantMismatch
+
+  return {
+    eyebrow: 'API Environment Guard｜第 60801～61200 批',
+    title: willSyncOfficialPlayer
+      ? '目前正在修改線上正式資料庫'
+      : (apiIsLocal ? '目前正在修改本機測試資料庫' : '目前 API 環境需確認'),
+    frontendLabel: frontendIsLocal ? '本機前端 localhost' : (frontendIsVercel ? 'Vercel 線上前端' : '其他前端來源'),
+    frontendValue: currentFrontendOrigin || '-',
+    apiLabel: apiIsLocal ? '本機 API / 本機資料庫' : (apiIsRender ? 'Render API / 線上資料庫' : '自訂 API'),
+    apiValue: currentApiBase || '-',
+    playerSyncLabel: willSyncOfficialPlayer
+      ? '正式玩家頁會讀取同一套線上資料庫，儲存後玩家重新整理即可看到。'
+      : (apiIsLocal
+          ? '目前會寫入本機 localhost 資料庫；Vercel 正式玩家頁不會同步這些本機修改。'
+          : '請確認 VITE_API_BASE_URL 是否指向正式 Render API。'),
+    loggedTenantLabel: loggedTenantSlug || (role.includes('ADMIN') ? '平台管理員 / 可跨商家' : '尚未讀到登入商家'),
+    urlTenantLabel: isPlatformTemplateMode.value ? '平台模板模式' : (urlTenantSlug || '網址未帶 tenantSlug'),
+    roleLabel: role || 'UNKNOWN',
+    mismatch: isTenantMismatch,
+    safe: willSyncOfficialPlayer,
+    toneClass: isTenantMismatch
+      ? 'border-rose-200 bg-rose-50 text-rose-800'
+      : (willSyncOfficialPlayer ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'),
+    badgeClass: isTenantMismatch
+      ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-200'
+      : (willSyncOfficialPlayer ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200' : 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'),
+    badge: isTenantMismatch ? '商家不一致' : (willSyncOfficialPlayer ? '線上同步正常' : '本機 / 測試環境'),
+    warning: isTenantMismatch
+      ? `登入商家是 ${loggedTenantSlug}，但網址 tenantSlug 是 ${urlTenantSlug}。請從「我的活動」點進設定頁，不要手動混用別的商家網址。`
+      : (apiIsLocal
+          ? '你現在可以測右側預覽，但正式客人網址要同步，必須在線上 Vercel 後台儲存，或把本機 VITE_API_BASE_URL 指到 Render。'
+          : 'Render 是後端 API，不是商家後台網址；商家要進 Vercel 的 /admin 頁面操作。')
+  }
+})
+
+const apiEnvironmentItems = computed(() => [
+  { label: '目前前端', value: apiEnvironmentGuard.value.frontendValue, note: apiEnvironmentGuard.value.frontendLabel },
+  { label: '目前 API', value: apiEnvironmentGuard.value.apiValue, note: apiEnvironmentGuard.value.apiLabel },
+  { label: '登入商家', value: apiEnvironmentGuard.value.loggedTenantLabel, note: `role: ${apiEnvironmentGuard.value.roleLabel}` },
+  { label: '網址商家', value: apiEnvironmentGuard.value.urlTenantLabel, note: isPlatformTemplateMode.value ? '平台模板不綁單一商家' : '來自 tenantSlug query' }
+])
 
 const playerUrl = computed(() => {
   if (isPlatformTemplateMode.value) {
@@ -1673,6 +1757,46 @@ onMounted(async () => {
     <section v-if="isPlatformTemplateMode" class="rounded-3xl border border-orange-200 bg-orange-50 p-5 text-sm font-bold leading-6 text-orange-800">
       <span class="font-black">目前是平台輪盤模板模式。</span>
       這裡改的是「遊戲模板中心 / 輪盤模組」的預設外觀，不會修改 A 商家、campaignId=3 或任何已存在的商家活動。
+    </section>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-blue-500">{{ apiEnvironmentGuard.eyebrow }}</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">{{ apiEnvironmentGuard.title }}</h2>
+          <p class="mt-2 max-w-4xl text-sm font-bold leading-6 text-slate-500">
+            這裡會直接判斷你現在是本機 localhost 還是 Vercel 線上後台，也會檢查目前 API 是否指向 Render 正式資料庫，避免商家改了畫面但正式玩家頁沒有同步。
+          </p>
+        </div>
+        <span class="inline-flex rounded-full px-4 py-2 text-xs font-black" :class="apiEnvironmentGuard.badgeClass">
+          {{ apiEnvironmentGuard.badge }}
+        </span>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          v-for="item in apiEnvironmentItems"
+          :key="item.label"
+          class="rounded-3xl border border-slate-100 bg-slate-50 p-4"
+        >
+          <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
+          <p class="mt-2 break-all text-sm font-black leading-6 text-slate-800">{{ item.value }}</p>
+          <p class="mt-1 text-xs font-bold leading-5 text-slate-500">{{ item.note }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr]">
+        <div class="rounded-3xl border p-4 text-sm font-bold leading-6" :class="apiEnvironmentGuard.toneClass">
+          {{ apiEnvironmentGuard.playerSyncLabel }}
+        </div>
+        <div class="rounded-3xl border p-4 text-sm font-bold leading-6" :class="apiEnvironmentGuard.toneClass">
+          {{ apiEnvironmentGuard.warning }}
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-3xl border border-blue-200 bg-blue-50 p-4 text-sm font-bold leading-6 text-blue-800">
+        商家後台網址應該是 Vercel 的 <span class="font-black">/admin</span> 頁面；Render 的 <span class="font-black">/api</span> 是後端資料接口，不是給商家直接開的後台頁面。
+      </div>
     </section>
 
     <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
