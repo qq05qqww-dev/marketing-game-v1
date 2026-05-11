@@ -1,8 +1,15 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 21101～21500 批：九宮格設定儲存正式寫入資料庫版
+// 第 77601～78000 批：商家停用自動封鎖名下活動玩家入口版
 //
 // 覆蓋位置：
 // backend/src/routes/campaign.routes.js
+//
+// 修正重點：
+// 1. GET /api/campaigns?tenantSlug=xxx 公開讀取時會先檢查商家是否 ACTIVE。
+// 2. GET /api/campaigns/:id 公開讀取時會檢查活動所屬商家是否 ACTIVE。
+// 3. GET /api/campaigns/:id/game-config 公開讀取時會檢查活動所屬商家是否 ACTIVE。
+// 4. 後台管理員 / 商家管理員帶 token 讀資料時不阻擋，方便維護停用商家的資料。
+// 5. 寫入 API 維持原本 requireAuth / role guard。
 
 import express from 'express'
 import { verifyToken } from '../utils/jwt.js'
@@ -20,6 +27,9 @@ import {
   adminWriteRateLimit,
   adminSensitiveRateLimit
 } from '../middleware/security.middleware.js'
+import {
+  blockInactiveTenantForPublicCampaignRead
+} from '../middleware/tenantActivityGuard.middleware.js'
 
 const router = express.Router()
 
@@ -93,23 +103,19 @@ const tenantSensitiveOnly = [requireAuth, requireRoleSet(SENSITIVE_ROLES), admin
 
 // 取得活動列表
 // GET /api/campaigns
-// GET /api/campaigns?active=true
-// GET /api/campaigns?gameType=GOLDEN_EGG
-// GET /api/campaigns?status=ACTIVE
+// GET /api/campaigns?tenantSlug=a-shop&gameType=WHEEL&status=ACTIVE
 //
-// V2.3：如果請求帶 Bearer token，會依登入者 tenantId 隔離。
-// - SUPER_ADMIN / ADMIN：可看全部，也可用 ?tenantId= 查指定商家
-// - MERCHANT_ADMIN / MERCHANT_STAFF：只看自己的商家
-// - 未登入：維持原本公開讀取行為
-router.get('/', optionalTenantAuth, listCampaigns)
+// 第 77601～78000 批：
+// 如果是玩家公開讀取指定 tenantSlug，商家不是 ACTIVE 時直接回 403，避免停用商家活動仍被玩家頁讀到。
+router.get('/', optionalTenantAuth, blockInactiveTenantForPublicCampaignRead, listCampaigns)
 
 // 取得單一活動詳情，含 prizes / gameConfig
 // GET /api/campaigns/:id
-router.get('/:id', optionalTenantAuth, campaignDetail)
+router.get('/:id', optionalTenantAuth, blockInactiveTenantForPublicCampaignRead, campaignDetail)
 
 // 取得活動遊戲設定
 // GET /api/campaigns/:id/game-config
-router.get('/:id/game-config', optionalTenantAuth, getGameConfigHandler)
+router.get('/:id/game-config', optionalTenantAuth, blockInactiveTenantForPublicCampaignRead, getGameConfigHandler)
 
 // ==============================
 // Tenant admin write APIs
