@@ -1,4 +1,4 @@
-// 第 62401～62800 批：輪盤設定頁左側集中設定右側固定預覽版
+// 第 64001～64400 批：輪盤設定頁左側常用設定搜尋與快速定位版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -197,6 +197,7 @@ const isSaving = ref(false)
 const previewKey = ref(0)
 const activeCategory = ref('basic')
 const categoryPanelCollapsed = ref(false)
+const settingSearchQuery = ref('')
 const previewIframeRef = ref(null)
 const previewFocusMode = ref('wheel')
 const previewDeviceMode = ref('phone')
@@ -269,9 +270,73 @@ const settingCategories = [
 
 const quickSettingCategoryKeys = ['polish', 'basic', 'theme', 'wheel', 'prizes']
 
+const settingSearchKeywordMap = {
+  polish: ['精緻', '模組', '預設', '黑金', '金橘', '霓虹', '清爽', '高級', 'vip', 'polish', 'preset'],
+  basic: ['標題', '副標題', '文字', '活動名稱', '品牌', 'logo', 'page', 'title', 'headline'],
+  theme: ['顏色', '色彩', '背景', '按鈕', '指針', '外框', '主題', 'color', 'theme'],
+  wheel: ['輪盤', '尺寸', '大小', '中心', '外圈', '圖示', '文字大小', '指針', 'wheel', 'spin'],
+  display: ['顯示', '展示', '剩餘次數', '狀態', '紀錄', '獎品牆', 'debug'],
+  serial: ['序號', '驗證', '輸入', 'serial', 'code'],
+  result: ['結果', '中獎', '彈窗', '恭喜', 'result'],
+  sound: ['音效', '特效', '聲音', '彩帶', '光暈', '抖動', 'sound', 'effect'],
+  rules: ['規則', '說明', '獎品說明', '兌換', 'footer'],
+  frontend: ['前台', '玩家網址', '預覽', '公開', '連結', 'url'],
+  prizes: ['獎項', '獎品', '權重', '機率', '顏色', '優惠券', 'prize', 'reward']
+}
+
+const normalizeSearchText = (value = '') => String(value || '').trim().toLowerCase()
+
+const enrichedSettingCategories = computed(() => settingCategories.map((category) => ({
+  ...category,
+  searchText: normalizeSearchText([
+    category.key,
+    category.title,
+    category.desc,
+    ...(settingSearchKeywordMap[category.key] || [])
+  ].join(' '))
+})))
+
+const normalizedSettingSearchQuery = computed(() => normalizeSearchText(settingSearchQuery.value))
+
 const quickSettingCategories = computed(() => {
-  return settingCategories.filter((category) => quickSettingCategoryKeys.includes(category.key))
+  return enrichedSettingCategories.value.filter((category) => quickSettingCategoryKeys.includes(category.key))
 })
+
+const settingSearchMatchedCategories = computed(() => {
+  const keyword = normalizedSettingSearchQuery.value
+  if (!keyword) return []
+
+  return enrichedSettingCategories.value.filter((category) => category.searchText.includes(keyword))
+})
+
+const filteredSettingCategories = computed(() => {
+  const keyword = normalizedSettingSearchQuery.value
+  if (!keyword) return enrichedSettingCategories.value
+
+  return settingSearchMatchedCategories.value
+})
+
+const settingSearchSummary = computed(() => {
+  const keyword = normalizedSettingSearchQuery.value
+  const total = settingSearchMatchedCategories.value.length
+
+  if (!keyword) {
+    return '輸入關鍵字可以快速定位標題、顏色、輪盤、指針、按鈕、獎項、序號與音效設定。'
+  }
+
+  return total
+    ? `已找到 ${total} 個相關設定分類，點選結果可直接切換。`
+    : '沒有找到符合的分類，請改用「顏色、輪盤、獎項、序號、音效」等關鍵字。'
+})
+
+const clearSettingSearch = () => {
+  settingSearchQuery.value = ''
+}
+
+const setCategoryFromSearch = (key) => {
+  setCategory(key)
+  categoryPanelCollapsed.value = false
+}
 
 const currentSettingCategory = computed(() => {
   return settingCategories.find((category) => category.key === activeCategory.value) || settingCategories[0]
@@ -2292,6 +2357,42 @@ onMounted(async () => {
                   <p class="mt-1 text-xs font-bold leading-5 text-slate-500">{{ categoryPanelSummary.activeDesc }}</p>
                 </div>
               </div>
+              <div class="w-full lg:max-w-xl">
+                <label class="text-[11px] font-black uppercase tracking-[0.18em] text-orange-500">
+                  Settings Search｜第 64001～64400 批
+                </label>
+                <div class="mt-2 flex items-center gap-2 rounded-2xl border border-orange-100 bg-white px-3 py-2 shadow-sm">
+                  <input
+                    v-model="settingSearchQuery"
+                    type="search"
+                    class="min-w-0 flex-1 border-0 bg-transparent text-sm font-bold text-slate-800 outline-none placeholder:text-slate-400"
+                    placeholder="搜尋：顏色、輪盤、指針、按鈕、獎項、序號、音效"
+                  >
+                  <button
+                    v-if="settingSearchQuery"
+                    type="button"
+                    class="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600 transition hover:bg-slate-200"
+                    @click="clearSettingSearch"
+                  >
+                    清除
+                  </button>
+                </div>
+                <p class="mt-2 text-xs font-bold leading-5 text-slate-500">{{ settingSearchSummary }}</p>
+                <div v-if="settingSearchQuery" class="mt-3 flex flex-wrap gap-2">
+                  <button
+                    v-for="category in settingSearchMatchedCategories"
+                    :key="`search-${category.key}`"
+                    type="button"
+                    class="rounded-full bg-orange-100 px-3 py-1.5 text-xs font-black text-orange-700 transition hover:bg-orange-200"
+                    @click="setCategoryFromSearch(category.key)"
+                  >
+                    {{ category.title }}
+                  </button>
+                  <span v-if="!settingSearchMatchedCategories.length" class="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-500">
+                    沒有符合分類
+                  </span>
+                </div>
+              </div>
               <div class="flex flex-wrap gap-2">
                 <button
                   v-for="category in quickSettingCategories"
@@ -2312,7 +2413,7 @@ onMounted(async () => {
 
           <div v-show="!categoryPanelCollapsed" class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
             <button
-              v-for="category in settingCategories"
+              v-for="category in filteredSettingCategories"
               :key="category.key"
               type="button"
               class="group rounded-[1.6rem] border p-4 text-left transition"
@@ -2339,8 +2440,15 @@ onMounted(async () => {
             </button>
           </div>
 
+          <div
+            v-if="!categoryPanelCollapsed && settingSearchQuery && !filteredSettingCategories.length"
+            class="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500"
+          >
+            沒有找到符合「{{ settingSearchQuery }}」的設定分類，請嘗試搜尋：顏色、輪盤、指針、按鈕、獎項、序號、音效。
+          </div>
+
           <div v-show="categoryPanelCollapsed" class="rounded-[1.5rem] border border-dashed border-slate-200 bg-slate-50 p-4 text-sm font-bold text-slate-500">
-            分類清單已收合。你可以用上方常用設定快速切換，或按「展開分類」查看全部設定分類。
+            分類清單已收合。你可以用上方常用設定或搜尋框快速定位，或按「展開分類」查看全部設定分類。
           </div>
         </section>
 
