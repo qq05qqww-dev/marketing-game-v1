@@ -1,7 +1,7 @@
 <script setup>
-// 第 52801～53200 批：輪盤獎項位置、預覽定位與品牌按鈕同步版
+// 第 62001～62400 批：輪盤精緻玩家頁視覺細節強化版
 /**
- * Multi Game Platform V2.3 第 52801～53200 批：輪盤獎項位置、預覽定位與品牌按鈕同步版
+ * Multi Game Platform V2.3 第 62001～62400 批：輪盤精緻玩家頁視覺細節強化版
  *
  * 修正重點：
  * 1. 輪盤轉完後強制停止轉動 loop 音效。
@@ -11592,6 +11592,236 @@ aside {
 .premium-wheel-polish-preset-clean-orange .premium-wheel-polish-status {
   border-color: rgba(251, 146, 60, 0.22) !important;
   background: rgba(255, 255, 255, 0.46) !important;
+}
+
+
+/* 第 62001～62400 批：輪盤精緻玩家頁視覺細節強化版
+   只強化外觀質感，不顯示工程驗收文字，不改 verify / play API 與抽獎核心。 */
+.premium-original-wheel-polish::after {
+  content: '';
+  position: absolute;
+  inset: 18px;
+  z-index: -1;
+  border-radius: 30px;
+  pointer-events: none;
+  background:
+    linear-gradient(120deg, transparent 0%, rgba(255, 255, 255, 0.28) 18%, transparent 38%, transparent 100%),
+    radial-gradient(circle at 74% 8%, rgba(255, 255, 255, 0.26), transparent 22%);
+  opacity: 0.72;
+  mix-blend-mode: screen;
+}
+
+.premium-original-wheel-polish .premium-wheel-shell::before {
+  background:
+    radial-gradient(circle at 32% 20%, rgba(255, 255, 255, 0.94), transparent 17%),
+    conic-gradient(from 18deg, rgba(255, 255, 255, 0.38), transparent 42deg, rgba(255, 255, 255, 0.18) 92deg, transparent 160deg, rgba(255, 255, 255, 0.28) 232deg, transparent 312deg, rgba(255, 255, 255, 0.38));
+  opacity: 0.92;
+}
+
+.premium-original-wheel-polish .premium-wheel-svg-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 7%;
+  z-index: 4;
+  border-radius: 999px;
+  pointer-events: none;
+  background:
+    linear-gradient(128deg, rgba(255, 255, 255, 0.28), transparent 34%, rgba(255, 255, 255, 0.12) 58%, transparent 74%),
+    radial-gradient(circle at 32% 18%, rgba(255, 255, 255, 0.34), transparent 18%);
+  opacity: 0.8;
+  mix-blend-mode: screen;
+}
+
+.premium-original-wheel-polish .premium-wheel-svg-wrap::after {
+  content: '';
+  position: absolute;
+  inset: 2.8%;
+  z-index: 5;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 18px rgba(255, 255, 255, 0.32),
+    inset 0 -22px 34px rgba(15, 23, 42, 0.12);
+}
+
+.premium-original-wheel-polish .premium-wheel-pointer-head {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -10px 16px rgba(127, 29, 29, 0.34),
+    0 12px 20px rgba(15, 23, 42, 0.28);
+}
+
+.premium-original-wheel-polish .premium-wheel-pointer-dot {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 4px 10px rgba(67, 20, 7, 0.36),
+    0 0 0 4px rgba(255, 255, 255, 0.18);
+}
+
+.premium-wheel-center-refined {
+  background:
+    radial-gradient(circle at 34% 22%, rgba(255, 255, 255, 0.34), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent 42%),
+    var(--premium-wheel-center-bg, #111827) !important;
+  border-color: rgba(255, 255, 255, 0.36) !important;
+}
+
+.premium-wheel-center-refined::after {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border-radius: inherit;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  pointer-events: none;
+}
+
+.premium-wheel-start-button-refined {
+  transform: translateZ(0);
+  will-change: transform, box-shadow;
+}
+
+.premium-wheel-start-button-refined:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.01);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -10px 16px rgba(124, 45, 18, 0.26),
+    0 18px 34px rgba(154, 52, 18, 0.38);
+}
+
+.premium-wheel-polish-preset-luxury-gold {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.9), transparent 31%),
+    radial-gradient(circle at 18% 18%, rgba(254, 243, 199, 0.82), transparent 24%),
+    radial-gradient(circle at 88% 18%, rgba(251, 191, 36, 0.34), transparent 23%),
+    linear-gradient(155deg, #fff7ed 0%, #fed7aa 44%, #f97316 100%) !important;
+}
+
+.premium-wheel-polish-preset-luxury-gold .premium-wheel-center-refined {
+  --premium-wheel-center-bg: linear-gradient(180deg, #1f2937 0%, #111827 52%, #020617 100%);
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, 0.2),
+    inset 0 -16px 25px rgba(15, 23, 42, 0.48),
+    0 14px 28px rgba(120, 53, 15, 0.32),
+    0 0 0 7px rgba(255, 255, 255, 0.2),
+    0 0 26px rgba(250, 204, 21, 0.2);
+}
+
+.premium-wheel-polish-preset-black-gold-vip {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(251, 191, 36, 0.34), transparent 32%),
+    radial-gradient(circle at 85% 14%, rgba(244, 63, 94, 0.16), transparent 24%),
+    radial-gradient(circle at 50% 56%, rgba(253, 230, 138, 0.2), transparent 45%),
+    linear-gradient(155deg, #020617 0%, #18181b 48%, #78350f 100%) !important;
+}
+
+.premium-wheel-polish-preset-black-gold-vip::after {
+  background:
+    linear-gradient(120deg, transparent 0%, rgba(251, 191, 36, 0.22) 18%, transparent 39%, transparent 100%),
+    radial-gradient(circle at 74% 8%, rgba(253, 230, 138, 0.22), transparent 22%);
+}
+
+.premium-wheel-polish-preset-black-gold-vip .premium-wheel-svg-wrap {
+  box-shadow:
+    inset 0 12px 24px rgba(255, 255, 255, 0.22),
+    inset 0 -26px 40px rgba(0, 0, 0, 0.42),
+    0 18px 42px rgba(0, 0, 0, 0.46),
+    0 0 26px rgba(251, 191, 36, 0.2) !important;
+}
+
+.premium-wheel-polish-preset-black-gold-vip .premium-wheel-center-refined {
+  --premium-wheel-center-bg: linear-gradient(180deg, #111827 0%, #020617 56%, #000000 100%);
+  color: #fef3c7 !important;
+  border-color: rgba(251, 191, 36, 0.58) !important;
+  box-shadow:
+    inset 0 8px 16px rgba(251, 191, 36, 0.12),
+    inset 0 -16px 26px rgba(0, 0, 0, 0.52),
+    0 16px 30px rgba(0, 0, 0, 0.48),
+    0 0 0 7px rgba(251, 191, 36, 0.18),
+    0 0 34px rgba(251, 191, 36, 0.22);
+}
+
+.premium-wheel-polish-preset-neon-purple {
+  background:
+    radial-gradient(circle at 18% 10%, rgba(236, 72, 153, 0.42), transparent 25%),
+    radial-gradient(circle at 84% 18%, rgba(34, 211, 238, 0.3), transparent 28%),
+    radial-gradient(circle at 50% 56%, rgba(216, 180, 254, 0.25), transparent 44%),
+    linear-gradient(155deg, #faf5ff 0%, #c084fc 42%, #7e22ce 100%) !important;
+}
+
+.premium-wheel-polish-preset-neon-purple .premium-wheel-svg-wrap {
+  box-shadow:
+    inset 0 12px 24px rgba(255, 255, 255, 0.36),
+    inset 0 -22px 38px rgba(76, 29, 149, 0.32),
+    0 18px 44px rgba(88, 28, 135, 0.42),
+    0 0 30px rgba(236, 72, 153, 0.26) !important;
+}
+
+.premium-wheel-polish-preset-neon-purple .premium-wheel-center-refined {
+  --premium-wheel-center-bg: linear-gradient(180deg, #7e22ce 0%, #581c87 58%, #312e81 100%);
+  border-color: rgba(244, 114, 182, 0.5) !important;
+  box-shadow:
+    inset 0 8px 16px rgba(255, 255, 255, 0.18),
+    inset 0 -16px 26px rgba(76, 29, 149, 0.42),
+    0 16px 30px rgba(88, 28, 135, 0.36),
+    0 0 0 7px rgba(216, 180, 254, 0.22),
+    0 0 34px rgba(236, 72, 153, 0.24);
+}
+
+.premium-wheel-polish-preset-clean-orange {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.96), transparent 34%),
+    radial-gradient(circle at 14% 18%, rgba(255, 237, 213, 0.78), transparent 25%),
+    linear-gradient(155deg, #ffffff 0%, #fff7ed 56%, #fdba74 100%) !important;
+}
+
+.premium-wheel-polish-preset-clean-orange .premium-wheel-svg-wrap {
+  box-shadow:
+    inset 0 10px 22px rgba(255, 255, 255, 0.72),
+    inset 0 -18px 30px rgba(251, 146, 60, 0.14),
+    0 16px 34px rgba(154, 52, 18, 0.18) !important;
+}
+
+.premium-wheel-polish-preset-clean-orange .premium-wheel-center-refined {
+  --premium-wheel-center-bg: linear-gradient(180deg, #fb923c 0%, #ea580c 54%, #c2410c 100%);
+  box-shadow:
+    inset 0 8px 16px rgba(255, 255, 255, 0.22),
+    inset 0 -14px 24px rgba(124, 45, 18, 0.28),
+    0 14px 26px rgba(154, 52, 18, 0.22),
+    0 0 0 7px rgba(255, 237, 213, 0.3);
+}
+
+.premium-wheel-polish-preset-black-gold-vip .premium-wheel-start-button-refined {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 42%),
+    linear-gradient(90deg, #fbbf24 0%, #d97706 46%, #92400e 100%) !important;
+  color: #111827 !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -9px 16px rgba(120, 53, 15, 0.32),
+    0 16px 30px rgba(0, 0, 0, 0.36),
+    0 0 22px rgba(251, 191, 36, 0.2);
+}
+
+.premium-wheel-polish-preset-neon-purple .premium-wheel-start-button-refined {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 42%),
+    linear-gradient(90deg, #ec4899 0%, #a855f7 48%, #2563eb 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -9px 16px rgba(88, 28, 135, 0.3),
+    0 16px 30px rgba(88, 28, 135, 0.32),
+    0 0 24px rgba(236, 72, 153, 0.24);
+}
+
+.premium-wheel-polish-preset-clean-orange .premium-wheel-start-button-refined {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 42%),
+    linear-gradient(90deg, #fb923c 0%, #f97316 52%, #ea580c 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -8px 14px rgba(154, 52, 18, 0.2),
+    0 14px 26px rgba(154, 52, 18, 0.2);
 }
 
 @media (max-width: 420px) {
