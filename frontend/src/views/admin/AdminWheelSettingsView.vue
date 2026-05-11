@@ -1,4 +1,5 @@
 <script setup>
+// 第 76001～76400 批：正式 marketing-game-v1 登入與連結統一版
 // 第 74001～74400 批：輪盤百分比準確驗證與防呆版
 // 延續第 73601～74000 批：輪盤指針顏色控制版
 // 第 69201～69600 批：輪盤中心按鈕文字控制與高規格一鍵套用版
@@ -63,17 +64,8 @@ const normalizeUrl = (value = '') => String(value || '').trim().replace(/\/$/, '
 const isLocalOrigin = (value = '') => /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
 
 const frontOrigin = computed(() => {
-  // 第 75201～75600 批：正式玩家入口一律使用 Vercel 網域。
-  // 即使商家在 localhost 後台測試，也不能產生 localhost 玩家連結或 localhost 登入入口。
-  const envUrl = normalizeUrl(
-    import.meta.env.VITE_PUBLIC_FRONTEND_URL ||
-      import.meta.env.VITE_FRONTEND_URL ||
-      import.meta.env.VITE_APP_FRONTEND_URL ||
-      PRODUCTION_FRONTEND_URL
-  )
-
-  if (envUrl && !isLocalOrigin(envUrl)) return envUrl
-
+  // 第 76001～76400 批：正式玩家登入與所有對外連結一律固定 marketing-game-v1 Vercel 網域。
+  // 不再讀取 localhost / 127.0.0.1 / 目前瀏覽器 origin，避免商家複製到本機連結。
   return PRODUCTION_FRONTEND_URL
 })
 
@@ -145,14 +137,14 @@ const apiEnvironmentItems = computed(() => [
 
 
 const officialPlayerLinkGuard = computed(() => ({
-  batch: '第 75201～75600 批',
-  title: '正式玩家連結強制 Vercel 來源',
+  batch: '第 76001～76400 批',
+  title: '正式 marketing-game-v1 登入與連結統一',
   officialFrontend: frontOrigin.value,
   currentAdminOrigin: normalizeUrl(getWindowOrigin()) || '-',
   currentAdminIsLocal: isLocalOrigin(getWindowOrigin()),
   message: isLocalOrigin(getWindowOrigin())
-    ? '目前雖然在 localhost 後台測試，但所有正式玩家頁、玩家登入、複製玩家網址都會導向 Vercel。'
-    : '目前已在正式前端來源，玩家頁與登入入口皆使用 Vercel。'
+    ? '目前雖然在 localhost 後台測試，但正式玩家頁、玩家登入、複製玩家網址與後台返回連結都會導向 marketing-game-v1。'
+    : '目前已在正式前端來源，玩家頁、登入入口與後台返回皆使用 marketing-game-v1。'
 }))
 
 const playerUrl = computed(() => {
@@ -2968,7 +2960,7 @@ const buildOfficialAdminUrl = (path = '/admin/campaigns', query = {}) => {
 const goOfficialAdminUrl = (path = '/admin/campaigns', query = {}) => {
   const target = buildOfficialAdminUrl(path, query)
 
-  // 第 75601～76000 批：會離開輪盤設定頁的管理入口，一律使用 Vercel 正式後台網址。
+  // 第 76001～76400 批：會離開輪盤設定頁的管理入口，一律使用 marketing-game-v1 正式後台網址。
   // 避免本機測試時回到 localhost:5173/admin/campaigns 或 localhost:5173/login。
   if (typeof window !== 'undefined') {
     window.location.href = target

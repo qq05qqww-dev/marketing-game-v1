@@ -61,15 +61,8 @@ const normalizeSingleQueryValue = (value = '') => {
 const isLocalFrontendOrigin = (value = '') => /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
 
 const getOfficialFrontendOrigin = () => {
-  const envUrl = String(
-    import.meta.env.VITE_PUBLIC_FRONTEND_URL ||
-      import.meta.env.VITE_FRONTEND_URL ||
-      import.meta.env.VITE_APP_FRONTEND_URL ||
-      OFFICIAL_FRONTEND_URL
-  ).trim().replace(/\/$/, '')
-
-  if (envUrl && !isLocalFrontendOrigin(envUrl)) return envUrl
-
+  // 第 76001～76400 批：玩家登入、分享、返回遊戲中心、紀錄頁等對外連結
+  // 全部固定到 marketing-game-v1 Vercel 正式網域，不再讀取 localhost 或目前瀏覽器 origin。
   return OFFICIAL_FRONTEND_URL
 }
 
@@ -4119,7 +4112,7 @@ const syncPremiumWheelToPlayer = () => {
 }
 
 const getShareUrl = () => {
-  // 第 75201～75600 批：分享出去的玩家版網址也固定使用 Vercel，不再產生 localhost 連結。
+  // 第 76001～76400 批：分享出去的玩家版網址固定使用 marketing-game-v1，不再產生 localhost 連結。
   return buildOfficialFrontendUrl(sourcePath.value)
 }
 
@@ -4272,15 +4265,15 @@ const isUserLoggedIn = computed(() => {
 })
 
 const getCurrentRedirectPath = () => {
-  return route.fullPath || window.location.pathname + window.location.search
+  const currentPath = route.fullPath || window.location.pathname + window.location.search || sourcePath.value
+  return buildOfficialFrontendUrl(currentPath)
 }
 
 const goLoginPage = () => {
   const redirect = getCurrentRedirectPath()
 
-  // 第 75601～76000 批：玩家登入入口完全移除 localhost fallback。
-  // 不論目前頁面是在本機預覽、iframe、Vercel，登入一律前往正式 Vercel /login，
-  // 避免 router.push('/login') 在 localhost:5173 產生 localhost 登入頁。
+  // 第 76001～76400 批：玩家登入入口完全固定 marketing-game-v1。
+  // redirect 也使用正式網址，避免登入後被帶回 localhost:5173。
   if (typeof window !== 'undefined') {
     window.location.href = `${getOfficialFrontendOrigin()}/login?redirect=${encodeURIComponent(redirect)}`
     return
@@ -5947,11 +5940,18 @@ const closeResultAndContinue = () => {
 
 const goGameHistory = () => {
   showResultModal.value = false
-  router.push('/game-history')
+
+  // 第 76001～76400 批：玩家紀錄入口固定正式 marketing-game-v1，不回 localhost。
+  if (typeof window !== 'undefined') {
+    window.location.href = buildOfficialFrontendUrl('/game-history')
+  }
 }
 
 const goGamesCenter = () => {
-  router.push('/games')
+  // 第 76001～76400 批：玩家遊戲中心入口固定正式 marketing-game-v1，不回 localhost。
+  if (typeof window !== 'undefined') {
+    window.location.href = buildOfficialFrontendUrl('/games')
+  }
 }
 
 const resetDemo = () => {
