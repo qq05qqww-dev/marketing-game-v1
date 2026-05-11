@@ -13,7 +13,7 @@
 // 5. 每次編輯前會保存快照，可一鍵還原本次修改。
 // 6. 保留複製玩家網址 / 管理連結，方便交付商家。
 
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import http from '../../api/http'
 
 const PRODUCTION_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
@@ -547,12 +547,30 @@ const createTenant = async () => {
   }
 }
 
+
+const getTenantActionPanelId = (tenantId, type = 'edit') => {
+  return `tenant-${type}-panel-${tenantId}`
+}
+
+const scrollToTenantActionPanel = async (tenantId, type = 'edit') => {
+  await nextTick()
+
+  window.setTimeout(() => {
+    const panel = document.getElementById(getTenantActionPanelId(tenantId, type))
+
+    if (panel) {
+      panel.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }
+  }, 80)
+}
+
 const startEditTenant = async (tenant) => {
   undoSnapshots.value = {
     ...undoSnapshots.value,
     [tenant.id]: { ...tenant }
   }
 
+  resetPasswordTenantId.value = null
   editingTenantId.value = tenant.id
 
   Object.assign(editForm, {
@@ -567,6 +585,8 @@ const startEditTenant = async (tenant) => {
   })
 
   await loadTenantUsers(tenant.id)
+  setMessage(`已開啟「${tenant.name}」編輯區，畫面會自動定位到表單。`)
+  await scrollToTenantActionPanel(tenant.id, 'edit')
 }
 
 const cancelEditTenant = () => {
@@ -687,6 +707,7 @@ const getPrimaryMerchantAdmin = async (tenant) => {
 const startResetPassword = async (tenant) => {
   const user = await getPrimaryMerchantAdmin(tenant)
 
+  editingTenantId.value = null
   resetPasswordTenantId.value = tenant.id
 
   Object.assign(passwordForm, {
@@ -698,6 +719,9 @@ const startResetPassword = async (tenant) => {
     password: '',
     passwordConfirm: ''
   })
+
+  setMessage(`已開啟「${tenant.name}」帳號 / 密碼區，畫面會自動定位到表單。`)
+  await scrollToTenantActionPanel(tenant.id, 'password')
 }
 
 const cancelResetPassword = () => {
@@ -1328,6 +1352,168 @@ onMounted(() => {
               {{ tenant.status === 'ACTIVE' ? '停用商家' : '啟用商家' }}
             </button>
           </div>
+
+          <div
+            v-if="editingTenantId === tenant.id"
+            :id="getTenantActionPanelId(tenant.id, 'edit')"
+            class="mt-5 rounded-3xl border border-indigo-100 bg-indigo-50/70 p-4 ring-2 ring-indigo-100"
+          >
+            <div class="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-indigo-500">Tenant Edit</p>
+                <h3 class="mt-1 text-lg font-black text-slate-950">編輯商家資料：{{ tenant.name }}</h3>
+              </div>
+              <button
+                type="button"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-800"
+                @click="cancelEditTenant"
+              >
+                關閉
+              </button>
+            </div>
+
+            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+              <input
+                v-model="editForm.name"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                placeholder="商家名稱"
+              >
+              <input
+                v-model="editForm.slug"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                placeholder="slug"
+                @blur="editForm.slug = normalizeSlug(editForm.slug)"
+              >
+              <input
+                v-model="editForm.contactName"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                placeholder="聯絡人"
+              >
+              <select
+                v-model="editForm.status"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black outline-none focus:border-indigo-400"
+              >
+                <option
+                  v-for="option in statusOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+              <input
+                v-model="editForm.contactPhone"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                placeholder="電話"
+              >
+              <input
+                v-model="editForm.contactEmail"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400"
+                placeholder="Email"
+              >
+              <input
+                v-model="editForm.note"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-indigo-400 xl:col-span-2"
+                placeholder="備註"
+              >
+            </div>
+
+            <div class="mt-4 flex justify-end gap-3">
+              <button
+                type="button"
+                class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                @click="cancelEditTenant"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl bg-indigo-600 px-5 py-3 text-sm font-black text-white transition hover:bg-indigo-700"
+                @click="updateTenant"
+              >
+                儲存變更
+              </button>
+            </div>
+          </div>
+
+          <div
+            v-if="resetPasswordTenantId === tenant.id"
+            :id="getTenantActionPanelId(tenant.id, 'password')"
+            class="mt-5 rounded-3xl border border-violet-100 bg-violet-50/70 p-4 ring-2 ring-violet-100"
+          >
+            <div class="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-violet-500">Account / Password</p>
+                <h3 class="mt-1 text-lg font-black text-slate-950">商家登入帳號 / 密碼：{{ tenant.name }}</h3>
+              </div>
+              <button
+                type="button"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-xs font-black text-slate-500 hover:text-slate-800"
+                @click="cancelResetPassword"
+              >
+                關閉
+              </button>
+            </div>
+
+            <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-5">
+              <input
+                v-model="passwordForm.name"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
+                placeholder="帳號姓名"
+              >
+              <input
+                v-model="passwordForm.email"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
+                placeholder="登入 Email"
+              >
+              <select
+                v-model="passwordForm.role"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black outline-none focus:border-violet-400"
+              >
+                <option
+                  v-for="option in roleOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
+              <input
+                v-model="passwordForm.password"
+                type="password"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
+                placeholder="新密碼，至少 6 碼"
+              >
+              <input
+                v-model="passwordForm.passwordConfirm"
+                type="password"
+                class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-violet-400"
+                placeholder="確認新密碼"
+              >
+            </div>
+
+            <p class="mt-3 text-xs font-bold text-slate-500">
+              若商家尚未有帳號，儲存時會建立新帳號；若已有帳號，會更新 Email / 姓名 / 角色，輸入新密碼時會重設密碼。
+            </p>
+
+            <div class="mt-4 flex justify-end gap-3">
+              <button
+                type="button"
+                class="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 transition hover:bg-slate-50"
+                @click="cancelResetPassword"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                class="rounded-2xl bg-violet-600 px-5 py-3 text-sm font-black text-white transition hover:bg-violet-700 disabled:opacity-60"
+                :disabled="userSaving"
+                @click="saveTenantUser"
+              >
+                {{ userSaving ? '儲存中...' : passwordForm.userId ? '更新帳號 / 密碼' : '建立登入帳號' }}
+              </button>
+            </div>
+          </div>
         </article>
       </div>
 
@@ -1475,6 +1661,7 @@ onMounted(() => {
 
               <tr
                 v-if="editingTenantId === tenant.id"
+                :id="getTenantActionPanelId(tenant.id, 'edit')"
                 class="bg-indigo-50/50"
               >
                 <td
@@ -1563,6 +1750,7 @@ onMounted(() => {
 
               <tr
                 v-if="resetPasswordTenantId === tenant.id"
+                :id="getTenantActionPanelId(tenant.id, 'password')"
                 class="bg-violet-50/50"
               >
                 <td
