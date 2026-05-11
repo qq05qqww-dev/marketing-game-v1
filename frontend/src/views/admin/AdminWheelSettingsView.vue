@@ -1,4 +1,4 @@
-// 第 60801～61200 批：輪盤設定頁 API 環境辨識與商家網址防混淆提示版
+// 第 61201～61600 批：輪盤設定頁線上正式儲存檢查與玩家頁同步提示版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -1036,6 +1036,97 @@ const saveResultAuditItems = computed(() => [
   { label: '儲存時間', value: saveResultAudit.value.savedAtLabel }
 ])
 
+
+const onlineSaveSyncCheck = computed(() => {
+  const env = apiEnvironmentGuard.value
+  const record = saveAuditRecord.value
+  const hasSaved = Boolean(record)
+  const isSuccess = record?.status === 'success'
+  const isFailed = record?.status === 'failed'
+  const isCancelled = record?.status === 'cancelled'
+  const apiValue = env.apiValue || API_BASE_URL
+  const frontendValue = env.frontendValue || frontOrigin.value
+  const officialPlayerUrl = isPlatformTemplateMode.value ? '平台模板不直接提供正式玩家頁' : playerUrl.value
+  const officialCanSync = Boolean(isSuccess && env.safe && !isPlatformTemplateMode.value)
+  const platformTemplateSavedOnline = Boolean(isSuccess && env.safe && isPlatformTemplateMode.value)
+  const localOnly = /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(apiValue || ''))
+
+  let title = '尚未完成正式同步檢查'
+  let badge = '等待儲存'
+  let badgeClass = 'bg-slate-100 text-slate-700 ring-1 ring-slate-200'
+  let toneClass = 'border-slate-200 bg-slate-50 text-slate-700'
+  let statusText = '按下「儲存設定」後，這裡會告訴你這次是寫入本機資料庫，還是 Render 線上正式資料庫。'
+  let nextAction = isPlatformTemplateMode.value
+    ? '若要讓新商家活動吃到模板，請在線上後台儲存平台模板後，再建立新的 WHEEL 活動。'
+    : '若要讓客人正式玩家頁同步，請確認目前 API 是 Render，並在儲存成功後重新整理正式玩家頁。'
+
+  if (hasSaved && isCancelled) {
+    title = '本次已取消儲存'
+    badge = '未寫入'
+    statusText = '你取消了儲存，本次沒有寫入本機或線上資料庫。'
+    nextAction = '重新調整設定後，再按「儲存設定」。'
+  } else if (hasSaved && isFailed) {
+    title = '本次儲存失敗'
+    badge = '失敗'
+    badgeClass = 'bg-rose-100 text-rose-800 ring-1 ring-rose-200'
+    toneClass = 'border-rose-200 bg-rose-50 text-rose-800'
+    statusText = record?.message || '本次沒有成功寫入資料庫，正式玩家頁不會同步。'
+    nextAction = '請確認登入權限、campaignId、tenantSlug 與後端 API 狀態後再儲存。'
+  } else if (isSuccess && localOnly) {
+    title = '已儲存到本機測試資料庫'
+    badge = '本機儲存'
+    badgeClass = 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
+    toneClass = 'border-amber-200 bg-amber-50 text-amber-800'
+    statusText = '這次儲存寫入 localhost 本機資料庫；Vercel 正式玩家頁不會讀到這筆本機修改。'
+    nextAction = '要同步正式玩家頁，請到 Vercel 線上後台操作，或確認本機 VITE_API_BASE_URL 指向 Render API。'
+  } else if (officialCanSync) {
+    title = '已儲存到線上正式資料庫'
+    badge = '正式玩家頁會同步'
+    badgeClass = 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+    toneClass = 'border-emerald-200 bg-emerald-50 text-emerald-800'
+    statusText = '這次儲存寫入 Render 線上資料庫；客人重新整理正式玩家頁後應該會看到最新設定。'
+    nextAction = '請點「開啟正式玩家頁」或複製玩家網址，用無痕視窗重新整理確認。'
+  } else if (platformTemplateSavedOnline) {
+    title = '平台模板已儲存到線上資料庫'
+    badge = '新活動會套用'
+    badgeClass = 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+    toneClass = 'border-emerald-200 bg-emerald-50 text-emerald-800'
+    statusText = '平台輪盤模板已保存到線上資料庫；它不會改既有活動，但新建立的輪盤活動會複製這份模板。'
+    nextAction = '請建立新的 WHEEL 活動，再進入該活動確認是否套用最新模板。'
+  } else if (isSuccess) {
+    title = '已儲存，但正式同步狀態需確認'
+    badge = '需確認 API'
+    badgeClass = 'bg-amber-100 text-amber-800 ring-1 ring-amber-200'
+    toneClass = 'border-amber-200 bg-amber-50 text-amber-800'
+    statusText = '本次有儲存紀錄，但目前前端 / API / 商家網址狀態不是完整線上同步組合。'
+    nextAction = '請檢查 API Environment Guard，確認 API 是否為 Render，且登入商家與網址 tenantSlug 是否一致。'
+  }
+
+  return {
+    eyebrow: 'Online Save Sync Check｜第 61201～61600 批',
+    title,
+    badge,
+    badgeClass,
+    toneClass,
+    statusText,
+    nextAction,
+    apiValue,
+    frontendValue,
+    officialPlayerUrl,
+    savedAtLabel: record?.savedAt ? formatSaveAuditTime(record.savedAt) : '尚未儲存',
+    officialCanSync,
+    safe: officialCanSync || platformTemplateSavedOnline,
+    showPlayerButton: Boolean(!isPlatformTemplateMode.value && playerUrl.value)
+  }
+})
+
+const onlineSaveSyncItems = computed(() => [
+  { label: '本次寫入 API', value: onlineSaveSyncCheck.value.apiValue },
+  { label: '目前前端來源', value: onlineSaveSyncCheck.value.frontendValue },
+  { label: '正式玩家頁', value: onlineSaveSyncCheck.value.officialPlayerUrl },
+  { label: '儲存時間', value: onlineSaveSyncCheck.value.savedAtLabel }
+])
+
 const safePreviewUrl = computed(() => {
   try {
     const parsed = new URL(playerUrl.value, frontOrigin.value)
@@ -1915,6 +2006,57 @@ onMounted(async () => {
         :class="saveResultAudit.safe ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-rose-200 bg-rose-50 text-rose-800'"
       >
         {{ isPlatformTemplateMode ? '驗收重點：平台模板儲存後仍只是模板草稿，不會直接同步到任何既有商家活動。' : '驗收重點：商家活動儲存後仍是該活動自己的設定，不會回寫平台模板，也不會影響其他商家。' }}
+      </div>
+    </section>
+
+    <section class="rounded-[2rem] border border-slate-200 bg-white p-5 shadow-sm">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] text-cyan-500">{{ onlineSaveSyncCheck.eyebrow }}</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">{{ onlineSaveSyncCheck.title }}</h2>
+          <p class="mt-2 max-w-4xl text-sm font-bold leading-6 text-slate-500">
+            {{ onlineSaveSyncCheck.statusText }}
+          </p>
+        </div>
+
+        <span
+          class="inline-flex rounded-full px-4 py-2 text-xs font-black"
+          :class="onlineSaveSyncCheck.badgeClass"
+        >
+          {{ onlineSaveSyncCheck.badge }}
+        </span>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          v-for="item in onlineSaveSyncItems"
+          :key="item.label"
+          class="rounded-3xl border border-slate-100 bg-slate-50 p-4"
+        >
+          <p class="text-xs font-black text-slate-400">{{ item.label }}</p>
+          <p class="mt-2 break-all text-sm font-black leading-6 text-slate-800">{{ item.value }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-3xl border p-4 text-sm font-bold leading-6" :class="onlineSaveSyncCheck.toneClass">
+        {{ onlineSaveSyncCheck.nextAction }}
+      </div>
+
+      <div v-if="onlineSaveSyncCheck.showPlayerButton" class="mt-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow transition hover:bg-slate-800"
+          @click="openPlayer"
+        >
+          開啟正式玩家頁確認
+        </button>
+        <button
+          type="button"
+          class="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-black text-cyan-700 transition hover:bg-cyan-100"
+          @click="copyText(playerUrl, '已複製正式玩家頁網址')"
+        >
+          複製正式玩家頁網址
+        </button>
       </div>
     </section>
 
