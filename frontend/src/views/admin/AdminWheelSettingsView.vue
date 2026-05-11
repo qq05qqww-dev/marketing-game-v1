@@ -1,5 +1,7 @@
-// 第 66401～66800 批：輪盤右側預覽平滑更新不重載版
 <script setup>
+// 第 74001～74400 批：輪盤百分比準確驗證與防呆版
+// 延續第 73601～74000 批：輪盤指針顏色控制版
+// 第 69201～69600 批：輪盤中心按鈕文字控制與高規格一鍵套用版
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -212,6 +214,10 @@ const previewSmoothSyncStatus = ref('平滑預覽待命')
 const previewSmoothSyncAt = ref('')
 const previewSmoothSyncCount = ref(0)
 const previewSmoothSyncMode = ref('idle')
+const prizePercentSimulationDraws = ref(1000)
+const prizePercentSimulationResults = ref([])
+const prizePercentSimulationAt = ref('')
+const prizePercentSimulatorExpanded = ref(false)
 
 const previewFocusOptions = [
   { key: 'top', label: '上方' },
@@ -280,24 +286,24 @@ const settingCategories = [
   { key: 'sound', icon: '效', title: '音效特效', desc: '音效開關與抽獎遮蔽' },
   { key: 'rules', icon: '規', title: '規則說明', desc: '活動規則與獎品說明顯示' },
   { key: 'frontend', icon: '設', title: '前台設定', desc: '玩家網址、預覽與公開顯示' },
-  { key: 'prizes', icon: '獎', title: '輪盤獎項', desc: '獎項名稱、權重與顏色' }
+  { key: 'prizes', icon: '獎', title: '輪盤獎項', desc: '獎項名稱、中獎百分比與顏色' }
 ]
 
 
 const quickSettingCategoryKeys = ['polish', 'basic', 'theme', 'wheel', 'prizes']
 
 const settingSearchKeywordMap = {
-  polish: ['精緻', '模組', '預設', '黑金', '金橘', '霓虹', '清爽', '高級', 'vip', 'polish', 'preset'],
+  polish: ['精緻', '模組', '預設', '金白', '綠金', '紅金', '清爽', '高級', '實體活動', 'polish', 'preset'],
   basic: ['標題', '副標題', '文字', '活動名稱', '品牌', 'logo', 'page', 'title', 'headline'],
   theme: ['顏色', '色彩', '背景', '按鈕', '指針', '外框', '主題', 'color', 'theme'],
-  wheel: ['輪盤', '尺寸', '大小', '中心', '外圈', '圖示', '文字大小', '指針', 'wheel', 'spin'],
+  wheel: ['輪盤', '尺寸', '大小', '中心', '中心按鈕', '按鈕文字', '字色', '外圈', '圖示', '文字大小', '指針', 'wheel', 'spin'],
   display: ['顯示', '展示', '剩餘次數', '狀態', '紀錄', '獎品牆', 'debug'],
   serial: ['序號', '驗證', '輸入', 'serial', 'code'],
   result: ['結果', '中獎', '彈窗', '恭喜', 'result'],
   sound: ['音效', '特效', '聲音', '彩帶', '光暈', '抖動', 'sound', 'effect'],
   rules: ['規則', '說明', '獎品說明', '兌換', 'footer'],
   frontend: ['前台', '玩家網址', '預覽', '公開', '連結', 'url'],
-  prizes: ['獎項', '獎品', '權重', '機率', '顏色', '優惠券', 'prize', 'reward']
+  prizes: ['獎項', '獎品', '百分比', '機率', '權重', '顏色', '優惠券', 'prize', 'reward', 'percent']
 }
 
 const normalizeSearchText = (value = '') => String(value || '').trim().toLowerCase()
@@ -410,63 +416,168 @@ const themeDescriptions = {
 const wheelPolishPresets = [
   {
     key: 'luxuryGold',
-    name: '高級金橘豪華版',
+    name: '典雅金白實體活動版',
     badge: '推薦',
-    desc: '適合正式活動、品牌抽獎、百貨感輪盤。外框金色、背景暖橘、指針紅金。',
+    desc: '乾淨高級、像實體活動輪盤：香檳金外圈、小燈泡、綠白交錯扇形、紅色固定指針，玩家一眼覺得精緻但不複雜。',
     theme: {
-      backgroundFrom: '#fff7ed',
-      backgroundTo: '#ea580c',
-      panelColor: '#ffedd5',
-      wheelOuterColor: '#f59e0b',
+      backgroundFrom: '#fff8e7',
+      backgroundTo: '#b45309',
+      panelColor: '#fff7ed',
+      wheelOuterColor: '#f6c453',
       pointerColor: '#dc2626',
-      spinButtonColor: '#111827',
+      spinButtonColor: '#14532d',
+      actionButtonFrom: '#f59e0b',
+      actionButtonTo: '#b45309'
+    },
+    wheelStyle: {
+      wheelSize: 372,
+      outerRingWidth: 18,
+      showRimLights: true,
+      rimLightCount: 30,
+      rimLightSize: 9,
+      wheelDepthLevel: 78,
+      stageGlowLevel: 72,
+      stageShadowLevel: 70,
+      stageCornerLevel: 76,
+      stageInnerLightLevel: 64,
+      centerButtonSize: 98,
+      centerButtonText: 'SPIN',
+      centerButtonTextSize: 18,
+      centerButtonTextColor: '#ffffff',
+      centerButtonBorderColor: '#fde68a',
+      pointerSize: 52,
+      pointerOffsetY: -10,
+      pointerGlossLevel: 72,
+      pointerShadowLevel: 68,
+      pointerTopColor: '#dc2626',
+      pointerArrowColor: '#b91c1c',
+      pointerDotColor: '#fde047',
+      prizeTextSize: 14,
+      prizeIconSize: 40,
+      prizeLabelRadius: 76,
+      prizeTextColor: '#ffffff',
+      prizeTextStrokeColor: '#1f2937',
+      prizeBadgeBgOpacity: 16,
+      sliceGlossLevel: 48,
+      prizeTextBoxWidth: 92,
+      showPrizeIcon: true,
+      showPrizeName: true,
+      showSliceBorder: true
+    },
+    effects: {
+      enableTickSound: true,
+      enableResultSound: true,
+      enablePointerShake: true,
+      enableLightGlow: true,
+      enableConfetti: true,
+      enableSpinMask: true
+    }
+  },
+  {
+    key: 'emeraldGold',
+    name: '翡翠金店面精品版',
+    badge: '精品',
+    desc: '深翡翠綠搭配金白外圈，適合會員制、精品店、餐飲品牌與高單價促銷，質感明顯但不會太暗。',
+    theme: {
+      backgroundFrom: '#ecfdf5',
+      backgroundTo: '#065f46',
+      panelColor: '#fefce8',
+      wheelOuterColor: '#eab308',
+      pointerColor: '#dc2626',
+      spinButtonColor: '#064e3b',
+      actionButtonFrom: '#10b981',
+      actionButtonTo: '#047857'
+    },
+    wheelStyle: {
+      wheelSize: 376,
+      outerRingWidth: 20,
+      showRimLights: true,
+      rimLightCount: 32,
+      rimLightSize: 9,
+      wheelDepthLevel: 86,
+      stageGlowLevel: 72,
+      stageShadowLevel: 70,
+      stageCornerLevel: 76,
+      stageInnerLightLevel: 64,
+      centerButtonSize: 100,
+      centerButtonText: 'START',
+      centerButtonTextSize: 17,
+      centerButtonTextColor: '#fef3c7',
+      centerButtonBorderColor: '#fde68a',
+      pointerSize: 54,
+      pointerOffsetY: -12,
+      pointerGlossLevel: 76,
+      pointerShadowLevel: 72,
+      pointerTopColor: '#dc2626',
+      pointerArrowColor: '#991b1b',
+      pointerDotColor: '#fde047',
+      prizeTextSize: 14,
+      prizeIconSize: 40,
+      prizeLabelRadius: 77,
+      prizeTextColor: '#ffffff',
+      prizeTextStrokeColor: '#1f2937',
+      prizeBadgeBgOpacity: 16,
+      sliceGlossLevel: 48,
+      prizeTextBoxWidth: 94,
+      showPrizeIcon: true,
+      showPrizeName: true,
+      showSliceBorder: true
+    },
+    effects: {
+      enableTickSound: true,
+      enableResultSound: true,
+      enablePointerShake: true,
+      enableLightGlow: true,
+      enableConfetti: true,
+      enableSpinMask: true
+    }
+  },
+  {
+    key: 'redGoldStage',
+    name: '紅金舞台活動版',
+    badge: '熱鬧',
+    desc: '紅色指針、金色厚外圈與亮燈舞台感，適合開幕、週年慶、門市現場活動與直播抽獎。',
+    theme: {
+      backgroundFrom: '#fff1f2',
+      backgroundTo: '#b91c1c',
+      panelColor: '#fff7ed',
+      wheelOuterColor: '#facc15',
+      pointerColor: '#b91c1c',
+      spinButtonColor: '#7f1d1d',
       actionButtonFrom: '#f97316',
       actionButtonTo: '#b91c1c'
     },
     wheelStyle: {
-      wheelSize: 356,
-      outerRingWidth: 16,
-      centerButtonSize: 94,
-      pointerSize: 50,
-      prizeTextSize: 14,
-      prizeIconSize: 42,
-      prizeLabelRadius: 66,
-      showPrizeIcon: true,
-      showPrizeName: true,
-      showSliceBorder: true
-    },
-    effects: {
-      enableTickSound: true,
-      enableResultSound: true,
-      enablePointerShake: true,
-      enableLightGlow: true,
-      enableConfetti: true,
-      enableSpinMask: true
-    }
-  },
-  {
-    key: 'blackGoldVip',
-    name: '黑金 VIP 典藏版',
-    badge: '質感',
-    desc: '適合會員制、高單價品牌、VIP 抽獎。整體更沉穩，輪盤金色更突出。',
-    theme: {
-      backgroundFrom: '#18181b',
-      backgroundTo: '#78350f',
-      panelColor: '#fef3c7',
-      wheelOuterColor: '#fbbf24',
-      pointerColor: '#f43f5e',
-      spinButtonColor: '#020617',
-      actionButtonFrom: '#f59e0b',
-      actionButtonTo: '#92400e'
-    },
-    wheelStyle: {
       wheelSize: 368,
       outerRingWidth: 18,
+      showRimLights: true,
+      rimLightCount: 30,
+      rimLightSize: 9,
+      wheelDepthLevel: 78,
+      stageGlowLevel: 72,
+      stageShadowLevel: 70,
+      stageCornerLevel: 76,
+      stageInnerLightLevel: 64,
       centerButtonSize: 96,
-      pointerSize: 52,
+      centerButtonText: '抽獎',
+      centerButtonTextSize: 18,
+      centerButtonTextColor: '#ffffff',
+      centerButtonBorderColor: '#fde68a',
+      pointerSize: 54,
+      pointerOffsetY: -12,
+      pointerGlossLevel: 76,
+      pointerShadowLevel: 72,
+      pointerTopColor: '#dc2626',
+      pointerArrowColor: '#991b1b',
+      pointerDotColor: '#fde047',
       prizeTextSize: 14,
-      prizeIconSize: 44,
-      prizeLabelRadius: 70,
+      prizeIconSize: 40,
+      prizeLabelRadius: 75,
+      prizeTextColor: '#ffffff',
+      prizeTextStrokeColor: '#1f2937',
+      prizeBadgeBgOpacity: 16,
+      sliceGlossLevel: 48,
+      prizeTextBoxWidth: 92,
       showPrizeIcon: true,
       showPrizeName: true,
       showSliceBorder: true
@@ -481,28 +592,110 @@ const wheelPolishPresets = [
     }
   },
   {
-    key: 'neonPurple',
-    name: '霓虹紫粉潮流版',
-    badge: '年輕',
-    desc: '適合社群活動、夜店感、直播互動。背景更亮眼，按鈕與輪盤更有衝擊感。',
+    key: 'royalBlueGold',
+    name: '皇家藍金企業版',
+    badge: '企業',
+    desc: '藍金配色更沉穩，適合企業活動、品牌發表、展場抽獎。整體高規格但保持文字清楚。',
     theme: {
-      backgroundFrom: '#faf5ff',
-      backgroundTo: '#7e22ce',
-      panelColor: '#f3e8ff',
-      wheelOuterColor: '#a855f7',
-      pointerColor: '#ec4899',
-      spinButtonColor: '#4c1d95',
-      actionButtonFrom: '#d946ef',
-      actionButtonTo: '#7c3aed'
+      backgroundFrom: '#eff6ff',
+      backgroundTo: '#1d4ed8',
+      panelColor: '#dbeafe',
+      wheelOuterColor: '#facc15',
+      pointerColor: '#dc2626',
+      spinButtonColor: '#1e3a8a',
+      actionButtonFrom: '#3b82f6',
+      actionButtonTo: '#1d4ed8'
     },
     wheelStyle: {
-      wheelSize: 348,
-      outerRingWidth: 14,
-      centerButtonSize: 92,
-      pointerSize: 48,
-      prizeTextSize: 13,
+      wheelSize: 372,
+      outerRingWidth: 19,
+      showRimLights: true,
+      rimLightCount: 32,
+      rimLightSize: 8,
+      wheelDepthLevel: 94,
+      stageGlowLevel: 72,
+      stageShadowLevel: 70,
+      stageCornerLevel: 76,
+      stageInnerLightLevel: 64,
+      centerButtonSize: 98,
+      centerButtonText: 'GO',
+      centerButtonTextSize: 20,
+      centerButtonTextColor: '#ffffff',
+      centerButtonBorderColor: '#fef3c7',
+      pointerSize: 52,
+      pointerOffsetY: -10,
+      pointerGlossLevel: 72,
+      pointerShadowLevel: 68,
+      pointerTopColor: '#dc2626',
+      pointerArrowColor: '#b91c1c',
+      pointerDotColor: '#fde047',
+      prizeTextSize: 14,
       prizeIconSize: 40,
-      prizeLabelRadius: 66,
+      prizeLabelRadius: 76,
+      prizeTextColor: '#ffffff',
+      prizeTextStrokeColor: '#1f2937',
+      prizeBadgeBgOpacity: 16,
+      sliceGlossLevel: 48,
+      prizeTextBoxWidth: 92,
+      showPrizeIcon: true,
+      showPrizeName: true,
+      showSliceBorder: true
+    },
+    effects: {
+      enableTickSound: true,
+      enableResultSound: true,
+      enablePointerShake: true,
+      enableLightGlow: true,
+      enableConfetti: true,
+      enableSpinMask: true
+    }
+  },
+  {
+    key: 'carnivalYellowGreen',
+    name: '嘉年華黃綠燈泡版',
+    badge: '現場',
+    desc: '更接近實體活動輪盤：黃金外圈、綠白扇形、紅指針、明亮燈泡，適合門市與市集活動。',
+    theme: {
+      backgroundFrom: '#fefce8',
+      backgroundTo: '#ca8a04',
+      panelColor: '#fef9c3',
+      wheelOuterColor: '#facc15',
+      pointerColor: '#dc2626',
+      spinButtonColor: '#166534',
+      actionButtonFrom: '#eab308',
+      actionButtonTo: '#a16207'
+    },
+    wheelStyle: {
+      wheelSize: 380,
+      outerRingWidth: 21,
+      showRimLights: true,
+      rimLightCount: 36,
+      rimLightSize: 10,
+      wheelDepthLevel: 94,
+      stageGlowLevel: 72,
+      stageShadowLevel: 70,
+      stageCornerLevel: 76,
+      stageInnerLightLevel: 64,
+      centerButtonSize: 96,
+      centerButtonText: 'START',
+      centerButtonTextSize: 16,
+      centerButtonTextColor: '#ffffff',
+      centerButtonBorderColor: '#fef08a',
+      pointerSize: 56,
+      pointerOffsetY: -14,
+      pointerGlossLevel: 78,
+      pointerShadowLevel: 78,
+      pointerTopColor: '#e11d48',
+      pointerArrowColor: '#be123c',
+      pointerDotColor: '#facc15',
+      prizeTextSize: 13,
+      prizeIconSize: 38,
+      prizeLabelRadius: 78,
+      prizeTextColor: '#ffffff',
+      prizeTextStrokeColor: '#1f2937',
+      prizeBadgeBgOpacity: 16,
+      sliceGlossLevel: 48,
+      prizeTextBoxWidth: 90,
       showPrizeIcon: true,
       showPrizeName: true,
       showSliceBorder: true
@@ -518,27 +711,50 @@ const wheelPolishPresets = [
   },
   {
     key: 'cleanOrange',
-    name: '清爽橘白簡潔版',
+    name: '清爽金橘商家版',
     badge: '乾淨',
-    desc: '適合一般商家、餐飲、美容、零售。畫面清楚、按鈕明顯、手機閱讀舒服。',
+    desc: '保留乾淨橘白風格，但加厚外圈、提高文字清晰度與中心按鈕質感，適合一般商家直接套用。',
     theme: {
       backgroundFrom: '#fff7ed',
       backgroundTo: '#fdba74',
       panelColor: '#ffffff',
-      wheelOuterColor: '#fb923c',
+      wheelOuterColor: '#f59e0b',
       pointerColor: '#ea580c',
-      spinButtonColor: '#9a3412',
+      spinButtonColor: '#92400e',
       actionButtonFrom: '#fb923c',
       actionButtonTo: '#ea580c'
     },
     wheelStyle: {
-      wheelSize: 336,
-      outerRingWidth: 12,
-      centerButtonSize: 88,
-      pointerSize: 44,
-      prizeTextSize: 13,
+      wheelSize: 352,
+      outerRingWidth: 15,
+      showRimLights: true,
+      rimLightCount: 24,
+      rimLightSize: 7,
+      wheelDepthLevel: 52,
+      stageGlowLevel: 72,
+      stageShadowLevel: 70,
+      stageCornerLevel: 76,
+      stageInnerLightLevel: 64,
+      centerButtonSize: 92,
+      centerButtonText: 'SPIN',
+      centerButtonTextSize: 17,
+      centerButtonTextColor: '#ffffff',
+      centerButtonBorderColor: '#ffedd5',
+      pointerSize: 48,
+      pointerOffsetY: -8,
+      pointerGlossLevel: 64,
+      pointerShadowLevel: 58,
+      pointerTopColor: '#ea580c',
+      pointerArrowColor: '#c2410c',
+      pointerDotColor: '#fde047',
+      prizeTextSize: 14,
       prizeIconSize: 38,
-      prizeLabelRadius: 64,
+      prizeLabelRadius: 74,
+      prizeTextColor: '#ffffff',
+      prizeTextStrokeColor: '#1f2937',
+      prizeBadgeBgOpacity: 16,
+      sliceGlossLevel: 48,
+      prizeTextBoxWidth: 90,
       showPrizeIcon: true,
       showPrizeName: true,
       showSliceBorder: true
@@ -553,13 +769,12 @@ const wheelPolishPresets = [
     }
   }
 ]
-
 const wheelPolishSummary = computed(() => ({
-  eyebrow: 'Wheel Module Polish｜第 58001～58400 批',
-  title: '輪盤模組精緻化預設',
+  eyebrow: 'Wheel Module Polish｜第 70401～70800 批',
+  title: '正確基準輪盤高規格預設清理版',
   desc: isPlatformTemplateMode.value
-    ? '這裡會調整平台輪盤模板的視覺預設。新輪盤活動建立時才會複製這些設定，既有商家活動不會被同步污染。'
-    : '這裡只會調整目前商家活動的輪盤視覺，不會回寫平台模板，也不會影響其他商家。',
+    ? '這裡從第 69601～70000 正確檔案往下重作輪盤，只保留乾淨、高級、實體活動輪盤方向；新輪盤活動建立時才會複製這些設定，既有商家活動不會被同步污染。'
+    : '這裡從第 69601～70000 正確檔案往下重作輪盤，只調整目前商家活動的輪盤高級視覺，不會回寫平台模板，也不會影響其他商家。',
   target: isPlatformTemplateMode.value
     ? platformWheelTemplateSlug.value
     : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
@@ -591,11 +806,11 @@ const currentWheelPolishStatus = computed(() => {
 
   if (!preset) {
     return {
-      eyebrow: 'Polish Active Preset｜第 65601～66000 批',
+      eyebrow: 'Polish Active Preset｜第 70001～70400 批',
       title: '尚未套用精緻預設',
       badge: '未套用',
       badgeClass: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
-      desc: '目前輪盤使用一般設定。你可以在下方選擇一個精緻預設，右側預覽會立即更新。',
+      desc: '目前輪盤使用一般設定。你可以在下方選擇一個精緻預設，右側預覽會立即更新；本批已清理後續無效方向，從正確檔案重新延伸。',
       presetName: '尚未套用',
       appliedAt: '尚未套用',
       target: wheelPolishSummary.value.target,
@@ -604,7 +819,7 @@ const currentWheelPolishStatus = computed(() => {
   }
 
   return {
-    eyebrow: 'Polish Active Preset｜第 65601～66000 批',
+    eyebrow: 'Polish Active Preset｜第 70001～70400 批',
     title: `目前套用：${preset.name}`,
     badge: preset.badge || '已套用',
     badgeClass: 'bg-orange-100 text-orange-800 ring-1 ring-orange-200',
@@ -639,7 +854,7 @@ const applyWheelPolishPreset = (presetKey = '') => {
   }
 
   settings.templateMeta.visualPolish = {
-    batch: '65601-66000',
+    batch: '70001-70400',
     presetKey: preset.key,
     presetName: preset.name,
     appliedAt: new Date().toISOString(),
@@ -692,7 +907,7 @@ const polishFineTuneControls = [
     min: 8,
     max: 26,
     step: 1,
-    desc: '控制金屬外圈厚度。黑金與金橘可略厚。'
+    desc: '控制金屬外圈厚度。高級實體活動版建議略厚，會更像真實抽獎輪盤。'
   },
   {
     key: 'pointerSize',
@@ -702,6 +917,33 @@ const polishFineTuneControls = [
     max: 68,
     step: 1,
     desc: '控制上方指針比例，太大會壓到輪盤文字。'
+  },
+  {
+    key: 'pointerOffsetY',
+    label: '指針上下位置',
+    unit: 'px',
+    min: -36,
+    max: 24,
+    step: 1,
+    desc: '第 72401～72800 批：微調指針高度。負數往上，正數往下；用來對齊輪盤外圈與命中點。'
+  },
+  {
+    key: 'pointerGlossLevel',
+    label: '指針高光質感',
+    unit: '%',
+    min: 0,
+    max: 100,
+    step: 1,
+    desc: '控制指針表面反光，數字越高越像立體烤漆。'
+  },
+  {
+    key: 'pointerShadowLevel',
+    label: '指針陰影厚度',
+    unit: '%',
+    min: 0,
+    max: 100,
+    step: 1,
+    desc: '控制指針落影與厚重感，數字越高越有舞台指針感。'
   },
   {
     key: 'centerButtonSize',
@@ -905,14 +1147,14 @@ const defaultSettings = () => ({
   verifyButtonText: '驗證序號',
   resultTitle: '恭喜中獎',
   theme: {
-    backgroundFrom: '#fff7ed',
-    backgroundTo: '#f97316',
-    panelColor: '#fed7aa',
-    wheelOuterColor: '#f59e0b',
+    backgroundFrom: '#fff8e7',
+    backgroundTo: '#b45309',
+    panelColor: '#fff7ed',
+    wheelOuterColor: '#f6c453',
     pointerColor: '#dc2626',
-    spinButtonColor: '#111827',
-    actionButtonFrom: '#fb923c',
-    actionButtonTo: '#dc2626'
+    spinButtonColor: '#14532d',
+    actionButtonFrom: '#f59e0b',
+    actionButtonTo: '#b45309'
   },
   display: {
     showBrandCard: true,
@@ -928,19 +1170,41 @@ const defaultSettings = () => ({
     showDebugInfo: false
   },
   wheelStyle: {
-    wheelSize: 320,
-    outerRingWidth: 12,
-    centerButtonSize: 86,
-    pointerSize: 42,
-    prizeTextSize: 13,
-    prizeIconSize: 38,
+    wheelSize: 372,
+    outerRingWidth: 18,
+    showRimLights: true,
+    rimLightCount: 30,
+    rimLightSize: 9,
+    wheelDepthLevel: 78,
+      stageGlowLevel: 72,
+      stageShadowLevel: 70,
+      stageCornerLevel: 76,
+      stageInnerLightLevel: 64,
+    centerButtonSize: 98,
+    centerButtonText: 'SPIN',
+    centerButtonTextSize: 18,
+    centerButtonTextColor: '#ffffff',
+    centerButtonBorderColor: '#fde68a',
+    pointerSize: 52,
+    pointerOffsetY: -10,
+    pointerGlossLevel: 72,
+    pointerShadowLevel: 68,
+    pointerTopColor: '#dc2626',
+    pointerArrowColor: '#b91c1c',
+    pointerDotColor: '#fde047',
+    prizeTextSize: 14,
+    prizeIconSize: 40,
     cellGap: 2,
-    prizeLabelRadius: 64,
+    prizeLabelRadius: 76,
+    prizeTextColor: '#ffffff',
+    prizeTextStrokeColor: '#1f2937',
+    prizeBadgeBgOpacity: 16,
+    sliceGlossLevel: 48,
     // 第 68001～68400 批：獎項密度自適應與半徑控制修正版
 // 第 67601～68000 批：獎項標籤置中與指針命中校正。
     prizeLabelOffsetX: 0,
     prizeLabelOffsetY: 0,
-    prizeTextBoxWidth: 82,
+    prizeTextBoxWidth: 92,
     pointerHitCorrection: 0,
     showPrizeIcon: true,
     showPrizeName: true,
@@ -962,10 +1226,10 @@ const defaultSettings = () => ({
     footerNote: '請依照活動規則參加抽獎；獎項與兌換方式以主辦單位公告為準。'
   },
   prizes: [
-    { id: 1, icon: '🎁', imageUrl: '', linkUrl: '', name: '50 元折價券', weight: 35, color: '#facc15' },
-    { id: 2, icon: '🎫', imageUrl: '', linkUrl: '', name: '100 元折價券', weight: 25, color: '#fb7185' },
-    { id: 3, icon: '🏆', imageUrl: '', linkUrl: '', name: '200 元折價券', weight: 15, color: '#fb923c' },
-    { id: 4, icon: '😊', imageUrl: '', linkUrl: '', name: '未中獎', weight: 25, color: '#ef4444' }
+    { id: 1, icon: '🎁', imageUrl: '', linkUrl: '', name: '50 元折價券', weight: 35, color: '#fef3c7' },
+    { id: 2, icon: '🎫', imageUrl: '', linkUrl: '', name: '100 元折價券', weight: 25, color: '#16a34a' },
+    { id: 3, icon: '🏆', imageUrl: '', linkUrl: '', name: '200 元折價券', weight: 15, color: '#fde68a' },
+    { id: 4, icon: '😊', imageUrl: '', linkUrl: '', name: '再接再厲', weight: 25, color: '#15803d' }
   ]
 })
 
@@ -1025,6 +1289,232 @@ const getPrizeDisplayName = (prize = {}) => {
 const previewRemainingText = computed(() => {
   return settings.display.showRemainingChance ? '剩餘次數 99｜可轉盤' : ''
 })
+
+const normalizePrizePercent = (value = 0) => {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return 0
+  return Math.max(0, Math.min(100, Math.round(number)))
+}
+
+const prizePercentTotal = computed(() => {
+  return (Array.isArray(settings.prizes) ? settings.prizes : []).reduce((sum, prize) => {
+    return sum + normalizePrizePercent(prize?.weight)
+  }, 0)
+})
+
+const prizePercentSummary = computed(() => {
+  const total = prizePercentTotal.value
+  const diff = Math.abs(total - 100)
+  const isPerfect = diff === 0
+  const isOver = total > 100
+  const isZero = total <= 0
+
+  return {
+    total,
+    diff,
+    isPerfect,
+    isOver,
+    isZero,
+    normalizedNote: total > 0
+      ? '抽獎時會依照各獎項百分比占總和的比例抽選；總和等於 100% 時最直覺。'
+      : '目前總和為 0%，沒有可抽選的百分比分配，請先設定獎項百分比。',
+    badge: isPerfect ? '100% 正常' : (isOver ? `超過 ${total - 100}%` : `尚餘 ${100 - total}%`),
+    message: isPerfect
+      ? '目前獎項百分比總和剛好 100%，玩家抽選比例最直覺。'
+      : (isOver
+          ? '目前總和超過 100%，系統仍可依比例抽選，但商家看到會誤會成超過 100%，建議修正。'
+          : '目前總和低於 100%，系統仍可依比例抽選，但建議補滿到 100% 才方便營運驗收。'),
+    saveHint: isPerfect
+      ? '可直接儲存。'
+      : '儲存前會再提醒一次；建議先用「平均分配 100%」或手動修正總和。',
+    toneClass: isPerfect
+      ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      : (isOver ? 'border-rose-200 bg-rose-50 text-rose-800' : 'border-amber-200 bg-amber-50 text-amber-800'),
+    badgeClass: isPerfect
+      ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200'
+      : (isOver ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-200' : 'bg-amber-100 text-amber-800 ring-1 ring-amber-200')
+  }
+})
+
+const prizePercentExpectedRows = computed(() => {
+  const total = prizePercentTotal.value
+  const list = Array.isArray(settings.prizes) ? settings.prizes : []
+
+  return list.map((prize, index) => {
+    const percent = normalizePrizePercent(prize?.weight)
+    const expectedRate = total > 0 ? Number(((percent / total) * 100).toFixed(2)) : 0
+
+    return {
+      id: prize?.id || `prize-percent-${index + 1}`,
+      index,
+      name: prize?.name || `獎項 ${index + 1}`,
+      color: prize?.color || '#f59e0b',
+      percent,
+      expectedRate
+    }
+  })
+})
+
+const prizePercentVisibleRows = computed(() => {
+  return prizePercentSimulatorExpanded.value
+    ? prizePercentExpectedRows.value
+    : prizePercentExpectedRows.value.slice(0, 5)
+})
+
+const prizePercentHiddenRowsCount = computed(() => {
+  return Math.max(0, prizePercentExpectedRows.value.length - prizePercentVisibleRows.value.length)
+})
+
+
+const prizePercentSaveGuard = computed(() => ({
+  title: prizePercentSummary.value.isPerfect ? '百分比驗證通過' : '百分比總和需要確認',
+  ok: prizePercentSummary.value.isPerfect,
+  badge: prizePercentSummary.value.badge,
+  message: prizePercentSummary.value.isPerfect
+    ? '目前總和為 100%，前端抽選與營運理解一致。'
+    : `目前總和為 ${prizePercentSummary.value.total}%。前端仍會依比例抽選，但建議正式活動調整為 100%。`,
+  detail: '本批只做前端設定驗證與防呆，不修改 DB / router / draw-core；正式後端 play API 是否完全吃同欄位，仍需後端抽獎核心驗證。'
+}))
+
+const updatePrizePercent = (prize, value) => {
+  if (!prize) return
+  prize.weight = normalizePrizePercent(value)
+  prizePercentSimulationResults.value = []
+  prizePercentSimulationAt.value = ''
+  if (typeof markSettingsDirty === 'function') {
+    markSettingsDirty('已調整獎項中獎百分比，尚未儲存')
+  }
+}
+
+const averagePrizePercent = () => {
+  if (!Array.isArray(settings.prizes) || !settings.prizes.length) return
+
+  const base = Math.floor(100 / settings.prizes.length)
+  const remainder = 100 - base * settings.prizes.length
+
+  settings.prizes.forEach((prize, index) => {
+    prize.weight = base + (index < remainder ? 1 : 0)
+  })
+
+  savedMessage.value = '已平均分配獎項中獎百分比，總和為 100%。請按儲存設定保存。'
+  setTimeout(() => {
+    savedMessage.value = ''
+  }, 1800)
+}
+
+const clearPrizePercent = () => {
+  if (!Array.isArray(settings.prizes)) return
+  const confirmed = window.confirm('確定要把所有獎項中獎百分比清為 0% 嗎？')
+  if (!confirmed) return
+
+  settings.prizes.forEach((prize) => {
+    prize.weight = 0
+  })
+
+  prizePercentSimulationResults.value = []
+  prizePercentSimulationAt.value = ''
+  savedMessage.value = '已將所有獎項中獎百分比清為 0%。請重新分配後再儲存。'
+  setTimeout(() => {
+    savedMessage.value = ''
+  }, 1800)
+}
+
+const normalizeSimulationDraws = (value = 1000) => {
+  const number = Math.round(Number(value))
+  if (!Number.isFinite(number)) return 1000
+  return Math.max(100, Math.min(10000, number))
+}
+
+const runPrizePercentSimulation = () => {
+  const rows = prizePercentExpectedRows.value.filter((item) => item.percent > 0)
+  const total = rows.reduce((sum, item) => sum + item.percent, 0)
+  const draws = normalizeSimulationDraws(prizePercentSimulationDraws.value)
+  prizePercentSimulationDraws.value = draws
+
+  if (!rows.length || total <= 0) {
+    prizePercentSimulationResults.value = []
+    savedMessage.value = '目前沒有可試算的獎項百分比，請先設定至少一個大於 0% 的獎項。'
+    window.setTimeout(() => {
+      savedMessage.value = ''
+    }, 2200)
+    return
+  }
+
+  const results = rows.map((item) => ({
+    ...item,
+    hits: 0,
+    actualRate: 0
+  }))
+
+  for (let i = 0; i < draws; i += 1) {
+    const target = Math.random() * total
+    let current = 0
+
+    for (const item of results) {
+      current += item.percent
+      if (target <= current) {
+        item.hits += 1
+        break
+      }
+    }
+  }
+
+  prizePercentSimulationResults.value = results.map((item) => ({
+    ...item,
+    actualRate: Number(((item.hits / draws) * 100).toFixed(2))
+  }))
+  prizePercentSimulationAt.value = new Date().toLocaleTimeString('zh-TW', { hour12: false })
+  savedMessage.value = `已完成 ${draws.toLocaleString('zh-TW')} 次百分比模擬試算。`
+  window.setTimeout(() => {
+    savedMessage.value = ''
+  }, 1800)
+}
+
+const normalizePrizePercentTo100 = () => {
+  const rows = Array.isArray(settings.prizes) ? settings.prizes : []
+  const total = prizePercentTotal.value
+
+  if (!rows.length) return
+
+  if (total <= 0) {
+    averagePrizePercent()
+    return
+  }
+
+  const normalized = rows.map((prize, index) => {
+    const raw = normalizePrizePercent(prize?.weight)
+    const exact = (raw / total) * 100
+    const floor = Math.floor(exact)
+
+    return {
+      index,
+      exact,
+      floor,
+      remainder: exact - floor
+    }
+  })
+
+  let currentTotal = normalized.reduce((sum, item) => sum + item.floor, 0)
+  const sorted = [...normalized].sort((a, b) => b.remainder - a.remainder)
+
+  for (const item of sorted) {
+    if (currentTotal >= 100) break
+    item.floor += 1
+    currentTotal += 1
+  }
+
+  normalized.forEach((item) => {
+    const source = sorted.find((candidate) => candidate.index === item.index) || item
+    rows[item.index].weight = source.floor
+  })
+
+  prizePercentSimulationResults.value = []
+  prizePercentSimulationAt.value = ''
+  savedMessage.value = '已依照原本比例重新校正為總和 100%。請確認後按儲存設定。'
+  window.setTimeout(() => {
+    savedMessage.value = ''
+  }, 2200)
+}
 
 const templateMeta = computed(() => {
   const meta = settings?.templateMeta
@@ -2138,6 +2628,8 @@ const buildSaveConfirmMessage = () => {
       '影響範圍：儲存為平台模板資料庫來源，不會改到任何既有商家活動。',
       '新建輪盤活動：建立時會複製這份最新模板一次。',
       '玩家頁：不會直接讀平台模板。',
+      `獎項百分比：${prizePercentSummary.value.badge}｜${prizePercentSummary.value.normalizedNote}`,
+      '正式抽獎提醒：本批不修改後端 draw-engine，正式 play API 欄位對齊需另行驗證。',
       '',
       '確認後才會儲存。'
     ].join('\n')
@@ -2150,6 +2642,8 @@ const buildSaveConfirmMessage = () => {
     '影響範圍：只寫入目前這個活動的 gameConfig.settings。',
     '平台模板：不會被回寫。',
     '其他商家：不會被改動。',
+    `獎項百分比：${prizePercentSummary.value.badge}｜${prizePercentSummary.value.normalizedNote}`,
+    '正式抽獎提醒：本批不修改後端 draw-engine，正式 play API 欄位對齊需另行驗證。',
     '',
     '確認後才會正式寫入資料庫。'
   ].join('\n')
@@ -2158,6 +2652,26 @@ const buildSaveConfirmMessage = () => {
 const guardedSaveSettings = async (options = {}) => {
   if (options?.silent === true || options?.localOnly === true) {
     return saveSettings(options)
+  }
+
+  if (!prizePercentSummary.value.isPerfect && typeof window !== 'undefined') {
+    const percentConfirmed = window.confirm([
+      '獎項百分比總和目前不是 100%。',
+      '',
+      `目前狀態：${prizePercentSummary.value.badge}`,
+      prizePercentSummary.value.message,
+      '',
+      '系統仍會依比例抽選，但正式活動建議先修正到 100%。',
+      '是否仍要繼續儲存？'
+    ].join('\n'))
+
+    if (!percentConfirmed) {
+      copiedMessage.value = '已取消儲存，請先修正獎項百分比總和。'
+      window.setTimeout(() => {
+        copiedMessage.value = ''
+      }, 2400)
+      return
+    }
   }
 
   const confirmed = typeof window === 'undefined'
@@ -2196,9 +2710,10 @@ const resetSettings = () => {
   const fresh = defaultSettings()
   Object.keys(settings).forEach((key) => delete settings[key])
   assignDeep(settings, fresh)
-  localStorage.removeItem(storageKey.value)
-  previewKey.value += 1
-  savedMessage.value = isPlatformTemplateMode.value ? '已還原平台輪盤模板預設，請按儲存設定保存模板草稿。' : '已還原輪盤預設設定，請按儲存設定寫入資料庫。'
+  localStorage.setItem(storageKey.value, JSON.stringify(settings))
+  persistLocalDraft('reset-all-defaults')
+  forcePreviewReload('還原全部預設')
+  savedMessage.value = isPlatformTemplateMode.value ? '已還原平台輪盤模板預設，右側預覽已同步；請按儲存設定保存模板草稿。' : '已還原輪盤預設設定，右側預覽已同步；請按儲存設定寫入資料庫。'
   markSettingsDirty('已還原預設，尚未儲存')
 }
 
@@ -2213,7 +2728,7 @@ const sectionResetOptions = [
   { key: 'sound', label: '還原音效特效', desc: '卡點聲、結果音效、指針抖動、光暈與彩帶回到預設。' },
   { key: 'rules', label: '還原規則說明', desc: '活動規則、獎品說明與頁尾備註回到預設。' },
   { key: 'frontend', label: '還原品牌前台設定', desc: 'Logo、品牌連結、品牌按鈕與文字大小回到預設。' },
-  { key: 'prizes', label: '還原輪盤獎項', desc: '獎項名稱、權重、圖示與顏色回到預設。' }
+  { key: 'prizes', label: '還原輪盤獎項', desc: '獎項名稱、中獎百分比、圖示與顏色回到預設。' }
 ]
 
 const currentSectionResetOption = computed(() => {
@@ -2304,6 +2819,7 @@ const resetSectionToDefault = (sectionKey = activeCategory.value) => {
       'brandButtonTextColor',
       'brandButtonTextSize'
     ])
+    settings.logoText = fresh.logoText || 'W'
   } else if (sectionKey === 'prizes') {
     settings.prizes.splice(0, settings.prizes.length, ...clonePlainValue(fresh.prizes))
   }
@@ -2366,13 +2882,15 @@ const backToCampaigns = () => {
 }
 
 const addPrize = () => {
+  const remainingPercent = Math.max(0, 100 - prizePercentTotal.value)
+
   settings.prizes.push({
     id: Date.now(),
     icon: '🎁',
     imageUrl: '',
     linkUrl: '',
     name: '新獎項',
-    weight: 10,
+    weight: remainingPercent > 0 ? Math.min(remainingPercent, 10) : 0,
     color: '#f59e0b'
   })
 }
@@ -3525,15 +4043,117 @@ onBeforeUnmount(() => {
             </label>
 
             <label class="grid gap-2 text-sm font-black text-slate-700">
+              外圈燈泡數量
+              <input v-model.number="settings.wheelStyle.rimLightCount" type="range" min="12" max="48" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.rimLightCount || 30 }} 顆｜建議 24～36</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              燈泡大小
+              <input v-model.number="settings.wheelStyle.rimLightSize" type="range" min="4" max="16" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.rimLightSize || 9 }} px｜讓外圈更像實體活動輪盤</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              輪盤厚度立體感（強化）
+              <input v-model.number="settings.wheelStyle.wheelDepthLevel" type="range" min="0" max="100" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.wheelDepthLevel ?? 72 }} %｜0=平面，100=厚底、陰影、內盤浮起最明顯</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              舞台光暈強度
+              <input v-model.number="settings.wheelStyle.stageGlowLevel" type="range" min="0" max="100" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.stageGlowLevel ?? 72 }} %｜控制輪盤後方柔光與高級展示感</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              舞台底座陰影
+              <input v-model.number="settings.wheelStyle.stageShadowLevel" type="range" min="0" max="100" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.stageShadowLevel ?? 70 }} %｜讓輪盤像放在實體展架上</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              舞台圓角高級感
+              <input v-model.number="settings.wheelStyle.stageCornerLevel" type="range" min="0" max="100" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.stageCornerLevel ?? 76 }} %｜控制外框圓角與精品卡片感</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              舞台內層亮面
+              <input v-model.number="settings.wheelStyle.stageInnerLightLevel" type="range" min="0" max="100" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.stageInnerLightLevel ?? 64 }} %｜增加內框玻璃反光，但不會變成圖片</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
               中心按鈕大小
               <input v-model.number="settings.wheelStyle.centerButtonSize" type="range" min="64" max="120" class="w-full" />
               <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.centerButtonSize }} px</span>
             </label>
 
             <label class="grid gap-2 text-sm font-black text-slate-700">
+              中心按鈕文字
+              <input v-model="settings.wheelStyle.centerButtonText" maxlength="8" class="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-black text-slate-700" placeholder="SPIN" />
+              <span class="text-xs font-bold text-slate-400">會同步到玩家輪盤中心按鈕</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              中心文字大小
+              <input v-model.number="settings.wheelStyle.centerButtonTextSize" type="range" min="10" max="34" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.centerButtonTextSize || 18 }} px</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              中心文字顏色
+              <input v-model="settings.wheelStyle.centerButtonTextColor" type="color" class="h-10 rounded-2xl border border-slate-200 bg-white px-2" />
+              <span class="text-xs font-bold text-slate-400">控制中心按鈕文字顏色，右側預覽會即時同步</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              中心外框顏色
+              <input v-model="settings.wheelStyle.centerButtonBorderColor" type="color" class="h-10 rounded-2xl border border-slate-200 bg-white px-2" />
+              <span class="text-xs font-bold text-slate-400">控制中心按鈕外框線顏色，右側預覽會即時同步</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
               指針大小
               <input v-model.number="settings.wheelStyle.pointerSize" type="range" min="28" max="64" class="w-full" />
               <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.pointerSize }} px</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              指針上下位置
+              <input v-model.number="settings.wheelStyle.pointerOffsetY" type="range" min="-36" max="24" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.pointerOffsetY ?? -10 }} px｜負數往上，正數往下</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              指針高光質感
+              <input v-model.number="settings.wheelStyle.pointerGlossLevel" type="range" min="0" max="100" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.pointerGlossLevel ?? 72 }} %｜增加烤漆反光</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              指針陰影厚度
+              <input v-model.number="settings.wheelStyle.pointerShadowLevel" type="range" min="0" max="100" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.pointerShadowLevel ?? 68 }} %｜讓指針更有立體壓住輪盤的感覺</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              指針上蓋顏色
+              <input v-model="settings.wheelStyle.pointerTopColor" type="color" class="h-10 rounded-2xl border border-slate-200 bg-white px-2" />
+              <span class="text-xs font-bold text-slate-400">控制指針上方圓頭 / 底座顏色，右側預覽會即時同步</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              指針箭頭顏色
+              <input v-model="settings.wheelStyle.pointerArrowColor" type="color" class="h-10 rounded-2xl border border-slate-200 bg-white px-2" />
+              <span class="text-xs font-bold text-slate-400">控制紅色三角指針本體顏色</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              指針燈珠顏色
+              <input v-model="settings.wheelStyle.pointerDotColor" type="color" class="h-10 rounded-2xl border border-slate-200 bg-white px-2" />
+              <span class="text-xs font-bold text-slate-400">控制指針上方圓形燈珠顏色</span>
             </label>
 
             <label class="grid gap-2 text-sm font-black text-slate-700">
@@ -3551,11 +4171,39 @@ onBeforeUnmount(() => {
             <label class="grid gap-2 text-sm font-black text-slate-700">
               獎項離中心距離
               <input v-model.number="settings.wheelStyle.prizeLabelRadius" type="range" min="36" max="94" class="w-full" />
-              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeLabelRadius }} %｜強力半徑｜建議 62～82</span>
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeLabelRadius }} %｜高級版建議 72～80，獎項多時比較清楚</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              獎項文字顏色
+              <input v-model="settings.wheelStyle.prizeTextColor" type="color" class="h-10 rounded-2xl border border-slate-200 bg-white px-2" />
+              <span class="text-xs font-bold text-slate-400">控制輪盤扇形上的獎項名稱顏色</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              獎項文字描邊
+              <input v-model="settings.wheelStyle.prizeTextStrokeColor" type="color" class="h-10 rounded-2xl border border-slate-200 bg-white px-2" />
+              <span class="text-xs font-bold text-slate-400">讓白色 / 淺色扇形上文字更清楚</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              獎項文字底霧
+              <input v-model.number="settings.wheelStyle.prizeBadgeBgOpacity" type="range" min="0" max="55" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeBadgeBgOpacity ?? 16 }} %｜獎項多時建議 12～28</span>
+            </label>
+
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              扇面高級光澤
+              <input v-model.number="settings.wheelStyle.sliceGlossLevel" type="range" min="0" max="100" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.sliceGlossLevel ?? 48 }} %｜增加輪盤表面高級反光</span>
             </label>
           </div>
 
-          <div class="mt-5 grid gap-3 md:grid-cols-3">
+          <div class="mt-5 grid gap-3 md:grid-cols-4">
+            <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
+              顯示外圈燈泡
+              <input v-model="settings.wheelStyle.showRimLights" type="checkbox" class="h-5 w-5 shrink-0" />
+            </label>
             <label class="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-black text-slate-700">
               顯示獎項圖示
               <input v-model="settings.wheelStyle.showPrizeIcon" type="checkbox" class="h-5 w-5 shrink-0" />
@@ -3758,11 +4406,84 @@ onBeforeUnmount(() => {
             <div>
               <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">Prize Wheel</p>
               <h2 class="mt-2 text-2xl font-black text-slate-950">輪盤獎項</h2>
-              <p class="mt-2 text-sm font-bold text-slate-500">可設定獎項名稱、emoji、圖片網址、連結、權重與色塊；圖片會自動縮放成適合輪盤的大小。</p>
+              <p class="mt-2 text-sm font-bold text-slate-500">可設定獎項名稱、emoji、圖片網址、連結、中獎百分比與色塊；百分比總和建議維持 100%，圖片會自動縮放成適合輪盤的大小。</p>
             </div>
             <button type="button" class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white" @click="addPrize">
               新增獎項
             </button>
+          </div>
+
+          <div class="mb-4 rounded-3xl border p-4 shadow-sm" :class="prizePercentSummary.toneClass">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-[11px] font-black uppercase tracking-[0.18em] opacity-70">Prize Percent Guard｜第 74401～74800 批</p>
+                <h3 class="mt-1 text-lg font-black">獎項百分比總和：{{ prizePercentSummary.total }}%</h3>
+                <p class="mt-1 text-xs font-bold leading-5 opacity-80">{{ prizePercentSummary.message }}</p>
+              </div>
+              <span class="rounded-full px-4 py-2 text-xs font-black" :class="prizePercentSummary.badgeClass">
+                {{ prizePercentSummary.badge }}
+              </span>
+            </div>
+
+            <div class="mt-3 flex flex-wrap items-center gap-2">
+              <button type="button" class="rounded-2xl bg-slate-950 px-4 py-2.5 text-xs font-black text-white" @click="averagePrizePercent">
+                平均分配 100%
+              </button>
+              <button type="button" class="rounded-2xl border border-current bg-white/70 px-4 py-2.5 text-xs font-black" @click="normalizePrizePercentTo100">
+                依比例校正 100%
+              </button>
+              <button type="button" class="rounded-2xl border border-current bg-white/70 px-4 py-2.5 text-xs font-black" @click="clearPrizePercent">
+                全部清為 0%
+              </button>
+              <button type="button" class="rounded-2xl border border-current bg-white/70 px-4 py-2.5 text-xs font-black" @click="prizePercentSimulatorExpanded = !prizePercentSimulatorExpanded">
+                {{ prizePercentSimulatorExpanded ? '收合試算器' : '展開機率試算器' }}
+              </button>
+              <p class="text-xs font-black opacity-65">
+                用原本 weight 欄位儲存；本批把上方區塊縮短，避免獎項列表被擠到太下面。
+              </p>
+            </div>
+
+            <div v-show="prizePercentSimulatorExpanded" class="mt-4 rounded-3xl border border-current/20 bg-white/65 p-4">
+              <div class="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[0.18em] opacity-60">Percent Simulator</p>
+                  <h4 class="mt-1 text-base font-black">機率試算器</h4>
+                  <p class="mt-1 text-xs font-bold leading-5 opacity-70">可模擬抽獎結果，確認目前百分比配置是否接近預期。正式後端抽獎核心未在本批修改。</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <label class="flex items-center gap-2 text-xs font-black opacity-80">
+                    模擬次數
+                    <input v-model.number="prizePercentSimulationDraws" type="number" min="100" max="10000" step="100" class="h-10 w-28 rounded-2xl border border-current/20 bg-white px-3 text-sm font-black" />
+                  </label>
+                  <button type="button" class="rounded-2xl bg-slate-950 px-4 py-3 text-xs font-black text-white" @click="runPrizePercentSimulation">
+                    開始試算
+                  </button>
+                </div>
+              </div>
+
+              <div class="mt-4 max-h-[320px] overflow-auto rounded-2xl border border-current/15 bg-white">
+                <div class="sticky top-0 z-10 grid grid-cols-[1.3fr_0.7fr_0.8fr_0.8fr] gap-2 bg-slate-950 px-4 py-3 text-xs font-black text-white">
+                  <span>獎項</span>
+                  <span>設定%</span>
+                  <span>理論命中</span>
+                  <span>模擬命中</span>
+                </div>
+                <div v-for="row in prizePercentVisibleRows" :key="row.id" class="grid grid-cols-[1.3fr_0.7fr_0.8fr_0.8fr] gap-2 border-t border-slate-100 px-4 py-3 text-xs font-black text-slate-700">
+                  <span class="truncate">{{ row.name }}</span>
+                  <span>{{ row.percent }}%</span>
+                  <span>{{ row.expectedRate }}%</span>
+                  <span>
+                    {{ (prizePercentSimulationResults.find((item) => item.id === row.id)?.actualRate ?? '-') }}<template v-if="prizePercentSimulationResults.find((item) => item.id === row.id)">%</template>
+                  </span>
+                </div>
+                <button v-if="prizePercentHiddenRowsCount" type="button" class="w-full border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs font-black text-slate-500" @click="prizePercentSimulatorExpanded = true">
+                  還有 {{ prizePercentHiddenRowsCount }} 個獎項，展開查看完整試算
+                </button>
+              </div>
+              <p class="mt-3 text-xs font-black opacity-60">
+                {{ prizePercentSimulationAt ? `最近試算時間：${prizePercentSimulationAt}` : '尚未執行試算。' }}
+              </p>
+            </div>
           </div>
 
           <div class="grid gap-4">
@@ -3792,8 +4513,11 @@ onBeforeUnmount(() => {
                 </label>
 
                 <label class="grid min-w-0 gap-2 text-xs font-black text-slate-500">
-                  權重
-                  <input v-model.number="prize.weight" type="number" min="0" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black" />
+                  中獎百分比
+                  <div class="relative">
+                    <input :value="Number(prize.weight || 0)" type="number" min="0" max="100" step="1" class="h-12 w-full rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm font-black" @input="updatePrizePercent(prize, $event.target.value)" />
+                    <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">%</span>
+                  </div>
                 </label>
 
                 <label class="grid min-w-0 gap-2 text-xs font-black text-slate-500">

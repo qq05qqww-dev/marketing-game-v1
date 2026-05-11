@@ -1,5 +1,10 @@
 <script setup>
-// 第 66401～66800 批：輪盤右側預覽平滑更新不重載版
+// 第 71601～72000 批：輪盤中心按鈕定位修正版
+// 修正第 71201～71600 批厚度立體感把中心按鈕額外 translateY，造成中心按鈕看起來往上/偏移。
+// 本批不改 DB / router / draw-core，只修玩家頁 CSS 定位。
+// 第 74001～74400 批：輪盤百分比準確驗證與防呆版
+// 延續第 73601～74000 批：輪盤指針顏色控制版
+// 第 69201～69600 批：輪盤中心按鈕文字控制與高規格一鍵套用版
 /**
  * Multi Game Platform V2.3 第 62001～62400 批：輪盤精緻玩家頁視覺細節強化版
  *
@@ -1869,31 +1874,46 @@ const campaign = reactive({
   showFrontBackToGameCenter: false,
   showFrontVipInfo: false,
   showFrontDebugInfo: false,
-  wheelCenterText: 'SPIN',
-  wheelCenterSize: 92,
+  wheelCenterText: 'START',
+  wheelCenterSize: 98,
   wheelCenterTextSize: 18,
-  wheelCenterBgColor: '#111827',
+  wheelCenterBgColor: '#14532d',
   wheelCenterTextColor: '#ffffff',
   wheelCenterBorderColor: '#fde68a',
   wheelCenterBorderWidth: 4,
-  wheelPreviewSize: 335,
-  wheelOuterRingWidth: 8,
-  wheelPrizeTextSize: 13,
-  wheelPrizeIconSize: 38,
-  wheelPrizeLabelRadius: 108,
+  wheelPreviewSize: 372,
+  wheelOuterRingWidth: 18,
+  wheelShowRimLights: true,
+  wheelRimLightCount: 30,
+  wheelRimLightSize: 9,
+  wheelDepthLevel: 78,
+  wheelStageGlowLevel: 72,
+  wheelStageShadowLevel: 70,
+  wheelStageCornerLevel: 76,
+  wheelStageInnerLightLevel: 64,
+  wheelPrizeTextSize: 14,
+  wheelPrizeIconSize: 40,
+  wheelPrizeLabelRadius: 76,
+  wheelPrizeTextColor: '#ffffff',
+  wheelPrizeTextStrokeColor: '#1f2937',
+  wheelPrizeBadgeBgOpacity: 16,
+  wheelSliceGlossLevel: 48,
   // 第 68401～68800 批：強力半徑 / 文字 / 圖示控制，讓最大最小差異更明顯。
   // 第 68001～68400 批：獎項密度自適應與半徑控制修正版
 // 第 67601～68000 批：獎項置中與指針命中校正。
   wheelPrizeLabelOffsetX: 0,
   wheelPrizeLabelOffsetY: 0,
-  wheelPrizeTextBoxWidth: 82,
+  wheelPrizeTextBoxWidth: 92,
   wheelPointerHitCorrection: 0,
+  wheelPointerOffsetY: -10,
+  wheelPointerGlossLevel: 72,
+  wheelPointerShadowLevel: 68,
   wheelShowPrizeIcon: true,
   wheelShowPrizeName: true,
   wheelShowSliceBorder: true,
   wheelPointerScale: 100,
-  wheelPointerTopColor: '#334155',
-  wheelPointerArrowColor: '#020617',
+  wheelPointerTopColor: '#dc2626',
+  wheelPointerArrowColor: '#b91c1c',
   wheelPointerDotColor: '#fde047',
   wheelPointerPreset: 'classic-black-gold',
   enablePointerTipShake: true,
@@ -1902,27 +1922,27 @@ const campaign = reactive({
   pointerTickVolume: 35,
   pointerTickSpeed: 85,
   pointerTickTone: 'crisp',
-  themeBgFrom: '#fb923c',
-  themeBgTo: '#dc2626',
+  themeBgFrom: '#fff8e7',
+  themeBgTo: '#b45309',
   themePanelColor: '#fff7ed',
-  themeAccentColor: '#facc15',
-  themeButtonColor: '#ea580c',
-  themeButtonDarkColor: '#7c2d12',
+  themeAccentColor: '#f6c453',
+  themeButtonColor: '#f59e0b',
+  themeButtonDarkColor: '#92400e',
   themeTextColor: '#fff7ed',
   themeGlowLevel: 70,
   enableLuxuryDots: true,
   enableGlassCards: true,
-  frameTopColor: '#fed7aa',
-  frameMiddleColor: '#fb923c',
-  frameBottomColor: '#7c2d12',
-  frameBorderColor: '#fdba74',
-  frameHighlightColor: '#facc15',
+  frameTopColor: '#fff7c2',
+  frameMiddleColor: '#f6c453',
+  frameBottomColor: '#92400e',
+  frameBorderColor: '#facc15',
+  frameHighlightColor: '#fef3c7',
   brandPreset: 'orange-gold',
   // 第 59601～60000 批：平台輪盤模組精緻預設接入玩家頁。
   // 由平台模板 / 商家活動 settings.templateMeta.visualPolish.presetKey 控制玩家端實際渲染風格。
   visualPolishPresetKey: 'luxuryGold',
-  visualPolishPresetName: '高級金橘豪華版',
-  visualPolishBatch: '59601-60000'
+  visualPolishPresetName: '典雅金白實體活動版',
+  visualPolishBatch: '68801-69200'
 })
 
 const player = reactive({
@@ -2452,6 +2472,9 @@ const restorePointerSettings = () => {
     'wheelPointerArrowColor',
     'wheelPointerDotColor',
     'wheelPointerPreset',
+    'wheelPointerOffsetY',
+    'wheelPointerGlossLevel',
+    'wheelPointerShadowLevel',
     'enablePointerTipShake',
     'pointerTipShakeSpeed',
     'enablePointerTickSound',
@@ -2576,7 +2599,7 @@ const adminSectionTips = {
 const wheelPointerPresets = [
   {
     key: 'classic-black-gold',
-    name: '經典黑金',
+    name: '經典紅金',
     description: '黑色箭頭搭配金色圓點，最百搭。',
     colors: ['#334155', '#020617', '#fde047'],
     payload: {
@@ -2664,9 +2687,9 @@ const brandFramePresets = [
       themeBgFrom: '#ff8a2a',
       themeBgTo: '#c2410c',
       themePanelColor: '#fff7ed',
-      themeAccentColor: '#facc15',
+      themeAccentColor: '#f6c453',
       themeButtonColor: '#e85d1f',
-      themeButtonDarkColor: '#7c2d12',
+      themeButtonDarkColor: '#92400e',
       themeTextColor: '#fff7ed',
       frameTopColor: '#ff8a2a',
       frameMiddleColor: '#ff6500',
@@ -2684,17 +2707,17 @@ const brandFramePresets = [
     recommended: false,
     colors: ['#fed7aa', '#fb923c', '#7c2d12'],
     payload: {
-      themeBgFrom: '#fb923c',
-      themeBgTo: '#dc2626',
+      themeBgFrom: '#fff8e7',
+      themeBgTo: '#b45309',
       themePanelColor: '#fff7ed',
-      themeAccentColor: '#facc15',
-      themeButtonColor: '#ea580c',
-      themeButtonDarkColor: '#7c2d12',
+      themeAccentColor: '#f6c453',
+      themeButtonColor: '#f59e0b',
+      themeButtonDarkColor: '#92400e',
       themeTextColor: '#fff7ed',
-      frameTopColor: '#fed7aa',
-      frameMiddleColor: '#fb923c',
-      frameBottomColor: '#7c2d12',
-      frameBorderColor: '#fdba74',
+      frameTopColor: '#fff7c2',
+      frameMiddleColor: '#f6c453',
+      frameBottomColor: '#92400e',
+      frameBorderColor: '#facc15',
       frameHighlightColor: '#facc15'
     }
   },
@@ -2710,7 +2733,7 @@ const brandFramePresets = [
       themeBgFrom: '#111827',
       themeBgTo: '#020617',
       themePanelColor: '#f8fafc',
-      themeAccentColor: '#facc15',
+      themeAccentColor: '#f6c453',
       themeButtonColor: '#374151',
       themeButtonDarkColor: '#020617',
       themeTextColor: '#f8fafc',
@@ -2864,9 +2887,150 @@ const wheelCenterButtonStyle = computed(() => {
     height: `${size}px`,
     fontSize: `${fontSize}px`,
     background: campaign.wheelCenterBgColor || '#111827',
+    '--premium-wheel-center-bg': campaign.wheelCenterBgColor || '#111827',
+    '--premium-wheel-center-text': campaign.wheelCenterTextColor || '#ffffff',
+    '--premium-wheel-center-border': campaign.wheelCenterBorderColor || '#fde68a',
     color: campaign.wheelCenterTextColor || '#ffffff',
     borderColor: campaign.wheelCenterBorderColor || '#fde68a',
     borderWidth: `${borderWidth}px`
+  }
+})
+
+// 第 70401～70800 批：實體輪盤外圈燈泡與厚度控制。
+// 這裡全部吃後台 wheelStyle 設定，不用圖片，避免固定 CSS preset 蓋掉使用者調整。
+const normalizedWheelRimLightCount = computed(() => {
+  return Math.min(48, Math.max(12, Number(campaign.wheelRimLightCount || 30)))
+})
+
+const normalizedWheelRimLightSize = computed(() => {
+  return Math.min(16, Math.max(4, Number(campaign.wheelRimLightSize || 9)))
+})
+
+const normalizedWheelDepthLevel = computed(() => {
+  return Math.min(100, Math.max(0, Number(campaign.wheelDepthLevel ?? 72)))
+})
+
+const wheelShellStyle = computed(() => {
+  const depth = normalizedWheelDepthLevel.value / 100
+  const ring = Math.min(26, Math.max(4, Number(campaign.wheelOuterRingWidth || 18)))
+  const outer = campaign.frameHighlightColor || campaign.themeAccentColor || '#f6c453'
+  const depthPx = Math.round(depth * 42)
+  const liftPx = Math.round(depth * 9)
+  const baseBlur = Math.round(16 + depth * 38)
+  const baseOpacity = Math.min(0.68, 0.16 + depth * 0.5)
+  const innerBottomOpacity = Math.min(0.62, 0.18 + depth * 0.42)
+
+  return {
+    '--premium-wheel-depth': depth.toFixed(2),
+    '--premium-wheel-depth-px': `${depthPx}px`,
+    '--premium-wheel-depth-lift': `${liftPx}px`,
+    '--premium-wheel-depth-base-blur': `${baseBlur}px`,
+    '--premium-wheel-depth-base-opacity': baseOpacity.toFixed(2),
+    '--premium-wheel-depth-inner-opacity': innerBottomOpacity.toFixed(2),
+    '--premium-wheel-ring-width': `${ring}px`,
+    '--premium-wheel-rim-light-size': `${normalizedWheelRimLightSize.value}px`,
+    '--premium-wheel-rim-color': outer,
+    '--premium-wheel-slice-gloss': Math.min(1, Math.max(0, Number(campaign.wheelSliceGlossLevel ?? 48) / 100)),
+    transform: `translateY(${-Math.round(depth * 3)}px)`,
+    boxShadow: [
+      `inset 0 ${Math.round(8 + depth * 20)}px ${Math.round(16 + depth * 28)}px rgba(255,255,255,${0.42 + depth * 0.22})`,
+      `inset 0 -${Math.round(16 + depth * 34)}px ${Math.round(22 + depth * 44)}px rgba(120,53,15,${innerBottomOpacity})`,
+      `0 ${Math.round(16 + depth * 26)}px ${Math.round(28 + depth * 46)}px rgba(67,20,7,${0.22 + depth * 0.38})`,
+      `0 ${Math.round(4 + depth * 10)}px 0 rgba(120,53,15,${0.12 + depth * 0.34})`
+    ].join(', ')
+  }
+})
+
+// 第 70801～71200 批：獎項文字清晰度控制。
+// 讓後台可以調整獎項文字顏色、描邊與底霧，獎項多時不再糊成一團。
+const normalizeOpacityPercent = (value = 0, fallback = 0) => {
+  const number = Number(value ?? fallback)
+  return Math.min(100, Math.max(0, Number.isFinite(number) ? number : fallback))
+}
+
+const getWheelPrizeNameStyle = (index) => {
+  const box = getWheelSvgLabelBox(index)
+  const bgOpacity = normalizeOpacityPercent(campaign.wheelPrizeBadgeBgOpacity, 16) / 100
+  const textColor = campaign.wheelPrizeTextColor || '#ffffff'
+  const strokeColor = campaign.wheelPrizeTextStrokeColor || '#1f2937'
+
+  return {
+    fontSize: `${box.textSize}px`,
+    maxWidth: `${box.textWidth}px`,
+    color: textColor,
+    background: bgOpacity > 0 ? `rgba(15, 23, 42, ${bgOpacity})` : 'transparent',
+    padding: bgOpacity > 0 ? '2px 6px' : '0',
+    borderRadius: '999px',
+    textShadow: `0 1px 0 ${strokeColor}, 0 2px 6px rgba(15,23,42,.46), 0 0 8px rgba(255,255,255,.18)`
+  }
+}
+
+const wheelRimLightBulbs = computed(() => {
+  const count = normalizedWheelRimLightCount.value
+  const radius = 47
+
+  return Array.from({ length: count }, (_, index) => {
+    const angle = (-90 + (360 / count) * index) * Math.PI / 180
+    return {
+      id: `rim-light-${index + 1}`,
+      style: {
+        left: `${50 + radius * Math.cos(angle)}%`,
+        top: `${50 + radius * Math.sin(angle)}%`,
+        animationDelay: `${index * -0.045}s`
+      }
+    }
+  })
+})
+
+
+// 第 70001～70400 批：輪盤舞台外框改成吃後台主題色。
+// 避免高級 preset 的固定 CSS 蓋掉後台調整，確保從正確基準後的輪盤改動都有作用。
+const normalizeWheelPercent = (value = 0, fallback = 0) => {
+  const number = Number(value ?? fallback)
+  return Math.min(100, Math.max(0, Number.isFinite(number) ? number : fallback))
+}
+
+const wheelStageFrameStyle = computed(() => {
+  // 第 72801～73200 批：輪盤舞台光暈與底座高級感控制。
+  // 這裡控制的是輪盤背後的展示框，不影響抽獎核心、不改指針命中、不改 DB/router/draw-core。
+  const outer = campaign.frameBorderColor || campaign.themeAccentColor || '#f6c453'
+  const top = campaign.themePanelColor || '#fff7ed'
+  const from = campaign.themeBgFrom || '#fff8e7'
+  const to = campaign.themeBgTo || '#b45309'
+  const glow = normalizeWheelPercent(campaign.wheelStageGlowLevel, 72) / 100
+  const shadow = normalizeWheelPercent(campaign.wheelStageShadowLevel, 70) / 100
+  const corner = normalizeWheelPercent(campaign.wheelStageCornerLevel, 76) / 100
+  const inner = normalizeWheelPercent(campaign.wheelStageInnerLightLevel, 64) / 100
+  const radius = Math.round(22 + corner * 28)
+  const glowBlur = Math.round(18 + glow * 56)
+  const glowAlpha = (0.12 + glow * 0.36).toFixed(2)
+  const shadowBlur = Math.round(28 + shadow * 64)
+  const shadowAlpha = (0.18 + shadow * 0.42).toFixed(2)
+  const innerAlpha = (0.10 + inner * 0.42).toFixed(2)
+
+  return {
+    '--premium-wheel-stage-outer': outer,
+    '--premium-wheel-stage-top': top,
+    '--premium-wheel-stage-from': from,
+    '--premium-wheel-stage-to': to,
+    '--premium-wheel-stage-glow': glow.toFixed(2),
+    '--premium-wheel-stage-shadow': shadow.toFixed(2),
+    '--premium-wheel-stage-inner-light': inner.toFixed(2),
+    '--premium-wheel-stage-radius': `${radius}px`,
+    '--premium-wheel-stage-glow-blur': `${glowBlur}px`,
+    '--premium-wheel-stage-glow-alpha': glowAlpha,
+    '--premium-wheel-stage-shadow-blur': `${shadowBlur}px`,
+    '--premium-wheel-stage-shadow-alpha': shadowAlpha,
+    '--premium-wheel-stage-inner-alpha': innerAlpha,
+    background: `linear-gradient(145deg, color-mix(in srgb, ${top} ${Math.round(72 + inner * 18)}%, white) 0%, ${from} 42%, ${to} 100%)`,
+    borderColor: outer,
+    borderRadius: `${radius}px`,
+    boxShadow: [
+      `0 ${Math.round(22 + shadow * 26)}px ${shadowBlur}px color-mix(in srgb, ${to} ${Math.round(30 + shadow * 34)}%, transparent)`,
+      `0 0 ${glowBlur}px color-mix(in srgb, ${outer} ${Math.round(16 + glow * 34)}%, transparent)`,
+      `inset 0 1px 0 rgba(255,255,255,${innerAlpha})`,
+      `inset 0 -${Math.round(12 + shadow * 28)}px ${Math.round(18 + shadow * 34)}px rgba(67,20,7,${(0.08 + shadow * 0.28).toFixed(2)})`
+    ].join(', ')
   }
 })
 
@@ -2886,13 +3050,43 @@ const normalizedPointerTickSpeed = computed(() => {
   return Math.min(180, Math.max(40, Number(campaign.pointerTickSpeed || 85)))
 })
 
+const normalizedWheelPointerOffsetY = computed(() => {
+  return Math.min(24, Math.max(-36, Number(campaign.wheelPointerOffsetY ?? -10)))
+})
+
+const normalizedWheelPointerGlossLevel = computed(() => {
+  return Math.min(100, Math.max(0, Number(campaign.wheelPointerGlossLevel ?? 72)))
+})
+
+const normalizedWheelPointerShadowLevel = computed(() => {
+  return Math.min(100, Math.max(0, Number(campaign.wheelPointerShadowLevel ?? 68)))
+})
+
 const wheelPointerStyle = computed(() => {
+  const gloss = normalizedWheelPointerGlossLevel.value / 100
+  const shadow = normalizedWheelPointerShadowLevel.value / 100
+  const pointerTop = campaign.wheelPointerTopColor || '#334155'
+  const pointerArrow = campaign.wheelPointerArrowColor || '#020617'
+
   return {
     '--wheel-pointer-scale': normalizedWheelPointerScale.value / 100,
-    '--wheel-pointer-top-color': campaign.wheelPointerTopColor || '#334155',
-    '--wheel-pointer-arrow-color': campaign.wheelPointerArrowColor || '#020617',
+    '--wheel-pointer-offset-y': `${normalizedWheelPointerOffsetY.value}px`,
+    '--wheel-pointer-gloss': gloss.toFixed(2),
+    '--wheel-pointer-shadow': shadow.toFixed(2),
+    '--wheel-pointer-gloss-alpha': (0.18 + gloss * 0.52).toFixed(2),
+    '--wheel-pointer-highlight-alpha': (0.16 + gloss * 0.28).toFixed(2),
+    '--wheel-pointer-shadow-alpha': (0.18 + shadow * 0.42).toFixed(2),
+    '--wheel-pointer-top-color': pointerTop,
+    '--wheel-pointer-arrow-color': pointerArrow,
     '--wheel-pointer-dot-color': campaign.wheelPointerDotColor || '#fde047',
-    '--wheel-pointer-tip-shake-speed': `${normalizedPointerTipShakeSpeed.value}ms`
+    '--wheel-pointer-tip-shake-speed': `${normalizedPointerTipShakeSpeed.value}ms`,
+    '--wheel-pointer-head-shadow-y': `${Math.round(5 + shadow * 8)}px`,
+    '--wheel-pointer-head-shadow-blur': `${Math.round(8 + shadow * 12)}px`,
+    '--wheel-pointer-arrow-shadow-y': `${Math.round(5 + shadow * 10)}px`,
+    '--wheel-pointer-arrow-shadow-blur': `${Math.round(6 + shadow * 12)}px`,
+    top: `${normalizedWheelPointerOffsetY.value}px`,
+    filter: `drop-shadow(0 ${Math.round(8 + shadow * 14)}px ${Math.round(8 + shadow * 18)}px rgba(15,23,42,${(0.18 + shadow * 0.42).toFixed(2)})) drop-shadow(0 2px 0 color-mix(in srgb, ${pointerArrow} 52%, white))`,
+    transform: `translateX(-50%) scale(${normalizedWheelPointerScale.value / 100})`
   }
 })
 
@@ -3048,10 +3242,10 @@ const probabilitySummary = computed(() => {
 
 const probabilityStatusText = computed(() => {
   if (probabilitySummary.value.isPerfectPercent) {
-    return '機率總和剛好 100，可作為百分比參考。'
+    return '獎項百分比總和剛好 100%，玩家抽選比例最直覺。'
   }
 
-  return '目前採權重抽選，總和不必一定等於 100。'
+  return '目前仍可依比例抽選；建議後台把獎項百分比總和調整為 100%。'
 })
 
 const probabilityStatusClass = computed(() => {
@@ -3444,8 +3638,8 @@ const wheelSliceStyle = (index) => {
   return {
     transform: `rotate(${rotate}deg) skewY(${skew}deg)`,
     background: index % 2 === 0
-      ? 'linear-gradient(135deg, #fff7c2 0%, #facc15 38%, #fb923c 72%, #c2410c 100%)'
-      : 'linear-gradient(135deg, #ffe4e6 0%, #fb7185 35%, #ef4444 72%, #991b1b 100%)'
+      ? 'linear-gradient(135deg, #fffdf2 0%, #fef3c7 42%, #f6c453 100%)'
+      : 'linear-gradient(135deg, #dcfce7 0%, #22c55e 48%, #15803d 100%)'
   }
 }
 
@@ -3497,7 +3691,19 @@ const getWheelSlicePath = (index) => {
 }
 
 const getWheelSliceFill = (index) => {
-  return index % 2 === 0 ? 'url(#wheelGoldGradient)' : 'url(#wheelRoseGradient)'
+  const key = normalizeWheelPolishPresetKey(campaign.visualPolishPresetKey)
+  const palettes = {
+    luxuryGold: ['#fffdf2', '#16a34a', '#fef3c7', '#15803d'],
+    emeraldGold: ['#fef3c7', '#047857', '#ecfdf5', '#065f46'],
+    blackGoldVip: ['#fef3c7', '#14532d', '#fde68a', '#166534'],
+    neonPurple: ['#fff1f2', '#b91c1c', '#fef3c7', '#7f1d1d'],
+    redGoldStage: ['#fff1f2', '#dc2626', '#fef3c7', '#991b1b'],
+    royalBlueGold: ['#eff6ff', '#1d4ed8', '#fef3c7', '#1e3a8a'],
+    carnivalYellowGreen: ['#fef08a', '#16a34a', '#ffffff', '#ca8a04'],
+    cleanOrange: ['#ffffff', '#fb923c', '#ffedd5', '#f97316']
+  }
+  const palette = palettes[key] || palettes.luxuryGold
+  return palette[index % palette.length]
 }
 
 
@@ -3608,17 +3814,31 @@ const getWheelLabelClass = (index) => {
 }
 
 const wheelStyle = computed(() => {
+  // 第 72001～72400 批：修正輪盤中心偏移真正原因。
+  // 之前中心按鈕定位已回到 left/top 50%，但 SVG 本體旋轉時沒有明確指定 transform-origin，
+  // 部分瀏覽器會讓 SVG 視覺圓心因旋轉/濾鏡/inline baseline 產生偏移，造成中心按鈕看起來沒有對準扇形交會點。
   return {
-    transform: `rotate(${wheelRotation.value}deg)`
+    transform: `rotate(${wheelRotation.value}deg)`,
+    transformOrigin: '50% 50%',
+    transformBox: 'fill-box'
   }
 })
 
-// 第 59601～60000 批：輪盤模組精緻預設實際套用到玩家頁外觀。
+// 第 70001～70400 批：正確基準輪盤高規格預設清理。
+// 從第 69601～70000 正確檔案往下做；舊的黑金 / 霓虹方向不再延伸。
+// 如果資料庫或 localStorage 仍留有舊 key，這裡會自動轉成乾淨實體活動輪盤方向。
 const normalizeWheelPolishPresetKey = (value = '') => {
   const key = String(value || '').trim()
 
-  return ['luxuryGold', 'blackGoldVip', 'neonPurple', 'cleanOrange'].includes(key)
-    ? key
+  const aliasMap = {
+    blackGoldVip: 'emeraldGold',
+    neonPurple: 'redGoldStage'
+  }
+
+  const normalizedKey = aliasMap[key] || key
+
+  return ['luxuryGold', 'cleanOrange', 'emeraldGold', 'redGoldStage', 'royalBlueGold', 'carnivalYellowGreen'].includes(normalizedKey)
+    ? normalizedKey
     : 'luxuryGold'
 }
 
@@ -3629,7 +3849,11 @@ const getWheelPolishPresetClass = (presetKey = '') => {
     luxuryGold: 'premium-wheel-polish-preset-luxury-gold',
     blackGoldVip: 'premium-wheel-polish-preset-black-gold-vip',
     neonPurple: 'premium-wheel-polish-preset-neon-purple',
-    cleanOrange: 'premium-wheel-polish-preset-clean-orange'
+    cleanOrange: 'premium-wheel-polish-preset-clean-orange',
+    emeraldGold: 'premium-wheel-polish-preset-emerald-gold',
+    redGoldStage: 'premium-wheel-polish-preset-red-gold-stage',
+    royalBlueGold: 'premium-wheel-polish-preset-royal-blue-gold',
+    carnivalYellowGreen: 'premium-wheel-polish-preset-carnival-yellow-green'
   }[key]
 }
 
@@ -3643,27 +3867,59 @@ const wheelPolishDisplay = computed(() => {
   const map = {
     luxuryGold: {
       eyebrow: 'Premium Polish',
-      title: '高級金橘豪華版',
-      badge: '金橘豪華',
+      title: '典雅金白實體活動版',
+      badge: '金白實體',
       icon: '👑',
-      description: '金色外框、柔亮光影與豪華舞台感，適合通用活動與品牌抽獎。',
-      features: ['金色外框', '柔亮光影', '高級舞台']
+      description: '從第 69601～70000 正確檔案延伸：香檳金外圈、小燈泡與綠白交錯扇形，像實體活動輪盤但更乾淨高級。',
+      features: ['小燈外圈', '綠白扇形', '清楚獎項']
     },
     blackGoldVip: {
-      eyebrow: 'VIP Black Gold',
-      title: '黑金 VIP 典藏版',
-      badge: '黑金 VIP',
+      eyebrow: 'Elegant Green Gold',
+      title: '典雅綠金品牌版',
+      badge: '綠金品牌',
       icon: '💎',
-      description: '深色背景搭配金色輪盤與高對比文字，適合高單價、VIP 或限定活動。',
-      features: ['黑金質感', '高對比', 'VIP 氣氛']
+      description: '深綠搭配香檳金與象牙白，適合品牌活動、會員抽獎與門市現場活動。',
+      features: ['綠金品牌', '香檳外圈', '高級清楚']
     },
     neonPurple: {
-      eyebrow: 'Neon Trend',
-      title: '霓虹紫粉潮流版',
-      badge: '霓虹潮流',
+      eyebrow: 'Event Red Gold',
+      title: '活動紅金舞台版',
+      badge: '紅金舞台',
       icon: '✨',
-      description: '紫粉霓虹光感與年輕化配色，適合社群、直播、潮流促銷活動。',
-      features: ['紫粉霓虹', '潮流光感', '社群感']
+      description: '紅色指針、金色外圈與明亮舞台感，適合現場活動、開幕抽獎與節慶促銷。',
+      features: ['紅金舞台', '固定指針', '活動感']
+    },
+    emeraldGold: {
+      eyebrow: 'Emerald Gold',
+      title: '翡翠金店面精品版',
+      badge: '翡翠金',
+      icon: '💚',
+      description: '深翡翠綠搭配金白外圈，適合會員制、精品店、餐飲品牌與高單價促銷。',
+      features: ['翡翠品牌', '金白外圈', '精品質感']
+    },
+    redGoldStage: {
+      eyebrow: 'Red Gold Stage',
+      title: '紅金舞台活動版',
+      badge: '紅金舞台',
+      icon: '🎪',
+      description: '紅色指針、金色厚外圈與亮燈舞台感，適合開幕、週年慶、門市現場活動與直播抽獎。',
+      features: ['舞台感', '紅金配色', '活動熱鬧']
+    },
+    royalBlueGold: {
+      eyebrow: 'Royal Blue Gold',
+      title: '皇家藍金企業版',
+      badge: '藍金企業',
+      icon: '🏆',
+      description: '藍金配色更沉穩，適合企業活動、品牌發表、展場抽獎。',
+      features: ['藍金高級', '企業感', '展場適合']
+    },
+    carnivalYellowGreen: {
+      eyebrow: 'Carnival',
+      title: '嘉年華黃綠燈泡版',
+      badge: '黃綠燈泡',
+      icon: '🎡',
+      description: '黃金外圈、綠白扇形、紅指針、明亮燈泡，更接近實體活動輪盤。',
+      features: ['黃綠扇形', '燈泡外圈', '實體活動']
     },
     cleanOrange: {
       eyebrow: 'Clean Orange',
@@ -4520,6 +4776,12 @@ const normalizeWheelRemoteSettings = (apiCampaign = {}) => {
   }
 }
 
+const normalizeWheelPrizePercent = (value = 0, fallback = 1) => {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return fallback
+  return Math.max(0, Math.min(100, number))
+}
+
 const normalizeWheelRemotePrizes = (apiCampaign = {}, settings = {}) => {
   const candidates =
     settings.prizes ||
@@ -4545,7 +4807,7 @@ const normalizeWheelRemotePrizes = (apiCampaign = {}, settings = {}) => {
         icon: item.icon || item.emoji || '🎁',
         imageUrl: item.imageUrl || item.image || item.prizeImageUrl || '',
         isEnabled: item.isEnabled !== false && item.enabled !== false,
-        probability: Number(item.probability ?? item.weight ?? item.chance ?? 1),
+        probability: normalizeWheelPrizePercent(item.probability ?? item.weight ?? item.chance ?? 1),
         stock: Number(item.stock ?? item.quantity ?? item.remainStock ?? item.remainingStock ?? 9999),
         type: item.type || item.prizeType || 'win',
         rank: item.rank || (item.type === 'lose' ? 'none' : 'normal'),
@@ -4623,12 +4885,14 @@ const applyWheelVisualPolishMeta = (settings = {}) => {
 
   campaign.visualPolishPresetKey = presetKey
   campaign.visualPolishPresetName = visualPolish?.presetName || ({
-    luxuryGold: '高級金橘豪華版',
-    blackGoldVip: '黑金 VIP 典藏版',
-    neonPurple: '霓虹紫粉潮流版',
-    cleanOrange: '清爽橘白簡潔版'
-  }[presetKey] || '高級金橘豪華版')
-  campaign.visualPolishBatch = visualPolish?.batch || settings?.templateMeta?.cloneBatch || '59601-60000'
+    luxuryGold: '典雅金白實體活動版',
+    emeraldGold: '翡翠金店面精品版',
+    redGoldStage: '紅金舞台活動版',
+    royalBlueGold: '皇家藍金企業版',
+    carnivalYellowGreen: '嘉年華黃綠燈泡版',
+    cleanOrange: '清爽金橘商家版'
+  }[presetKey] || '典雅金白實體活動版')
+  campaign.visualPolishBatch = visualPolish?.batch || settings?.templateMeta?.cloneBatch || '70001-70400'
 }
 
 const applyWheelAdminDraftSettings = (draft = null) => {
@@ -4642,9 +4906,9 @@ const applyWheelAdminDraftSettings = (draft = null) => {
   campaign.mainTitle = draft.headline || draft.mainTitle || campaign.mainTitle
   campaign.heroTagline = draft.subtitle || draft.heroTagline || campaign.heroTagline
   campaign.subTitle = draft.badgeText || campaign.subTitle
-  campaign.logoImageUrl = draft.brandLogoUrl || campaign.logoImageUrl
-  campaign.websiteUrl = draft.brandLinkUrl || campaign.websiteUrl
-  campaign.websiteText = draft.brandLinkText || campaign.websiteText
+  campaign.logoImageUrl = Object.prototype.hasOwnProperty.call(draft, 'brandLogoUrl') ? String(draft.brandLogoUrl || '').trim() : campaign.logoImageUrl
+  campaign.websiteUrl = Object.prototype.hasOwnProperty.call(draft, 'brandLinkUrl') ? String(draft.brandLinkUrl || '').trim() : campaign.websiteUrl
+  campaign.websiteText = Object.prototype.hasOwnProperty.call(draft, 'brandLinkText') ? String(draft.brandLinkText || '').trim() : campaign.websiteText
   campaign.brandTextColor = draft.brandTextColor || campaign.brandTextColor
   campaign.brandLogoSize = Number(draft.brandLogoSize || campaign.brandLogoSize || 56)
   campaign.brandTitleSize = Number(draft.brandTitleSize || campaign.brandTitleSize || 16)
@@ -4684,15 +4948,37 @@ const applyWheelAdminDraftSettings = (draft = null) => {
   if (draft.wheelStyle) {
     campaign.wheelPreviewSize = Number(draft.wheelStyle.wheelSize || campaign.wheelPreviewSize || 335)
     campaign.wheelOuterRingWidth = Number(draft.wheelStyle.outerRingWidth || campaign.wheelOuterRingWidth || 8)
+    campaign.wheelShowRimLights = draft.wheelStyle.showRimLights !== false
+    campaign.wheelRimLightCount = Number(draft.wheelStyle.rimLightCount || campaign.wheelRimLightCount || 30)
+    campaign.wheelRimLightSize = Number(draft.wheelStyle.rimLightSize || campaign.wheelRimLightSize || 9)
+    campaign.wheelDepthLevel = Number(draft.wheelStyle.wheelDepthLevel ?? campaign.wheelDepthLevel ?? 72)
+    campaign.wheelStageGlowLevel = Number(draft.wheelStyle.stageGlowLevel ?? campaign.wheelStageGlowLevel ?? 72)
+    campaign.wheelStageShadowLevel = Number(draft.wheelStyle.stageShadowLevel ?? campaign.wheelStageShadowLevel ?? 70)
+    campaign.wheelStageCornerLevel = Number(draft.wheelStyle.stageCornerLevel ?? campaign.wheelStageCornerLevel ?? 76)
+    campaign.wheelStageInnerLightLevel = Number(draft.wheelStyle.stageInnerLightLevel ?? campaign.wheelStageInnerLightLevel ?? 64)
     campaign.wheelCenterSize = Number(draft.wheelStyle.centerButtonSize || campaign.wheelCenterSize || 92)
+    campaign.wheelCenterText = String(draft.wheelStyle.centerButtonText || campaign.wheelCenterText || 'SPIN').trim() || 'SPIN'
+    campaign.wheelCenterTextSize = Number(draft.wheelStyle.centerButtonTextSize || campaign.wheelCenterTextSize || 18)
+    campaign.wheelCenterTextColor = draft.wheelStyle.centerButtonTextColor || campaign.wheelCenterTextColor || '#ffffff'
+    campaign.wheelCenterBorderColor = draft.wheelStyle.centerButtonBorderColor || campaign.wheelCenterBorderColor || '#fde68a'
     campaign.wheelPointerScale = Math.max(60, Math.min(180, Math.round(Number(draft.wheelStyle.pointerSize || 42) / 42 * 100)))
+    campaign.wheelPointerTopColor = draft.wheelStyle.pointerTopColor || draft.theme?.pointerColor || campaign.wheelPointerTopColor || '#dc2626'
+    campaign.wheelPointerArrowColor = draft.wheelStyle.pointerArrowColor || draft.theme?.pointerColor || campaign.wheelPointerArrowColor || '#b91c1c'
+    campaign.wheelPointerDotColor = draft.wheelStyle.pointerDotColor || campaign.wheelPointerDotColor || '#fde047'
     campaign.wheelPrizeTextSize = Number(draft.wheelStyle.prizeTextSize || campaign.wheelPrizeTextSize || 13)
     campaign.wheelPrizeIconSize = Number(draft.wheelStyle.prizeIconSize || campaign.wheelPrizeIconSize || 38)
     campaign.wheelPrizeLabelRadius = normalizeWheelPrizeLabelRadius(draft.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
     campaign.wheelPrizeLabelOffsetX = Number(draft.wheelStyle.prizeLabelOffsetX ?? campaign.wheelPrizeLabelOffsetX ?? 0)
     campaign.wheelPrizeLabelOffsetY = Number(draft.wheelStyle.prizeLabelOffsetY ?? campaign.wheelPrizeLabelOffsetY ?? 0)
     campaign.wheelPrizeTextBoxWidth = Number(draft.wheelStyle.prizeTextBoxWidth || campaign.wheelPrizeTextBoxWidth || 82)
+    campaign.wheelPrizeTextColor = draft.wheelStyle.prizeTextColor || campaign.wheelPrizeTextColor || '#ffffff'
+    campaign.wheelPrizeTextStrokeColor = draft.wheelStyle.prizeTextStrokeColor || campaign.wheelPrizeTextStrokeColor || '#1f2937'
+    campaign.wheelPrizeBadgeBgOpacity = Number(draft.wheelStyle.prizeBadgeBgOpacity ?? campaign.wheelPrizeBadgeBgOpacity ?? 16)
+    campaign.wheelSliceGlossLevel = Number(draft.wheelStyle.sliceGlossLevel ?? campaign.wheelSliceGlossLevel ?? 48)
     campaign.wheelPointerHitCorrection = Number(draft.wheelStyle.pointerHitCorrection ?? campaign.wheelPointerHitCorrection ?? 0)
+    campaign.wheelPointerOffsetY = Number(draft.wheelStyle.pointerOffsetY ?? campaign.wheelPointerOffsetY ?? -10)
+    campaign.wheelPointerGlossLevel = Number(draft.wheelStyle.pointerGlossLevel ?? campaign.wheelPointerGlossLevel ?? 72)
+    campaign.wheelPointerShadowLevel = Number(draft.wheelStyle.pointerShadowLevel ?? campaign.wheelPointerShadowLevel ?? 68)
     campaign.wheelShowPrizeIcon = draft.wheelStyle.showPrizeIcon !== false
     campaign.wheelShowPrizeName = draft.wheelStyle.showPrizeName !== false
     campaign.wheelShowSliceBorder = draft.wheelStyle.showSliceBorder !== false
@@ -4724,7 +5010,7 @@ const applyWheelAdminDraftSettings = (draft = null) => {
       imageUrl: item.imageUrl || '',
       linkUrl: item.linkUrl || '',
       isEnabled: item.isEnabled !== false,
-      probability: Number(item.weight ?? item.probability ?? 1),
+      probability: normalizeWheelPrizePercent(item.weight ?? item.probability ?? 1),
       stock: Number(item.stock ?? 9999),
       type: item.type || (String(item.name || '').includes('未中') ? 'lose' : 'win'),
       rank: item.rank || (String(item.name || '').includes('未中') ? 'none' : 'normal')
@@ -4750,9 +5036,9 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
   campaign.heroTagline = settings.heroTagline || settings.brandSubtitle || campaign.heroTagline
   campaign.noticeText = settings.noticeText || apiCampaign.description || campaign.noticeText
   campaign.logoText = settings.logoText || settings.logo || campaign.logoText
-  campaign.logoImageUrl = settings.brandLogoUrl || settings.logoImageUrl || campaign.logoImageUrl
-  campaign.bannerImageUrl = settings.bannerImageUrl || campaign.bannerImageUrl
-  campaign.websiteUrl = settings.brandLinkUrl || settings.websiteUrl || settings.officialLinkUrl || campaign.websiteUrl
+  campaign.logoImageUrl = Object.prototype.hasOwnProperty.call(settings, 'brandLogoUrl') ? String(settings.brandLogoUrl || '').trim() : (settings.logoImageUrl || campaign.logoImageUrl)
+  campaign.bannerImageUrl = Object.prototype.hasOwnProperty.call(settings, 'bannerImageUrl') ? String(settings.bannerImageUrl || '').trim() : campaign.bannerImageUrl
+  campaign.websiteUrl = Object.prototype.hasOwnProperty.call(settings, 'brandLinkUrl') ? String(settings.brandLinkUrl || '').trim() : (settings.websiteUrl || settings.officialLinkUrl || campaign.websiteUrl)
   campaign.websiteText = settings.brandLinkText || settings.websiteText || settings.officialLinkLabel || campaign.websiteText
   campaign.websiteButtonBgColor = settings.brandButtonBgColor || settings.websiteButtonBgColor || campaign.websiteButtonBgColor
   campaign.websiteButtonTextColor = settings.brandButtonTextColor || settings.websiteButtonTextColor || campaign.websiteButtonTextColor
@@ -4799,15 +5085,37 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
   if (settings.wheelStyle) {
     campaign.wheelPreviewSize = Number(settings.wheelStyle.wheelSize || campaign.wheelPreviewSize || 335)
     campaign.wheelOuterRingWidth = Number(settings.wheelStyle.outerRingWidth || campaign.wheelOuterRingWidth || 8)
+    campaign.wheelShowRimLights = settings.wheelStyle.showRimLights !== false
+    campaign.wheelRimLightCount = Number(settings.wheelStyle.rimLightCount || campaign.wheelRimLightCount || 30)
+    campaign.wheelRimLightSize = Number(settings.wheelStyle.rimLightSize || campaign.wheelRimLightSize || 9)
+    campaign.wheelDepthLevel = Number(settings.wheelStyle.wheelDepthLevel ?? campaign.wheelDepthLevel ?? 72)
+    campaign.wheelStageGlowLevel = Number(settings.wheelStyle.stageGlowLevel ?? campaign.wheelStageGlowLevel ?? 72)
+    campaign.wheelStageShadowLevel = Number(settings.wheelStyle.stageShadowLevel ?? campaign.wheelStageShadowLevel ?? 70)
+    campaign.wheelStageCornerLevel = Number(settings.wheelStyle.stageCornerLevel ?? campaign.wheelStageCornerLevel ?? 76)
+    campaign.wheelStageInnerLightLevel = Number(settings.wheelStyle.stageInnerLightLevel ?? campaign.wheelStageInnerLightLevel ?? 64)
     campaign.wheelCenterSize = Number(settings.wheelStyle.centerButtonSize || campaign.wheelCenterSize || 92)
+    campaign.wheelCenterText = String(settings.wheelStyle.centerButtonText || campaign.wheelCenterText || 'SPIN').trim() || 'SPIN'
+    campaign.wheelCenterTextSize = Number(settings.wheelStyle.centerButtonTextSize || campaign.wheelCenterTextSize || 18)
+    campaign.wheelCenterTextColor = settings.wheelStyle.centerButtonTextColor || campaign.wheelCenterTextColor || '#ffffff'
+    campaign.wheelCenterBorderColor = settings.wheelStyle.centerButtonBorderColor || campaign.wheelCenterBorderColor || '#fde68a'
     campaign.wheelPointerScale = Math.max(60, Math.min(180, Math.round(Number(settings.wheelStyle.pointerSize || 42) / 42 * 100)))
+    campaign.wheelPointerTopColor = settings.wheelStyle.pointerTopColor || settings.theme?.pointerColor || campaign.wheelPointerTopColor || '#dc2626'
+    campaign.wheelPointerArrowColor = settings.wheelStyle.pointerArrowColor || settings.theme?.pointerColor || campaign.wheelPointerArrowColor || '#b91c1c'
+    campaign.wheelPointerDotColor = settings.wheelStyle.pointerDotColor || campaign.wheelPointerDotColor || '#fde047'
     campaign.wheelPrizeTextSize = Number(settings.wheelStyle.prizeTextSize || campaign.wheelPrizeTextSize || 13)
     campaign.wheelPrizeIconSize = Number(settings.wheelStyle.prizeIconSize || campaign.wheelPrizeIconSize || 38)
     campaign.wheelPrizeLabelRadius = normalizeWheelPrizeLabelRadius(settings.wheelStyle.prizeLabelRadius || campaign.wheelPrizeLabelRadius || 92)
     campaign.wheelPrizeLabelOffsetX = Number(settings.wheelStyle.prizeLabelOffsetX ?? campaign.wheelPrizeLabelOffsetX ?? 0)
     campaign.wheelPrizeLabelOffsetY = Number(settings.wheelStyle.prizeLabelOffsetY ?? campaign.wheelPrizeLabelOffsetY ?? 0)
     campaign.wheelPrizeTextBoxWidth = Number(settings.wheelStyle.prizeTextBoxWidth || campaign.wheelPrizeTextBoxWidth || 82)
+    campaign.wheelPrizeTextColor = settings.wheelStyle.prizeTextColor || campaign.wheelPrizeTextColor || '#ffffff'
+    campaign.wheelPrizeTextStrokeColor = settings.wheelStyle.prizeTextStrokeColor || campaign.wheelPrizeTextStrokeColor || '#1f2937'
+    campaign.wheelPrizeBadgeBgOpacity = Number(settings.wheelStyle.prizeBadgeBgOpacity ?? campaign.wheelPrizeBadgeBgOpacity ?? 16)
+    campaign.wheelSliceGlossLevel = Number(settings.wheelStyle.sliceGlossLevel ?? campaign.wheelSliceGlossLevel ?? 48)
     campaign.wheelPointerHitCorrection = Number(settings.wheelStyle.pointerHitCorrection ?? campaign.wheelPointerHitCorrection ?? 0)
+    campaign.wheelPointerOffsetY = Number(settings.wheelStyle.pointerOffsetY ?? campaign.wheelPointerOffsetY ?? -10)
+    campaign.wheelPointerGlossLevel = Number(settings.wheelStyle.pointerGlossLevel ?? campaign.wheelPointerGlossLevel ?? 72)
+    campaign.wheelPointerShadowLevel = Number(settings.wheelStyle.pointerShadowLevel ?? campaign.wheelPointerShadowLevel ?? 68)
     campaign.wheelShowPrizeIcon = settings.wheelStyle.showPrizeIcon !== false
     campaign.wheelShowPrizeName = settings.wheelStyle.showPrizeName !== false
     campaign.wheelShowSliceBorder = settings.wheelStyle.showSliceBorder !== false
@@ -7010,6 +7318,44 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 </span>
               </label>
 
+              <div class="grid gap-3 sm:grid-cols-3">
+                <label class="grid gap-1 rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-700 shadow-sm">
+                  指針上下位置 -36～24
+                  <input
+                    v-model.number="campaign.wheelPointerOffsetY"
+                    type="range"
+                    min="-36"
+                    max="24"
+                    class="accent-slate-700"
+                  />
+                  <span class="text-xs text-slate-500">目前：{{ normalizedWheelPointerOffsetY }}px</span>
+                </label>
+
+                <label class="grid gap-1 rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-700 shadow-sm">
+                  指針高光質感 0～100
+                  <input
+                    v-model.number="campaign.wheelPointerGlossLevel"
+                    type="range"
+                    min="0"
+                    max="100"
+                    class="accent-slate-700"
+                  />
+                  <span class="text-xs text-slate-500">目前：{{ normalizedWheelPointerGlossLevel }}%</span>
+                </label>
+
+                <label class="grid gap-1 rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-700 shadow-sm">
+                  指針陰影厚度 0～100
+                  <input
+                    v-model.number="campaign.wheelPointerShadowLevel"
+                    type="range"
+                    min="0"
+                    max="100"
+                    class="accent-slate-700"
+                  />
+                  <span class="text-xs text-slate-500">目前：{{ normalizedWheelPointerShadowLevel }}%</span>
+                </label>
+              </div>
+
               <div class="grid gap-3 sm:grid-cols-2">
                 <label class="flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-xs font-black text-slate-700 shadow-sm">
                   <input
@@ -8923,13 +9269,6 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                       />
                     </div>
 
-                    <div
-                      v-else
-                      class="premium-vip-logo-frame flex shrink-0 items-center justify-center rounded-2xl border-[4px] border-yellow-100 bg-gradient-to-br from-yellow-200 via-amber-400 to-orange-600 text-3xl font-black text-white shadow-2xl" :style="{ width: `${campaign.brandLogoSize || 56}px`, height: `${campaign.brandLogoSize || 56}px` }"
-                    >
-                      {{ campaign.logoText }}
-                    </div>
-
                     <div class="min-w-0 text-left">
                       <p class="inline-flex rounded-full border border-yellow-100/40 bg-black/20 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-yellow-100 shadow-inner">
                         VIP Lucky Club
@@ -9102,6 +9441,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
               <section
                 class="premium-wheel-stage premium-vip-wheel-stage premium-original-wheel-polish relative mx-auto mt-6 w-full max-w-[356px] rounded-[38px] border border-yellow-100/70 bg-gradient-to-br from-yellow-50 via-orange-50 to-orange-200 p-3 shadow-[0_30px_70px_rgba(78,29,4,.48)] sm:max-w-[430px] sm:p-4 lg:max-w-[500px] lg:p-5"
                 :class="[wheelPolishPresetClass, isSpinning ? 'premium-wheel-active' : '']"
+                :style="wheelStageFrameStyle"
               >
                 <div
                   class="premium-wheel-pointer absolute left-1/2 top-[-10px] z-30"
@@ -9117,7 +9457,19 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                   <div class="premium-wheel-pointer-dot absolute left-1/2 top-3 h-3 w-3 -translate-x-1/2 rounded-full shadow-inner"></div>
                 </div>
 
-                <div class="premium-wheel-shell relative mx-auto aspect-square w-full rounded-full p-1 sm:p-2 lg:p-3" :style="{ maxWidth: `${campaign.wheelPreviewSize || 335}px` }">
+                <div class="premium-wheel-shell relative mx-auto aspect-square w-full rounded-full p-1 sm:p-2 lg:p-3" :style="[{ maxWidth: `${campaign.wheelPreviewSize || 335}px` }, wheelShellStyle]">
+                  <div
+                    v-if="campaign.wheelShowRimLights !== false"
+                    class="premium-wheel-rim-lights pointer-events-none absolute inset-0 z-[18] rounded-full"
+                  >
+                    <span
+                      v-for="bulb in wheelRimLightBulbs"
+                      :key="bulb.id"
+                      class="premium-wheel-rim-light absolute rounded-full"
+                      :style="bulb.style"
+                    ></span>
+                  </div>
+
                   <div class="premium-wheel-svg-wrap relative h-full w-full rounded-full" :style="{ borderWidth: `${campaign.wheelOuterRingWidth || 8}px` }">
                     <svg
                       class="premium-wheel-svg h-full w-full transition-transform duration-[3600ms] ease-out"
@@ -9125,18 +9477,18 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                       :style="wheelStyle"
                     >
                       <defs>
-                        <radialGradient id="wheelGoldGradient" cx="32%" cy="24%" r="78%">
-                          <stop offset="0%" stop-color="#fff7c2" />
-                          <stop offset="42%" stop-color="#facc15" />
-                          <stop offset="72%" stop-color="#fb923c" />
-                          <stop offset="100%" stop-color="#c2410c" />
+                        <radialGradient id="wheelGoldGradient" cx="30%" cy="22%" r="82%">
+                          <stop offset="0%" stop-color="#ffffff" />
+                          <stop offset="35%" stop-color="#fff7d6" />
+                          <stop offset="70%" stop-color="#f6c453" />
+                          <stop offset="100%" stop-color="#b45309" />
                         </radialGradient>
 
-                        <radialGradient id="wheelRoseGradient" cx="30%" cy="24%" r="80%">
-                          <stop offset="0%" stop-color="#ffe4e6" />
-                          <stop offset="38%" stop-color="#fb7185" />
-                          <stop offset="74%" stop-color="#ef4444" />
-                          <stop offset="100%" stop-color="#991b1b" />
+                        <radialGradient id="wheelRoseGradient" cx="30%" cy="22%" r="82%">
+                          <stop offset="0%" stop-color="#ecfdf5" />
+                          <stop offset="36%" stop-color="#86efac" />
+                          <stop offset="72%" stop-color="#22c55e" />
+                          <stop offset="100%" stop-color="#14532d" />
                         </radialGradient>
 
                         <filter id="wheelInnerShadow" x="-20%" y="-20%" width="140%" height="140%">
@@ -9200,7 +9552,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                             <div
                               v-if="campaign.wheelShowPrizeName !== false"
                               class="premium-wheel-prize-name"
-                              :style="{ fontSize: `${getWheelSvgLabelBox(index).textSize}px`, maxWidth: `${getWheelSvgLabelBox(index).textWidth}px` }"
+                              :style="getWheelPrizeNameStyle(index)"
                             >
                               {{ getWheelPrizeLabelText(prize) }}
                             </div>
@@ -10966,10 +11318,23 @@ aside {
   line-height: 0.98;
 }
 
+
+/* 第 70801～71200 批：扇面光澤與獎項文字清晰度。 */
+.premium-wheel-shine,
+.premium-original-wheel-polish .premium-wheel-shine {
+  opacity: calc(0.18 + (var(--premium-wheel-slice-gloss, 0.48) * 0.82)) !important;
+}
+
+.premium-wheel-prize-name {
+  -webkit-text-stroke: 0.35px rgba(255, 255, 255, 0.18);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
 .premium-wheel-pointer {
   --wheel-pointer-scale: 1;
-  --wheel-pointer-top-color: #334155;
-  --wheel-pointer-arrow-color: #020617;
+  --wheel-pointer-top-color: #dc2626;
+  --wheel-pointer-arrow-color: #b91c1c;
   --wheel-pointer-dot-color: #fde047;
   transform: translateX(-50%) scale(var(--wheel-pointer-scale));
   transform-origin: 50% 18px;
@@ -10977,8 +11342,8 @@ aside {
 
 .premium-wheel-pointer-preview {
   --wheel-pointer-scale: 1;
-  --wheel-pointer-top-color: #334155;
-  --wheel-pointer-arrow-color: #020617;
+  --wheel-pointer-top-color: #dc2626;
+  --wheel-pointer-arrow-color: #b91c1c;
   --wheel-pointer-dot-color: #fde047;
   transform: scale(var(--wheel-pointer-scale));
   transform-origin: 50% 18px;
@@ -11947,6 +12312,100 @@ aside {
     0 0 0 7px rgba(255, 237, 213, 0.3);
 }
 
+
+.premium-wheel-polish-preset-emerald-gold {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(236, 253, 245, 0.88), transparent 32%),
+    radial-gradient(circle at 18% 18%, rgba(254, 243, 199, 0.5), transparent 25%),
+    linear-gradient(155deg, #ecfdf5 0%, #34d399 43%, #065f46 100%) !important;
+}
+
+.premium-wheel-polish-preset-emerald-gold .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 34% 20%, rgba(255, 255, 255, 0.96), transparent 18%),
+    conic-gradient(from -18deg, #fef3c7 0deg, #047857 54deg, #ecfdf5 112deg, #065f46 168deg, #fde68a 224deg, #10b981 292deg, #fef3c7 360deg) !important;
+}
+
+.premium-wheel-polish-preset-emerald-gold .premium-wheel-center-refined {
+  --premium-wheel-center-bg: linear-gradient(180deg, #047857 0%, #065f46 56%, #022c22 100%);
+  color: #fef3c7 !important;
+  border-color: rgba(253, 230, 138, 0.7) !important;
+  box-shadow: inset 0 8px 16px rgba(255,255,255,.18), inset 0 -16px 26px rgba(2,44,34,.45), 0 16px 30px rgba(6,95,70,.32), 0 0 0 7px rgba(253,230,138,.22);
+}
+
+.premium-wheel-polish-preset-red-gold-stage {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,.82), transparent 30%),
+    radial-gradient(circle at 85% 14%, rgba(250,204,21,.28), transparent 26%),
+    linear-gradient(155deg, #fff1f2 0%, #fb7185 42%, #991b1b 100%) !important;
+}
+
+.premium-wheel-polish-preset-red-gold-stage .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 34% 20%, rgba(255,255,255,.95), transparent 18%),
+    conic-gradient(from -18deg, #fef3c7 0deg, #dc2626 55deg, #fff7ed 114deg, #991b1b 170deg, #fde68a 228deg, #b91c1c 296deg, #fef3c7 360deg) !important;
+}
+
+.premium-wheel-polish-preset-red-gold-stage .premium-wheel-center-refined {
+  --premium-wheel-center-bg: linear-gradient(180deg, #b91c1c 0%, #7f1d1d 58%, #450a0a 100%);
+  border-color: rgba(253,230,138,.64) !important;
+  box-shadow: inset 0 8px 16px rgba(255,255,255,.18), inset 0 -16px 26px rgba(69,10,10,.46), 0 16px 30px rgba(153,27,27,.32), 0 0 0 7px rgba(253,230,138,.22);
+}
+
+.premium-wheel-polish-preset-royal-blue-gold {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(239,246,255,.92), transparent 32%),
+    radial-gradient(circle at 85% 16%, rgba(250,204,21,.28), transparent 26%),
+    linear-gradient(155deg, #eff6ff 0%, #60a5fa 43%, #1d4ed8 100%) !important;
+}
+
+.premium-wheel-polish-preset-royal-blue-gold .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 34% 20%, rgba(255,255,255,.96), transparent 18%),
+    conic-gradient(from -18deg, #eff6ff 0deg, #1d4ed8 54deg, #fef3c7 112deg, #1e3a8a 170deg, #dbeafe 228deg, #2563eb 296deg, #eff6ff 360deg) !important;
+}
+
+.premium-wheel-polish-preset-royal-blue-gold .premium-wheel-center-refined {
+  --premium-wheel-center-bg: linear-gradient(180deg, #2563eb 0%, #1e3a8a 58%, #172554 100%);
+  border-color: rgba(254,243,199,.72) !important;
+  box-shadow: inset 0 8px 16px rgba(255,255,255,.18), inset 0 -16px 26px rgba(23,37,84,.46), 0 16px 30px rgba(30,64,175,.3), 0 0 0 7px rgba(254,243,199,.2);
+}
+
+.premium-wheel-polish-preset-carnival-yellow-green {
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255,255,255,.9), transparent 32%),
+    radial-gradient(circle at 18% 20%, rgba(254,240,138,.56), transparent 25%),
+    linear-gradient(155deg, #fefce8 0%, #facc15 44%, #ca8a04 100%) !important;
+}
+
+.premium-wheel-polish-preset-carnival-yellow-green .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 34% 20%, rgba(255,255,255,.96), transparent 18%),
+    conic-gradient(from -18deg, #fef08a 0deg, #16a34a 54deg, #ffffff 112deg, #15803d 170deg, #facc15 228deg, #22c55e 296deg, #fef08a 360deg) !important;
+}
+
+.premium-wheel-polish-preset-carnival-yellow-green .premium-wheel-center-refined {
+  --premium-wheel-center-bg: linear-gradient(180deg, #166534 0%, #14532d 58%, #052e16 100%);
+  border-color: rgba(254,240,138,.72) !important;
+  box-shadow: inset 0 8px 16px rgba(255,255,255,.18), inset 0 -16px 26px rgba(5,46,22,.46), 0 16px 30px rgba(133,77,14,.28), 0 0 0 7px rgba(254,240,138,.24);
+}
+
+.premium-wheel-polish-preset-emerald-gold .premium-wheel-start-button-refined,
+.premium-wheel-polish-preset-carnival-yellow-green .premium-wheel-start-button-refined {
+  background: linear-gradient(180deg, rgba(255,255,255,.22), transparent 42%), linear-gradient(90deg, #22c55e 0%, #16a34a 52%, #15803d 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.46), inset 0 -9px 16px rgba(5,46,22,.28), 0 16px 30px rgba(21,128,61,.28);
+}
+
+.premium-wheel-polish-preset-red-gold-stage .premium-wheel-start-button-refined {
+  background: linear-gradient(180deg, rgba(255,255,255,.22), transparent 42%), linear-gradient(90deg, #f97316 0%, #dc2626 52%, #991b1b 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.46), inset 0 -9px 16px rgba(69,10,10,.28), 0 16px 30px rgba(153,27,27,.28);
+}
+
+.premium-wheel-polish-preset-royal-blue-gold .premium-wheel-start-button-refined {
+  background: linear-gradient(180deg, rgba(255,255,255,.22), transparent 42%), linear-gradient(90deg, #60a5fa 0%, #2563eb 52%, #1e3a8a 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.46), inset 0 -9px 16px rgba(23,37,84,.28), 0 16px 30px rgba(30,64,175,.28);
+}
+
 .premium-wheel-polish-preset-black-gold-vip .premium-wheel-start-button-refined {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 42%),
@@ -12016,72 +12475,498 @@ aside {
   stroke: transparent !important;
 }
 
+
+
+/* 第 68801～69200 批：輪盤高級實體活動視覺升級版
+   方向：乾淨、簡單、實體活動輪盤感；香檳金外圈、小燈泡、綠白交錯扇形、紅色固定指針。
+   本批只改玩家視覺 CSS / SVG 呈現，不改 router / DB / draw-core。 */
+.premium-original-wheel-polish {
+  overflow: visible;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.96), rgba(255, 248, 231, 0.9) 30%, rgba(245, 158, 11, 0.34) 72%, rgba(146, 64, 14, 0.22) 100%);
+  border-color: rgba(254, 243, 199, 0.96);
+  box-shadow:
+    0 34px 72px rgba(120, 53, 15, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -18px 34px rgba(146, 64, 14, 0.12);
+}
+
+.premium-original-wheel-polish::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+}
+
+.premium-wheel-shell {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(255, 253, 235, 0.94) 0 48%, transparent 49%),
+    conic-gradient(from -90deg,
+      #fff7c2 0deg 10deg,
+      #d97706 10deg 20deg,
+      #fef3c7 20deg 30deg,
+      #f59e0b 30deg 40deg,
+      #fff7c2 40deg 50deg,
+      #d97706 50deg 60deg,
+      #fef3c7 60deg 70deg,
+      #f59e0b 70deg 80deg,
+      #fff7c2 80deg 90deg,
+      #d97706 90deg 100deg,
+      #fef3c7 100deg 110deg,
+      #f59e0b 110deg 120deg,
+      #fff7c2 120deg 130deg,
+      #d97706 130deg 140deg,
+      #fef3c7 140deg 150deg,
+      #f59e0b 150deg 160deg,
+      #fff7c2 160deg 170deg,
+      #d97706 170deg 180deg,
+      #fef3c7 180deg 190deg,
+      #f59e0b 190deg 200deg,
+      #fff7c2 200deg 210deg,
+      #d97706 210deg 220deg,
+      #fef3c7 220deg 230deg,
+      #f59e0b 230deg 240deg,
+      #fff7c2 240deg 250deg,
+      #d97706 250deg 260deg,
+      #fef3c7 260deg 270deg,
+      #f59e0b 270deg 280deg,
+      #fff7c2 280deg 290deg,
+      #d97706 290deg 300deg,
+      #fef3c7 300deg 310deg,
+      #f59e0b 310deg 320deg,
+      #fff7c2 320deg 330deg,
+      #d97706 330deg 340deg,
+      #fef3c7 340deg 350deg,
+      #f59e0b 350deg 360deg);
+  box-shadow:
+    0 22px 46px rgba(120, 53, 15, 0.42),
+    inset 0 8px 14px rgba(255, 255, 255, 0.74),
+    inset 0 -16px 26px rgba(146, 64, 14, 0.26);
+}
+
+.premium-wheel-svg-wrap {
+  border-style: solid;
+  border-color: #f6c453;
+  background:
+    radial-gradient(circle at 32% 22%, rgba(255, 255, 255, 0.92), transparent 22%),
+    linear-gradient(145deg, #fff7c2, #f6c453 42%, #b45309 100%);
+  box-shadow:
+    inset 0 0 0 4px rgba(255, 255, 255, 0.58),
+    inset 0 -12px 20px rgba(120, 53, 15, 0.24),
+    0 14px 26px rgba(120, 53, 15, 0.32);
+}
+
+.premium-wheel-svg-wrap::before {
+  content: "";
+  position: absolute;
+  inset: -11px;
+  z-index: 0;
+  border-radius: 999px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle, #ffffff 0 28%, #fff7c2 30% 48%, rgba(245, 158, 11, 0.25) 51% 58%, transparent 61%) 50% 0 / 22px 22px repeat;
+  filter: drop-shadow(0 0 7px rgba(254, 243, 199, 0.9));
+  opacity: 0.98;
+}
+
+.premium-wheel-svg {
+  position: relative;
+  z-index: 2;
+  border-radius: 999px;
+  filter: drop-shadow(0 12px 18px rgba(67, 20, 7, 0.22));
+}
+
+.premium-wheel-svg-slice {
+  stroke: rgba(255, 255, 255, 0.92);
+  stroke-width: 2.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.premium-wheel-shine {
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.62), transparent 18%),
+    linear-gradient(120deg, transparent 10%, rgba(255, 255, 255, 0.24) 32%, transparent 48%),
+    radial-gradient(circle at 50% 50%, transparent 56%, rgba(120, 53, 15, 0.16) 100%);
+  mix-blend-mode: screen;
+}
+
+.premium-wheel-prize-media {
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.98), rgba(254, 243, 199, 0.92) 62%, rgba(245, 158, 11, 0.76));
+  border: 1px solid rgba(255, 255, 255, 0.84);
+  box-shadow:
+    inset 0 2px 5px rgba(255, 255, 255, 0.72),
+    0 6px 12px rgba(20, 83, 45, 0.24);
+}
+
+.premium-wheel-prize-name {
+  color: #ffffff;
+  text-shadow:
+    0 2px 4px rgba(20, 83, 45, 0.86),
+    0 0 8px rgba(255, 255, 255, 0.36);
+  letter-spacing: 0.01em;
+}
+
+.premium-wheel-center-refined {
+  background:
+    radial-gradient(circle at 32% 24%, rgba(255, 255, 255, 0.36), transparent 30%),
+    linear-gradient(145deg, #166534 0%, #14532d 52%, #052e16 100%) !important;
+  color: #fff7c2 !important;
+  border-color: #f6c453 !important;
+  box-shadow:
+    inset 0 6px 10px rgba(255, 255, 255, 0.18),
+    inset 0 -8px 16px rgba(0, 0, 0, 0.28),
+    0 12px 22px rgba(20, 83, 45, 0.38),
+    0 0 0 5px rgba(254, 243, 199, 0.54);
+  text-shadow: 0 2px 5px rgba(0, 0, 0, 0.36);
+}
+
+.premium-wheel-pointer-head {
+  background:
+    radial-gradient(circle at 42% 18%, rgba(255, 255, 255, 0.5), transparent 28%),
+    linear-gradient(145deg, #ef4444 0%, #dc2626 46%, #7f1d1d 100%) !important;
+}
+
+.premium-wheel-pointer-arrow {
+  border-top-color: #dc2626 !important;
+}
+
+.premium-wheel-pointer-dot {
+  background: #fff7c2 !important;
+}
+
+.premium-wheel-start-button-refined {
+  background:
+    linear-gradient(135deg, #f59e0b 0%, #d97706 42%, #92400e 100%);
+  box-shadow:
+    0 16px 28px rgba(146, 64, 14, 0.34),
+    inset 0 2px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -8px 14px rgba(120, 53, 15, 0.24);
+}
+
+.premium-wheel-active .premium-wheel-svg-wrap::before {
+  animation: premium-wheel-luxury-bulbs 0.68s linear infinite;
+}
+
+@keyframes premium-wheel-luxury-bulbs {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(10deg); }
+}
+
+
+
+/* 第 69601～70000 批：中心按鈕文字色 / 外框色修正
+   前一批高級輪盤 preset CSS 使用 !important 固定色，會蓋掉後台 color picker。
+   這裡改用 inline CSS variables，讓後台「中心文字顏色」「中心外框顏色」立即反映到右側預覽與玩家頁。 */
+.premium-original-wheel-polish .premium-wheel-center-refined,
+.premium-wheel-stage .premium-wheel-center-refined,
+.premium-vip-wheel-stage .premium-wheel-center-refined {
+  color: var(--premium-wheel-center-text, #ffffff) !important;
+  border-color: var(--premium-wheel-center-border, #fde68a) !important;
+}
+
+.premium-original-wheel-polish .premium-wheel-center-refined span,
+.premium-wheel-stage .premium-wheel-center-refined span,
+.premium-vip-wheel-stage .premium-wheel-center-refined span {
+  color: var(--premium-wheel-center-text, #ffffff) !important;
+}
+
+.premium-original-wheel-polish .premium-wheel-center-refined::after,
+.premium-wheel-stage .premium-wheel-center-refined::after,
+.premium-vip-wheel-stage .premium-wheel-center-refined::after {
+  border-color: var(--premium-wheel-center-border, #fde68a) !important;
+  opacity: 0.72;
+}
+
+
+
+/* 第 70401～70800 批：實體輪盤外圈燈泡與厚外框立體感 */
+.premium-original-wheel-polish .premium-wheel-shell {
+  background:
+    radial-gradient(circle at 32% 18%, rgba(255,255,255,.92), transparent 17%),
+    radial-gradient(circle at 50% 50%, rgba(255,255,255,.22), transparent 52%),
+    conic-gradient(from -18deg, rgba(255,255,255,.92), var(--premium-wheel-rim-color, #f6c453), rgba(146,64,14,.92), var(--premium-wheel-rim-color, #f6c453), rgba(255,255,255,.86));
+  padding: max(.25rem, calc(var(--premium-wheel-ring-width, 18px) * .28));
+}
+
+.premium-original-wheel-polish .premium-wheel-shell::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--premium-wheel-ring-width, 18px) * .24);
+  z-index: 1;
+  border-radius: inherit;
+  border: 1px solid rgba(255,255,255,.5);
+  box-shadow:
+    inset 0 0 0 calc(var(--premium-wheel-ring-width, 18px) * .18) rgba(255,255,255,.12),
+    inset 0 calc(var(--premium-wheel-depth, .72) * 12px) calc(var(--premium-wheel-depth, .72) * 20px) rgba(255,255,255,.2),
+    inset 0 calc(var(--premium-wheel-depth, .72) * -18px) calc(var(--premium-wheel-depth, .72) * 28px) rgba(67,20,7,.28);
+  pointer-events: none;
+}
+
+.premium-wheel-rim-light {
+  width: var(--premium-wheel-rim-light-size, 9px);
+  height: var(--premium-wheel-rim-light-size, 9px);
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle at 34% 28%, #fff 0%, #fef9c3 24%, #facc15 58%, #ea580c 100%);
+  box-shadow:
+    0 0 calc(var(--premium-wheel-rim-light-size, 9px) * 1.25) rgba(250,204,21,.9),
+    0 0 calc(var(--premium-wheel-rim-light-size, 9px) * 2.15) rgba(249,115,22,.38),
+    inset 0 -1px 2px rgba(120,53,15,.35);
+  animation: premium-wheel-rim-light-chase 1.18s linear infinite;
+}
+
+.premium-wheel-active .premium-wheel-rim-light {
+  animation-duration: .62s;
+}
+
+@keyframes premium-wheel-rim-light-chase {
+  0%, 100% {
+    opacity: .58;
+    filter: brightness(.9);
+    scale: .88;
+  }
+
+  45% {
+    opacity: 1;
+    filter: brightness(1.45);
+    scale: 1.18;
+  }
+}
+
+.premium-original-wheel-polish .premium-wheel-svg-wrap {
+  position: relative;
+  z-index: 2;
+  border-color: rgba(255,255,255,.95) !important;
+}
+
+
+/* 第 71201～71600 批：輪盤厚度立體感強化
+   之前 wheelDepthLevel 只改陰影，差異不夠明顯；這裡改成同時影響：
+   1. 外圈厚底側邊 2. 內盤浮起高度 3. 底部壓影 4. 下緣暗部厚度。 */
+.premium-original-wheel-polish .premium-wheel-shell {
+  isolation: isolate;
+  overflow: visible;
+  transition: transform .22s ease, box-shadow .22s ease, padding .22s ease, filter .22s ease;
+  padding: max(.28rem, calc(var(--premium-wheel-ring-width, 18px) * (0.22 + var(--premium-wheel-depth, .72) * .22))) !important;
+  filter:
+    drop-shadow(0 calc(8px + var(--premium-wheel-depth, .72) * 18px) calc(12px + var(--premium-wheel-depth, .72) * 34px) rgba(67, 20, 7, var(--premium-wheel-depth-base-opacity, .52)));
+}
+
+.premium-original-wheel-polish .premium-wheel-shell::before {
+  content: '';
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 50%;
+  bottom: calc(var(--premium-wheel-depth-px, 30px) * -0.72);
+  z-index: 0;
+  border-radius: 0 0 999px 999px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--premium-wheel-rim-color, #f6c453) 80%, white) 0%,
+      color-mix(in srgb, var(--premium-wheel-rim-color, #f6c453) 72%, #78350f) 42%,
+      rgba(67, 20, 7, .82) 100%);
+  opacity: calc(.18 + var(--premium-wheel-depth, .72) * .82);
+  box-shadow:
+    inset 0 10px 18px rgba(255, 255, 255, .28),
+    inset 0 -22px 28px rgba(67, 20, 7, .52),
+    0 calc(var(--premium-wheel-depth-px, 30px) * .46) var(--premium-wheel-depth-base-blur, 44px) rgba(67, 20, 7, var(--premium-wheel-depth-base-opacity, .52));
+  pointer-events: none;
+  transform: translateY(calc(var(--premium-wheel-depth-px, 30px) * .38));
+}
+
+.premium-original-wheel-polish .premium-wheel-shell::after {
+  content: '';
+  position: absolute;
+  inset: calc(var(--premium-wheel-ring-width, 18px) * .20);
+  z-index: 1;
+  border-radius: inherit;
+  border: 1px solid rgba(255,255,255,.56);
+  background:
+    radial-gradient(circle at 34% 18%, rgba(255,255,255,.48), transparent 18%),
+    linear-gradient(180deg, rgba(255,255,255,.16), transparent 38%, rgba(67,20,7, calc(var(--premium-wheel-depth, .72) * .18)) 100%);
+  box-shadow:
+    inset 0 calc(var(--premium-wheel-depth, .72) * 18px) calc(var(--premium-wheel-depth, .72) * 26px) rgba(255,255,255,.28),
+    inset 0 calc(var(--premium-wheel-depth, .72) * -30px) calc(var(--premium-wheel-depth, .72) * 42px) rgba(67,20,7,var(--premium-wheel-depth-inner-opacity, .48));
+  pointer-events: none;
+}
+
+.premium-original-wheel-polish .premium-wheel-rim-lights {
+  z-index: 22;
+  transform: translateY(calc(var(--premium-wheel-depth-lift, 6px) * -0.22));
+}
+
+.premium-original-wheel-polish .premium-wheel-svg-wrap {
+  z-index: 4;
+  transform: translateY(calc(var(--premium-wheel-depth-lift, 6px) * -1));
+  transition: transform .22s ease, box-shadow .22s ease, border-width .22s ease;
+  box-shadow:
+    inset 0 10px 22px rgba(255, 255, 255, 0.74),
+    inset 0 calc(var(--premium-wheel-depth, .72) * -28px) calc(var(--premium-wheel-depth, .72) * 44px) rgba(67, 20, 7, calc(.12 + var(--premium-wheel-depth, .72) * .28)),
+    0 calc(10px + var(--premium-wheel-depth, .72) * 14px) calc(18px + var(--premium-wheel-depth, .72) * 24px) rgba(67, 20, 7, calc(.16 + var(--premium-wheel-depth, .72) * .22)) !important;
+}
+
+.premium-original-wheel-polish .premium-wheel-center-refined {
+  transform: translate(-50%, -50%) translateY(calc(var(--premium-wheel-depth-lift, 6px) * -0.45));
+  box-shadow:
+    0 calc(8px + var(--premium-wheel-depth, .72) * 10px) calc(14px + var(--premium-wheel-depth, .72) * 20px) rgba(67, 20, 7, calc(.22 + var(--premium-wheel-depth, .72) * .28)),
+    inset 0 2px 0 rgba(255,255,255,.38),
+    inset 0 calc(var(--premium-wheel-depth, .72) * -8px) calc(var(--premium-wheel-depth, .72) * 14px) rgba(0,0,0,.26) !important;
+}
+
+
+/* 第 71601～72000 批：中心按鈕定位修正
+   第 71201～71600 批為了做厚度立體感，讓 .premium-wheel-center-refined 額外 translateY。
+   但中心按鈕本身已經在 wheel-svg-wrap 裡，外層整顆輪盤會一起浮起；
+   再額外 translateY 會造成中心按鈕和 SVG 圓心錯位。
+   這裡強制回到真正 50% / 50% 圓心，只保留陰影與厚度效果。 */
+.premium-original-wheel-polish .premium-wheel-center-refined,
+.premium-wheel-stage .premium-wheel-center-refined,
+.premium-vip-wheel-stage .premium-wheel-center-refined {
+  left: 50% !important;
+  top: 50% !important;
+  margin: 0 !important;
+  transform: translate3d(-50%, -50%, 0) !important;
+  transform-origin: center center !important;
+}
+
+.premium-original-wheel-polish .premium-wheel-center-refined span,
+.premium-wheel-stage .premium-wheel-center-refined span,
+.premium-vip-wheel-stage .premium-wheel-center-refined span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  text-align: center;
+}
+
+
+/* 第 72001～72400 批：SVG 旋轉圓心與中心按鈕對齊修正
+   真正衝突點不是中心按鈕 left/top，而是輪盤 SVG 本體在 rotate() 時沒有固定 transform-origin。
+   當 SVG 旋轉圓心偏移時，扇形交會點會跑掉，中心按鈕即使是 50%/50% 也會看起來不在正中間。
+   這裡強制：SVG block 化、旋轉圓心固定、外層與中心按鈕使用同一個圓心。 */
+.premium-original-wheel-polish .premium-wheel-svg-wrap,
+.premium-wheel-stage .premium-wheel-svg-wrap,
+.premium-vip-wheel-stage .premium-wheel-svg-wrap {
+  position: relative !important;
+  overflow: visible !important;
+  transform-origin: 50% 50% !important;
+}
+
+.premium-original-wheel-polish .premium-wheel-svg,
+.premium-wheel-stage .premium-wheel-svg,
+.premium-vip-wheel-stage .premium-wheel-svg {
+  display: block !important;
+  transform-origin: 50% 50% !important;
+  transform-box: fill-box !important;
+  inline-size: 100% !important;
+  block-size: 100% !important;
+}
+
+.premium-original-wheel-polish .premium-wheel-center-refined,
+.premium-wheel-stage .premium-wheel-center-refined,
+.premium-vip-wheel-stage .premium-wheel-center-refined {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  translate: none !important;
+  rotate: none !important;
+  scale: none !important;
+  transform: translate(-50%, -50%) !important;
+  transform-origin: 50% 50% !important;
+}
+
+
+/* 第 72801～73200 批：輪盤舞台光暈與底座高級感控制。
+   用 CSS variable 接後台設定，讓舞台外框、柔光、底座陰影、內層亮面都有明顯變化。 */
+.premium-wheel-stage,
+.premium-original-wheel-polish,
+.premium-vip-wheel-stage {
+  border-radius: var(--premium-wheel-stage-radius, 40px) !important;
+  isolation: isolate;
+}
+
+.premium-wheel-stage::before,
+.premium-original-wheel-polish::before,
+.premium-vip-wheel-stage::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  z-index: -1;
+  border-radius: calc(var(--premium-wheel-stage-radius, 40px) - 8px);
+  background:
+    radial-gradient(circle at 50% 14%, rgba(255,255,255,var(--premium-wheel-stage-inner-alpha, .36)), transparent 34%),
+    radial-gradient(circle at 50% 62%, color-mix(in srgb, var(--premium-wheel-stage-outer, #f6c453) 32%, transparent), transparent 70%);
+  filter: blur(calc(var(--premium-wheel-stage-glow-blur, 42px) * .28));
+  opacity: calc(.36 + var(--premium-wheel-stage-glow, .72) * .42);
+  pointer-events: none;
+}
+
+.premium-wheel-stage::after,
+.premium-original-wheel-polish::after,
+.premium-vip-wheel-stage::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -18px;
+  z-index: -2;
+  height: 42px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--premium-wheel-stage-to, #b45309) 52%, transparent);
+  filter: blur(calc(var(--premium-wheel-stage-shadow-blur, 64px) * .38));
+  opacity: var(--premium-wheel-stage-shadow-alpha, .48);
+  pointer-events: none;
+}
+
+
+/* 第 72401～72800 批：指針位置與立體質感控制。
+   重點：指針高度、反光、陰影全部吃後台設定，不再被舊 preset 固定樣式蓋掉。 */
+.premium-wheel-pointer,
+.premium-original-wheel-polish .premium-wheel-pointer {
+  top: var(--wheel-pointer-offset-y, -10px) !important;
+  transform: translateX(-50%) scale(var(--wheel-pointer-scale, 1)) !important;
+  transform-origin: 50% 18px !important;
+}
+
+.premium-wheel-pointer-preview {
+  transform: scale(var(--wheel-pointer-scale, 1)) !important;
+  transform-origin: 50% 18px !important;
+}
+
+.premium-wheel-pointer-head,
+.premium-original-wheel-polish .premium-wheel-pointer-head {
+  background:
+    radial-gradient(circle at 35% 18%, rgba(255, 255, 255, var(--wheel-pointer-gloss-alpha, .55)), transparent 28%),
+    linear-gradient(145deg,
+      color-mix(in srgb, var(--wheel-pointer-top-color, #dc2626) 68%, white),
+      var(--wheel-pointer-top-color, #dc2626) 48%,
+      color-mix(in srgb, var(--wheel-pointer-top-color, #dc2626) 72%, black)
+    ) !important;
+  box-shadow:
+    inset 0 6px 10px rgba(255, 255, 255, var(--wheel-pointer-highlight-alpha, .36)),
+    inset 0 -8px 14px rgba(0, 0, 0, var(--wheel-pointer-shadow-alpha, .38)),
+    0 var(--wheel-pointer-head-shadow-y, 10px) var(--wheel-pointer-head-shadow-blur, 16px) rgba(15, 23, 42, var(--wheel-pointer-shadow-alpha, .46)) !important;
+}
+
+.premium-wheel-pointer-arrow,
+.premium-original-wheel-polish .premium-wheel-pointer-arrow {
+  border-top-color: var(--wheel-pointer-arrow-color, #dc2626) !important;
+  filter:
+    drop-shadow(0 var(--wheel-pointer-arrow-shadow-y, 11px) var(--wheel-pointer-arrow-shadow-blur, 14px) rgba(15, 23, 42, var(--wheel-pointer-shadow-alpha, .46)))
+    drop-shadow(0 -2px 0 color-mix(in srgb, var(--wheel-pointer-arrow-color, #dc2626) 70%, white)) !important;
+}
+
+.premium-wheel-pointer-dot,
+.premium-original-wheel-polish .premium-wheel-pointer-dot {
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, var(--wheel-pointer-gloss-alpha, .55)), transparent 28%),
+    linear-gradient(145deg, color-mix(in srgb, var(--wheel-pointer-dot-color, #fde047) 86%, white), var(--wheel-pointer-dot-color, #fde047)) !important;
+}
+
 </style>
-
-<!--
-Multi Game Platform V2.3 第 1751～1800 批：正式輪盤頁共用模組 live apply 前最後驗收版
-
-本批延續第 1701～1750 批穩定點，僅作為 live apply 前最後驗收與交付標記：
-1. 正式輪盤頁預設仍保留原本流程，不永久切換。
-2. ?legacyWheel=1 仍為最高優先 fallback。
-3. ?commonWheel=1 測試區仍保留。
-4. full canary flags 可實際顯示 CommonGamePlayBoard。
-5. verify / play API guard 維持嚴格測試旗標保護。
-6. 本批不改 router / DB schema / draw-core。
-7. 作為下一批 live apply controlled switch 前的最後穩定驗收點。
--->
-
-
-<!--
-Multi Game Platform V2.3 第 1851～1900 批：正式輪盤頁套用後監控面板與 legacy rollback 操作提示版
-
-本批延續第 1801～1850 批正式套用穩定點：
-1. 正式輪盤玩家頁預設維持 CommonGamePlayBoard 共用模組。
-2. ?legacyWheel=1 保留最高優先緊急回退。
-3. ?commonWheel=1 測試區保留。
-4. 新增正式套用後監控面板、三路線狀態、rollback checklist 與營運操作提示。
-5. 不改 router / DB schema / 抽獎核心。
-6. verify / play API guard 不放寬。
--->
-
-
-<!--
-Multi Game Platform V2.3 第 1901～1950 批：正式輪盤頁資料流檢查與玩家操作狀態精緻化版
-
-本批延續第 1851～1900 批正式套用後監控穩定點：
-1. 正式輪盤玩家頁預設維持 CommonGamePlayBoard 共用模組。
-2. ?legacyWheel=1 保留最高優先緊急回退。
-3. ?commonWheel=1 測試區保留。
-4. 新增正式套用後資料流檢查、玩家操作狀態、verify/play guard 顯示與錯誤提示收斂。
-5. 不改 router / DB schema / 抽獎核心。
-6. verify / play API guard 不放寬。
--->
-
-
-<!--
-Multi Game Platform V2.3 第 1951～2000 批：正式輪盤頁資料流檢查與玩家操作狀態修正後穩定版
-
-本批延續第 1950-1 批小批修正版：
-1. 正式輪盤玩家頁預設維持 CommonGamePlayBoard 共用模組。
-2. ?legacyWheel=1 保留最高優先緊急回退。
-3. ?commonWheel=1 測試區保留。
-4. 保留 commonWheelPlayNormalizedState alias 修正成果，避免正式頁 render crash。
-5. 重新收斂正式套用後資料流檢查、玩家操作狀態、verify/play guard 顯示與錯誤提示。
-6. 不改 router / DB schema / 抽獎核心。
-7. verify / play API guard 不放寬。
--->
-
-<!--
-Multi Game Platform V2.3 第 2101～2150 批：正式輪盤頁部署驗收與版本封存交付版
-
-本批延續第 2051～2100 批正式上線更換穩定點：
-1. 正式輪盤玩家頁預設維持 CommonGamePlayBoard 共用模組。
-2. ?legacyWheel=1 保留最高優先緊急回退。
-3. ?commonWheel=1 測試區保留。
-4. 整理正式部署驗收流程：本機正式頁、commonWheel 測試區、legacy rollback 三路線必測。
-5. 整理版本封存交付流程：覆蓋 WheelGameView.vue、前端 build、Git commit / push、Render 部署檢查、正式網址驗收。
-6. 整理營運維護節奏：上線當日巡檢、1～3 天觀測、每週報表檢查、異常回報與 rollback SOP。
-7. 不改 router / DB schema / 抽獎核心。
-8. verify / play API guard 不放寬。
-9. 保留 commonWheelPlayNormalizedState alias 修正成果，避免正式頁 render crash。
--->
