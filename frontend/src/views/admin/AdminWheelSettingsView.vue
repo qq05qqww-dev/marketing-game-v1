@@ -2151,7 +2151,7 @@ const previewSaveGuidance = computed(() => {
   }
 
   return {
-    eyebrow: 'Preview Save Guidance｜第 67201～67600 批',
+    eyebrow: 'Preview Draft Guard｜第 74801～75200 批',
     title,
     badge,
     badgeClass,
@@ -2172,6 +2172,86 @@ const previewSaveGuidanceItems = computed(() => [
   { label: '目前 API', value: previewSaveGuidance.value.apiLabel },
   { label: '正式玩家頁', value: previewSaveGuidance.value.playerUrl }
 ])
+
+
+// 第 74801～75200 批：輪盤資料來源統一提示與正式玩家同步修正版。
+// 目的：把「玩家正式頁 / 商家活動設定 / 平台模板」三種來源一次講清楚，避免誤以為三者會自動同步。
+const wheelUnifiedSourceGuide = computed(() => {
+  const modeLabel = isPlatformTemplateMode.value ? '平台模板模式' : '商家活動模式'
+  const targetLabel = isPlatformTemplateMode.value
+    ? `平台模板：${platformWheelTemplateSlug.value}`
+    : `商家：${tenantSlug.value || '-'}｜活動：${campaignId.value || '-'}`
+  const playerSource = isPlatformTemplateMode.value
+    ? '玩家正式頁不會直接讀平台模板；平台模板只在新建輪盤活動時複製一次。'
+    : `玩家正式頁會讀取同一筆商家活動設定：campaignId=${campaignId.value || '-'}。`
+  const previewSource = isPlatformTemplateMode.value
+    ? '右側是平台模板草稿預覽，用來檢查未來新活動的預設外觀。'
+    : '右側是目前商家活動的草稿預覽；按儲存設定後，玩家正式頁重新整理才會同步。'
+
+  return {
+    eyebrow: 'Unified Source Guard｜第 74801～75200 批',
+    title: isPlatformTemplateMode.value
+      ? '目前看到的是平台模板，不是商家正式活動'
+      : '目前正在編輯商家正式活動資料來源',
+    badge: modeLabel,
+    badgeClass: isPlatformTemplateMode.value
+      ? 'bg-orange-100 text-orange-800 ring-1 ring-orange-200'
+      : 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200',
+    toneClass: isPlatformTemplateMode.value
+      ? 'border-orange-200 bg-orange-50 text-orange-800'
+      : 'border-emerald-200 bg-emerald-50 text-emerald-800',
+    targetLabel,
+    playerSource,
+    previewSource,
+    templateSource: '平台模板只負責新建立輪盤活動的預設值；既有商家活動不會被模板自動覆蓋。',
+    finalHint: isPlatformTemplateMode.value
+      ? '如果要改玩家手機看到的活動，請從「商家活動 / 我的活動」進入該 campaignId 的設定頁。'
+      : '如果玩家手機畫面沒有變，請先確認你是在 Vercel 線上後台儲存，且玩家網址 campaignId 與本頁相同。'
+  }
+})
+
+const wheelUnifiedSourceRows = computed(() => [
+  {
+    label: '玩家手機正式頁',
+    value: isPlatformTemplateMode.value ? '不讀平台模板' : `讀 campaignId=${campaignId.value || '-'}`,
+    note: isPlatformTemplateMode.value
+      ? '玩家頁只讀商家活動資料，不會直接讀模板中心。'
+      : `正式網址：${playerUrl.value}`
+  },
+  {
+    label: '商家輪盤設定頁',
+    value: isPlatformTemplateMode.value ? '目前不是商家活動' : `tenant=${tenantSlug.value || '-'} / campaign=${campaignId.value || '-'}`,
+    note: isPlatformTemplateMode.value
+      ? '請回到商家活動列表，從某一筆 WHEEL 活動進入。'
+      : '左側修改先進草稿預覽，按儲存設定才寫入資料庫。'
+  },
+  {
+    label: '平台模板中心',
+    value: platformWheelTemplateSlug.value,
+    note: '只提供新建活動的預設外觀，不會自動改掉既有活動。'
+  },
+  {
+    label: '右側 iframe 預覽',
+    value: isPlatformTemplateMode.value ? '模板草稿預覽' : '商家活動草稿預覽',
+    note: '預覽不是正式玩家資料庫結果；正式結果以儲存後的玩家頁重新整理為準。'
+  }
+])
+
+const wheelUnifiedActionSteps = computed(() => {
+  if (isPlatformTemplateMode.value) {
+    return [
+      '要改新活動預設：在這裡調整平台模板後按「儲存設定」。',
+      '要改既有玩家活動：回商家活動列表，進入該 campaignId 的輪盤設定。',
+      '模板儲存後，只會影響之後新建的輪盤活動，不會改既有活動。'
+    ]
+  }
+
+  return [
+    '確認本頁 campaignId 與玩家網址 campaignId 相同。',
+    '調整設定後先看右側草稿預覽。',
+    '按「儲存設定」寫入資料庫，再重新整理正式玩家頁確認。'
+  ]
+})
 
 const safePreviewUrl = computed(() => {
   try {
@@ -3132,6 +3212,61 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </section>
+    <section class="rounded-[2rem] border p-5 shadow-sm" :class="wheelUnifiedSourceGuide.toneClass">
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.2em] opacity-70">{{ wheelUnifiedSourceGuide.eyebrow }}</p>
+          <h2 class="mt-2 text-2xl font-black">{{ wheelUnifiedSourceGuide.title }}</h2>
+          <p class="mt-2 max-w-4xl text-sm font-bold leading-6 opacity-85">
+            {{ wheelUnifiedSourceGuide.finalHint }}
+          </p>
+        </div>
+        <span class="inline-flex rounded-full px-4 py-2 text-xs font-black" :class="wheelUnifiedSourceGuide.badgeClass">
+          {{ wheelUnifiedSourceGuide.badge }}
+        </span>
+      </div>
+
+      <div class="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          v-for="item in wheelUnifiedSourceRows"
+          :key="item.label"
+          class="rounded-3xl border border-white/70 bg-white/80 p-4 shadow-sm"
+        >
+          <p class="text-xs font-black opacity-60">{{ item.label }}</p>
+          <p class="mt-2 break-all text-sm font-black leading-6">{{ item.value }}</p>
+          <p class="mt-1 text-xs font-bold leading-5 opacity-70">{{ item.note }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 lg:grid-cols-3">
+        <div class="rounded-3xl border border-white/70 bg-white/80 p-4 text-sm font-bold leading-6">
+          <p class="text-xs font-black opacity-60">目前儲存目標</p>
+          <p class="mt-2 break-all font-black">{{ wheelUnifiedSourceGuide.targetLabel }}</p>
+        </div>
+        <div class="rounded-3xl border border-white/70 bg-white/80 p-4 text-sm font-bold leading-6">
+          <p class="text-xs font-black opacity-60">玩家頁資料來源</p>
+          <p class="mt-2">{{ wheelUnifiedSourceGuide.playerSource }}</p>
+        </div>
+        <div class="rounded-3xl border border-white/70 bg-white/80 p-4 text-sm font-bold leading-6">
+          <p class="text-xs font-black opacity-60">右側預覽來源</p>
+          <p class="mt-2">{{ wheelUnifiedSourceGuide.previewSource }}</p>
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-3xl border border-white/70 bg-white/80 p-4">
+        <p class="text-xs font-black opacity-60">正確操作順序</p>
+        <ol class="mt-2 grid gap-2 text-sm font-bold leading-6 md:grid-cols-3">
+          <li
+            v-for="(step, index) in wheelUnifiedActionSteps"
+            :key="step"
+            class="rounded-2xl border border-white/70 bg-white/70 px-4 py-3"
+          >
+            <span class="font-black">{{ index + 1 }}.</span> {{ step }}
+          </li>
+        </ol>
+      </div>
+    </section>
+
     <section class="overflow-hidden rounded-[2rem] border border-orange-100 bg-white shadow-sm">
       <div class="grid gap-0 xl:grid-cols-[1fr_0.72fr]">
         <div class="bg-gradient-to-br from-slate-950 via-orange-950 to-slate-900 p-6 text-white">
@@ -4646,7 +4781,7 @@ onBeforeUnmount(() => {
 
             <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl transition-all duration-300" :style="previewFrameStyle">
               <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
-                {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}｜{{ previewDeviceProfile.label }}｜{{ previewZoomProfile.label }}
+                {{ isPlatformTemplateMode ? '平台模板草稿 iframe 預覽' : '商家活動草稿 iframe 預覽' }}｜{{ previewDeviceProfile.label }}｜{{ previewZoomProfile.label }}
               </div>
               <div class="border-b border-slate-100 px-4 py-2 text-[11px] font-black" :class="previewSmoothSyncToneClass">
                 <div class="flex flex-wrap items-center justify-between gap-2">

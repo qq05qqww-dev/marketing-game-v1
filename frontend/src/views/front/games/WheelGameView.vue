@@ -1,4 +1,6 @@
 <script setup>
+// 第 74801～75200 批：輪盤資料來源統一提示與正式玩家同步修正版
+// 玩家頁本身不改抽獎核心；正式玩家頁仍以 campaignId + tenantSlug 讀取線上活動設定。
 // 第 71601～72000 批：輪盤中心按鈕定位修正版
 // 修正第 71201～71600 批厚度立體感把中心按鈕額外 translateY，造成中心按鈕看起來往上/偏移。
 // 本批不改 DB / router / draw-core，只修玩家頁 CSS 定位。
@@ -136,6 +138,23 @@ const remoteWheelLoading = ref(Boolean(routeTenantSlug.value))
 const remoteWheelError = ref('')
 const remoteWheelLoadedAt = ref('')
 const remoteWheelLastPlayResult = ref(null)
+
+
+// 第 74801～75200 批：正式玩家頁資料來源標記。只供管理預覽 / debug 判斷，不影響一般玩家抽獎流程。
+const wheelPlayerSourceGuard = computed(() => {
+  const campaignId = remoteWheelCampaignId.value || getRouteCampaignId() || '-'
+  const tenant = routeTenantSlug.value || normalizeSingleQueryValue(route.query.tenantSlug || '') || '-'
+  const adminPreview = String(route.query.adminPreview || '').trim() === '1'
+
+  return {
+    visible: adminPreview || isAdminMode.value,
+    title: '正式玩家頁資料來源',
+    source: `tenant:${tenant} / campaignId:${campaignId}`,
+    note: adminPreview
+      ? '目前是後台 iframe 草稿預覽；正式玩家頁請按儲存後重新整理確認。'
+      : '目前為正式玩家頁，會讀取線上資料庫的商家活動設定。'
+  }
+})
 
 
 const isLegacyWheelRoute = computed(() => {
