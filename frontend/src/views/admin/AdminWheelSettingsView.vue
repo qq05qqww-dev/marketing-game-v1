@@ -1,4 +1,4 @@
-// 第 61201～61600 批：輪盤設定頁線上正式儲存檢查與玩家頁同步提示版
+// 第 62401～62800 批：輪盤設定頁左側集中設定右側固定預覽版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -2162,13 +2162,15 @@ onMounted(async () => {
       </div>
     </section>
 
-    <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-      <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">設定分類</p>
-          <h2 class="mt-2 text-2xl font-black text-slate-950">輪盤設定分類</h2>
-          <p class="mt-2 text-sm font-bold text-slate-500">簡易模式會把進階項目收起來，商家只要照分類修改就好。</p>
-        </div>
+    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_430px] 2xl:grid-cols-[minmax(0,1fr)_460px]">
+      <div class="space-y-6">
+        <section class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div class="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">設定分類｜第 62401～62800 批</p>
+              <h2 class="mt-2 text-2xl font-black text-slate-950">輪盤設定分類</h2>
+              <p class="mt-2 text-sm font-bold text-slate-500">設定分類與模組精緻集中在左側，右側固定顯示輪盤玩家預覽，修改時不用再上下找畫面。</p>
+            </div>
 
         <div class="flex flex-wrap gap-2">
           <button
@@ -2188,7 +2190,7 @@ onMounted(async () => {
         </div>
       </div>
 
-      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+      <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
         <button
           v-for="category in settingCategories"
           :key="category.key"
@@ -2216,10 +2218,7 @@ onMounted(async () => {
           </div>
         </button>
       </div>
-    </section>
-
-    <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_430px]">
-      <div class="space-y-6">
+        </section>
 
         <section v-show="activeCategory === 'polish'" class="rounded-[2rem] border border-orange-200 bg-white p-6 shadow-sm">
           <div class="mb-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -2248,7 +2247,7 @@ onMounted(async () => {
             </div>
           </div>
 
-          <div class="mt-5 grid gap-4 xl:grid-cols-4 md:grid-cols-2">
+          <div class="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
             <article
               v-for="preset in wheelPolishPresets"
               :key="preset.key"
@@ -2724,7 +2723,7 @@ onMounted(async () => {
         </section>
       </div>
 
-      <aside class="xl:sticky xl:top-5 xl:self-start">
+      <aside class="xl:sticky xl:top-24 xl:self-start">
         <section class="overflow-hidden rounded-[2rem] border border-slate-200 bg-slate-950 shadow-sm">
           <div class="p-5 text-white">
             <p class="text-xs font-black uppercase tracking-[0.22em] text-orange-200">Live Player Preview</p>
@@ -2748,7 +2747,7 @@ onMounted(async () => {
               </button>
             </div>
 
-            <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl" style="max-width: 390px;">
+            <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl" style="max-width: 430px;">
               <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
                 {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}
               </div>
