@@ -1,4 +1,5 @@
 <script setup>
+// 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /**
  * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
  *
@@ -472,15 +473,15 @@ const applyAdminPreviewPrizeDraftToGrid = (draftPrizes = []) => {
 }
 
 const applyAdminPreviewDraftToCampaign = () => {
-  if (typeof window === 'undefined') return
-  if (route.query.adminPreviewDraft !== '1') return
+  if (typeof window === 'undefined') return false
+  if (route.query.adminPreviewDraft !== '1') return false
 
   const draftKey = String(route.query.draftKey || '')
-  if (!draftKey) return
+  if (!draftKey) return false
 
   try {
     const rawDraft = window.localStorage.getItem(draftKey)
-    if (!rawDraft) return
+    if (!rawDraft) return false
 
     const draft = JSON.parse(rawDraft)
     const mappedSettings = normalizeAdminPreviewDraftSettings(draft.settings || {})
@@ -497,8 +498,13 @@ const applyAdminPreviewDraftToCampaign = () => {
     })
 
     applyAdminPreviewPrizeDraftToGrid(mappedSettings.prizes)
+
+    // 第 80401～80800 批：正式 iframe 預覽會先讀遠端活動 / GameConfig，
+    // 遠端資料載入完成後必須再次套用後台草稿，避免文字又被資料庫舊值覆蓋。
+    return true
   } catch (error) {
     console.warn('讀取九宮格後台即時預覽草稿失敗：', error)
+    return false
   }
 }
 
@@ -2837,6 +2843,7 @@ const loadTenantPremiumGridCampaign = async () => {
 
     applyTenantPremiumGridCampaign(activeCampaign)
     await loadPremiumGridGameConfigSettings(activeCampaign.id)
+    applyAdminPreviewDraftToCampaign()
   } catch (error) {
     console.error('載入商家精緻九宮格活動失敗：', error)
     tenantPremiumGridCampaign.value = null
@@ -2903,6 +2910,7 @@ const applyPremiumGridGameConfigSettingsToLiveState = (settings = {}) => {
   if (settings.display?.chanceText) campaign.chanceText = settings.display.chanceText
 
   updateChanceText()
+  applyAdminPreviewDraftToCampaign()
 }
 
 const premiumGridBackendProbabilitySummary = computed(() => {
@@ -2940,6 +2948,7 @@ const loadPremiumGridGameConfigSettings = async (campaignId) => {
     }
 
     premiumGridGameConfigLoadedAt.value = new Date().toLocaleString('zh-TW')
+    applyAdminPreviewDraftToCampaign()
   } catch (error) {
     console.error('載入九宮格 GameConfig settings 失敗：', error)
     premiumGridGameConfigSettings.value = null

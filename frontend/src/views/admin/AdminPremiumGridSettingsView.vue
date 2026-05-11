@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 79601～80000 批：九宮格機率試算器收合展開版
+// 第 80401～80800 批：九宮格即時預覽文字同步修正版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -869,7 +869,7 @@ const scheduleDraftPreviewSync = () => {
   window.clearTimeout(livePreviewDebounceTimer.value)
   livePreviewDebounceTimer.value = window.setTimeout(() => {
     syncDraftToPreviewStorage({ refresh: true })
-  }, 350)
+  }, 180)
 }
 
 const refreshFormalPreview = () => {
@@ -2099,7 +2099,7 @@ onMounted(() => {
 
               <p class="rounded-2xl bg-slate-50 px-4 py-3 text-xs font-bold leading-6 text-slate-500">
                 目前預覽網址：<span class="font-black text-slate-700">{{ formalPlayerPreviewUrl }}</span><br />
-                商家實際給客人的就是這條玩家連結；右側 iframe 會額外加 adminPreviewDraft 參數讀取後台草稿，正式客人頁不會受草稿影響。
+                右側 iframe 會讀取後台即時草稿；修改文字、顏色、獎項後會自動同步預覽，不必先儲存。正式客人頁只讀已儲存設定。
               </p>
             </div>
 
