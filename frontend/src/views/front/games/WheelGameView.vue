@@ -3618,6 +3618,15 @@ const wheelPolishDisplay = computed(() => {
 
 const wheelPolishFeatureBadges = computed(() => wheelPolishDisplay.value.features || [])
 
+// 第 61601～62000 批：輪盤精緻驗收卡正式頁隱藏版
+// 正式客人玩家頁不顯示工程驗收卡；只在後台 iframe 預覽、adminPreview 或除錯模式顯示。
+const showWheelPolishStatusBadge = computed(() => {
+  return route.query.adminPreview === '1' ||
+    route.query.adminPreviewDraft === '1' ||
+    route.query.templatePreview === '1' ||
+    campaign.showFrontDebugInfo === true
+})
+
 const getPrizeTypeLabel = (type) => {
   return type === 'lose' ? '未中獎' : '中獎'
 }
@@ -8871,7 +8880,10 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                   {{ campaign.heroTagline }}
                 </p>
 
-                <div class="premium-wheel-polish-status mx-auto mt-4 max-w-md rounded-[28px] border border-yellow-100/35 bg-white/12 p-3 text-left shadow-inner backdrop-blur">
+                <div
+                  v-if="showWheelPolishStatusBadge"
+                  class="premium-wheel-polish-status mx-auto mt-4 max-w-md rounded-[28px] border border-yellow-100/35 bg-white/12 p-3 text-left shadow-inner backdrop-blur"
+                >
                   <div class="flex items-start gap-3">
                     <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-yellow-100/45 bg-black/20 text-2xl shadow-lg">
                       {{ wheelPolishDisplay.icon }}
@@ -8902,7 +8914,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                       {{ item }}
                     </span>
                     <span class="rounded-full border border-emerald-200/35 bg-emerald-100/15 px-3 py-1 text-[10px] font-black text-emerald-50">
-                      玩家頁已套用｜第 60051～60400 批
+                      預覽驗收｜第 61601～62000 批
                     </span>
                   </div>
                 </div>
