@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 81601～82000 批：九宮格儲存設定按鈕回饋與模板草稿保存修正版
+// 第 82001～82400 批：九宮格平台模板預覽來源與儲存一致修正版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -134,10 +134,15 @@ const normalizedCampaignId = computed(() => {
 })
 
 const canUseGameConfigApi = computed(() => Boolean(normalizedCampaignId.value))
+const isTemplateDraftMode = computed(() => !canUseGameConfigApi.value)
 
 const formalPlayerPreviewUrl = computed(() => {
-  const safeSlug = String(previewTenantSlug.value || 'a-shop').trim() || 'a-shop'
-  const baseUrl = `/play/${encodeURIComponent(safeSlug)}/premium-grid`
+  // 第 82001～82400 批：平台模板中心不能再用 /play/a-shop/premium-grid 當預覽來源，
+  // 否則 iframe 會先讀 A 商家正式活動，再套草稿，造成使用者誤以為「儲存沒有存到模板」。
+  // 沒有正式 campaignId 時固定走模板預覽入口 /games/premium-grid。
+  const baseUrl = isTemplateDraftMode.value
+    ? '/games/premium-grid'
+    : `/play/${encodeURIComponent(String(previewTenantSlug.value || 'a-shop').trim() || 'a-shop')}/premium-grid`
 
   if (previewMode.value === 'legacy') return `${baseUrl}?legacyGrid=1`
   if (previewMode.value === 'common') return `${baseUrl}?commonGrid=1`
@@ -147,8 +152,12 @@ const formalPlayerPreviewUrl = computed(() => {
 })
 
 const adminPreviewDraftKey = computed(() => {
-  const id = normalizedCampaignId.value || campaignId.value || 'demo'
-  const slug = String(previewTenantSlug.value || 'a-shop').trim() || 'a-shop'
+  const id = isTemplateDraftMode.value
+    ? 'platform-template'
+    : (normalizedCampaignId.value || campaignId.value || 'demo')
+  const slug = isTemplateDraftMode.value
+    ? 'platform'
+    : (String(previewTenantSlug.value || 'a-shop').trim() || 'a-shop')
 
   return `premium-grid-admin-preview-draft:${id}:${slug}`
 })
@@ -726,7 +735,10 @@ const saveTemplateDraftLocally = () => {
   const payload = buildSettingsSavePayload()
   const storageKeys = [
     'mgp:premium-grid-platform-template-draft',
+    'mgp:premium-grid-platform-template-saved',
     'mgp:premium-grid-template-draft:last',
+    'mgp:premium-grid-template-source:platform',
+    adminPreviewDraftKey.value,
     `mgp:premium-grid-template-draft:${previewTenantSlug.value || 'a-shop'}`
   ]
 
@@ -735,9 +747,10 @@ const saveTemplateDraftLocally = () => {
   })
 
   configSavedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
-  configModeMessage.value = '目前沒有正式活動 ID，已改存為九宮格模板草稿；右側預覽會同步，正式玩家頁需進入商家活動設定頁儲存到資料庫。'
+  configModeMessage.value = '已儲存九宮格平台模板草稿：此畫面是商家建立新九宮格活動時要複製的模板預覽，不是 A 商家的正式活動。既有商家活動不會被自動覆蓋。'
   syncDraftToPreviewStorage({ refresh: false })
-  setInlineSaveFeedback('已儲存九宮格模板草稿，右側預覽已同步；若要讓正式玩家頁生效，請到商家活動設定頁儲存。')
+  window.setTimeout(() => postDraftToPreviewIframe(payload), 60)
+  setInlineSaveFeedback('已儲存九宮格平台模板草稿，右側模板預覽已鎖定目前修改內容；商家新建九宮格活動時才會複製此模板。')
 }
 
 const mergeSettingsIntoDraft = (incoming = {}) => {
@@ -1229,11 +1242,11 @@ onMounted(() => {
           </div>
           <div class="rounded-2xl bg-emerald-50 px-4 py-3">
             <p class="text-xs font-black text-emerald-500">預覽來源</p>
-            <p class="mt-1 text-lg font-black text-emerald-800">正式玩家頁 iframe</p>
+            <p class="mt-1 text-lg font-black text-emerald-800">{{ isTemplateDraftMode ? '平台模板預覽' : '正式玩家頁 iframe' }}</p>
           </div>
           <div class="rounded-2xl bg-amber-50 px-4 py-3">
             <p class="text-xs font-black text-amber-500">設定 API</p>
-            <p class="mt-1 text-lg font-black text-amber-800">{{ canUseGameConfigApi ? '資料庫儲存' : '需活動 ID' }}</p>
+            <p class="mt-1 text-lg font-black text-amber-800">{{ canUseGameConfigApi ? '資料庫儲存' : '模板草稿儲存' }}</p>
           </div>
           <div class="rounded-2xl bg-blue-50 px-4 py-3">
             <p class="text-xs font-black text-blue-500">讀取 / 儲存</p>
@@ -2094,8 +2107,9 @@ onMounted(() => {
               </div>
 
               <div class="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-800">
-                這裡直接顯示真正玩家網址，不再用 PremiumGridPlayBoard.vue 模仿。
-                目前已啟用即時草稿同步：左側修改會先同步到右側 iframe 預覽，不影響正式客人頁。
+                {{ isTemplateDraftMode
+                  ? '目前是九宮格平台模板預覽：右側不是 A 商家正式活動，而是商家建立新九宮格活動時會看到的模板草稿。按「儲存設定」會保存這份模板草稿。'
+                  : '這裡直接顯示真正玩家網址，不再用 PremiumGridPlayBoard.vue 模仿。左側修改會先同步到右側 iframe 預覽，不影響正式客人頁。' }}
               </div>
 
               <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -2164,7 +2178,9 @@ onMounted(() => {
 
               <p class="rounded-2xl bg-slate-50 px-4 py-3 text-xs font-bold leading-6 text-slate-500">
                 目前預覽網址：<span class="font-black text-slate-700">{{ formalPlayerPreviewUrl }}</span><br />
-                右側 iframe 會讀取後台即時草稿；修改文字、顏色、獎項後會用平滑同步更新，不再每次重載畫面。正式客人頁只讀已儲存設定。
+                {{ isTemplateDraftMode
+                  ? '右側會讀取已儲存的九宮格平台模板草稿；這是商家新建九宮格活動時要套用的畫面，不是既有商家活動。'
+                  : '右側 iframe 會讀取後台即時草稿；修改文字、顏色、獎項後會用平滑同步更新，不再每次重載畫面。正式客人頁只讀已儲存設定。' }}
               </p>
             </div>
 
