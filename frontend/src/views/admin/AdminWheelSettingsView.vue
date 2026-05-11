@@ -198,6 +198,7 @@ const previewKey = ref(0)
 const activeCategory = ref('basic')
 const previewIframeRef = ref(null)
 const previewFocusMode = ref('wheel')
+const previewDeviceMode = ref('phone')
 
 const previewFocusOptions = [
   { key: 'top', label: '上方' },
@@ -205,6 +206,28 @@ const previewFocusOptions = [
   { key: 'serial', label: '序號' },
   { key: 'records', label: '紀錄' }
 ]
+
+const previewDeviceOptions = [
+  { key: 'phone', label: '手機', desc: '390×760', frameWidth: '430px', iframeHeightClass: 'h-[760px]' },
+  { key: 'longPhone', label: '長手機', desc: '390×880', frameWidth: '430px', iframeHeightClass: 'h-[880px]' },
+  { key: 'tablet', label: '平板', desc: '520×780', frameWidth: '560px', iframeHeightClass: 'h-[780px]' }
+]
+
+const previewDeviceProfile = computed(() => {
+  return previewDeviceOptions.find((item) => item.key === previewDeviceMode.value) || previewDeviceOptions[0]
+})
+
+const previewFrameStyle = computed(() => ({
+  maxWidth: previewDeviceProfile.value.frameWidth
+}))
+
+const previewIframeHeightClass = computed(() => previewDeviceProfile.value.iframeHeightClass)
+
+const setPreviewDeviceMode = (mode = 'phone') => {
+  previewDeviceMode.value = mode
+  previewKey.value += 1
+  nextTick(scrollPreviewToFocus)
+}
 
 const settingCategories = [
   { key: 'polish', icon: '精', title: '模組精緻', desc: '一鍵套用高級輪盤視覺預設' },
@@ -2747,17 +2770,37 @@ onMounted(async () => {
               </button>
             </div>
 
-            <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl" style="max-width: 430px;">
+            <div class="mb-3 rounded-2xl border border-white/10 bg-white/5 p-2">
+              <div class="mb-2 flex items-center justify-between gap-2 px-1">
+                <p class="text-[11px] font-black uppercase tracking-[0.18em] text-white/50">Preview Device｜第 62801～63200 批</p>
+                <p class="text-[11px] font-bold text-white/40">{{ previewDeviceProfile.desc }}</p>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <button
+                  v-for="device in previewDeviceOptions"
+                  :key="device.key"
+                  type="button"
+                  class="rounded-2xl px-3 py-2 text-xs font-black transition"
+                  :class="previewDeviceMode === device.key ? 'bg-white text-slate-950' : 'border border-white/15 text-white/70 hover:bg-white/10'"
+                  @click="setPreviewDeviceMode(device.key)"
+                >
+                  {{ device.label }}
+                </button>
+              </div>
+            </div>
+
+            <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl transition-all duration-300" :style="previewFrameStyle">
               <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
-                {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}
+                {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}｜{{ previewDeviceProfile.label }}
               </div>
 
               <iframe
                 ref="previewIframeRef"
-                :key="previewKey"
+                :key="`${previewKey}-${previewDeviceMode}`"
                 :src="safePreviewUrl"
                 title="輪盤正式玩家頁即時預覽"
-                class="h-[720px] w-full bg-white"
+                class="w-full bg-white"
+                :class="previewIframeHeightClass"
                 loading="eager"
                 @load="handlePreviewIframeLoad"
               ></iframe>
@@ -2781,7 +2824,7 @@ onMounted(async () => {
             </div>
 
             <div class="mt-3 rounded-2xl border border-amber-300/30 bg-amber-300/10 px-4 py-3 text-xs font-bold leading-6 text-amber-100">
-              提示：預覽會自動跳到目前分類最相關的位置；按「輪盤」可以直接看輪盤本體，不用每次手動往下拉。
+              提示：預覽會自動跳到目前分類最相關的位置；按「輪盤」可以直接看輪盤本體。需要檢查手機長畫面時，可切換「長手機」預覽。
             </div>
           </div>
         </section>
