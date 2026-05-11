@@ -1,4 +1,4 @@
-// 第 58401～58800 批：平台輪盤模板最新儲存設定建立活動複製版
+// 第 60401～60800 批：輪盤模組精緻預設右側預覽即時同步修正版
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -352,11 +352,22 @@ const applyWheelPolishPreset = (presetKey = '') => {
   }
 
   activeCategory.value = 'polish'
-  setPreviewFocus('wheel')
-  savedMessage.value = `已套用「${preset.name}」，請按儲存設定保存。`
+
+  // 第 60401～60800 批：套用精緻預設後立即寫入右側預覽草稿。
+  // 原本只切換 previewKey，iframe 可能先重新載入舊 localStorage，導致右側預覽看起來沒有變。
+  // 這裡先保存草稿，再重新載入 preview，確保點套用後右側畫面立即同步。
+  if (typeof window !== 'undefined') {
+    window.clearTimeout(previewSyncTimer)
+  }
+
+  persistLocalDraft()
+  previewFocusMode.value = 'wheel'
+  nextTick(scrollPreviewToFocus)
+
+  savedMessage.value = `已套用「${preset.name}」，右側預覽已更新；請按儲存設定保存。`
   window.setTimeout(() => {
     savedMessage.value = ''
-  }, 2400)
+  }, 2600)
 }
 
 const displayLabels = {
