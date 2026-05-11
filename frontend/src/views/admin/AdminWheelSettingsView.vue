@@ -1,4 +1,4 @@
-// 第 64801～65200 批：輪盤設定頁分類局部還原與快捷修正版
+// 第 65201～65250 批：修正 Section Reset confirm join 字串小批修正版
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -1859,8 +1859,7 @@ const resetSectionToDefault = (sectionKey = activeCategory.value) => {
       '',
       '這只會改目前畫面草稿與右側預覽。',
       '正式玩家頁必須再按「儲存設定」後才會同步。'
-    ].join('
-'))
+    ].join('\n'))
 
     if (!confirmed) return
   }
