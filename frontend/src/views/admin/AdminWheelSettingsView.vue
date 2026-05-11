@@ -1,4 +1,4 @@
-// 第 64001～64400 批：輪盤設定頁左側常用設定搜尋與快速定位版
+// 第 64801～65200 批：輪盤設定頁分類局部還原與快捷修正版
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -1811,6 +1811,128 @@ const resetSettings = () => {
   markSettingsDirty('已還原預設，尚未儲存')
 }
 
+
+const sectionResetOptions = [
+  { key: 'polish', label: '清除精緻預設標記', desc: '移除 templateMeta.visualPolish，保留目前顏色與輪盤數值。' },
+  { key: 'basic', label: '還原基本文字', desc: '活動標題、品牌文字、主要按鈕文字回到預設。' },
+  { key: 'theme', label: '還原主題色彩', desc: '背景、按鈕、輪盤外框、指針顏色回到預設。' },
+  { key: 'wheel', label: '還原輪盤樣式', desc: '輪盤大小、外圈、中心按鈕、獎項文字回到預設。' },
+  { key: 'display', label: '還原展示區塊', desc: '品牌卡、狀態卡、紀錄、獎品牆等開關回到預設。' },
+  { key: 'serial', label: '還原序號文字', desc: '序號標題、提示、驗證按鈕與抽獎按鈕回到預設。' },
+  { key: 'sound', label: '還原音效特效', desc: '卡點聲、結果音效、指針抖動、光暈與彩帶回到預設。' },
+  { key: 'rules', label: '還原規則說明', desc: '活動規則、獎品說明與頁尾備註回到預設。' },
+  { key: 'frontend', label: '還原品牌前台設定', desc: 'Logo、品牌連結、品牌按鈕與文字大小回到預設。' },
+  { key: 'prizes', label: '還原輪盤獎項', desc: '獎項名稱、權重、圖示與顏色回到預設。' }
+]
+
+const currentSectionResetOption = computed(() => {
+  return sectionResetOptions.find((item) => item.key === activeCategory.value) || sectionResetOptions[0]
+})
+
+const replaceReactiveObject = (target, source) => {
+  if (!target || typeof target !== 'object') return
+  Object.keys(target).forEach((key) => delete target[key])
+  assignDeep(target, source || {})
+}
+
+const clonePlainValue = (value) => {
+  try {
+    return JSON.parse(JSON.stringify(value))
+  } catch (error) {
+    return value
+  }
+}
+
+const resetTopLevelFields = (fresh = {}, fieldKeys = []) => {
+  fieldKeys.forEach((key) => {
+    settings[key] = clonePlainValue(fresh[key])
+  })
+}
+
+const resetSectionToDefault = (sectionKey = activeCategory.value) => {
+  const option = sectionResetOptions.find((item) => item.key === sectionKey)
+  const label = option?.label || '還原目前分類'
+
+  if (typeof window !== 'undefined') {
+    const confirmed = window.confirm([
+      `確認執行「${label}」？`,
+      '',
+      '這只會改目前畫面草稿與右側預覽。',
+      '正式玩家頁必須再按「儲存設定」後才會同步。'
+    ].join('
+'))
+
+    if (!confirmed) return
+  }
+
+  const fresh = defaultSettings()
+
+  if (sectionKey === 'polish') {
+    if (settings.templateMeta && typeof settings.templateMeta === 'object' && !Array.isArray(settings.templateMeta)) {
+      delete settings.templateMeta.visualPolish
+    }
+  } else if (sectionKey === 'basic') {
+    resetTopLevelFields(fresh, [
+      'pageTitle',
+      'brandName',
+      'brandSubtitle',
+      'headline',
+      'subtitle',
+      'badgeText',
+      'playButtonText',
+      'verifyButtonText',
+      'resultTitle'
+    ])
+  } else if (sectionKey === 'theme') {
+    replaceReactiveObject(settings.theme, fresh.theme)
+  } else if (sectionKey === 'wheel') {
+    replaceReactiveObject(settings.wheelStyle, fresh.wheelStyle)
+  } else if (sectionKey === 'display') {
+    replaceReactiveObject(settings.display, fresh.display)
+  } else if (sectionKey === 'serial') {
+    resetTopLevelFields(fresh, ['serialTitle', 'serialHint', 'verifyButtonText', 'playButtonText', 'badgeText'])
+    settings.serialPrefix = settings.serialPrefix || 'WHEEL'
+    settings.requireSerialCode = true
+  } else if (sectionKey === 'sound') {
+    replaceReactiveObject(settings.effects, fresh.effects)
+    if (settings.display) settings.display.enableSound = true
+  } else if (sectionKey === 'rules') {
+    replaceReactiveObject(settings.content, fresh.content)
+    if (settings.display) {
+      settings.display.showRules = true
+      settings.display.showPrizeInfo = true
+    }
+  } else if (sectionKey === 'frontend') {
+    resetTopLevelFields(fresh, [
+      'brandLogoUrl',
+      'brandLinkUrl',
+      'brandLinkText',
+      'brandLogoSize',
+      'brandTitleSize',
+      'brandTextColor',
+      'brandButtonBgColor',
+      'brandButtonTextColor',
+      'brandButtonTextSize'
+    ])
+  } else if (sectionKey === 'prizes') {
+    settings.prizes.splice(0, settings.prizes.length, ...clonePlainValue(fresh.prizes))
+  }
+
+  activeCategory.value = sectionKey
+  persistLocalDraft()
+  previewFocusMode.value = ['theme', 'wheel', 'polish', 'prizes'].includes(sectionKey) ? 'wheel' : 'top'
+  nextTick(scrollPreviewToFocus)
+  markSettingsDirty(`已執行「${label}」，尚未儲存`)
+  savedMessage.value = `已執行「${label}」，右側預覽已更新；請按儲存設定保存。`
+  window.setTimeout(() => {
+    savedMessage.value = ''
+  }, 2600)
+}
+
+const resetCurrentSectionToDefault = () => {
+  resetSectionToDefault(activeCategory.value)
+}
+
 const copyText = async (text, message = '已複製到剪貼簿') => {
   try {
     await navigator.clipboard.writeText(text)
@@ -2558,6 +2680,48 @@ onBeforeUnmount(() => {
                   {{ category.title }}
                 </button>
               </div>
+            </div>
+          </div>
+
+          <div class="mb-4 rounded-[1.5rem] border border-blue-100 bg-gradient-to-r from-blue-50 to-cyan-50 p-4">
+            <div class="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <p class="text-[11px] font-black uppercase tracking-[0.18em] text-blue-500">
+                  Section Reset Guard｜第 64801～65200 批
+                </p>
+                <h3 class="mt-2 text-base font-black text-slate-950">分類局部還原</h3>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-500">
+                  可只還原目前分類，不會整份設定重置。右側會先更新預覽，正式玩家頁仍需按「儲存設定」。
+                </p>
+              </div>
+              <div class="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-blue-100 xl:min-w-[260px]">
+                <p class="text-xs font-black text-blue-500">目前可還原</p>
+                <p class="mt-1 text-sm font-black text-slate-900">{{ currentSectionResetOption.label }}</p>
+                <p class="mt-1 text-xs font-bold leading-5 text-slate-500">{{ currentSectionResetOption.desc }}</p>
+              </div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                class="rounded-2xl bg-blue-600 px-4 py-2.5 text-xs font-black text-white shadow transition hover:bg-blue-700"
+                @click="resetCurrentSectionToDefault"
+              >
+                還原目前分類
+              </button>
+              <button
+                v-for="option in sectionResetOptions"
+                :key="`section-reset-${option.key}`"
+                type="button"
+                class="rounded-full px-3 py-1.5 text-xs font-black transition"
+                :class="activeCategory === option.key
+                  ? 'bg-slate-950 text-white shadow'
+                  : 'bg-white text-slate-600 ring-1 ring-blue-100 hover:bg-blue-100 hover:text-blue-700'
+                "
+                @click="resetSectionToDefault(option.key)"
+              >
+                {{ option.label }}
+              </button>
             </div>
           </div>
 
