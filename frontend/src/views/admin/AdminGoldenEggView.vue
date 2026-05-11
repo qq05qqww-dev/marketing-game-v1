@@ -617,7 +617,7 @@ const loadedCampaignSnapshot = ref(cloneByJson(campaign))
 const loadedPrizesSnapshot = ref(cloneByJson(prizes.value))
 const loadedDatabaseGameConfigFormSnapshot = ref({})
 const restoreNotice = ref('')
-const eggProbabilitySimulatorOpen = ref(false)
+const eggProbabilitySimulatorOpen = ref(true)
 const eggProbabilitySimulatorRuns = ref(1000)
 const eggProbabilitySimulationResults = ref([])
 const eggProbabilitySimulationAt = ref('')
@@ -10825,14 +10825,17 @@ watch(
               百分比總和：{{ probabilityTotal }}%｜{{ probabilityHintText }}
             </div>
 
-            <div class="mt-3 rounded-3xl border border-indigo-100 bg-indigo-50/80 p-4">
+            <div class="mt-3 rounded-3xl border border-indigo-100 bg-indigo-50/80 p-4 shadow-sm shadow-indigo-100/70">
+              <div class="mb-3 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black leading-5 text-indigo-700 ring-1 ring-indigo-100">
+                這裡就是金蛋機率試算器：輸入模擬次數後按「開始試算」。結果表預設展開，資料太多可按「收合試算器」。
+              </div>
               <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <p class="text-[11px] font-black uppercase tracking-[0.22em] text-indigo-500">
-                    Percent Simulator｜第 84801～85200 批
+                    Percent Simulator｜第 85201～85600 批｜預設展開
                   </p>
                   <h3 class="mt-1 text-base font-black text-slate-950">
-                    金蛋機率試算器
+                    金蛋機率試算器（預設展開，可收合）
                   </h3>
                   <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">
                     {{ eggProbabilitySimulatorSummary }}
@@ -10860,7 +10863,7 @@ watch(
                     class="rounded-2xl bg-white px-4 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100"
                     @click="eggProbabilitySimulatorOpen = !eggProbabilitySimulatorOpen"
                   >
-                    {{ eggProbabilitySimulatorOpen ? '收合結果' : '展開結果' }}
+                    {{ eggProbabilitySimulatorOpen ? '收合試算器' : '展開試算器' }}
                   </button>
                 </div>
               </div>
