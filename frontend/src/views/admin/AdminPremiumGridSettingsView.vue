@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 79201～79600 批：九宮格後台百分比與正式後端抽獎對齊版
+// 第 79601～80000 批：九宮格機率試算器收合展開版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -36,6 +36,7 @@ const currentCampaignTitle = ref('')
 const operationGuideOpen = ref(true)
 const probabilitySimulationCount = ref(1000)
 const probabilitySimulationResults = ref([])
+const probabilitySimulatorOpen = ref(false)
 const probabilityBackendGuardOpen = ref(true)
 
 const simpleMode = ref(true)
@@ -1609,37 +1610,58 @@ onMounted(() => {
               <div class="rounded-[28px] border border-slate-200 bg-white p-5">
                 <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <p class="text-xs font-black uppercase tracking-[0.22em] text-fuchsia-500">Percent Simulator</p>
+                    <p class="text-xs font-black uppercase tracking-[0.22em] text-fuchsia-500">Percent Simulator｜第 79601～80000 批</p>
                     <h3 class="mt-2 text-lg font-black text-slate-950">九宮格機率試算器</h3>
-                    <p class="mt-1 text-sm font-bold text-slate-500">此處用同一組後台百分比模擬；正式玩家抽獎仍由後端 Draw Engine 計算。</p>
+                    <p class="mt-1 text-sm font-bold text-slate-500">預設收合，資料多時不佔版面；展開後可用同一組後台百分比模擬。</p>
+                    <p class="mt-2 text-xs font-black text-slate-400">目前可試算 {{ probabilitySimulationSummary.itemCount }} 個獎項，總和 {{ probabilitySimulationSummary.totalText }}。</p>
                   </div>
                   <div class="flex flex-wrap items-center gap-2">
-                    <input v-model.number="probabilitySimulationCount" type="number" min="100" max="10000" step="100" class="w-32 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black" />
-                    <button type="button" class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white" @click="runProbabilitySimulation">開始試算</button>
+                    <span v-if="probabilitySimulationResults.length" class="rounded-full bg-emerald-50 px-3 py-2 text-xs font-black text-emerald-700">已試算 {{ probabilitySimulationCount }} 次</span>
+                    <button
+                      type="button"
+                      class="rounded-2xl border border-fuchsia-200 bg-fuchsia-50 px-4 py-3 text-sm font-black text-fuchsia-700"
+                      @click="probabilitySimulatorOpen = !probabilitySimulatorOpen"
+                    >
+                      {{ probabilitySimulatorOpen ? '收合試算器' : '展開試算器' }}
+                    </button>
                   </div>
                 </div>
 
-                <div v-if="probabilitySimulationResults.length" class="mt-4 overflow-hidden rounded-2xl border border-slate-100">
-                  <table class="w-full text-left text-sm">
-                    <thead class="bg-slate-950 text-white">
-                      <tr>
-                        <th class="px-4 py-3">獎項</th>
-                        <th class="px-4 py-3">設定%</th>
-                        <th class="px-4 py-3">理論命中</th>
-                        <th class="px-4 py-3">模擬命中</th>
-                        <th class="px-4 py-3">次數</th>
-                      </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 bg-white">
-                      <tr v-for="item in probabilitySimulationResults" :key="item.id">
-                        <td class="px-4 py-3 font-black text-slate-800">{{ item.icon }} {{ item.title }}</td>
-                        <td class="px-4 py-3 font-black text-slate-600">{{ item.percent }}%</td>
-                        <td class="px-4 py-3 font-black text-indigo-700">{{ item.theoreticalPercent }}%</td>
-                        <td class="px-4 py-3 font-black text-emerald-700">{{ item.simulatedPercent }}%</td>
-                        <td class="px-4 py-3 font-black text-slate-500">{{ item.hits }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div v-if="probabilitySimulatorOpen" class="mt-4 space-y-4 rounded-3xl border border-slate-100 bg-slate-50 p-4">
+                  <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-sm font-bold leading-6 text-slate-500">此處用同一組後台百分比模擬；正式玩家抽獎仍由後端 Draw Engine 計算。</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <input v-model.number="probabilitySimulationCount" type="number" min="100" max="10000" step="100" class="w-32 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black" />
+                      <button type="button" class="rounded-2xl bg-slate-950 px-4 py-3 text-sm font-black text-white" @click="runProbabilitySimulation">開始試算</button>
+                    </div>
+                  </div>
+
+                  <div v-if="probabilitySimulationResults.length" class="max-h-80 overflow-auto rounded-2xl border border-slate-100 bg-white">
+                    <table class="w-full min-w-[640px] text-left text-sm">
+                      <thead class="sticky top-0 bg-slate-950 text-white">
+                        <tr>
+                          <th class="px-4 py-3">獎項</th>
+                          <th class="px-4 py-3">設定%</th>
+                          <th class="px-4 py-3">理論命中</th>
+                          <th class="px-4 py-3">模擬命中</th>
+                          <th class="px-4 py-3">次數</th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-slate-100 bg-white">
+                        <tr v-for="item in probabilitySimulationResults" :key="item.id">
+                          <td class="px-4 py-3 font-black text-slate-800">{{ item.icon }} {{ item.title }}</td>
+                          <td class="px-4 py-3 font-black text-slate-600">{{ item.percent }}%</td>
+                          <td class="px-4 py-3 font-black text-indigo-700">{{ item.theoreticalPercent }}%</td>
+                          <td class="px-4 py-3 font-black text-emerald-700">{{ item.simulatedPercent }}%</td>
+                          <td class="px-4 py-3 font-black text-slate-500">{{ item.hits }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div v-else class="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-5 text-sm font-bold text-slate-500">
+                    尚未試算。輸入模擬次數後按「開始試算」，結果會顯示在這裡。
+                  </div>
                 </div>
               </div>
 
