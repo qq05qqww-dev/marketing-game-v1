@@ -1,4 +1,4 @@
-// 第 65251～65600 批：輪盤模組精緻操作流程與正式頁驗收捷徑版
+// 第 66001～66400 批：輪盤精緻預設微調面板版
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -661,6 +661,149 @@ const applyWheelPolishPreset = (presetKey = '') => {
     savedMessage.value = ''
   }, 2600)
 }
+
+
+// 第 66001～66400 批：輪盤精緻預設微調面板。
+// 讓平台模板與商家活動在同一個「模組精緻」分類內快速微調常用輪盤尺寸，不必切到多個分類。
+const polishFineTuneControls = [
+  {
+    key: 'wheelSize',
+    label: '輪盤大小',
+    unit: 'px',
+    min: 280,
+    max: 420,
+    step: 4,
+    desc: '控制整個輪盤直徑。手機版建議 320～376。'
+  },
+  {
+    key: 'outerRingWidth',
+    label: '外框厚度',
+    unit: 'px',
+    min: 8,
+    max: 26,
+    step: 1,
+    desc: '控制金屬外圈厚度。黑金與金橘可略厚。'
+  },
+  {
+    key: 'pointerSize',
+    label: '指針大小',
+    unit: 'px',
+    min: 32,
+    max: 68,
+    step: 1,
+    desc: '控制上方指針比例，太大會壓到輪盤文字。'
+  },
+  {
+    key: 'centerButtonSize',
+    label: '中心按鈕',
+    unit: 'px',
+    min: 72,
+    max: 116,
+    step: 2,
+    desc: '控制 SPIN 中心按鈕大小。'
+  },
+  {
+    key: 'prizeTextSize',
+    label: '獎項文字',
+    unit: 'px',
+    min: 10,
+    max: 18,
+    step: 1,
+    desc: '控制輪盤獎項文字大小。手機過小可調 12～14。'
+  },
+  {
+    key: 'prizeIconSize',
+    label: '獎項圖示',
+    unit: 'px',
+    min: 28,
+    max: 58,
+    step: 1,
+    desc: '控制獎項 emoji 或圖片圖示大小。'
+  }
+]
+
+const polishFineTuneSummary = computed(() => {
+  const meta = currentWheelPolishMeta.value
+  const presetName = String(meta?.presetName || currentWheelPolishPreset.value?.name || '尚未套用精緻預設')
+
+  return {
+    eyebrow: 'Polish Fine Tune｜第 66001～66400 批',
+    title: '精緻預設微調面板',
+    desc: '先套用精緻預設，再在這裡微調輪盤大小、外框、指針、中心按鈕與獎項顯示。右側預覽會即時更新，正式玩家頁仍需按「儲存設定」。',
+    presetName,
+    target: isPlatformTemplateMode.value
+      ? `platform-template:${templateId.value}`
+      : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`,
+    updatedAt: meta?.fineTune?.updatedAt ? formatSaveAuditTime(meta.fineTune.updatedAt) : '尚未微調'
+  }
+})
+
+const normalizeFineTuneNumber = (value, control = {}) => {
+  const raw = Number(value)
+  const fallback = Number(defaultSettings().wheelStyle?.[control.key] || 0)
+  const parsed = Number.isFinite(raw) ? raw : fallback
+  const min = Number(control.min ?? parsed)
+  const max = Number(control.max ?? parsed)
+  const step = Number(control.step || 1)
+  const clamped = Math.min(Math.max(parsed, min), max)
+
+  return Math.round(clamped / step) * step
+}
+
+const getWheelFineTuneValue = (key = '') => {
+  const value = Number(settings?.wheelStyle?.[key])
+  if (Number.isFinite(value)) return value
+
+  return Number(defaultSettings().wheelStyle?.[key] || 0)
+}
+
+const setWheelFineTuneValue = (key = '', value = '') => {
+  const control = polishFineTuneControls.find((item) => item.key === key)
+  if (!control) return
+
+  if (!settings.wheelStyle || typeof settings.wheelStyle !== 'object' || Array.isArray(settings.wheelStyle)) {
+    settings.wheelStyle = {}
+  }
+
+  settings.wheelStyle[key] = normalizeFineTuneNumber(value, control)
+
+  if (!settings.templateMeta || typeof settings.templateMeta !== 'object' || Array.isArray(settings.templateMeta)) {
+    settings.templateMeta = {}
+  }
+
+  const existingVisualPolish = settings.templateMeta.visualPolish &&
+    typeof settings.templateMeta.visualPolish === 'object' &&
+    !Array.isArray(settings.templateMeta.visualPolish)
+    ? settings.templateMeta.visualPolish
+    : {}
+
+  settings.templateMeta.visualPolish = {
+    ...existingVisualPolish,
+    fineTune: {
+      ...(existingVisualPolish.fineTune || {}),
+      batch: '66001-66400',
+      updatedAt: new Date().toISOString(),
+      updatedKey: key,
+      updatedLabel: control.label,
+      updatedValue: settings.wheelStyle[key],
+      mode: isPlatformTemplateMode.value ? 'platform_template' : 'merchant_campaign',
+      target: isPlatformTemplateMode.value
+        ? `platform-template:${templateId.value}`
+        : `tenant:${tenantSlug.value} / campaignId:${campaignId.value || '-'}`
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.clearTimeout(previewSyncTimer)
+  }
+
+  persistLocalDraft()
+  previewFocusMode.value = 'wheel'
+  nextTick(scrollPreviewToFocus)
+
+  markSettingsDirty(`已微調「${control.label}」為 ${settings.wheelStyle[key]}${control.unit || ''}，尚未儲存`)
+}
+
 
 const displayLabels = {
   showBrandCard: '顯示品牌卡片',
@@ -2932,6 +3075,66 @@ onBeforeUnmount(() => {
                 <p class="text-xs font-black text-slate-400">套用目標</p>
                 <p class="mt-1 break-all text-xs font-black text-slate-900">{{ currentWheelPolishStatus.target }}</p>
               </div>
+            </div>
+          </div>
+
+          <div class="mt-5 rounded-[1.75rem] border border-indigo-100 bg-gradient-to-br from-indigo-50 via-white to-sky-50 p-5 shadow-sm">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-indigo-500">{{ polishFineTuneSummary.eyebrow }}</p>
+                <h3 class="mt-2 text-xl font-black text-slate-950">{{ polishFineTuneSummary.title }}</h3>
+                <p class="mt-2 max-w-3xl text-sm font-bold leading-6 text-slate-500">{{ polishFineTuneSummary.desc }}</p>
+              </div>
+              <div class="grid gap-2 rounded-3xl bg-white/80 p-4 text-xs font-black text-slate-600 ring-1 ring-indigo-100">
+                <span>目前預設：{{ polishFineTuneSummary.presetName }}</span>
+                <span>微調目標：{{ polishFineTuneSummary.target }}</span>
+                <span>最近微調：{{ polishFineTuneSummary.updatedAt }}</span>
+              </div>
+            </div>
+
+            <div class="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div
+                v-for="control in polishFineTuneControls"
+                :key="control.key"
+                class="rounded-3xl border border-white bg-white/90 p-4 shadow-sm ring-1 ring-indigo-50"
+              >
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <p class="text-sm font-black text-slate-900">{{ control.label }}</p>
+                    <p class="mt-1 text-xs font-bold leading-5 text-slate-500">{{ control.desc }}</p>
+                  </div>
+                  <span class="rounded-full bg-indigo-100 px-3 py-1 text-xs font-black text-indigo-700">
+                    {{ getWheelFineTuneValue(control.key) }}{{ control.unit }}
+                  </span>
+                </div>
+
+                <input
+                  type="range"
+                  class="mt-4 w-full accent-indigo-600"
+                  :min="control.min"
+                  :max="control.max"
+                  :step="control.step"
+                  :value="getWheelFineTuneValue(control.key)"
+                  @input="setWheelFineTuneValue(control.key, $event.target.value)"
+                />
+
+                <div class="mt-3 flex items-center gap-2">
+                  <input
+                    type="number"
+                    class="w-28 rounded-2xl border border-indigo-100 px-3 py-2 text-sm font-black text-slate-800 outline-none focus:border-indigo-400"
+                    :min="control.min"
+                    :max="control.max"
+                    :step="control.step"
+                    :value="getWheelFineTuneValue(control.key)"
+                    @input="setWheelFineTuneValue(control.key, $event.target.value)"
+                  />
+                  <span class="text-xs font-black text-slate-400">{{ control.min }}～{{ control.max }}{{ control.unit }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mt-4 rounded-3xl border border-indigo-200 bg-indigo-50 p-4 text-sm font-bold leading-6 text-indigo-800">
+              微調會立即更新右側預覽與本機草稿；要讓平台模板或商家正式玩家頁同步，仍需按「儲存設定」。
             </div>
           </div>
 
