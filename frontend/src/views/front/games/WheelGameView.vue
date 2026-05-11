@@ -1897,6 +1897,25 @@ const campaign = reactive({
   ruleContent: '每日登入可獲得 1 次轉盤機會。\n分享活動可依設定增加轉盤機會。\n獎項數量有限，送完為止。',
   prizeInfoTitle: '獎品說明',
   prizeInfoContent: '中獎結果會顯示於畫面與最近轉盤紀錄。\n實際兌換方式以主辦單位公告為準。\n部分獎項可能有使用期限或資格限制。',
+  resultModalWinImageUrl: '',
+  resultModalLoseImageUrl: '',
+  resultModalImageSize: 132,
+  resultModalBackgroundColor: '#ffffff',
+  resultModalHeaderFromColor: '#f59e0b',
+  resultModalHeaderToColor: '#dc2626',
+  resultModalTitleText: '恭喜中獎',
+  resultModalLoseTitleText: '再接再厲',
+  resultModalTitleTextSize: 30,
+  resultModalTitleTextColor: '#ffffff',
+  resultModalPrizeTextSize: 18,
+  resultModalPrizeTextColor: '#fffbeb',
+  resultModalHintText: '建議截圖保存中獎結果，兌換方式以主辦單位公告為準。',
+  resultModalHintTextSize: 13,
+  resultModalHintTextColor: '#92400e',
+  resultModalPrimaryButtonColor: '#f97316',
+  resultModalPrimaryButtonToColor: '#dc2626',
+  resultModalPrimaryButtonTextColor: '#ffffff',
+  resultModalSecondaryButtonTextColor: '#334155',
   // 第 46401～46800 批：輪盤玩家頁分享區隱藏與剩餘次數長條版。正式玩家頁預設簡潔，mode=admin 才顯示完整輔助資訊。
   showFrontRules: true,
   showFrontPrizeInfo: true,
@@ -3533,6 +3552,60 @@ const resultHintText = computed(() => {
   return '結果已寫入我的遊戲紀錄，目前轉盤機會已用完，可分享活動增加 1 次。'
 })
 
+const wheelResultModalTitle = computed(() => {
+  if (resultPrize.value?.type === 'lose') return campaign.resultModalLoseTitleText || '再接再厲'
+  return campaign.resultModalTitleText || '恭喜中獎'
+})
+
+const wheelResultModalImageUrl = computed(() => {
+  const configured = resultPrize.value?.type === 'lose'
+    ? campaign.resultModalLoseImageUrl
+    : campaign.resultModalWinImageUrl
+
+  return String(configured || '').trim()
+})
+
+const wheelResultModalHeaderStyle = computed(() => ({
+  background: `linear-gradient(135deg, ${campaign.resultModalHeaderFromColor || '#f59e0b'}, ${campaign.resultModalHeaderToColor || '#dc2626'})`
+}))
+
+const wheelResultModalCardStyle = computed(() => ({
+  backgroundColor: campaign.resultModalBackgroundColor || '#ffffff'
+}))
+
+const wheelResultModalImageStyle = computed(() => {
+  const size = Math.max(72, Math.min(220, Number(campaign.resultModalImageSize || 132)))
+  return {
+    width: `${size}px`,
+    height: `${size}px`,
+    fontSize: `${Math.max(40, Math.round(size * 0.52))}px`
+  }
+})
+
+const wheelResultModalTitleStyle = computed(() => ({
+  fontSize: `${Math.max(20, Math.min(48, Number(campaign.resultModalTitleTextSize || 30)))}px`,
+  color: campaign.resultModalTitleTextColor || '#ffffff'
+}))
+
+const wheelResultModalPrizeStyle = computed(() => ({
+  fontSize: `${Math.max(14, Math.min(34, Number(campaign.resultModalPrizeTextSize || 18)))}px`,
+  color: campaign.resultModalPrizeTextColor || '#fffbeb'
+}))
+
+const wheelResultModalHintStyle = computed(() => ({
+  fontSize: `${Math.max(11, Math.min(22, Number(campaign.resultModalHintTextSize || 13)))}px`,
+  color: campaign.resultModalHintTextColor || '#92400e'
+}))
+
+const wheelResultPrimaryButtonStyle = computed(() => ({
+  color: campaign.resultModalPrimaryButtonTextColor || '#ffffff',
+  background: `linear-gradient(90deg, ${campaign.resultModalPrimaryButtonColor || '#f97316'}, ${campaign.resultModalPrimaryButtonToColor || '#dc2626'})`
+}))
+
+const wheelResultSecondaryButtonStyle = computed(() => ({
+  color: campaign.resultModalSecondaryButtonTextColor || '#334155'
+}))
+
 const handleResultPrimaryAction = async () => {
   if (isResultActionProcessing.value) return
 
@@ -5077,6 +5150,8 @@ const applyWheelAdminDraftSettings = (draft = null) => {
     }))
   }
 
+  applyWheelResultModalSettings(draft)
+
   updateChanceText()
 }
 
@@ -5180,6 +5255,8 @@ const applyRemoteWheelCampaignData = (apiCampaign = {}) => {
     campaign.wheelShowPrizeName = settings.wheelStyle.showPrizeName !== false
     campaign.wheelShowSliceBorder = settings.wheelStyle.showSliceBorder !== false
   }
+
+  applyWheelResultModalSettings(settings)
 
   campaign.playButtonText = settings.playButtonText || campaign.playButtonText
   campaign.verifyButtonText = settings.verifyButtonText || campaign.verifyButtonText
@@ -10323,26 +10400,24 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
       v-if="showResultModal"
       class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-4 backdrop-blur-md"
     >
-      <div class="premium-result-card w-full max-w-sm overflow-hidden rounded-[36px] bg-white shadow-2xl">
+      <div class="premium-result-card w-full max-w-sm overflow-hidden rounded-[36px] shadow-2xl" :style="wheelResultModalCardStyle">
         <div
           class="relative overflow-hidden p-6 text-center text-white"
-          :class="resultPrize?.type === 'lose'
-            ? 'bg-gradient-to-br from-slate-500 via-slate-700 to-slate-950'
-            : 'bg-gradient-to-br from-amber-400 via-orange-500 to-red-600'
-          "
+          :style="wheelResultModalHeaderStyle"
         >
           <div class="absolute inset-0 opacity-25 premium-result-dot-bg"></div>
           <div class="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-white/20 blur-2xl"></div>
           <div class="absolute -bottom-20 -left-16 h-48 w-48 rounded-full bg-yellow-200/20 blur-3xl"></div>
 
           <div
-            class="premium-result-prize-image relative mx-auto flex h-32 w-32 items-center justify-center overflow-hidden rounded-[36px] border border-white/40 bg-white/20 text-7xl shadow-2xl backdrop-blur sm:h-36 sm:w-36"
+            class="premium-result-prize-image relative mx-auto flex items-center justify-center overflow-hidden rounded-[36px] border border-white/40 bg-white/20 shadow-2xl backdrop-blur"
             :class="campaign.enablePrizeBounce && resultPrize?.type !== 'lose' ? 'premium-prize-bounce' : ''"
+            :style="wheelResultModalImageStyle"
           >
             <img
-              v-if="hasPrizeImage(resultPrize)"
-              :src="getPrizeImageUrl(resultPrize)"
-              alt="獎項圖片"
+              v-if="wheelResultModalImageUrl || hasPrizeImage(resultPrize)"
+              :src="wheelResultModalImageUrl || getPrizeImageUrl(resultPrize)"
+              alt="結果圖片"
               class="h-full w-full object-contain p-2"
             />
             <span v-else>{{ resultPrize?.icon || '🎁' }}</span>
@@ -10352,11 +10427,11 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
             Wheel Result
           </p>
 
-          <p class="relative mt-2 text-3xl font-black drop-shadow">
-            {{ resultPrize?.type === 'lose' ? '再接再厲' : '恭喜中獎' }}
+          <p class="relative mt-2 font-black drop-shadow" :style="wheelResultModalTitleStyle">
+            {{ wheelResultModalTitle }}
           </p>
 
-          <p class="relative mt-2 rounded-full bg-white/20 px-4 py-2 text-lg font-black text-yellow-50 shadow-inner">
+          <p class="relative mt-2 rounded-full bg-white/20 px-4 py-2 font-black shadow-inner" :style="wheelResultModalPrizeStyle">
             {{ resultPrize?.name }}
           </p>
 
@@ -10365,7 +10440,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
           </p>
         </div>
 
-        <div class="bg-gradient-to-b from-white to-orange-50 p-6 text-center">
+        <div class="p-6 text-center">
           <p class="rounded-3xl bg-white px-4 py-4 text-sm font-bold leading-6 text-slate-500 shadow-sm">
             {{ resultPrize?.description || '結果已寫入我的遊戲紀錄。' }}
           </p>
@@ -10392,8 +10467,8 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
             </div>
           </div>
 
-          <p class="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-xs font-black leading-5 text-orange-700">
-            {{ resultHintText }}
+          <p class="mt-4 rounded-2xl bg-orange-50 px-4 py-3 font-black leading-5" :style="wheelResultModalHintStyle">
+            {{ campaign.resultModalHintText || resultHintText }}
           </p>
 
           <div
@@ -10405,7 +10480,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
             </p>
 
             <p class="mt-1">
-              建議截圖、複製或分享中獎結果；兌換方式以主辦單位公告為準。
+              {{ campaign.resultModalHintText || '建議截圖、複製或分享中獎結果；兌換方式以主辦單位公告為準。' }}
             </p>
           </div>
 
@@ -10432,6 +10507,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                 : 'bg-gradient-to-r from-orange-500 to-red-600 hover:brightness-110'
               "
               :disabled="isResultActionProcessing"
+              :style="isResultActionProcessing ? {} : wheelResultPrimaryButtonStyle"
               @click="handleResultPrimaryAction"
             >
               {{ resultActionText }}
@@ -10442,6 +10518,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
               class="w-full rounded-2xl border border-orange-100 bg-white px-5 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-orange-50"
               :class="isResultActionProcessing ? 'cursor-not-allowed opacity-60' : ''"
               :disabled="isResultActionProcessing"
+              :style="wheelResultSecondaryButtonStyle"
               @click="goGameHistory"
             >
               查看我的遊戲紀錄
@@ -10452,6 +10529,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
               class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-5 py-3 text-sm font-black text-slate-500 transition hover:bg-slate-100"
               :class="isResultActionProcessing ? 'cursor-not-allowed opacity-60' : ''"
               :disabled="isResultActionProcessing"
+              :style="wheelResultSecondaryButtonStyle"
               @click="stopAllSounds(); showResultModal = false"
             >
               先關閉

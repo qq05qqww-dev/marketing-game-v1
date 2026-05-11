@@ -356,6 +356,56 @@ const clearSettingSearch = () => {
   settingSearchQuery.value = ''
 }
 
+const readImageFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(String(reader.result || ''))
+  reader.onerror = () => reject(reader.error || new Error('讀取圖片失敗'))
+  reader.readAsDataURL(file)
+})
+
+const handleResultModalLocalImage = async (event, target = 'win') => {
+  const file = event?.target?.files?.[0]
+  if (!file) return
+
+  if (!String(file.type || '').startsWith('image/')) {
+    saveErrorMessage.value = '請選擇圖片檔案。'
+    event.target.value = ''
+    return
+  }
+
+  if (file.size > 1.5 * 1024 * 1024) {
+    saveErrorMessage.value = '圖片建議小於 1.5MB，避免模板設定過大。'
+    event.target.value = ''
+    return
+  }
+
+  try {
+    const dataUrl = await readImageFileAsDataUrl(file)
+    if (!settings.resultModal) settings.resultModal = {}
+    if (target === 'lose') {
+      settings.resultModal.loseImageUrl = dataUrl
+    } else {
+      settings.resultModal.winImageUrl = dataUrl
+    }
+    markSettingsDirty(target === 'lose' ? '已套用未中獎彈窗本機圖片，尚未儲存' : '已套用中獎彈窗本機圖片，尚未儲存')
+  } catch (error) {
+    saveErrorMessage.value = '圖片讀取失敗，請重新選擇。'
+  } finally {
+    event.target.value = ''
+  }
+}
+
+const clearResultModalImage = (target = 'win') => {
+  if (!settings.resultModal) settings.resultModal = {}
+  if (target === 'lose') {
+    settings.resultModal.loseImageUrl = ''
+    markSettingsDirty('已清除未中獎彈窗圖片，尚未儲存')
+  } else {
+    settings.resultModal.winImageUrl = ''
+    markSettingsDirty('已清除中獎彈窗圖片，尚未儲存')
+  }
+}
+
 const setCategoryFromSearch = (key) => {
   setCategory(key)
   categoryPanelCollapsed.value = false
@@ -1147,6 +1197,27 @@ const defaultSettings = () => ({
   playButtonText: '開始轉盤',
   verifyButtonText: '驗證序號',
   resultTitle: '恭喜中獎',
+  resultModal: {
+    winImageUrl: '',
+    loseImageUrl: '',
+    imageSize: 132,
+    backgroundColor: '#ffffff',
+    headerFromColor: '#f59e0b',
+    headerToColor: '#dc2626',
+    titleText: '恭喜中獎',
+    loseTitleText: '再接再厲',
+    titleTextSize: 30,
+    titleTextColor: '#ffffff',
+    prizeTextSize: 18,
+    prizeTextColor: '#fffbeb',
+    hintText: '建議截圖保存中獎結果，兌換方式以主辦單位公告為準。',
+    hintTextSize: 13,
+    hintTextColor: '#92400e',
+    primaryButtonColor: '#f97316',
+    primaryButtonToColor: '#dc2626',
+    primaryButtonTextColor: '#ffffff',
+    secondaryButtonTextColor: '#334155'
+  },
   theme: {
     backgroundFrom: '#fff8e7',
     backgroundTo: '#b45309',
@@ -4526,18 +4597,78 @@ onBeforeUnmount(() => {
 
         <section v-show="activeCategory === 'result'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">結果彈窗</p>
-          <h2 class="mt-2 text-2xl font-black text-slate-950">中獎結果與按鈕文字</h2>
-          <p class="mt-2 text-sm font-bold text-slate-500">整理玩家抽完輪盤後會看到的主要文字。</p>
+          <h2 class="mt-2 text-2xl font-black text-slate-950">中獎結果圖片、文字與顏色</h2>
+          <p class="mt-2 text-sm font-bold text-slate-500">整理玩家抽完輪盤後會看到的主要視窗；可貼網路圖片，也可選本機圖片轉成 Data URL 儲存。</p>
 
           <div class="mt-5 grid gap-4 md:grid-cols-2">
             <label class="grid gap-2 text-sm font-black text-slate-700">
-              結果標題
-              <input v-model="settings.resultTitle" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              中獎標題
+              <input v-model="settings.resultModal.titleText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+            </label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              未中獎標題
+              <input v-model="settings.resultModal.loseTitleText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+            </label>
+            <label class="grid gap-2 text-sm font-black text-slate-700 md:col-span-2">
+              兌換 / 提醒文字
+              <input v-model="settings.resultModal.hintText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
             </label>
             <label class="grid gap-2 text-sm font-black text-slate-700">
               開始轉盤按鈕
               <input v-model="settings.playButtonText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
             </label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">
+              結果備用標題
+              <input v-model="settings.resultTitle" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+            </label>
+          </div>
+
+          <div class="mt-6 grid gap-4 md:grid-cols-2">
+            <div class="rounded-3xl border border-amber-100 bg-amber-50 p-4">
+              <p class="text-sm font-black text-slate-800">中獎圖片</p>
+              <input v-model="settings.resultModal.winImageUrl" placeholder="https://..." class="mt-3 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              <div class="mt-3 flex flex-wrap gap-2">
+                <label class="cursor-pointer rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white">
+                  選本機圖片
+                  <input type="file" accept="image/*" class="hidden" @change="handleResultModalLocalImage($event, 'win')" />
+                </label>
+                <button type="button" class="rounded-2xl border border-rose-100 bg-white px-4 py-2 text-xs font-black text-rose-600" @click="clearResultModalImage('win')">清除圖片</button>
+              </div>
+            </div>
+
+            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p class="text-sm font-black text-slate-800">未中獎圖片</p>
+              <input v-model="settings.resultModal.loseImageUrl" placeholder="https://..." class="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+              <div class="mt-3 flex flex-wrap gap-2">
+                <label class="cursor-pointer rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white">
+                  選本機圖片
+                  <input type="file" accept="image/*" class="hidden" @change="handleResultModalLocalImage($event, 'lose')" />
+                </label>
+                <button type="button" class="rounded-2xl border border-rose-100 bg-white px-4 py-2 text-xs font-black text-rose-600" @click="clearResultModalImage('lose')">清除圖片</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 rounded-3xl border border-violet-100 bg-violet-50 p-5">
+            <h3 class="text-sm font-black text-violet-900">圖片與文字大小</h3>
+            <div class="mt-4 grid gap-5 md:grid-cols-2">
+              <label class="grid gap-2 text-sm font-black text-slate-700">圖片大小 {{ settings.resultModal.imageSize }}px<input v-model.number="settings.resultModal.imageSize" type="range" min="72" max="220" /></label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">標題文字 {{ settings.resultModal.titleTextSize }}px<input v-model.number="settings.resultModal.titleTextSize" type="range" min="20" max="48" /></label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">獎項文字 {{ settings.resultModal.prizeTextSize }}px<input v-model.number="settings.resultModal.prizeTextSize" type="range" min="14" max="34" /></label>
+              <label class="grid gap-2 text-sm font-black text-slate-700">提醒文字 {{ settings.resultModal.hintTextSize }}px<input v-model.number="settings.resultModal.hintTextSize" type="range" min="11" max="22" /></label>
+            </div>
+          </div>
+
+          <div class="mt-6 grid gap-4 md:grid-cols-3">
+            <label class="grid gap-2 text-sm font-black text-slate-700">彈窗底色<input v-model="settings.resultModal.backgroundColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">上方起始色<input v-model="settings.resultModal.headerFromColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">上方結束色<input v-model="settings.resultModal.headerToColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">標題顏色<input v-model="settings.resultModal.titleTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">獎項文字顏色<input v-model="settings.resultModal.prizeTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">提醒文字顏色<input v-model="settings.resultModal.hintTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">主按鈕起始<input v-model="settings.resultModal.primaryButtonColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">主按鈕結束<input v-model="settings.resultModal.primaryButtonToColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+            <label class="grid gap-2 text-sm font-black text-slate-700">主按鈕文字<input v-model="settings.resultModal.primaryButtonTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
           </div>
         </section>
 
