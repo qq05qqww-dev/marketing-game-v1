@@ -1881,6 +1881,7 @@ const campaign = reactive({
   wheelPrizeTextSize: 13,
   wheelPrizeIconSize: 38,
   wheelPrizeLabelRadius: 108,
+  // 第 68401～68800 批：強力半徑 / 文字 / 圖示控制，讓最大最小差異更明顯。
   // 第 68001～68400 批：獎項密度自適應與半徑控制修正版
 // 第 67601～68000 批：獎項置中與指針命中校正。
   wheelPrizeLabelOffsetX: 0,
@@ -3503,19 +3504,20 @@ const getWheelSliceFill = (index) => {
 const normalizeWheelPrizeLabelRadius = (value) => {
   const raw = Number(value || 0)
 
-  // 第 68001～68400 批：修正獎項半徑滑桿無感問題。
-  // 舊版後台曾使用 20～42，但直接乘 160 會只落在 64～67px，幾乎看不出變化。
-  // 這裡保留舊資料相容，同時讓新版 48～82% 能真正控制獎項靠中心 / 靠外圈。
-  if (raw > 0 && raw < 48) {
-    const legacyRatio = Math.min(1, Math.max(0, (raw - 20) / 22))
-    return Math.round(88 + legacyRatio * 36)
+  // 第 68401～68800 批：強力半徑控制。
+  // 後台現在使用 36～94%，玩家頁轉成 SVG 半徑 62～146px，
+  // 讓「靠中心 / 靠外圈」差異明顯，不再看起來無感。
+  if (raw > 0 && raw < 36) {
+    const legacyRatio = Math.min(1, Math.max(0, (raw - 20) / 16))
+    return Math.round(72 + legacyRatio * 28)
   }
 
-  if (raw >= 48 && raw <= 100) {
-    return Math.min(132, Math.max(72, Math.round(160 * (raw / 100))))
+  if (raw >= 36 && raw <= 100) {
+    const ratio = Math.min(1, Math.max(0, (raw - 36) / 58))
+    return Math.round(62 + ratio * 84)
   }
 
-  return Math.min(132, Math.max(72, raw || 108))
+  return Math.min(146, Math.max(58, raw || 108))
 }
 
 const getWheelPrizeDensityMode = () => {
@@ -3555,22 +3557,21 @@ const getWheelSvgLabelBox = (index) => {
   const point = getWheelSvgLabelPosition(index)
   const total = Math.max(1, activePrizes.value.length)
   const densityMode = getWheelPrizeDensityMode()
-  const baseIconSize = Math.max(22, Math.min(64, Number(campaign.wheelPrizeIconSize || 38)))
-  const baseTextSize = Math.max(9, Math.min(18, Number(campaign.wheelPrizeTextSize || 13)))
-  const baseBoxWidth = Math.max(48, Math.min(122, Number(campaign.wheelPrizeTextBoxWidth || 82)))
+  const baseIconSize = Math.max(14, Math.min(76, Number(campaign.wheelPrizeIconSize || 38)))
+  const baseTextSize = Math.max(8, Math.min(26, Number(campaign.wheelPrizeTextSize || 13)))
+  const baseBoxWidth = Math.max(44, Math.min(132, Number(campaign.wheelPrizeTextBoxWidth || 82)))
 
-  const iconSize = densityMode === 'dense'
-    ? Math.min(baseIconSize, 30)
-    : (densityMode === 'compact' ? Math.min(baseIconSize, 34) : baseIconSize)
-  const textSize = densityMode === 'dense'
-    ? Math.min(baseTextSize, 10)
-    : (densityMode === 'compact' ? Math.min(baseTextSize, 11) : baseTextSize)
-  const boxWidth = densityMode === 'dense'
-    ? Math.min(baseBoxWidth, 62)
-    : (densityMode === 'compact' ? Math.min(baseBoxWidth, 72) : baseBoxWidth)
+  // 第 68401～68800 批：密度模式不再把滑桿效果硬壓死。
+  // 舊版 dense / compact 直接把文字限制在 10～11px、圖示限制在 30～34px，
+  // 導致最大最小幾乎看不出差異。新版改為比例縮放，獎項多時仍防重疊，
+  // 但保留「獎項文字大小 / 獎項圖示大小」的明顯控制感。
+  const densityScale = densityMode === 'dense' ? 0.82 : (densityMode === 'compact' ? 0.9 : 1)
+  const iconSize = Math.round(Math.max(12, Math.min(70, baseIconSize * densityScale)))
+  const textSize = Math.round(Math.max(7, Math.min(24, baseTextSize * (densityMode === 'dense' ? 0.86 : densityScale))))
+  const boxWidth = Math.round(Math.max(42, Math.min(128, baseBoxWidth * (densityMode === 'dense' ? 0.9 : 1))))
   const boxHeight = Math.max(
-    densityMode === 'dense' ? 40 : 48,
-    iconSize + (campaign.wheelShowPrizeName === false ? 8 : textSize * 2.1 + 8)
+    densityMode === 'dense' ? 34 : 44,
+    iconSize + (campaign.wheelShowPrizeName === false ? 6 : textSize * 1.75 + 6)
   )
 
   return {
@@ -10953,7 +10954,7 @@ aside {
 
 .premium-wheel-prize-badge-dense {
   gap: 0;
-  transform: scale(0.94);
+  transform: scale(1);
 }
 
 .premium-wheel-prize-badge-dense .premium-wheel-prize-media {

@@ -716,28 +716,28 @@ const polishFineTuneControls = [
     key: 'prizeTextSize',
     label: '獎項文字',
     unit: 'px',
-    min: 10,
-    max: 18,
+    min: 8,
+    max: 26,
     step: 1,
-    desc: '控制輪盤獎項文字大小。手機過小可調 12～14。'
+    desc: '第 68401～68800 批：放大有效控制範圍。獎項多時也會保留明顯變化；建議 10～16。'
   },
   {
     key: 'prizeIconSize',
     label: '獎項圖示',
     unit: 'px',
-    min: 28,
-    max: 58,
+    min: 16,
+    max: 76,
     step: 1,
-    desc: '控制獎項 emoji 或圖片圖示大小。'
+    desc: '第 68401～68800 批：圖示大小不再被密度模式過度限制；建議 24～54。'
   },
   {
     key: 'prizeLabelRadius',
     label: '獎項半徑',
     unit: '%',
-    min: 48,
-    max: 82,
+    min: 36,
+    max: 94,
     step: 1,
-    desc: '控制獎項在扇形內的半徑位置。數字越大越靠外圈；獎項很多時建議 64～76。'
+    desc: '第 68401～68800 批：半徑改成強力模式。數字小明顯靠中心，數字大明顯靠外圈；建議 62～82。'
   },
   {
     key: 'prizeLabelOffsetY',
@@ -3538,20 +3538,20 @@ onBeforeUnmount(() => {
 
             <label class="grid gap-2 text-sm font-black text-slate-700">
               獎項文字大小
-              <input v-model.number="settings.wheelStyle.prizeTextSize" type="range" min="10" max="20" class="w-full" />
-              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeTextSize }} px</span>
+              <input v-model.number="settings.wheelStyle.prizeTextSize" type="range" min="8" max="26" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeTextSize }} px｜建議 10～16</span>
             </label>
 
             <label class="grid gap-2 text-sm font-black text-slate-700">
               獎項圖示大小
-              <input v-model.number="settings.wheelStyle.prizeIconSize" type="range" min="24" max="54" class="w-full" />
-              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeIconSize }} px</span>
+              <input v-model.number="settings.wheelStyle.prizeIconSize" type="range" min="16" max="76" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeIconSize }} px｜建議 24～54</span>
             </label>
 
             <label class="grid gap-2 text-sm font-black text-slate-700">
               獎項離中心距離
-              <input v-model.number="settings.wheelStyle.prizeLabelRadius" type="range" min="48" max="82" class="w-full" />
-              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeLabelRadius }} %｜建議 64～76</span>
+              <input v-model.number="settings.wheelStyle.prizeLabelRadius" type="range" min="36" max="94" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeLabelRadius }} %｜強力半徑｜建議 62～82</span>
             </label>
           </div>
 
