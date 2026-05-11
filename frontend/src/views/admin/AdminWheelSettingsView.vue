@@ -558,6 +558,58 @@ const wheelPolishSummary = computed(() => ({
     : '只更新目前活動 gameConfig.settings；玩家頁讀此活動資料庫設定。'
 }))
 
+
+const currentWheelPolishMeta = computed(() => {
+  const meta = settings?.templateMeta?.visualPolish
+
+  if (!meta || typeof meta !== 'object' || Array.isArray(meta)) {
+    return {}
+  }
+
+  return meta
+})
+
+const currentWheelPolishPreset = computed(() => {
+  const presetKey = String(currentWheelPolishMeta.value?.presetKey || '').trim()
+
+  return wheelPolishPresets.find((item) => item.key === presetKey) || null
+})
+
+const currentWheelPolishStatus = computed(() => {
+  const preset = currentWheelPolishPreset.value
+  const meta = currentWheelPolishMeta.value
+
+  if (!preset) {
+    return {
+      eyebrow: 'Polish Active Preset｜第 65601～66000 批',
+      title: '尚未套用精緻預設',
+      badge: '未套用',
+      badgeClass: 'bg-slate-100 text-slate-700 ring-1 ring-slate-200',
+      desc: '目前輪盤使用一般設定。你可以在下方選擇一個精緻預設，右側預覽會立即更新。',
+      presetName: '尚未套用',
+      appliedAt: '尚未套用',
+      target: wheelPolishSummary.value.target,
+      safe: false
+    }
+  }
+
+  return {
+    eyebrow: 'Polish Active Preset｜第 65601～66000 批',
+    title: `目前套用：${preset.name}`,
+    badge: preset.badge || '已套用',
+    badgeClass: 'bg-orange-100 text-orange-800 ring-1 ring-orange-200',
+    desc: preset.desc,
+    presetName: preset.name,
+    appliedAt: meta.appliedAt ? formatSaveAuditTime(meta.appliedAt) : '尚未記錄時間',
+    target: meta.target || wheelPolishSummary.value.target,
+    safe: true
+  }
+})
+
+const isCurrentWheelPolishPreset = (presetKey = '') => {
+  return String(currentWheelPolishMeta.value?.presetKey || '') === String(presetKey || '')
+}
+
 const applyWheelPolishPreset = (presetKey = '') => {
   const preset = wheelPolishPresets.find((item) => item.key === presetKey)
   if (!preset) return
@@ -577,7 +629,7 @@ const applyWheelPolishPreset = (presetKey = '') => {
   }
 
   settings.templateMeta.visualPolish = {
-    batch: '58001-58400',
+    batch: '65601-66000',
     presetKey: preset.key,
     presetName: preset.name,
     appliedAt: new Date().toISOString(),
@@ -603,6 +655,7 @@ const applyWheelPolishPreset = (presetKey = '') => {
   previewFocusMode.value = 'wheel'
   nextTick(scrollPreviewToFocus)
 
+  markSettingsDirty(`已套用「${preset.name}」，右側預覽已更新但尚未儲存`)
   savedMessage.value = `已套用「${preset.name}」，右側預覽已更新；請按儲存設定保存。`
   window.setTimeout(() => {
     savedMessage.value = ''
@@ -2855,16 +2908,47 @@ onBeforeUnmount(() => {
             </div>
           </div>
 
+          <div class="mt-5 rounded-[1.75rem] border border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-5 shadow-sm">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-orange-500">{{ currentWheelPolishStatus.eyebrow }}</p>
+                <h3 class="mt-2 text-xl font-black text-slate-950">{{ currentWheelPolishStatus.title }}</h3>
+                <p class="mt-2 max-w-3xl text-sm font-bold leading-6 text-slate-500">{{ currentWheelPolishStatus.desc }}</p>
+              </div>
+              <span class="inline-flex w-fit rounded-full px-4 py-2 text-xs font-black" :class="currentWheelPolishStatus.badgeClass">
+                {{ currentWheelPolishStatus.badge }}
+              </span>
+            </div>
+            <div class="mt-4 grid gap-3 md:grid-cols-3">
+              <div class="rounded-2xl bg-white/80 p-4 ring-1 ring-orange-100">
+                <p class="text-xs font-black text-slate-400">目前預設</p>
+                <p class="mt-1 text-sm font-black text-slate-900">{{ currentWheelPolishStatus.presetName }}</p>
+              </div>
+              <div class="rounded-2xl bg-white/80 p-4 ring-1 ring-orange-100">
+                <p class="text-xs font-black text-slate-400">套用時間</p>
+                <p class="mt-1 text-sm font-black text-slate-900">{{ currentWheelPolishStatus.appliedAt }}</p>
+              </div>
+              <div class="rounded-2xl bg-white/80 p-4 ring-1 ring-orange-100">
+                <p class="text-xs font-black text-slate-400">套用目標</p>
+                <p class="mt-1 break-all text-xs font-black text-slate-900">{{ currentWheelPolishStatus.target }}</p>
+              </div>
+            </div>
+          </div>
+
           <div class="mt-5 grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
             <article
               v-for="preset in wheelPolishPresets"
               :key="preset.key"
-              class="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-slate-50 p-4 transition hover:-translate-y-1 hover:border-orange-300 hover:bg-orange-50 hover:shadow-xl"
+              class="group overflow-hidden rounded-[1.75rem] border p-4 transition hover:-translate-y-1 hover:border-orange-300 hover:bg-orange-50 hover:shadow-xl"
+              :class="isCurrentWheelPolishPreset(preset.key) ? 'border-orange-400 bg-orange-50 shadow-xl ring-2 ring-orange-200' : 'border-slate-200 bg-slate-50'"
             >
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <span class="inline-flex rounded-full bg-white px-3 py-1 text-xs font-black text-orange-700 ring-1 ring-orange-100">{{ preset.badge }}</span>
                   <h3 class="mt-3 text-lg font-black text-slate-950">{{ preset.name }}</h3>
+                  <p v-if="isCurrentWheelPolishPreset(preset.key)" class="mt-2 inline-flex rounded-full bg-orange-500 px-3 py-1 text-xs font-black text-white">
+                    目前已套用
+                  </p>
                 </div>
                 <div
                   class="h-14 w-14 shrink-0 rounded-full border-[6px] shadow-inner"
@@ -2882,10 +2966,11 @@ onBeforeUnmount(() => {
               </div>
               <button
                 type="button"
-                class="mt-5 w-full rounded-2xl bg-orange-500 px-4 py-3 text-sm font-black text-white shadow transition hover:bg-orange-600"
+                class="mt-5 w-full rounded-2xl px-4 py-3 text-sm font-black text-white shadow transition"
+                :class="isCurrentWheelPolishPreset(preset.key) ? 'bg-slate-900 hover:bg-slate-800' : 'bg-orange-500 hover:bg-orange-600'"
                 @click="applyWheelPolishPreset(preset.key)"
               >
-                套用這個精緻預設
+                {{ isCurrentWheelPolishPreset(preset.key) ? '重新套用目前預設' : '套用這個精緻預設' }}
               </button>
             </article>
           </div>
