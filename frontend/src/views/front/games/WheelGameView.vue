@@ -3566,6 +3566,58 @@ const getWheelPolishPresetClass = (presetKey = '') => {
 
 const wheelPolishPresetClass = computed(() => getWheelPolishPresetClass(campaign.visualPolishPresetKey))
 
+// 第 60051～60400 批：玩家頁精緻模式辨識徽章。
+// 只顯示目前套用的視覺預設，不改抽獎 API / 序號 / 中獎流程。
+const wheelPolishDisplay = computed(() => {
+  const key = normalizeWheelPolishPresetKey(campaign.visualPolishPresetKey)
+
+  const map = {
+    luxuryGold: {
+      eyebrow: 'Premium Polish',
+      title: '高級金橘豪華版',
+      badge: '金橘豪華',
+      icon: '👑',
+      description: '金色外框、柔亮光影與豪華舞台感，適合通用活動與品牌抽獎。',
+      features: ['金色外框', '柔亮光影', '高級舞台']
+    },
+    blackGoldVip: {
+      eyebrow: 'VIP Black Gold',
+      title: '黑金 VIP 典藏版',
+      badge: '黑金 VIP',
+      icon: '💎',
+      description: '深色背景搭配金色輪盤與高對比文字，適合高單價、VIP 或限定活動。',
+      features: ['黑金質感', '高對比', 'VIP 氣氛']
+    },
+    neonPurple: {
+      eyebrow: 'Neon Trend',
+      title: '霓虹紫粉潮流版',
+      badge: '霓虹潮流',
+      icon: '✨',
+      description: '紫粉霓虹光感與年輕化配色，適合社群、直播、潮流促銷活動。',
+      features: ['紫粉霓虹', '潮流光感', '社群感']
+    },
+    cleanOrange: {
+      eyebrow: 'Clean Orange',
+      title: '清爽橘白簡潔版',
+      badge: '清爽橘白',
+      icon: '🍊',
+      description: '白橘乾淨視覺與低負擔版面，適合日常商家活動與手機瀏覽。',
+      features: ['清爽留白', '手機友善', '簡潔明亮']
+    }
+  }
+
+  const item = map[key] || map.luxuryGold
+
+  return {
+    ...item,
+    key,
+    batch: campaign.visualPolishBatch || '60051-60400',
+    sourceName: campaign.visualPolishPresetName || item.title
+  }
+})
+
+const wheelPolishFeatureBadges = computed(() => wheelPolishDisplay.value.features || [])
+
 const getPrizeTypeLabel = (type) => {
   return type === 'lose' ? '未中獎' : '中獎'
 }
@@ -8819,6 +8871,42 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                   {{ campaign.heroTagline }}
                 </p>
 
+                <div class="premium-wheel-polish-status mx-auto mt-4 max-w-md rounded-[28px] border border-yellow-100/35 bg-white/12 p-3 text-left shadow-inner backdrop-blur">
+                  <div class="flex items-start gap-3">
+                    <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-yellow-100/45 bg-black/20 text-2xl shadow-lg">
+                      {{ wheelPolishDisplay.icon }}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="rounded-full border border-yellow-100/40 bg-yellow-100/15 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-yellow-50">
+                          {{ wheelPolishDisplay.eyebrow }}
+                        </span>
+                        <span class="rounded-full bg-black/25 px-3 py-1 text-[10px] font-black text-white/80">
+                          {{ wheelPolishDisplay.badge }}
+                        </span>
+                      </div>
+                      <p class="mt-2 text-sm font-black text-yellow-50">
+                        {{ wheelPolishDisplay.sourceName }}
+                      </p>
+                      <p class="mt-1 text-[11px] font-bold leading-5 text-white/70">
+                        {{ wheelPolishDisplay.description }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <span
+                      v-for="item in wheelPolishFeatureBadges"
+                      :key="item"
+                      class="rounded-full border border-white/15 bg-black/18 px-3 py-1 text-[10px] font-black text-white/75"
+                    >
+                      {{ item }}
+                    </span>
+                    <span class="rounded-full border border-emerald-200/35 bg-emerald-100/15 px-3 py-1 text-[10px] font-black text-emerald-50">
+                      玩家頁已套用｜第 60051～60400 批
+                    </span>
+                  </div>
+                </div>
+
                 <p
                   v-if="frontDisplay.showVipInfo"
                   class="mx-auto mt-3 max-w-xs rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-[11px] font-bold leading-5 text-white/75"
@@ -11453,6 +11541,45 @@ aside {
 .premium-wheel-polish-preset-clean-orange .premium-wheel-svg-text {
   fill: #7c2d12;
   stroke: rgba(255, 255, 255, 0.96);
+}
+
+
+/* 第 60051～60400 批：玩家頁精緻模式辨識徽章與驗收標記。 */
+.premium-wheel-polish-status {
+  position: relative;
+  overflow: hidden;
+}
+
+.premium-wheel-polish-status::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(254, 243, 199, 0.2), transparent 28%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.12), transparent 48%, rgba(255, 255, 255, 0.08));
+}
+
+.premium-wheel-polish-status > * {
+  position: relative;
+  z-index: 1;
+}
+
+.premium-wheel-polish-preset-black-gold-vip .premium-wheel-polish-status {
+  border-color: rgba(251, 191, 36, 0.42) !important;
+  background: rgba(2, 6, 23, 0.42) !important;
+  box-shadow: inset 0 1px 0 rgba(251, 191, 36, 0.18), 0 18px 34px rgba(0, 0, 0, 0.22);
+}
+
+.premium-wheel-polish-preset-neon-purple .premium-wheel-polish-status {
+  border-color: rgba(244, 114, 182, 0.42) !important;
+  background: rgba(88, 28, 135, 0.24) !important;
+  box-shadow: inset 0 1px 0 rgba(244, 114, 182, 0.22), 0 18px 34px rgba(88, 28, 135, 0.2);
+}
+
+.premium-wheel-polish-preset-clean-orange .premium-wheel-polish-status {
+  border-color: rgba(251, 146, 60, 0.22) !important;
+  background: rgba(255, 255, 255, 0.46) !important;
 }
 
 @media (max-width: 420px) {
