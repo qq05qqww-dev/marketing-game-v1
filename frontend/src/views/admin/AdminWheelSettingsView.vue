@@ -199,6 +199,7 @@ const activeCategory = ref('basic')
 const previewIframeRef = ref(null)
 const previewFocusMode = ref('wheel')
 const previewDeviceMode = ref('phone')
+const previewZoomMode = ref('100')
 
 const previewFocusOptions = [
   { key: 'top', label: '上方' },
@@ -213,8 +214,19 @@ const previewDeviceOptions = [
   { key: 'tablet', label: '平板', desc: '520×780', frameWidth: '560px', iframeHeightClass: 'h-[780px]' }
 ]
 
+const previewZoomOptions = [
+  { key: '90', label: '90%', scale: 0.9, desc: '縮小檢查滿版' },
+  { key: '100', label: '100%', scale: 1, desc: '標準比例' },
+  { key: '110', label: '110%', scale: 1.1, desc: '放大檢查細節' },
+  { key: '120', label: '120%', scale: 1.2, desc: '滿版壓力測試' }
+]
+
 const previewDeviceProfile = computed(() => {
   return previewDeviceOptions.find((item) => item.key === previewDeviceMode.value) || previewDeviceOptions[0]
+})
+
+const previewZoomProfile = computed(() => {
+  return previewZoomOptions.find((item) => item.key === previewZoomMode.value) || previewZoomOptions[1]
 })
 
 const previewFrameStyle = computed(() => ({
@@ -223,8 +235,18 @@ const previewFrameStyle = computed(() => ({
 
 const previewIframeHeightClass = computed(() => previewDeviceProfile.value.iframeHeightClass)
 
+const previewIframeScaleStyle = computed(() => ({
+  zoom: previewZoomProfile.value.scale
+}))
+
 const setPreviewDeviceMode = (mode = 'phone') => {
   previewDeviceMode.value = mode
+  previewKey.value += 1
+  nextTick(scrollPreviewToFocus)
+}
+
+const setPreviewZoomMode = (mode = '100') => {
+  previewZoomMode.value = mode
   previewKey.value += 1
   nextTick(scrollPreviewToFocus)
 }
@@ -2789,18 +2811,38 @@ onMounted(async () => {
               </div>
             </div>
 
+            <div class="mb-3 rounded-2xl border border-white/10 bg-white/5 p-2">
+              <div class="mb-2 flex items-center justify-between gap-2 px-1">
+                <p class="text-[11px] font-black uppercase tracking-[0.18em] text-white/50">Preview Zoom｜第 63201～63600 批</p>
+                <p class="text-[11px] font-bold text-white/40">{{ previewZoomProfile.desc }}</p>
+              </div>
+              <div class="grid grid-cols-4 gap-2">
+                <button
+                  v-for="zoom in previewZoomOptions"
+                  :key="zoom.key"
+                  type="button"
+                  class="rounded-2xl px-3 py-2 text-xs font-black transition"
+                  :class="previewZoomMode === zoom.key ? 'bg-orange-300 text-slate-950' : 'border border-white/15 text-white/70 hover:bg-white/10'"
+                  @click="setPreviewZoomMode(zoom.key)"
+                >
+                  {{ zoom.label }}
+                </button>
+              </div>
+            </div>
+
             <div class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-900 bg-white shadow-2xl transition-all duration-300" :style="previewFrameStyle">
               <div class="border-b border-slate-200 bg-white px-4 py-2 text-center text-[11px] font-black text-slate-400">
-                {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}｜{{ previewDeviceProfile.label }}
+                {{ isPlatformTemplateMode ? '平台模板 iframe 預覽' : '正式玩家頁 iframe 預覽' }}｜{{ previewDeviceProfile.label }}｜{{ previewZoomProfile.label }}
               </div>
 
               <iframe
                 ref="previewIframeRef"
-                :key="`${previewKey}-${previewDeviceMode}`"
+                :key="`${previewKey}-${previewDeviceMode}-${previewZoomMode}`"
                 :src="safePreviewUrl"
                 title="輪盤正式玩家頁即時預覽"
                 class="w-full bg-white"
                 :class="previewIframeHeightClass"
+                :style="previewIframeScaleStyle"
                 loading="eager"
                 @load="handlePreviewIframeLoad"
               ></iframe>
