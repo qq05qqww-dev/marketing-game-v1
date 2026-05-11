@@ -4595,80 +4595,193 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section v-show="activeCategory === 'result'" class="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
-          <p class="text-xs font-black uppercase tracking-[0.2em] text-orange-500">結果彈窗</p>
-          <h2 class="mt-2 text-2xl font-black text-slate-950">中獎結果圖片、文字與顏色</h2>
-          <p class="mt-2 text-sm font-bold text-slate-500">整理玩家抽完輪盤後會看到的主要視窗；可貼網路圖片，也可選本機圖片轉成 Data URL 儲存。</p>
-
-          <div class="mt-5 grid gap-4 md:grid-cols-2">
-            <label class="grid gap-2 text-sm font-black text-slate-700">
-              中獎標題
-              <input v-model="settings.resultModal.titleText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
-            </label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">
-              未中獎標題
-              <input v-model="settings.resultModal.loseTitleText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
-            </label>
-            <label class="grid gap-2 text-sm font-black text-slate-700 md:col-span-2">
-              兌換 / 提醒文字
-              <input v-model="settings.resultModal.hintText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
-            </label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">
-              開始轉盤按鈕
-              <input v-model="settings.playButtonText" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
-            </label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">
-              結果備用標題
-              <input v-model="settings.resultTitle" class="rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
-            </label>
-          </div>
-
-          <div class="mt-6 grid gap-4 md:grid-cols-2">
-            <div class="rounded-3xl border border-amber-100 bg-amber-50 p-4">
-              <p class="text-sm font-black text-slate-800">中獎圖片</p>
-              <input v-model="settings.resultModal.winImageUrl" placeholder="https://..." class="mt-3 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
-              <div class="mt-3 flex flex-wrap gap-2">
-                <label class="cursor-pointer rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white">
-                  選本機圖片
-                  <input type="file" accept="image/*" class="hidden" @change="handleResultModalLocalImage($event, 'win')" />
-                </label>
-                <button type="button" class="rounded-2xl border border-rose-100 bg-white px-4 py-2 text-xs font-black text-rose-600" @click="clearResultModalImage('win')">清除圖片</button>
+        <section v-show="activeCategory === 'result'" class="overflow-hidden rounded-[2.25rem] border border-orange-100 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.08)]">
+          <div class="relative overflow-hidden border-b border-orange-100 bg-gradient-to-br from-orange-50 via-white to-amber-50 p-6">
+            <div class="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-orange-200/35 blur-3xl"></div>
+            <div class="absolute -bottom-20 left-10 h-44 w-44 rounded-full bg-yellow-200/35 blur-3xl"></div>
+            <div class="relative flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p class="inline-flex rounded-full bg-white/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-orange-600 shadow-sm ring-1 ring-orange-100">RESULT MODAL</p>
+                <h2 class="mt-3 text-2xl font-black leading-tight text-slate-950">中獎結果視窗高級樣式</h2>
+                <p class="mt-2 max-w-2xl text-sm font-bold leading-6 text-slate-500">集中控制結果彈窗圖片、標題、獎項文字、提醒文字與按鈕色彩；支援網路圖片與本機圖片 Data URL。</p>
               </div>
-            </div>
-
-            <div class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <p class="text-sm font-black text-slate-800">未中獎圖片</p>
-              <input v-model="settings.resultModal.loseImageUrl" placeholder="https://..." class="mt-3 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
-              <div class="mt-3 flex flex-wrap gap-2">
-                <label class="cursor-pointer rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white">
-                  選本機圖片
-                  <input type="file" accept="image/*" class="hidden" @change="handleResultModalLocalImage($event, 'lose')" />
-                </label>
-                <button type="button" class="rounded-2xl border border-rose-100 bg-white px-4 py-2 text-xs font-black text-rose-600" @click="clearResultModalImage('lose')">清除圖片</button>
+              <div class="grid min-w-[260px] gap-2 rounded-[1.75rem] border border-white/80 bg-white/75 p-4 text-xs font-black text-slate-600 shadow-sm backdrop-blur">
+                <div class="flex items-center justify-between gap-3">
+                  <span>圖片尺寸</span>
+                  <span class="rounded-full bg-orange-100 px-3 py-1 text-orange-700">{{ settings.resultModal.imageSize }}px</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>標題文字</span>
+                  <span class="rounded-full bg-violet-100 px-3 py-1 text-violet-700">{{ settings.resultModal.titleTextSize }}px</span>
+                </div>
+                <div class="flex items-center justify-between gap-3">
+                  <span>主按鈕</span>
+                  <span class="rounded-full bg-slate-900 px-3 py-1 text-white">漸層可調</span>
+                </div>
               </div>
             </div>
           </div>
 
-          <div class="mt-6 rounded-3xl border border-violet-100 bg-violet-50 p-5">
-            <h3 class="text-sm font-black text-violet-900">圖片與文字大小</h3>
-            <div class="mt-4 grid gap-5 md:grid-cols-2">
-              <label class="grid gap-2 text-sm font-black text-slate-700">圖片大小 {{ settings.resultModal.imageSize }}px<input v-model.number="settings.resultModal.imageSize" type="range" min="72" max="220" /></label>
-              <label class="grid gap-2 text-sm font-black text-slate-700">標題文字 {{ settings.resultModal.titleTextSize }}px<input v-model.number="settings.resultModal.titleTextSize" type="range" min="20" max="48" /></label>
-              <label class="grid gap-2 text-sm font-black text-slate-700">獎項文字 {{ settings.resultModal.prizeTextSize }}px<input v-model.number="settings.resultModal.prizeTextSize" type="range" min="14" max="34" /></label>
-              <label class="grid gap-2 text-sm font-black text-slate-700">提醒文字 {{ settings.resultModal.hintTextSize }}px<input v-model.number="settings.resultModal.hintTextSize" type="range" min="11" max="22" /></label>
-            </div>
-          </div>
+          <div class="space-y-6 p-6">
+            <div class="grid gap-4 xl:grid-cols-[1.25fr_0.9fr]">
+              <div class="rounded-[2rem] border border-slate-100 bg-slate-50/70 p-5">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                  <div>
+                    <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">TEXT CONTENT</p>
+                    <h3 class="mt-1 text-lg font-black text-slate-900">彈窗文字內容</h3>
+                  </div>
+                  <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-500 ring-1 ring-slate-200">玩家抽完後顯示</span>
+                </div>
+                <div class="grid gap-4 md:grid-cols-2">
+                  <label class="grid gap-2 text-sm font-black text-slate-700">
+                    中獎標題
+                    <input v-model="settings.resultModal.titleText" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-black text-slate-700">
+                    未中獎標題
+                    <input v-model="settings.resultModal.loseTitleText" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-black text-slate-700 md:col-span-2">
+                    兌換 / 提醒文字
+                    <input v-model="settings.resultModal.hintText" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-black text-slate-700">
+                    開始轉盤按鈕
+                    <input v-model="settings.playButtonText" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+                  </label>
+                  <label class="grid gap-2 text-sm font-black text-slate-700">
+                    結果備用標題
+                    <input v-model="settings.resultTitle" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+                  </label>
+                </div>
+              </div>
 
-          <div class="mt-6 grid gap-4 md:grid-cols-3">
-            <label class="grid gap-2 text-sm font-black text-slate-700">彈窗底色<input v-model="settings.resultModal.backgroundColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">上方起始色<input v-model="settings.resultModal.headerFromColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">上方結束色<input v-model="settings.resultModal.headerToColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">標題顏色<input v-model="settings.resultModal.titleTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">獎項文字顏色<input v-model="settings.resultModal.prizeTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">提醒文字顏色<input v-model="settings.resultModal.hintTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">主按鈕起始<input v-model="settings.resultModal.primaryButtonColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">主按鈕結束<input v-model="settings.resultModal.primaryButtonToColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
-            <label class="grid gap-2 text-sm font-black text-slate-700">主按鈕文字<input v-model="settings.resultModal.primaryButtonTextColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
+              <div class="rounded-[2rem] border border-orange-100 bg-gradient-to-br from-orange-50 to-amber-50 p-5">
+                <div class="mb-4">
+                  <p class="text-xs font-black uppercase tracking-[0.18em] text-orange-500">LIVE LOOK</p>
+                  <h3 class="mt-1 text-lg font-black text-slate-900">小型結果預覽</h3>
+                </div>
+                <div class="overflow-hidden rounded-[2rem] border border-white/70 bg-white shadow-xl">
+                  <div
+                    class="p-5 text-center"
+                    :style="{
+                      background: `linear-gradient(135deg, ${settings.resultModal.headerFromColor}, ${settings.resultModal.headerToColor})`,
+                      color: settings.resultModal.titleTextColor
+                    }"
+                  >
+                    <div
+                      class="mx-auto flex items-center justify-center overflow-hidden rounded-[1.5rem] border border-white/40 bg-white/20 shadow-xl"
+                      :style="{ width: `${Math.min(settings.resultModal.imageSize, 118)}px`, height: `${Math.min(settings.resultModal.imageSize, 118)}px`, fontSize: `${Math.min(settings.resultModal.imageSize * 0.44, 52)}px` }"
+                    >
+                      <img v-if="settings.resultModal.winImageUrl" :src="settings.resultModal.winImageUrl" alt="中獎圖片預覽" class="h-full w-full object-contain p-2" />
+                      <span v-else>🎁</span>
+                    </div>
+                    <p class="mt-4 font-black drop-shadow" :style="{ fontSize: `${Math.min(settings.resultModal.titleTextSize, 34)}px` }">{{ settings.resultModal.titleText || '恭喜中獎' }}</p>
+                    <p class="mx-auto mt-2 inline-flex rounded-full bg-white/20 px-4 py-2 font-black shadow-inner" :style="{ color: settings.resultModal.prizeTextColor, fontSize: `${Math.min(settings.resultModal.prizeTextSize, 24)}px` }">獎項名稱</p>
+                  </div>
+                  <div class="p-4 text-center" :style="{ backgroundColor: settings.resultModal.backgroundColor }">
+                    <p class="rounded-2xl bg-white px-4 py-3 font-black leading-6 shadow-sm" :style="{ color: settings.resultModal.hintTextColor, fontSize: `${settings.resultModal.hintTextSize}px` }">{{ settings.resultModal.hintText || '請依商家公告方式兌換獎品。' }}</p>
+                    <button
+                      type="button"
+                      class="mt-4 rounded-2xl px-5 py-3 text-sm font-black shadow-lg"
+                      :style="{
+                        color: settings.resultModal.primaryButtonTextColor,
+                        background: `linear-gradient(135deg, ${settings.resultModal.primaryButtonColor}, ${settings.resultModal.primaryButtonToColor})`
+                      }"
+                    >
+                      {{ settings.playButtonText || '開始轉盤' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-2">
+              <div class="rounded-[2rem] border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm">
+                <div class="flex items-start gap-3">
+                  <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-amber-200 text-xl shadow-inner">🏆</div>
+                  <div class="flex-1">
+                    <p class="text-sm font-black text-slate-900">中獎圖片</p>
+                    <p class="mt-1 text-xs font-bold leading-5 text-slate-500">可貼網路圖片網址，或選擇本機照片轉成 Data URL。</p>
+                  </div>
+                </div>
+                <input v-model="settings.resultModal.winImageUrl" placeholder="https://..." class="mt-4 w-full rounded-2xl border border-amber-100 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <label class="cursor-pointer rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-sm">
+                    選本機圖片
+                    <input type="file" accept="image/*" class="hidden" @change="handleResultModalLocalImage($event, 'win')" />
+                  </label>
+                  <button type="button" class="rounded-2xl border border-rose-100 bg-white px-4 py-2 text-xs font-black text-rose-600" @click="clearResultModalImage('win')">清除圖片</button>
+                </div>
+              </div>
+
+              <div class="rounded-[2rem] border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
+                <div class="flex items-start gap-3">
+                  <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-200 text-xl shadow-inner">🌙</div>
+                  <div class="flex-1">
+                    <p class="text-sm font-black text-slate-900">未中獎圖片</p>
+                    <p class="mt-1 text-xs font-bold leading-5 text-slate-500">未中獎時會優先顯示這張圖，沒有圖片則顯示預設 icon。</p>
+                  </div>
+                </div>
+                <input v-model="settings.resultModal.loseImageUrl" placeholder="https://..." class="mt-4 w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold outline-none focus:border-orange-400 focus:ring-4 focus:ring-orange-100" />
+                <div class="mt-3 flex flex-wrap gap-2">
+                  <label class="cursor-pointer rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white shadow-sm">
+                    選本機圖片
+                    <input type="file" accept="image/*" class="hidden" @change="handleResultModalLocalImage($event, 'lose')" />
+                  </label>
+                  <button type="button" class="rounded-2xl border border-rose-100 bg-white px-4 py-2 text-xs font-black text-rose-600" @click="clearResultModalImage('lose')">清除圖片</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-[2rem] border border-violet-100 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-5 shadow-sm">
+              <div class="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[0.18em] text-violet-500">SIZE CONTROL</p>
+                  <h3 class="mt-1 text-lg font-black text-violet-950">圖片與文字大小</h3>
+                </div>
+                <p class="text-xs font-bold text-violet-500">拉桿會同步更新右側結果視窗樣式。</p>
+              </div>
+              <div class="mt-5 grid gap-5 md:grid-cols-2">
+                <label class="grid gap-2 text-sm font-black text-slate-700">
+                  <span class="flex items-center justify-between"><span>圖片大小</span><b class="text-orange-600">{{ settings.resultModal.imageSize }}px</b></span>
+                  <input v-model.number="settings.resultModal.imageSize" type="range" min="72" max="220" class="accent-orange-500" />
+                </label>
+                <label class="grid gap-2 text-sm font-black text-slate-700">
+                  <span class="flex items-center justify-between"><span>標題文字</span><b class="text-orange-600">{{ settings.resultModal.titleTextSize }}px</b></span>
+                  <input v-model.number="settings.resultModal.titleTextSize" type="range" min="20" max="48" class="accent-orange-500" />
+                </label>
+                <label class="grid gap-2 text-sm font-black text-slate-700">
+                  <span class="flex items-center justify-between"><span>獎項文字</span><b class="text-orange-600">{{ settings.resultModal.prizeTextSize }}px</b></span>
+                  <input v-model.number="settings.resultModal.prizeTextSize" type="range" min="14" max="34" class="accent-orange-500" />
+                </label>
+                <label class="grid gap-2 text-sm font-black text-slate-700">
+                  <span class="flex items-center justify-between"><span>提醒文字</span><b class="text-orange-600">{{ settings.resultModal.hintTextSize }}px</b></span>
+                  <input v-model.number="settings.resultModal.hintTextSize" type="range" min="11" max="22" class="accent-orange-500" />
+                </label>
+              </div>
+            </div>
+
+            <div class="rounded-[2rem] border border-slate-100 bg-slate-50 p-5 shadow-sm">
+              <div class="mb-5 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p class="text-xs font-black uppercase tracking-[0.18em] text-slate-400">COLOR PALETTE</p>
+                  <h3 class="mt-1 text-lg font-black text-slate-950">彈窗色彩配置</h3>
+                </div>
+                <p class="text-xs font-bold text-slate-500">每個色塊都會影響玩家結果彈窗。</p>
+              </div>
+              <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">彈窗底色<input v-model="settings.resultModal.backgroundColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">上方起始色<input v-model="settings.resultModal.headerFromColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">上方結束色<input v-model="settings.resultModal.headerToColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">標題顏色<input v-model="settings.resultModal.titleTextColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">獎項文字顏色<input v-model="settings.resultModal.prizeTextColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">提醒文字顏色<input v-model="settings.resultModal.hintTextColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">主按鈕起始<input v-model="settings.resultModal.primaryButtonColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">主按鈕結束<input v-model="settings.resultModal.primaryButtonToColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+                <label class="flex items-center justify-between gap-3 rounded-2xl border border-white bg-white p-3 text-sm font-black text-slate-700 shadow-sm">主按鈕文字<input v-model="settings.resultModal.primaryButtonTextColor" type="color" class="h-10 w-14 rounded-xl border border-slate-200 bg-white p-1" /></label>
+              </div>
+            </div>
           </div>
         </section>
 
