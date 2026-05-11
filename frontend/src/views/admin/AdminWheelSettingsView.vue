@@ -63,19 +63,16 @@ const normalizeUrl = (value = '') => String(value || '').trim().replace(/\/$/, '
 const isLocalOrigin = (value = '') => /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
 
 const frontOrigin = computed(() => {
+  // 第 75201～75600 批：正式玩家入口一律使用 Vercel 網域。
+  // 即使商家在 localhost 後台測試，也不能產生 localhost 玩家連結或 localhost 登入入口。
   const envUrl = normalizeUrl(
     import.meta.env.VITE_PUBLIC_FRONTEND_URL ||
       import.meta.env.VITE_FRONTEND_URL ||
       import.meta.env.VITE_APP_FRONTEND_URL ||
-      ''
+      PRODUCTION_FRONTEND_URL
   )
 
-  if (envUrl) return envUrl
-
-  if (typeof window !== 'undefined' && window.location?.origin) {
-    const origin = normalizeUrl(window.location.origin)
-    return origin || PRODUCTION_FRONTEND_URL
-  }
+  if (envUrl && !isLocalOrigin(envUrl)) return envUrl
 
   return PRODUCTION_FRONTEND_URL
 })
@@ -145,6 +142,18 @@ const apiEnvironmentItems = computed(() => [
   { label: '登入商家', value: apiEnvironmentGuard.value.loggedTenantLabel, note: `role: ${apiEnvironmentGuard.value.roleLabel}` },
   { label: '網址商家', value: apiEnvironmentGuard.value.urlTenantLabel, note: isPlatformTemplateMode.value ? '平台模板不綁單一商家' : '來自 tenantSlug query' }
 ])
+
+
+const officialPlayerLinkGuard = computed(() => ({
+  batch: '第 75201～75600 批',
+  title: '正式玩家連結強制 Vercel 來源',
+  officialFrontend: frontOrigin.value,
+  currentAdminOrigin: normalizeUrl(getWindowOrigin()) || '-',
+  currentAdminIsLocal: isLocalOrigin(getWindowOrigin()),
+  message: isLocalOrigin(getWindowOrigin())
+    ? '目前雖然在 localhost 後台測試，但所有正式玩家頁、玩家登入、複製玩家網址都會導向 Vercel。'
+    : '目前已在正式前端來源，玩家頁與登入入口皆使用 Vercel。'
+}))
 
 const playerUrl = computed(() => {
   if (isPlatformTemplateMode.value) {
@@ -2125,7 +2134,7 @@ const previewSaveGuidance = computed(() => {
   let officialHint = isOfficialOnline
     ? '目前是 Vercel 前端 + Render API，儲存成功後正式玩家頁會讀同一套線上資料庫。'
     : (isLocalApi
-        ? '目前 API 是 localhost，本機修改不會同步到 Vercel 正式玩家頁。'
+        ? '目前 API 是 localhost；畫面預覽可測，但正式玩家連結與登入入口已固定使用 Vercel。'
         : '目前 API 環境需確認，請先看 API Environment Guard。')
 
   if (env.mismatch) {
@@ -2174,7 +2183,7 @@ const previewSaveGuidanceItems = computed(() => [
 ])
 
 
-// 第 74801～75200 批：輪盤資料來源統一提示與正式玩家同步修正版。
+// 第 75201～75600 批：正式玩家連結強制 Vercel 來源修正版。
 // 目的：把「玩家正式頁 / 商家活動設定 / 平台模板」三種來源一次講清楚，避免誤以為三者會自動同步。
 const wheelUnifiedSourceGuide = computed(() => {
   const modeLabel = isPlatformTemplateMode.value ? '平台模板模式' : '商家活動模式'
@@ -2274,7 +2283,7 @@ const safePreviewUrl = computed(() => {
       parsed.searchParams.set('campaignId', campaignId.value)
     }
 
-    return `${parsed.pathname}${parsed.search}`
+    return `${frontOrigin.value}${parsed.pathname}${parsed.search}`
   } catch (error) {
     const separator = playerUrl.value.includes('?') ? '&' : '?'
     const params = new URLSearchParams({
@@ -2329,7 +2338,7 @@ const postPreviewDraftUpdate = (reason = 'settings-update') => {
   }
 
   try {
-    frameWindow.postMessage(buildPreviewDraftSyncPayload(reason), window.location.origin)
+    frameWindow.postMessage(buildPreviewDraftSyncPayload(reason), frontOrigin.value)
     previewSmoothSyncStatus.value = '右側預覽已平滑更新，沒有重新載入 iframe。'
     previewSmoothSyncMode.value = 'smooth'
     previewSmoothSyncCount.value += 1

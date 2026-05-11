@@ -25,6 +25,7 @@ const router = useRouter()
 // 第 27101～27500 批：正式遠端玩家頁資料庫 API 入口。
 // 正式部署請設定 VITE_API_BASE_URL=https://你的後端網域/api
 const FORMAL_API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api').replace(/\/$/, '')
+const OFFICIAL_FRONTEND_URL = 'https://marketing-game-v1.vercel.app'
 
 const unwrapFormalApiPayload = (payload) => {
   return payload?.data?.data ?? payload?.data ?? payload ?? null
@@ -54,6 +55,27 @@ const formalFetchJson = async (path, options = {}) => {
 const normalizeSingleQueryValue = (value = '') => {
   const raw = Array.isArray(value) ? value[0] : value
   return String(raw || '').split(',')[0].trim()
+}
+
+
+const isLocalFrontendOrigin = (value = '') => /localhost|127\.0\.0\.1|0\.0\.0\.0/i.test(String(value || ''))
+
+const getOfficialFrontendOrigin = () => {
+  const envUrl = String(
+    import.meta.env.VITE_PUBLIC_FRONTEND_URL ||
+      import.meta.env.VITE_FRONTEND_URL ||
+      import.meta.env.VITE_APP_FRONTEND_URL ||
+      OFFICIAL_FRONTEND_URL
+  ).trim().replace(/\/$/, '')
+
+  if (envUrl && !isLocalFrontendOrigin(envUrl)) return envUrl
+
+  return OFFICIAL_FRONTEND_URL
+}
+
+const buildOfficialFrontendUrl = (path = '/') => {
+  const cleanPath = String(path || '/').startsWith('/') ? String(path || '/') : `/${path}`
+  return `${getOfficialFrontendOrigin()}${cleanPath}`
 }
 
 const getRouteCampaignId = () => {
@@ -4068,7 +4090,8 @@ const handlePremiumWheelStorageSync = (event) => {
 const handleWheelAdminDraftMessage = (event) => {
   if (typeof window === 'undefined') return
   if (!event?.data || typeof event.data !== 'object') return
-  if (event.origin !== window.location.origin) return
+  const allowedOrigins = [String(window.location.origin || ''), getOfficialFrontendOrigin()]
+  if (!allowedOrigins.includes(String(event.origin || ''))) return
   if (event.data.type !== 'MGP_WHEEL_ADMIN_DRAFT_UPDATE') return
   if (!isAdminDraftPreviewRoute.value) return
 
@@ -4096,9 +4119,8 @@ const syncPremiumWheelToPlayer = () => {
 }
 
 const getShareUrl = () => {
-  if (typeof window === 'undefined') return sourcePath.value
-
-  return `${window.location.origin}${sourcePath.value}`
+  // 第 75201～75600 批：分享出去的玩家版網址也固定使用 Vercel，不再產生 localhost 連結。
+  return buildOfficialFrontendUrl(sourcePath.value)
 }
 
 const getCustomShareTitle = () => {
@@ -4254,10 +4276,22 @@ const getCurrentRedirectPath = () => {
 }
 
 const goLoginPage = () => {
+  const redirect = getCurrentRedirectPath()
+
+  // 第 75201～75600 批：玩家登入入口一律導向 Vercel 正式站。
+  // 避免從 localhost 預覽或本機玩家頁點登入時，被帶到 localhost 登入。
+  if (typeof window !== 'undefined') {
+    const currentOrigin = String(window.location?.origin || '')
+    if (isLocalFrontendOrigin(currentOrigin)) {
+      window.location.href = `${getOfficialFrontendOrigin()}/login?redirect=${encodeURIComponent(redirect)}`
+      return
+    }
+  }
+
   router.push({
     path: '/login',
     query: {
-      redirect: getCurrentRedirectPath()
+      redirect
     }
   })
 }
