@@ -8898,8 +8898,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
 
               <section
                 class="premium-wheel-stage premium-vip-wheel-stage premium-original-wheel-polish relative mx-auto mt-6 w-full max-w-[356px] rounded-[38px] border border-yellow-100/70 bg-gradient-to-br from-yellow-50 via-orange-50 to-orange-200 p-3 shadow-[0_30px_70px_rgba(78,29,4,.48)] sm:max-w-[430px] sm:p-4 lg:max-w-[500px] lg:p-5"
-                :class="wheelPolishPresetClass"
-                :class="isSpinning ? 'premium-wheel-active' : ''"
+                :class="[wheelPolishPresetClass, isSpinning ? 'premium-wheel-active' : '']"
               >
                 <div
                   class="premium-wheel-pointer absolute left-1/2 top-[-6px] z-30"
