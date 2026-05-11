@@ -1,5 +1,6 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 79201～79600 批：九宮格正式後端百分比抽獎對齊版
+// 第 84801～85200 批：砸金蛋後端百分比抽獎對齊版
+// 延續第 79201～79600 批：九宮格正式後端百分比抽獎對齊版
 //
 // 覆蓋位置：
 // backend/src/services/drawEngine.service.js
@@ -115,13 +116,13 @@ const isGameConfigItemEnabled = (item = {}) => {
 
 const extractGameConfigPrizeItems = (settings = {}) => {
   const candidates = [
+    settings.eggItems,
     settings.prizes,
     settings.gridItems,
     settings.rewards,
     settings.rewardItems,
     settings.items,
-    settings.wheelItems,
-    settings.eggItems
+    settings.wheelItems
   ]
 
   for (const value of candidates) {
@@ -179,8 +180,9 @@ const getCampaignPrizePool = (campaign = {}) => {
   const gameConfigPool = buildGameConfigPrizePool(campaign)
 
   // 第 79201～79600 批：九宮格正式抽獎必須以後台 GameConfig settings 的百分比為準。
-  // 若同一活動仍有舊 Prize table 資料，也不能蓋過商家後台九宮格設定。
-  if (gameType === 'GRID' && gameConfigPool.length) {
+  // 第 84801～85200 批：砸金蛋也必須以後台 GameConfig settings 的 eggItems / prizes 百分比為準。
+  // 若同一活動仍有舊 Prize table 資料，也不能蓋過商家後台設定。
+  if (['GRID', 'GOLDEN_EGG'].includes(gameType) && gameConfigPool.length) {
     return gameConfigPool
   }
 

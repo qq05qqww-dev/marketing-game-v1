@@ -617,6 +617,61 @@ const loadedCampaignSnapshot = ref(cloneByJson(campaign))
 const loadedPrizesSnapshot = ref(cloneByJson(prizes.value))
 const loadedDatabaseGameConfigFormSnapshot = ref({})
 const restoreNotice = ref('')
+const eggProbabilitySimulatorOpen = ref(false)
+const eggProbabilitySimulatorRuns = ref(1000)
+const eggProbabilitySimulationResults = ref([])
+const eggProbabilitySimulationAt = ref('')
+
+const normalizeGoldenEggProbability = (value = 0) => {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return 0
+  return Math.max(0, Math.min(100, Math.round(number * 100) / 100))
+}
+
+const normalizeGoldenEggStock = (prize = {}) => {
+  if (String(prize.type || '').toLowerCase() === 'lose') return 999999999
+  const stock = Number(prize.stock ?? prize.remainStock ?? prize.quantity ?? prize.inventory ?? 0)
+  if (!Number.isFinite(stock)) return 0
+  return Math.max(0, Math.floor(stock))
+}
+
+const buildGoldenEggPrizeSettingsPayload = () => {
+  return prizes.value.map((prize, index) => {
+    const probabilityPercent = normalizeGoldenEggProbability(prize.probability)
+    const stock = normalizeGoldenEggStock(prize)
+    const type = String(prize.type || '').toLowerCase() === 'lose' ? 'LOSE' : 'WIN'
+
+    return {
+      id: prize.id || `golden-egg-prize-${index + 1}`,
+      position: index + 1,
+      sortOrder: index + 1,
+      title: prize.name || `獎項 ${index + 1}`,
+      name: prize.name || `獎項 ${index + 1}`,
+      shortName: prize.shortName || prize.name || `獎${index + 1}`,
+      label: prize.shortName || prize.name || `獎${index + 1}`,
+      description: prize.description || '',
+      icon: prize.icon || '🎁',
+      emoji: prize.icon || '🎁',
+      imageUrl: prize.imageUrl || '',
+      image: prize.imageUrl || '',
+      isEnabled: prize.isEnabled !== false,
+      enabled: prize.isEnabled !== false,
+      type,
+      rewardType: type,
+      rank: prize.rank || (type === 'LOSE' ? 'none' : 'normal'),
+      stock,
+      remainStock: stock,
+      quantity: stock,
+      inventory: stock,
+      probabilityPercent,
+      probability: probabilityPercent,
+      weight: probabilityPercent,
+      percent: probabilityPercent,
+      source: 'GOLDEN_EGG_ADMIN_PERCENT'
+    }
+  })
+}
+
 
 const updateLoadedRestoreSnapshot = () => {
   loadedCampaignSnapshot.value = cloneByJson(campaign)
@@ -1082,8 +1137,79 @@ const previewDeviceButtonClass = (deviceKey) => {
 }
 
 const probabilityTotal = computed(() => {
-  return prizes.value.reduce((sum, prize) => sum + Number(prize.probability || 0), 0)
+  return Math.round(prizes.value
+    .filter((prize) => prize.isEnabled !== false)
+    .reduce((sum, prize) => sum + normalizeGoldenEggProbability(prize.probability), 0) * 100) / 100
 })
+
+const enabledGoldenEggPrizeRows = computed(() => {
+  const activePrizes = prizes.value.filter((prize) => prize.isEnabled !== false)
+  const total = activePrizes.reduce((sum, prize) => sum + normalizeGoldenEggProbability(prize.probability), 0)
+
+  return activePrizes.map((prize, index) => {
+    const probabilityPercent = normalizeGoldenEggProbability(prize.probability)
+    const theoreticalPercent = total > 0 ? Math.round((probabilityPercent / total) * 10000) / 100 : 0
+
+    return {
+      id: prize.id || `egg-prize-${index + 1}`,
+      name: prize.name || `獎項 ${index + 1}`,
+      icon: prize.icon || '🎁',
+      type: String(prize.type || '').toLowerCase() === 'lose' ? 'LOSE' : 'WIN',
+      probabilityPercent,
+      theoreticalPercent,
+      stock: normalizeGoldenEggStock(prize)
+    }
+  })
+})
+
+const eggProbabilitySimulatorSummary = computed(() => {
+  const total = probabilityTotal.value
+  if (total === 100) return '目前百分比總和 100%，後台設定可直接交給後端 Draw Engine 使用。'
+  if (total > 100) return `目前超過 ${Math.round((total - 100) * 100) / 100}%，後端仍會依比例抽，但商家容易誤會，建議修正。`
+  return `目前尚餘 ${Math.round((100 - total) * 100) / 100}%，後端仍會依比例抽，但建議補足到 100%。`
+})
+
+const runEggProbabilitySimulator = () => {
+  const rows = enabledGoldenEggPrizeRows.value.filter((item) => item.probabilityPercent > 0 && (item.type === 'LOSE' || item.stock > 0))
+  const runs = Math.max(100, Math.min(10000, Number(eggProbabilitySimulatorRuns.value || 1000)))
+
+  eggProbabilitySimulatorRuns.value = runs
+
+  if (!rows.length) {
+    eggProbabilitySimulationResults.value = []
+    eggProbabilitySimulationAt.value = '沒有可試算的啟用獎項。'
+    return
+  }
+
+  const total = rows.reduce((sum, row) => sum + row.probabilityPercent, 0)
+  const counts = new Map(rows.map((row) => [row.id, 0]))
+
+  for (let index = 0; index < runs; index += 1) {
+    const target = Math.random() * total
+    let current = 0
+    let selected = rows[rows.length - 1]
+
+    for (const row of rows) {
+      current += row.probabilityPercent
+      if (target <= current) {
+        selected = row
+        break
+      }
+    }
+
+    counts.set(selected.id, Number(counts.get(selected.id) || 0) + 1)
+  }
+
+  eggProbabilitySimulationResults.value = rows.map((row) => {
+    const count = Number(counts.get(row.id) || 0)
+    return {
+      ...row,
+      count,
+      simulatedPercent: Math.round((count / runs) * 10000) / 100
+    }
+  })
+  eggProbabilitySimulationAt.value = `已用目前後台百分比模擬 ${runs} 次；正式玩家抽獎由後端 Draw Engine 讀取儲存後的 GameConfig settings。`
+}
 
 const enabledPrizeCount = computed(() => {
   return prizes.value.filter((prize) => prize.isEnabled !== false).length
@@ -1260,8 +1386,8 @@ const probabilityHintClass = computed(() => {
 
 const probabilityHintText = computed(() => {
   return probabilityTotal.value === 100
-    ? '目前機率總和剛好 100%。'
-    : '目前使用權重抽選；建議調整到 100，後續比較好理解。'
+    ? '目前機率總和剛好 100%，正式玩家抽獎會以後台儲存的百分比交給後端計算。'
+    : '目前百分比總和不是 100%；後端仍會依比例抽，但建議修正到 100%。'
 })
 
 const payload = computed(() => {
@@ -2255,7 +2381,7 @@ const averageProbability = () => {
     probability: baseValue + (index < remainder ? 1 : 0)
   }))
 
-  saveState('已已平均分配百分比機率，總和為 100%。')
+  saveState('已平均分配百分比機率，總和為 100%。')
 }
 
 const clearProbability = () => {
@@ -5711,6 +5837,12 @@ const buildDatabaseGameConfigPayload = () => {
     eggCardBgTo: databaseGameConfigForm.eggCardBgTo || '#7f1d1d',
     eggNumberBgColor: databaseGameConfigForm.eggNumberBgColor || '#7f1d1d',
     eggNumberTextColor: databaseGameConfigForm.eggNumberTextColor || '#fef3c7',
+    // 第 84801～85200 批：金蛋正式抽獎機率由後台百分比設定寫入 GameConfig。
+    // 後端 Draw Engine 會優先讀取 eggItems / prizes 的 probabilityPercent / weight / probability。
+    eggItems: buildGoldenEggPrizeSettingsPayload(),
+    prizes: buildGoldenEggPrizeSettingsPayload(),
+    probabilityMode: 'BACKEND_DRAW_ENGINE',
+    probabilitySource: 'GOLDEN_EGG_GAME_CONFIG_PERCENT',
     shareTitle: databaseGameConfigForm.shareTitle || '九宮格砸金蛋抽獎活動',
     shareDescription: databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！',
     shareUrl: databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`,
@@ -10693,13 +10825,94 @@ watch(
               百分比總和：{{ probabilityTotal }}%｜{{ probabilityHintText }}
             </div>
 
+            <div class="mt-3 rounded-3xl border border-indigo-100 bg-indigo-50/80 p-4">
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p class="text-[11px] font-black uppercase tracking-[0.22em] text-indigo-500">
+                    Percent Simulator｜第 84801～85200 批
+                  </p>
+                  <h3 class="mt-1 text-base font-black text-slate-950">
+                    金蛋機率試算器
+                  </h3>
+                  <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">
+                    {{ eggProbabilitySimulatorSummary }}
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    v-model.number="eggProbabilitySimulatorRuns"
+                    type="number"
+                    min="100"
+                    max="10000"
+                    step="100"
+                    class="w-28 rounded-2xl border border-indigo-100 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                  />
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white"
+                    @click="runEggProbabilitySimulator"
+                  >
+                    開始試算
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-white px-4 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100"
+                    @click="eggProbabilitySimulatorOpen = !eggProbabilitySimulatorOpen"
+                  >
+                    {{ eggProbabilitySimulatorOpen ? '收合結果' : '展開結果' }}
+                  </button>
+                </div>
+              </div>
+
+              <p v-if="eggProbabilitySimulationAt" class="mt-3 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black text-indigo-700">
+                {{ eggProbabilitySimulationAt }}
+              </p>
+
+              <div
+                v-if="eggProbabilitySimulatorOpen"
+                class="mt-3 max-h-80 overflow-auto rounded-2xl border border-indigo-100 bg-white"
+              >
+                <table class="w-full min-w-[560px] text-left text-xs">
+                  <thead class="sticky top-0 bg-slate-950 text-white">
+                    <tr>
+                      <th class="px-3 py-2">獎項</th>
+                      <th class="px-3 py-2">設定%</th>
+                      <th class="px-3 py-2">理論%</th>
+                      <th class="px-3 py-2">模擬%</th>
+                      <th class="px-3 py-2">次數</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="row in (eggProbabilitySimulationResults.length ? eggProbabilitySimulationResults : enabledGoldenEggPrizeRows)"
+                      :key="`egg-probability-sim-${row.id}`"
+                      class="border-b border-slate-100 last:border-b-0"
+                    >
+                      <td class="px-3 py-2 font-black text-slate-800">
+                        {{ row.icon }} {{ row.name }}
+                      </td>
+                      <td class="px-3 py-2 font-black text-slate-700">{{ row.probabilityPercent }}%</td>
+                      <td class="px-3 py-2 font-black text-indigo-700">{{ row.theoreticalPercent }}%</td>
+                      <td class="px-3 py-2 font-black text-emerald-700">
+                        {{ row.simulatedPercent === undefined ? '-' : `${row.simulatedPercent}%` }}
+                      </td>
+                      <td class="px-3 py-2 font-black text-slate-500">
+                        {{ row.count === undefined ? '-' : row.count }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
             <div class="mt-3 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 class="rounded-2xl bg-emerald-500 px-3 py-2 text-xs font-black text-white"
                 @click="averageProbability"
               >
-                平均到 100
+                平均分配 100%
               </button>
 
               <button
@@ -13283,7 +13496,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                 <p class="text-lg font-black">{{ winPrizeCount }}</p>
               </div>
               <div class="rounded-2xl bg-white/10 px-3 py-2 text-white">
-                <p class="text-[10px] font-bold text-slate-300">總權重</p>
+                <p class="text-[10px] font-bold text-slate-300">總百分比</p>
                 <p class="text-lg font-black">{{ probabilityTotal }}</p>
               </div>
             </div>

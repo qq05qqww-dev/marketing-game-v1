@@ -2475,10 +2475,13 @@ const crackEgg = async (egg) => {
   if (!egg || egg.status === 'opened') return
 
   if (isOnlineMode.value) {
+    // 第 84801～85200 批：正式商家玩家頁必須走後端 Draw Engine。
+    // 後端會讀取後台儲存的金蛋百分比設定，前端只負責動畫與結果顯示。
     await crackEggWithRemoteApi(egg)
     return
   }
 
+  // 只有模板預覽 / 離線展示才使用本地模擬；正式玩家不靠前端決定結果。
   const prize = pickPrize()
   if (!prize) return
 
