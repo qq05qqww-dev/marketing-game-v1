@@ -2930,6 +2930,29 @@ const wheelCenterButtonStyle = computed(() => {
   }
 })
 
+// 第 76401～76800 批：平台模板輪盤中心按鈕 SVG 同心定位。
+// 原本中心按鈕是 HTML absolute 疊在 SVG 外層，當舞台/厚度/iframe 縮放一起作用時，
+// 平台模板預覽容易跟扇形交會點不同心。這裡改用 SVG foreignObject，
+// 直接鎖在 viewBox 160 / 160 的輪盤圓心，玩家頁與模板預覽都會置中。
+const wheelCenterSvgBox = computed(() => {
+  const size = Math.min(130, Math.max(58, Number(campaign.wheelCenterSize || 92)))
+  const x = 160 - size / 2
+  const y = 160 - size / 2
+
+  return {
+    x,
+    y,
+    size
+  }
+})
+
+const wheelCenterSvgButtonStyle = computed(() => ({
+  ...wheelCenterButtonStyle.value,
+  width: '100%',
+  height: '100%',
+  boxSizing: 'border-box'
+}))
+
 // 第 70401～70800 批：實體輪盤外圈燈泡與厚度控制。
 // 這裡全部吃後台 wheelStyle 設定，不用圖片，避免固定 CSS preset 蓋掉使用者調整。
 const normalizedWheelRimLightCount = computed(() => {
@@ -9603,18 +9626,26 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                           </div>
                         </foreignObject>
                       </g>
+                      <foreignObject
+                        class="premium-wheel-center-svg-foreign"
+                        :x="wheelCenterSvgBox.x"
+                        :y="wheelCenterSvgBox.y"
+                        :width="wheelCenterSvgBox.size"
+                        :height="wheelCenterSvgBox.size"
+                      >
+                        <div
+                          xmlns="http://www.w3.org/1999/xhtml"
+                          class="premium-wheel-center premium-wheel-center-refined premium-wheel-center-svg-fixed flex items-center justify-center rounded-full border text-center font-black"
+                          :style="wheelCenterSvgButtonStyle"
+                        >
+                          <span class="relative z-10">
+                            {{ isSpinning ? '轉動中' : resultPrize ? '完成' : (campaign.wheelCenterText || 'SPIN') }}
+                          </span>
+                        </div>
+                      </foreignObject>
                     </svg>
 
                     <div class="premium-wheel-shine pointer-events-none absolute inset-0 z-[15] rounded-full"></div>
-
-                    <div
-                      class="premium-wheel-center premium-wheel-center-refined absolute left-1/2 top-1/2 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border text-center font-black"
-                      :style="wheelCenterButtonStyle"
-                    >
-                      <span class="relative z-10">
-                        {{ isSpinning ? '轉動中' : resultPrize ? '完成' : (campaign.wheelCenterText || 'SPIN') }}
-                      </span>
-                    </div>
                   </div>
                 </div>
 
@@ -13014,3 +13045,37 @@ aside {
 }
 
 </style>
+
+
+/* 第 76401～76800 批：開始 / SPIN 中心按鈕改成 SVG 同心定位。
+   目的：平台模板、商家預覽、正式玩家頁都以 SVG viewBox 160/160 為唯一圓心，
+   不再受外層舞台縮放、厚度 translate、iframe zoom 或 Tailwind absolute translate 影響。 */
+.premium-wheel-center-svg-foreign {
+  overflow: visible;
+  pointer-events: none;
+}
+
+.premium-wheel-center-svg-fixed {
+  position: static !important;
+  left: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  transform: none !important;
+  translate: none !important;
+  rotate: none !important;
+  scale: none !important;
+  transform-origin: 50% 50% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+.premium-wheel-center-svg-fixed span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  line-height: 1;
+  text-align: center;
+}
