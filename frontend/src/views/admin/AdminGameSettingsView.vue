@@ -1,14 +1,14 @@
 <!--
   Multi Game Platform V2.3
-  第 76801～77200 批：遊戲模板中心三遊戲模板模組入口統一版
+  第 77201～77600 批：遊戲模板中心模板模組按鈕正式導頁修正版
 
   覆蓋位置：
   frontend/src/views/admin/AdminGameSettingsView.vue
 
   本批重點：
-  1. 平台總管理員 / 遊戲模板中心三個正式遊戲統一顯示「模板模組設定」。
-  2. 輪盤、九宮格、金蛋三張卡片的入口命名與操作位置統一。
-  3. 「編輯設定」不再只出現在九宮格 / 金蛋，避免誤會它們不是模板模組。
+  1. 修正「模板模組設定」按鈕點擊後停在原地的問題。
+  2. 遊戲模板中心所有玩家版、管理版、模板模組設定入口改用正式 marketing-game-v1 網址導頁。
+  3. 輪盤、九宮格、金蛋三張卡片的模板模組入口保留統一命名。
   4. 不改 DB / router / draw-core。
 -->
 <script setup>
@@ -208,14 +208,24 @@ const officialSummary = computed(() => {
   }
 })
 
+const buildOfficialUrl = (path = '') => {
+  const value = String(path || '').trim()
+  if (!value) return OFFICIAL_FRONTEND_ORIGIN
+  if (/^https?:\/\//i.test(value)) return value
+  return `${OFFICIAL_FRONTEND_ORIGIN}${value.startsWith('/') ? value : `/${value}`}`
+}
+
 const openPath = (path = '') => {
+  // 第 77201～77600 批：遊戲模板中心按鈕不再使用 router.push，
+  // 避免目前在 localhost 或同一路由時看起來停在原地。
+  // 全部正式導向 marketing-game-v1 Vercel 網址。
   if (!path) return
-  router.push(path)
+  window.location.href = buildOfficialUrl(path)
 }
 
 const openExternalOfficialPath = (path = '') => {
   if (!path) return
-  window.open(`${OFFICIAL_FRONTEND_ORIGIN}${path}`, '_blank', 'noopener,noreferrer')
+  window.open(buildOfficialUrl(path), '_blank', 'noopener,noreferrer')
 }
 
 const copyText = async (text = '', message = '已複製') => {
@@ -231,7 +241,7 @@ const copyText = async (text = '', message = '已複製') => {
 }
 
 const copyOfficialUrl = (path = '', label = '網址') => {
-  copyText(`${OFFICIAL_FRONTEND_ORIGIN}${path}`, `已複製${label}`)
+  copyText(buildOfficialUrl(path), `已複製${label}`)
 }
 
 const resetTemplateCenter = () => {
