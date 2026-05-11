@@ -2953,21 +2953,41 @@ const openPlayer = () => {
   window.open(playerUrl.value, '_blank', 'noopener,noreferrer')
 }
 
+const buildOfficialAdminUrl = (path = '/admin/campaigns', query = {}) => {
+  const url = new URL(path, frontOrigin.value)
+
+  Object.entries(query || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      url.searchParams.set(key, String(value))
+    }
+  })
+
+  return url.toString()
+}
+
+const goOfficialAdminUrl = (path = '/admin/campaigns', query = {}) => {
+  const target = buildOfficialAdminUrl(path, query)
+
+  // 第 75601～76000 批：會離開輪盤設定頁的管理入口，一律使用 Vercel 正式後台網址。
+  // 避免本機測試時回到 localhost:5173/admin/campaigns 或 localhost:5173/login。
+  if (typeof window !== 'undefined') {
+    window.location.href = target
+    return
+  }
+}
+
 const backToCampaigns = () => {
   if (isPlatformTemplateMode.value) {
-    router.push('/admin/game-settings')
+    goOfficialAdminUrl('/admin/game-settings')
     return
   }
 
-  router.push({
-    path: '/admin/campaigns',
-    query: campaignId.value
-      ? {
-          campaignId: campaignId.value,
-          gameType: 'WHEEL'
-        }
-      : {}
-  })
+  goOfficialAdminUrl('/admin/campaigns', campaignId.value
+    ? {
+        campaignId: campaignId.value,
+        gameType: 'WHEEL'
+      }
+    : {})
 }
 
 const addPrize = () => {

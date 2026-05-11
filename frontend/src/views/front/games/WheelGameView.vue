@@ -4278,22 +4278,13 @@ const getCurrentRedirectPath = () => {
 const goLoginPage = () => {
   const redirect = getCurrentRedirectPath()
 
-  // 第 75201～75600 批：玩家登入入口一律導向 Vercel 正式站。
-  // 避免從 localhost 預覽或本機玩家頁點登入時，被帶到 localhost 登入。
+  // 第 75601～76000 批：玩家登入入口完全移除 localhost fallback。
+  // 不論目前頁面是在本機預覽、iframe、Vercel，登入一律前往正式 Vercel /login，
+  // 避免 router.push('/login') 在 localhost:5173 產生 localhost 登入頁。
   if (typeof window !== 'undefined') {
-    const currentOrigin = String(window.location?.origin || '')
-    if (isLocalFrontendOrigin(currentOrigin)) {
-      window.location.href = `${getOfficialFrontendOrigin()}/login?redirect=${encodeURIComponent(redirect)}`
-      return
-    }
+    window.location.href = `${getOfficialFrontendOrigin()}/login?redirect=${encodeURIComponent(redirect)}`
+    return
   }
-
-  router.push({
-    path: '/login',
-    query: {
-      redirect
-    }
-  })
 }
 
 const getApiBaseUrl = () => {
