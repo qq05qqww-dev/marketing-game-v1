@@ -1,4 +1,4 @@
-// 第 65201～65250 批：修正 Section Reset confirm join 字串小批修正版
+// 第 65251～65600 批：輪盤模組精緻操作流程與正式頁驗收捷徑版
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -2156,6 +2156,69 @@ onBeforeUnmount(() => {
           >
             還原預設
           </button>
+        </div>
+      </div>
+    </section>
+
+    <section class="rounded-[2rem] border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 shadow-sm">
+      <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div>
+          <p class="text-xs font-black uppercase tracking-[0.18em] text-amber-600">Polish Workflow｜第 65251～65600 批</p>
+          <h2 class="mt-2 text-xl font-black text-slate-950">輪盤模組精緻操作流程</h2>
+          <p class="mt-2 max-w-3xl text-sm font-bold leading-7 text-slate-500">
+            建議順序：先套用模組精緻預設，再看右側手機預覽，確認後按「儲存設定」，最後開啟正式玩家頁檢查。
+            如果目前 API 是 localhost，代表只改本機資料庫；正式玩家頁要同步必須在線上 Vercel 後台儲存。
+          </p>
+        </div>
+
+        <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-2xl bg-amber-500 px-4 py-3 text-sm font-black text-white shadow transition hover:-translate-y-0.5 hover:bg-amber-600"
+            @click="setCategory('polish')"
+          >
+            ① 前往模組精緻
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-50"
+            @click="setPreviewFocus('wheel')"
+          >
+            ② 對準輪盤預覽
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-black text-blue-700 transition hover:bg-blue-100"
+            @click="openPlayer"
+          >
+            ③ 開啟玩家頁
+          </button>
+          <button
+            type="button"
+            class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+            @click="copyText(playerUrl, '已複製正式玩家頁網址。')"
+          >
+            複製玩家網址
+          </button>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-3 md:grid-cols-4">
+        <div class="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-sm">
+          <p class="text-xs font-black text-slate-400">目前模式</p>
+          <p class="mt-1 text-sm font-black text-slate-900">{{ isPlatformTemplateMode ? '平台輪盤模板' : '商家活動設定' }}</p>
+        </div>
+        <div class="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-sm">
+          <p class="text-xs font-black text-slate-400">目前 API</p>
+          <p class="mt-1 break-all text-sm font-black text-slate-900">{{ API_BASE_URL }}</p>
+        </div>
+        <div class="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-sm">
+          <p class="text-xs font-black text-slate-400">目前活動</p>
+          <p class="mt-1 text-sm font-black text-slate-900">{{ campaignId || '平台模板' }}</p>
+        </div>
+        <div class="rounded-3xl border border-white/80 bg-white/75 p-4 shadow-sm">
+          <p class="text-xs font-black text-slate-400">正式玩家頁</p>
+          <p class="mt-1 break-all text-xs font-black text-slate-700">{{ playerUrl }}</p>
         </div>
       </div>
     </section>
