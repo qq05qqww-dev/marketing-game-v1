@@ -414,6 +414,24 @@ const getAdminPreviewTextStyle = (key, fallbackPx) => {
   }
 }
 
+// 第 82801～83200 批：正式玩家頁字型大小套用修正。
+// 後台儲存的 textSize 不只要給 iframe 草稿預覽，也要在正式玩家頁讀取 GameConfig.settings 後套用。
+// 否則商家後台右側預覽會變大，但玩家手機正式頁仍會維持預設小字。
+const normalizePremiumGridTextSizeSettings = (settings = {}) => {
+  const source = settings?.textSize || settings?.style?.textSize || settings?.templateTextSize || {}
+
+  return {
+    pageTitleSize: Number(source.pageTitleSize || adminPreviewTextSize.pageTitleSize || 14),
+    brandNameSize: Number(source.brandNameSize || adminPreviewTextSize.brandNameSize || 16),
+    brandSubtitleSize: Number(source.brandSubtitleSize || adminPreviewTextSize.brandSubtitleSize || 12),
+    headlineSize: Number(source.headlineSize || adminPreviewTextSize.headlineSize || 36),
+    subtitleSize: Number(source.subtitleSize || adminPreviewTextSize.subtitleSize || 28),
+    badgeTextSize: Number(source.badgeTextSize || adminPreviewTextSize.badgeTextSize || 14),
+    prizeTextSize: Number(source.prizeTextSize || adminPreviewTextSize.prizeTextSize || 13),
+    buttonTextSize: Number(source.buttonTextSize || adminPreviewTextSize.buttonTextSize || 16)
+  }
+}
+
 const officialLinkButtonStyle = computed(() => {
   return {
     fontSize: `${Number(campaign.officialLinkTextSize || 12)}px`,
@@ -446,7 +464,7 @@ const normalizeAdminPreviewDraftSettings = (settings = {}) => {
       officialLinkTextColor: settings.officialLink?.textColor,
       officialLinkBackgroundColor: settings.officialLink?.backgroundColor
     },
-    textSize: settings.textSize || {},
+    textSize: normalizePremiumGridTextSizeSettings(settings),
     prizes: Array.isArray(settings.prizes) ? settings.prizes : []
   }
 }
@@ -2949,6 +2967,11 @@ const applyPremiumGridGameConfigSettingsToLiveState = (settings = {}) => {
   if (basic.playButtonText) campaign.buttonText = basic.playButtonText
 
   if (settings.display?.chanceText) campaign.chanceText = settings.display.chanceText
+
+  Object.assign(adminPreviewTextSize, {
+    ...adminPreviewTextSize,
+    ...normalizePremiumGridTextSizeSettings(settings)
+  })
 
   updateChanceText()
   applyAdminPreviewDraftToCampaign()
