@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 80401～80800 批：九宮格即時預覽文字同步修正版
+// 第 81601～82000 批：九宮格儲存設定按鈕回饋與模板草稿保存修正版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -22,6 +22,7 @@ const router = useRouter()
 const activeSection = ref('basicText')
 const savedMessage = ref('')
 const warningMessage = ref('')
+const inlineSaveMessage = ref('')
 const previewActiveIndex = ref(-1)
 const previewDrawing = ref(false)
 const configLoading = ref(false)
@@ -708,6 +709,37 @@ const buildMissingCampaignMessage = () => {
   return `活動 #${normalizedCampaignId.value} 不存在正式資料庫，或目前登入商家沒有權限讀取。請返回活動管理，清除本機暫存活動後，重新從正式活動列表進入。`
 }
 
+const setInlineSaveFeedback = (message = '', type = 'success') => {
+  inlineSaveMessage.value = message
+
+  if (type === 'error') {
+    warningMessage.value = message
+    return
+  }
+
+  savedMessage.value = message
+}
+
+const saveTemplateDraftLocally = () => {
+  if (typeof window === 'undefined') return
+
+  const payload = buildSettingsSavePayload()
+  const storageKeys = [
+    'mgp:premium-grid-platform-template-draft',
+    'mgp:premium-grid-template-draft:last',
+    `mgp:premium-grid-template-draft:${previewTenantSlug.value || 'a-shop'}`
+  ]
+
+  storageKeys.forEach((key) => {
+    window.localStorage.setItem(key, JSON.stringify(payload))
+  })
+
+  configSavedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
+  configModeMessage.value = '目前沒有正式活動 ID，已改存為九宮格模板草稿；右側預覽會同步，正式玩家頁需進入商家活動設定頁儲存到資料庫。'
+  syncDraftToPreviewStorage({ refresh: false })
+  setInlineSaveFeedback('已儲存九宮格模板草稿，右側預覽已同步；若要讓正式玩家頁生效，請到商家活動設定頁儲存。')
+}
+
 const mergeSettingsIntoDraft = (incoming = {}) => {
   Object.entries(incoming || {}).forEach(([key, value]) => {
     if (key === 'prizes' && Array.isArray(value)) {
@@ -742,6 +774,7 @@ const loadSettingsFromGameConfig = async () => {
   configLoading.value = true
   savedMessage.value = ''
   warningMessage.value = ''
+  inlineSaveMessage.value = ''
 
   try {
     const response = await getCampaignGameConfigApi(normalizedCampaignId.value)
@@ -777,14 +810,17 @@ const loadSettingsFromGameConfig = async () => {
 }
 
 const saveSettingsToGameConfig = async () => {
+  inlineSaveMessage.value = ''
+
   if (!canUseGameConfigApi.value) {
-    warningMessage.value = '目前網址沒有有效活動 ID，請用 /admin/premium-grid-settings/活動ID 進入後再儲存。'
+    saveTemplateDraftLocally()
     return
   }
 
   configSaving.value = true
   savedMessage.value = ''
   warningMessage.value = ''
+  inlineSaveMessage.value = '儲存中，正在寫入 GameConfig settings...'
 
   try {
     const payload = buildSettingsSavePayload()
@@ -818,6 +854,7 @@ const saveSettingsToGameConfig = async () => {
     configSavedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
     configLoadedAt.value = configSavedAt.value
     savedMessage.value = `已同步資料庫：${campaignDisplayName.value} 的九宮格設定已寫入 PostgreSQL，並已重新讀取確認。`
+    inlineSaveMessage.value = '儲存完成：已寫入資料庫並重新讀取確認，正式玩家頁重新整理後會同步。'
     configModeMessage.value = '設定已正式儲存到後端 GameConfig settings；重新進入此頁會讀取資料庫設定。'
     syncDraftToPreviewStorage({ refresh: true })
   } catch (error) {
@@ -825,9 +862,11 @@ const saveSettingsToGameConfig = async () => {
 
     if (isNotFoundApiError(error)) {
       warningMessage.value = buildMissingCampaignMessage()
+      inlineSaveMessage.value = warningMessage.value
       configModeMessage.value = '儲存失敗：活動不存在正式資料庫，請不要使用本機暫存活動 ID。'
     } else {
       warningMessage.value = error?.response?.data?.message || error?.message || '儲存九宮格設定失敗，請確認後端與權限。'
+      inlineSaveMessage.value = warningMessage.value
     }
   } finally {
     configSaving.value = false
@@ -1154,7 +1193,7 @@ onMounted(() => {
             </button>
             <button
               type="button"
-              :disabled="!canUseGameConfigApi || configSaving"
+              :disabled="configSaving"
               class="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               @click="saveSettingsToGameConfig"
             >
@@ -1541,6 +1580,12 @@ onMounted(() => {
                   暫存草稿
                 </button>
               </div>
+              <p
+                v-if="inlineSaveMessage"
+                class="mt-2 w-full rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black leading-6 text-emerald-700"
+              >
+                {{ inlineSaveMessage }}
+              </p>
             </div>
 
             <div v-if="activeSection === 'basicText'" class="mt-6 space-y-6">
