@@ -1880,8 +1880,9 @@ const campaign = reactive({
   wheelOuterRingWidth: 8,
   wheelPrizeTextSize: 13,
   wheelPrizeIconSize: 38,
-  wheelPrizeLabelRadius: 92,
-  // 第 67601～68000 批：獎項置中與指針命中校正。
+  wheelPrizeLabelRadius: 108,
+  // 第 68001～68400 批：獎項密度自適應與半徑控制修正版
+// 第 67601～68000 批：獎項置中與指針命中校正。
   wheelPrizeLabelOffsetX: 0,
   wheelPrizeLabelOffsetY: 0,
   wheelPrizeTextBoxWidth: 82,
@@ -3502,13 +3503,40 @@ const getWheelSliceFill = (index) => {
 const normalizeWheelPrizeLabelRadius = (value) => {
   const raw = Number(value || 0)
 
-  // 後台滑桿使用百分比 20～42；SVG 座標需要實際半徑 px。
-  // 若直接把 28 當 px，獎項會全部擠到中心，所以這裡統一轉換。
-  if (raw > 0 && raw <= 50) {
-    return Math.min(132, Math.max(64, Math.round(160 * (raw / 100))))
+  // 第 68001～68400 批：修正獎項半徑滑桿無感問題。
+  // 舊版後台曾使用 20～42，但直接乘 160 會只落在 64～67px，幾乎看不出變化。
+  // 這裡保留舊資料相容，同時讓新版 48～82% 能真正控制獎項靠中心 / 靠外圈。
+  if (raw > 0 && raw < 48) {
+    const legacyRatio = Math.min(1, Math.max(0, (raw - 20) / 22))
+    return Math.round(88 + legacyRatio * 36)
   }
 
-  return Math.min(132, Math.max(64, raw || 92))
+  if (raw >= 48 && raw <= 100) {
+    return Math.min(132, Math.max(72, Math.round(160 * (raw / 100))))
+  }
+
+  return Math.min(132, Math.max(72, raw || 108))
+}
+
+const getWheelPrizeDensityMode = () => {
+  const total = Math.max(1, activePrizes.value.length)
+  if (total >= 9) return 'dense'
+  if (total >= 7) return 'compact'
+  return 'normal'
+}
+
+const getWheelPrizeLabelText = (prize = {}) => {
+  const raw = String(prize.shortName || prize.name || '獎項').trim()
+  const total = Math.max(1, activePrizes.value.length)
+  const compact = raw
+    .replace(/折價券/g, '券')
+    .replace(/優惠券/g, '券')
+    .replace(/元/g, '')
+    .replace(/禮物/g, '禮')
+
+  if (total >= 9) return compact.length > 4 ? `${compact.slice(0, 4)}…` : compact
+  if (total >= 7) return compact.length > 5 ? `${compact.slice(0, 5)}…` : compact
+  return raw
 }
 
 const getWheelSvgLabelPosition = (index) => {
@@ -3525,16 +3553,36 @@ const getWheelSvgLabelPosition = (index) => {
 
 const getWheelSvgLabelBox = (index) => {
   const point = getWheelSvgLabelPosition(index)
-  const iconSize = Math.max(24, Math.min(64, Number(campaign.wheelPrizeIconSize || 38)))
-  const boxWidth = Math.max(48, Math.min(116, Number(campaign.wheelPrizeTextBoxWidth || 82)))
-  const boxHeight = Math.max(48, iconSize + Number(campaign.wheelPrizeTextSize || 13) + 22)
+  const total = Math.max(1, activePrizes.value.length)
+  const densityMode = getWheelPrizeDensityMode()
+  const baseIconSize = Math.max(22, Math.min(64, Number(campaign.wheelPrizeIconSize || 38)))
+  const baseTextSize = Math.max(9, Math.min(18, Number(campaign.wheelPrizeTextSize || 13)))
+  const baseBoxWidth = Math.max(48, Math.min(122, Number(campaign.wheelPrizeTextBoxWidth || 82)))
+
+  const iconSize = densityMode === 'dense'
+    ? Math.min(baseIconSize, 30)
+    : (densityMode === 'compact' ? Math.min(baseIconSize, 34) : baseIconSize)
+  const textSize = densityMode === 'dense'
+    ? Math.min(baseTextSize, 10)
+    : (densityMode === 'compact' ? Math.min(baseTextSize, 11) : baseTextSize)
+  const boxWidth = densityMode === 'dense'
+    ? Math.min(baseBoxWidth, 62)
+    : (densityMode === 'compact' ? Math.min(baseBoxWidth, 72) : baseBoxWidth)
+  const boxHeight = Math.max(
+    densityMode === 'dense' ? 40 : 48,
+    iconSize + (campaign.wheelShowPrizeName === false ? 8 : textSize * 2.1 + 8)
+  )
 
   return {
     x: point.x - boxWidth / 2,
     y: point.y - boxHeight / 2,
     width: boxWidth,
     height: boxHeight,
-    iconSize
+    iconSize,
+    textSize,
+    textWidth: boxWidth - 4,
+    densityMode,
+    total
   }
 }
 
@@ -9135,7 +9183,7 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                           :width="getWheelSvgLabelBox(index).width"
                           :height="getWheelSvgLabelBox(index).height"
                         >
-                          <div class="premium-wheel-prize-badge">
+                          <div class="premium-wheel-prize-badge" :class="`premium-wheel-prize-badge-${getWheelSvgLabelBox(index).densityMode}`">
                             <div
                               v-if="campaign.wheelShowPrizeIcon !== false"
                               class="premium-wheel-prize-media"
@@ -9151,9 +9199,9 @@ const wheelFinalDeployAcceptanceChecklist = computed(() => {
                             <div
                               v-if="campaign.wheelShowPrizeName !== false"
                               class="premium-wheel-prize-name"
-                              :style="{ fontSize: `${campaign.wheelPrizeTextSize || 13}px` }"
+                              :style="{ fontSize: `${getWheelSvgLabelBox(index).textSize}px`, maxWidth: `${getWheelSvgLabelBox(index).textWidth}px` }"
                             >
-                              {{ prize.shortName || prize.name }}
+                              {{ getWheelPrizeLabelText(prize) }}
                             </div>
                           </div>
                         </foreignObject>
@@ -10888,12 +10936,33 @@ aside {
 .premium-wheel-prize-name {
   max-width: 100%;
   overflow: hidden;
+  display: -webkit-box;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   font-weight: 950;
   line-height: 1.05;
   color: rgba(255, 255, 255, 0.96);
   text-shadow: 0 2px 5px rgba(15, 23, 42, 0.58), 0 0 10px rgba(255, 255, 255, 0.22);
+}
+
+.premium-wheel-prize-badge-compact {
+  gap: 1px;
+}
+
+.premium-wheel-prize-badge-dense {
+  gap: 0;
+  transform: scale(0.94);
+}
+
+.premium-wheel-prize-badge-dense .premium-wheel-prize-media {
+  filter: drop-shadow(0 3px 5px rgba(15, 23, 42, 0.32));
+}
+
+.premium-wheel-prize-badge-dense .premium-wheel-prize-name {
+  letter-spacing: -0.03em;
+  line-height: 0.98;
 }
 
 .premium-wheel-pointer {

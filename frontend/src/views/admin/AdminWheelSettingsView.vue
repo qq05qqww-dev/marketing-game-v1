@@ -430,7 +430,7 @@ const wheelPolishPresets = [
       pointerSize: 50,
       prizeTextSize: 14,
       prizeIconSize: 42,
-      prizeLabelRadius: 35,
+      prizeLabelRadius: 66,
       showPrizeIcon: true,
       showPrizeName: true,
       showSliceBorder: true
@@ -466,7 +466,7 @@ const wheelPolishPresets = [
       pointerSize: 52,
       prizeTextSize: 14,
       prizeIconSize: 44,
-      prizeLabelRadius: 36,
+      prizeLabelRadius: 70,
       showPrizeIcon: true,
       showPrizeName: true,
       showSliceBorder: true
@@ -502,7 +502,7 @@ const wheelPolishPresets = [
       pointerSize: 48,
       prizeTextSize: 13,
       prizeIconSize: 40,
-      prizeLabelRadius: 35,
+      prizeLabelRadius: 66,
       showPrizeIcon: true,
       showPrizeName: true,
       showSliceBorder: true
@@ -538,7 +538,7 @@ const wheelPolishPresets = [
       pointerSize: 44,
       prizeTextSize: 13,
       prizeIconSize: 38,
-      prizeLabelRadius: 34,
+      prizeLabelRadius: 64,
       showPrizeIcon: true,
       showPrizeName: true,
       showSliceBorder: true
@@ -734,10 +734,10 @@ const polishFineTuneControls = [
     key: 'prizeLabelRadius',
     label: '獎項半徑',
     unit: '%',
-    min: 24,
-    max: 46,
+    min: 48,
+    max: 82,
     step: 1,
-    desc: '控制獎項在每格扇形內的位置。數字越大越靠外圈。'
+    desc: '控制獎項在扇形內的半徑位置。數字越大越靠外圈；獎項很多時建議 64～76。'
   },
   {
     key: 'prizeLabelOffsetY',
@@ -935,8 +935,9 @@ const defaultSettings = () => ({
     prizeTextSize: 13,
     prizeIconSize: 38,
     cellGap: 2,
-    prizeLabelRadius: 34,
-    // 第 67601～68000 批：獎項標籤置中與指針命中校正。
+    prizeLabelRadius: 64,
+    // 第 68001～68400 批：獎項密度自適應與半徑控制修正版
+// 第 67601～68000 批：獎項標籤置中與指針命中校正。
     prizeLabelOffsetX: 0,
     prizeLabelOffsetY: 0,
     prizeTextBoxWidth: 82,
@@ -3549,8 +3550,8 @@ onBeforeUnmount(() => {
 
             <label class="grid gap-2 text-sm font-black text-slate-700">
               獎項離中心距離
-              <input v-model.number="settings.wheelStyle.prizeLabelRadius" type="range" min="20" max="42" class="w-full" />
-              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeLabelRadius }} %</span>
+              <input v-model.number="settings.wheelStyle.prizeLabelRadius" type="range" min="48" max="82" class="w-full" />
+              <span class="text-xs font-bold text-slate-400">{{ settings.wheelStyle.prizeLabelRadius }} %｜建議 64～76</span>
             </label>
           </div>
 
