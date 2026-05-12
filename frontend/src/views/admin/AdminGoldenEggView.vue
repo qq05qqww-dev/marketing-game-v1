@@ -1,4 +1,3 @@
-// 第 88001～88400 批：金蛋機率試算器結果表資料列修正版
 <script setup>
 // Multi Game Platform V2.3
 // 第 86801～87200 批：金蛋結果彈窗中獎未中獎圖片分流版
@@ -301,6 +300,14 @@ const databaseGameConfigForm = reactive({
   showActivityCountdown: true,
   activityCountdownAlwaysShowSeconds: true,
   showBottomNav: true,
+  showRuleSection: true,
+  showPrizeInfoSection: true,
+  defaultRuleOpen: false,
+  defaultPrizeInfoOpen: false,
+  ruleTitle: '活動規則',
+  ruleContent: '請先輸入主辦單位提供的抽獎序號。\n序號驗證成功後，才會取得可用砸蛋次數。\n每次砸蛋會消耗 1 次序號機會。\n獎項數量有限，送完為止。',
+  prizeInfoTitle: '獎品說明',
+  prizeInfoContent: '中獎結果會顯示於畫面與最近紀錄。\n實際兌換方式以主辦單位公告為準。\n請保留中獎畫面或截圖作為兌獎依據。',
   eggSize: 74,
   eggCardSize: 128,
   eggGridGap: 12,
@@ -1221,34 +1228,6 @@ const runEggProbabilitySimulator = () => {
   })
   eggProbabilitySimulationAt.value = `已用目前後台百分比模擬 ${runs} 次；正式玩家抽獎由後端 Draw Engine 讀取儲存後的 GameConfig settings。`
 }
-
-
-// 第 88001～88400 批：補上試算結果表格資料列轉換。
-// 前一批移除重複試算器後，畫面仍保留 eggProbabilitySimulationRows，
-// 但 script 沒有對應 computed，造成只看到表頭沒有資料列。
-const eggProbabilitySimulationRows = computed(() => {
-  return eggProbabilitySimulationResults.value.map((item, index) => {
-    const settingPercent = normalizeGoldenEggProbability(
-      item.settingPercent ?? item.probabilityPercent ?? item.probability ?? 0
-    )
-    const theoryPercent = normalizeGoldenEggProbability(
-      item.theoryPercent ?? item.theoreticalPercent ?? settingPercent
-    )
-    const simulatedPercent = Number(item.simulatedPercent)
-    const hitCount = Number(item.count)
-    const icon = String(item.icon || '').trim()
-    const name = String(item.name || item.title || item.label || `獎項 ${index + 1}`).trim()
-
-    return {
-      key: item.id || `golden-egg-simulation-row-${index + 1}`,
-      label: `${icon ? `${icon} ` : ''}${name}`,
-      settingPercent,
-      theoryPercent,
-      simulatedPercentText: Number.isFinite(simulatedPercent) ? `${simulatedPercent}%` : '-',
-      hitCountText: Number.isFinite(hitCount) ? String(hitCount) : '-'
-    }
-  })
-})
 
 const enabledPrizeCount = computed(() => {
   return prizes.value.filter((prize) => prize.isEnabled !== false).length
@@ -2215,6 +2194,14 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
   databaseGameConfigForm.systemShareText = campaign.systemShareText || databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.lineShareText = campaign.lineShareText || databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
   databaseGameConfigForm.telegramShareText = campaign.telegramShareText || databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
+  databaseGameConfigForm.showRuleSection = campaign.showRuleSection !== false
+  databaseGameConfigForm.showPrizeInfoSection = campaign.showPrizeInfoSection !== false
+  databaseGameConfigForm.defaultRuleOpen = campaign.defaultRuleOpen === true
+  databaseGameConfigForm.defaultPrizeInfoOpen = campaign.defaultPrizeInfoOpen === true
+  databaseGameConfigForm.ruleTitle = campaign.ruleTitle || databaseGameConfigForm.ruleTitle || '活動規則'
+  databaseGameConfigForm.ruleContent = campaign.ruleContent || databaseGameConfigForm.ruleContent || ''
+  databaseGameConfigForm.prizeInfoTitle = campaign.prizeInfoTitle || databaseGameConfigForm.prizeInfoTitle || '獎品說明'
+  databaseGameConfigForm.prizeInfoContent = campaign.prizeInfoContent || databaseGameConfigForm.prizeInfoContent || ''
 }
 
 const applyPreviewVisualSettingsToDatabaseForm = () => {
@@ -5804,6 +5791,7 @@ const resetDatabaseCampaignForm = () => {
 
 const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   const settings = campaignData?.gameConfig?.settings || {}
+  const contentSettings = settings?.content && typeof settings.content === 'object' ? settings.content : {}
   applySystemShareButtonSettingsToForm(settings)
 
   databaseGameConfigForm.pageTitle = settings.pageTitle || campaignData?.title || ''
@@ -5823,6 +5811,14 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.showActivityCountdown = settings.showActivityCountdown !== false
   databaseGameConfigForm.activityCountdownAlwaysShowSeconds = settings.activityCountdownAlwaysShowSeconds !== false
   databaseGameConfigForm.showBottomNav = settings.showBottomNav !== false
+  databaseGameConfigForm.showRuleSection = settings.showRuleSection ?? settings.showRules ?? settings.showFrontRules ?? campaign.showRuleSection ?? true
+  databaseGameConfigForm.showPrizeInfoSection = settings.showPrizeInfoSection ?? settings.showPrizeInfo ?? settings.showFrontPrizeInfo ?? campaign.showPrizeInfoSection ?? true
+  databaseGameConfigForm.defaultRuleOpen = settings.defaultRuleOpen ?? settings.defaultRulesOpen ?? campaign.defaultRuleOpen ?? false
+  databaseGameConfigForm.defaultPrizeInfoOpen = settings.defaultPrizeInfoOpen ?? campaign.defaultPrizeInfoOpen ?? false
+  databaseGameConfigForm.ruleTitle = settings.ruleTitle || settings.rulesTitle || contentSettings.ruleTitle || contentSettings.rulesTitle || campaign.ruleTitle || '活動規則'
+  databaseGameConfigForm.ruleContent = settings.ruleContent || settings.rulesText || settings.ruleText || contentSettings.ruleContent || contentSettings.rulesText || contentSettings.ruleText || campaign.ruleContent || ''
+  databaseGameConfigForm.prizeInfoTitle = settings.prizeInfoTitle || contentSettings.prizeInfoTitle || campaign.prizeInfoTitle || '獎品說明'
+  databaseGameConfigForm.prizeInfoContent = settings.prizeInfoContent || settings.prizeInfoText || contentSettings.prizeInfoContent || contentSettings.prizeInfoText || campaign.prizeInfoContent || ''
   databaseGameConfigForm.shareTitle = settings.shareTitle || campaign.shareTitle || '九宮格砸金蛋抽獎活動'
   databaseGameConfigForm.shareDescription = settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.shareUrl = settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
@@ -5879,6 +5875,24 @@ const buildDatabaseGameConfigPayload = () => {
     showActivityCountdown: databaseGameConfigForm.showActivityCountdown,
     activityCountdownAlwaysShowSeconds: databaseGameConfigForm.activityCountdownAlwaysShowSeconds,
     showBottomNav: databaseGameConfigForm.showBottomNav,
+    showRuleSection: databaseGameConfigForm.showRuleSection !== false,
+    showPrizeInfoSection: databaseGameConfigForm.showPrizeInfoSection !== false,
+    defaultRuleOpen: databaseGameConfigForm.defaultRuleOpen === true,
+    defaultPrizeInfoOpen: databaseGameConfigForm.defaultPrizeInfoOpen === true,
+    ruleTitle: databaseGameConfigForm.ruleTitle || '活動規則',
+    ruleContent: databaseGameConfigForm.ruleContent || '',
+    prizeInfoTitle: databaseGameConfigForm.prizeInfoTitle || '獎品說明',
+    prizeInfoContent: databaseGameConfigForm.prizeInfoContent || '',
+    content: {
+      ...(originalSettings?.content && typeof originalSettings.content === 'object' ? originalSettings.content : {}),
+      rulesTitle: databaseGameConfigForm.ruleTitle || '活動規則',
+      ruleTitle: databaseGameConfigForm.ruleTitle || '活動規則',
+      rulesText: databaseGameConfigForm.ruleContent || '',
+      ruleContent: databaseGameConfigForm.ruleContent || '',
+      prizeInfoTitle: databaseGameConfigForm.prizeInfoTitle || '獎品說明',
+      prizeInfoText: databaseGameConfigForm.prizeInfoContent || '',
+      prizeInfoContent: databaseGameConfigForm.prizeInfoContent || ''
+    },
     eggSize: Number(databaseGameConfigForm.eggSize || 74),
     eggCardSize: Number(databaseGameConfigForm.eggCardSize || 128),
     eggGridGap: Number(databaseGameConfigForm.eggGridGap || 12),
@@ -5928,6 +5942,8 @@ const buildDatabaseGameConfigPayload = () => {
 
 
 const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => {
+  const contentSettings = settings?.content && typeof settings.content === 'object' ? settings.content : {}
+
   return {
     pageTitle: String(settings.pageTitle || campaignData?.title || ''),
     mainTitle: String(settings.mainTitle || campaignData?.title || ''),
@@ -5946,6 +5962,14 @@ const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => 
     showActivityCountdown: settings.showActivityCountdown !== false,
     activityCountdownAlwaysShowSeconds: settings.activityCountdownAlwaysShowSeconds !== false,
     showBottomNav: settings.showBottomNav !== false,
+    showRuleSection: settings.showRuleSection ?? settings.showRules ?? settings.showFrontRules ?? true,
+    showPrizeInfoSection: settings.showPrizeInfoSection ?? settings.showPrizeInfo ?? settings.showFrontPrizeInfo ?? true,
+    defaultRuleOpen: settings.defaultRuleOpen ?? settings.defaultRulesOpen ?? false,
+    defaultPrizeInfoOpen: settings.defaultPrizeInfoOpen ?? false,
+    ruleTitle: String(settings.ruleTitle || settings.rulesTitle || contentSettings.ruleTitle || contentSettings.rulesTitle || '活動規則'),
+    ruleContent: String(settings.ruleContent || settings.rulesText || settings.ruleText || contentSettings.ruleContent || contentSettings.rulesText || contentSettings.ruleText || ''),
+    prizeInfoTitle: String(settings.prizeInfoTitle || contentSettings.prizeInfoTitle || '獎品說明'),
+    prizeInfoContent: String(settings.prizeInfoContent || settings.prizeInfoText || contentSettings.prizeInfoContent || contentSettings.prizeInfoText || ''),
     eggSize: Number(settings.eggSize ?? 74),
     eggCardSize: Number(settings.eggCardSize ?? 128),
     eggGridGap: Number(settings.eggGridGap ?? settings.eggGap ?? 12),
@@ -5997,6 +6021,14 @@ const databaseGameConfigFormComparable = computed(() => ({
   showActivityCountdown: Boolean(databaseGameConfigForm.showActivityCountdown),
   activityCountdownAlwaysShowSeconds: Boolean(databaseGameConfigForm.activityCountdownAlwaysShowSeconds),
   showBottomNav: Boolean(databaseGameConfigForm.showBottomNav),
+  showRuleSection: Boolean(databaseGameConfigForm.showRuleSection),
+  showPrizeInfoSection: Boolean(databaseGameConfigForm.showPrizeInfoSection),
+  defaultRuleOpen: Boolean(databaseGameConfigForm.defaultRuleOpen),
+  defaultPrizeInfoOpen: Boolean(databaseGameConfigForm.defaultPrizeInfoOpen),
+  ruleTitle: String(databaseGameConfigForm.ruleTitle || '活動規則'),
+  ruleContent: String(databaseGameConfigForm.ruleContent || ''),
+  prizeInfoTitle: String(databaseGameConfigForm.prizeInfoTitle || '獎品說明'),
+  prizeInfoContent: String(databaseGameConfigForm.prizeInfoContent || ''),
   eggSize: Number(databaseGameConfigForm.eggSize || 74),
   eggCardSize: Number(databaseGameConfigForm.eggCardSize || 128),
   eggGridGap: Number(databaseGameConfigForm.eggGridGap || 12),
@@ -6061,6 +6093,14 @@ const databaseGameConfigDiffLabelMap = {
   showActivityCountdown: '顯示倒數時間',
   activityCountdownAlwaysShowSeconds: '倒數顯示秒數',
   showBottomNav: '顯示底部功能列',
+  showRuleSection: '顯示活動規則區塊',
+  showPrizeInfoSection: '顯示獎品說明區塊',
+  defaultRuleOpen: '活動規則預設展開',
+  defaultPrizeInfoOpen: '獎品說明預設展開',
+  ruleTitle: '活動規則標題',
+  ruleContent: '活動規則內容',
+  prizeInfoTitle: '獎品說明標題',
+  prizeInfoContent: '獎品說明內容',
   eggSize: '金蛋大小 eggSize',
   eggCardSize: '金蛋格子大小 eggCardSize',
   eggGridGap: '金蛋間距 eggGridGap',
@@ -10060,7 +10100,7 @@ watch(
           <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <p class="text-[11px] font-black uppercase tracking-[0.24em] text-amber-600">
-                Golden Egg Percent Simulator｜第 88001～88400 批｜結果表修正
+                Golden Egg Percent Simulator｜第 85601～86000 批｜強制置頂
               </p>
               <h2 class="mt-1 text-xl font-black text-slate-950">
                 金蛋機率試算器
@@ -10134,7 +10174,7 @@ watch(
           </div>
 
           <p class="mt-3 text-xs font-bold leading-5 text-amber-800">
-            若按「開始試算」後表格仍沒有資料，請重新整理頁面並確認已套用第 88001～88400 批。
+            若這裡有出現，就代表目前檔案已經套用第 85601～86000 批；如果線上還看不到，請確認已 git add / commit / push，並等待 Vercel 部署完成。
           </p>
         </section>
 
@@ -10971,7 +11011,89 @@ watch(
               百分比總和：{{ probabilityTotal }}%｜{{ probabilityHintText }}
             </div>
 
-            <!-- 第 87601～88000 批：移除重複的舊版金蛋機率試算器；保留上方強制置頂版本，避免同一區塊出現兩個計算器。 -->
+            <div class="mt-3 rounded-3xl border border-indigo-100 bg-indigo-50/80 p-4 shadow-sm shadow-indigo-100/70">
+              <div class="mb-3 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black leading-5 text-indigo-700 ring-1 ring-indigo-100">
+                這裡就是金蛋機率試算器：輸入模擬次數後按「開始試算」。結果表預設展開，資料太多可按「收合試算器」。
+              </div>
+              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p class="text-[11px] font-black uppercase tracking-[0.22em] text-indigo-500">
+                    Percent Simulator｜第 85201～85600 批｜預設展開
+                  </p>
+                  <h3 class="mt-1 text-base font-black text-slate-950">
+                    金蛋機率試算器（預設展開，可收合）
+                  </h3>
+                  <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">
+                    {{ eggProbabilitySimulatorSummary }}
+                  </p>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    v-model.number="eggProbabilitySimulatorRuns"
+                    type="number"
+                    min="100"
+                    max="10000"
+                    step="100"
+                    class="w-28 rounded-2xl border border-indigo-100 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
+                  />
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white"
+                    @click="runEggProbabilitySimulator"
+                  >
+                    開始試算
+                  </button>
+                  <button
+                    type="button"
+                    class="rounded-2xl bg-white px-4 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100"
+                    @click="eggProbabilitySimulatorOpen = !eggProbabilitySimulatorOpen"
+                  >
+                    {{ eggProbabilitySimulatorOpen ? '收合試算器' : '展開試算器' }}
+                  </button>
+                </div>
+              </div>
+
+              <p v-if="eggProbabilitySimulationAt" class="mt-3 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black text-indigo-700">
+                {{ eggProbabilitySimulationAt }}
+              </p>
+
+              <div
+                v-if="eggProbabilitySimulatorOpen"
+                class="mt-3 max-h-80 overflow-auto rounded-2xl border border-indigo-100 bg-white"
+              >
+                <table class="w-full min-w-[560px] text-left text-xs">
+                  <thead class="sticky top-0 bg-slate-950 text-white">
+                    <tr>
+                      <th class="px-3 py-2">獎項</th>
+                      <th class="px-3 py-2">設定%</th>
+                      <th class="px-3 py-2">理論%</th>
+                      <th class="px-3 py-2">模擬%</th>
+                      <th class="px-3 py-2">次數</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="row in (eggProbabilitySimulationResults.length ? eggProbabilitySimulationResults : enabledGoldenEggPrizeRows)"
+                      :key="`egg-probability-sim-${row.id}`"
+                      class="border-b border-slate-100 last:border-b-0"
+                    >
+                      <td class="px-3 py-2 font-black text-slate-800">
+                        {{ row.icon }} {{ row.name }}
+                      </td>
+                      <td class="px-3 py-2 font-black text-slate-700">{{ row.probabilityPercent }}%</td>
+                      <td class="px-3 py-2 font-black text-indigo-700">{{ row.theoreticalPercent }}%</td>
+                      <td class="px-3 py-2 font-black text-emerald-700">
+                        {{ row.simulatedPercent === undefined ? '-' : `${row.simulatedPercent}%` }}
+                      </td>
+                      <td class="px-3 py-2 font-black text-slate-500">
+                        {{ row.count === undefined ? '-' : row.count }}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
             <div class="mt-3 grid grid-cols-2 gap-2">
               <button
