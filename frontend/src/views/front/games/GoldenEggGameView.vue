@@ -738,16 +738,11 @@ const normalizeRemoteGoldenEggSettings = (apiCampaign = {}) => {
     ? rawSettings.theme
     : {}
 
-  const content = rawSettings?.content && typeof rawSettings.content === 'object'
-    ? rawSettings.content
-    : {}
-
   return {
     rawSettings,
     nestedCampaign,
     basicText,
     theme,
-    content,
     prizeSettings: Array.isArray(rawSettings?.prizes) ? rawSettings.prizes : []
   }
 }
@@ -757,8 +752,7 @@ const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}
     rawSettings = {},
     nestedCampaign = {},
     basicText = {},
-    theme = {},
-    content = {}
+    theme = {}
   } = normalized
 
   const flatSettings = {
@@ -848,14 +842,36 @@ const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}
     rawSettings.serialRedeemPlaceholder ||
     campaign.serialRedeemPlaceholder
 
-  campaign.showRuleSection = rawSettings.showRuleSection ?? rawSettings.showRules ?? rawSettings.showFrontRules ?? nestedCampaign.showRuleSection ?? campaign.showRuleSection
-  campaign.showPrizeInfoSection = rawSettings.showPrizeInfoSection ?? rawSettings.showPrizeInfo ?? rawSettings.showFrontPrizeInfo ?? nestedCampaign.showPrizeInfoSection ?? campaign.showPrizeInfoSection
-  campaign.defaultRuleOpen = rawSettings.defaultRuleOpen ?? rawSettings.defaultRulesOpen ?? nestedCampaign.defaultRuleOpen ?? campaign.defaultRuleOpen
-  campaign.defaultPrizeInfoOpen = rawSettings.defaultPrizeInfoOpen ?? nestedCampaign.defaultPrizeInfoOpen ?? campaign.defaultPrizeInfoOpen
-  campaign.ruleTitle = rawSettings.ruleTitle || rawSettings.rulesTitle || content.ruleTitle || content.rulesTitle || nestedCampaign.ruleTitle || campaign.ruleTitle
-  campaign.ruleContent = rawSettings.ruleContent || rawSettings.rulesText || rawSettings.ruleText || content.ruleContent || content.rulesText || content.ruleText || nestedCampaign.ruleContent || campaign.ruleContent
-  campaign.prizeInfoTitle = rawSettings.prizeInfoTitle || content.prizeInfoTitle || nestedCampaign.prizeInfoTitle || campaign.prizeInfoTitle
-  campaign.prizeInfoContent = rawSettings.prizeInfoContent || rawSettings.prizeInfoText || content.prizeInfoContent || content.prizeInfoText || nestedCampaign.prizeInfoContent || campaign.prizeInfoContent
+  const contentSettings = rawSettings.content && typeof rawSettings.content === 'object' ? rawSettings.content : {}
+  campaign.ruleTitle =
+    rawSettings.ruleTitle ||
+    rawSettings.rulesTitle ||
+    contentSettings.ruleTitle ||
+    contentSettings.rulesTitle ||
+    nestedCampaign.ruleTitle ||
+    campaign.ruleTitle
+
+  campaign.ruleContent =
+    rawSettings.ruleContent ||
+    rawSettings.rulesText ||
+    contentSettings.ruleContent ||
+    contentSettings.rulesText ||
+    nestedCampaign.ruleContent ||
+    campaign.ruleContent
+
+  campaign.prizeInfoTitle =
+    rawSettings.prizeInfoTitle ||
+    contentSettings.prizeInfoTitle ||
+    nestedCampaign.prizeInfoTitle ||
+    campaign.prizeInfoTitle
+
+  campaign.prizeInfoContent =
+    rawSettings.prizeInfoContent ||
+    rawSettings.prizeInfoText ||
+    contentSettings.prizeInfoContent ||
+    contentSettings.prizeInfoText ||
+    nestedCampaign.prizeInfoContent ||
+    campaign.prizeInfoContent
 
   campaign.themeBgFrom = theme.themeBgFrom || theme.from || rawSettings.themeBgFrom || campaign.themeBgFrom
   campaign.themeBgMiddle = theme.themeBgMiddle || theme.middle || rawSettings.themeBgMiddle || campaign.themeBgMiddle

@@ -296,18 +296,15 @@ const databaseGameConfigForm = reactive({
   activityRunningText: '',
   activityNotStartedText: '',
   activityEndedText: '',
+  // 第 88801～89200 批：活動規則 / 獎品說明必須進入正式 GameConfig settings，不能只停在右側預覽草稿。
+  ruleTitle: '活動規則',
+  ruleContent: '',
+  prizeInfoTitle: '獎品說明',
+  prizeInfoContent: '',
   showActivityTimeSection: true,
   showActivityCountdown: true,
   activityCountdownAlwaysShowSeconds: true,
   showBottomNav: true,
-  showRuleSection: true,
-  showPrizeInfoSection: true,
-  defaultRuleOpen: false,
-  defaultPrizeInfoOpen: false,
-  ruleTitle: '活動規則',
-  ruleContent: '請先輸入主辦單位提供的抽獎序號。\n序號驗證成功後，才會取得可用砸蛋次數。\n每次砸蛋會消耗 1 次序號機會。\n獎項數量有限，送完為止。',
-  prizeInfoTitle: '獎品說明',
-  prizeInfoContent: '中獎結果會顯示於畫面與最近紀錄。\n實際兌換方式以主辦單位公告為準。\n請保留中獎畫面或截圖作為兌獎依據。',
   eggSize: 74,
   eggCardSize: 128,
   eggGridGap: 12,
@@ -2194,14 +2191,6 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
   databaseGameConfigForm.systemShareText = campaign.systemShareText || databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.lineShareText = campaign.lineShareText || databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
   databaseGameConfigForm.telegramShareText = campaign.telegramShareText || databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
-  databaseGameConfigForm.showRuleSection = campaign.showRuleSection !== false
-  databaseGameConfigForm.showPrizeInfoSection = campaign.showPrizeInfoSection !== false
-  databaseGameConfigForm.defaultRuleOpen = campaign.defaultRuleOpen === true
-  databaseGameConfigForm.defaultPrizeInfoOpen = campaign.defaultPrizeInfoOpen === true
-  databaseGameConfigForm.ruleTitle = campaign.ruleTitle || databaseGameConfigForm.ruleTitle || '活動規則'
-  databaseGameConfigForm.ruleContent = campaign.ruleContent || databaseGameConfigForm.ruleContent || ''
-  databaseGameConfigForm.prizeInfoTitle = campaign.prizeInfoTitle || databaseGameConfigForm.prizeInfoTitle || '獎品說明'
-  databaseGameConfigForm.prizeInfoContent = campaign.prizeInfoContent || databaseGameConfigForm.prizeInfoContent || ''
 }
 
 const applyPreviewVisualSettingsToDatabaseForm = () => {
@@ -5791,7 +5780,6 @@ const resetDatabaseCampaignForm = () => {
 
 const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   const settings = campaignData?.gameConfig?.settings || {}
-  const contentSettings = settings?.content && typeof settings.content === 'object' ? settings.content : {}
   applySystemShareButtonSettingsToForm(settings)
 
   databaseGameConfigForm.pageTitle = settings.pageTitle || campaignData?.title || ''
@@ -5807,18 +5795,22 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.activityRunningText = settings.activityRunningText || '正式資料庫活動進行中，請輸入序號參加。'
   databaseGameConfigForm.activityNotStartedText = settings.activityNotStartedText || '活動尚未開始。'
   databaseGameConfigForm.activityEndedText = settings.activityEndedText || '活動已結束。'
+
+  const normalizedContentSettings = settings.content && typeof settings.content === 'object' ? settings.content : {}
+  databaseGameConfigForm.ruleTitle = settings.ruleTitle || settings.rulesTitle || normalizedContentSettings.ruleTitle || normalizedContentSettings.rulesTitle || campaign.ruleTitle || '活動規則'
+  databaseGameConfigForm.ruleContent = settings.ruleContent || settings.rulesText || normalizedContentSettings.ruleContent || normalizedContentSettings.rulesText || campaign.ruleContent || ''
+  databaseGameConfigForm.prizeInfoTitle = settings.prizeInfoTitle || normalizedContentSettings.prizeInfoTitle || campaign.prizeInfoTitle || '獎品說明'
+  databaseGameConfigForm.prizeInfoContent = settings.prizeInfoContent || settings.prizeInfoText || normalizedContentSettings.prizeInfoContent || normalizedContentSettings.prizeInfoText || campaign.prizeInfoContent || ''
+
+  campaign.ruleTitle = databaseGameConfigForm.ruleTitle
+  campaign.ruleContent = databaseGameConfigForm.ruleContent
+  campaign.prizeInfoTitle = databaseGameConfigForm.prizeInfoTitle
+  campaign.prizeInfoContent = databaseGameConfigForm.prizeInfoContent
+
   databaseGameConfigForm.showActivityTimeSection = settings.showActivityTimeSection !== false
   databaseGameConfigForm.showActivityCountdown = settings.showActivityCountdown !== false
   databaseGameConfigForm.activityCountdownAlwaysShowSeconds = settings.activityCountdownAlwaysShowSeconds !== false
   databaseGameConfigForm.showBottomNav = settings.showBottomNav !== false
-  databaseGameConfigForm.showRuleSection = settings.showRuleSection ?? settings.showRules ?? settings.showFrontRules ?? campaign.showRuleSection ?? true
-  databaseGameConfigForm.showPrizeInfoSection = settings.showPrizeInfoSection ?? settings.showPrizeInfo ?? settings.showFrontPrizeInfo ?? campaign.showPrizeInfoSection ?? true
-  databaseGameConfigForm.defaultRuleOpen = settings.defaultRuleOpen ?? settings.defaultRulesOpen ?? campaign.defaultRuleOpen ?? false
-  databaseGameConfigForm.defaultPrizeInfoOpen = settings.defaultPrizeInfoOpen ?? campaign.defaultPrizeInfoOpen ?? false
-  databaseGameConfigForm.ruleTitle = settings.ruleTitle || settings.rulesTitle || contentSettings.ruleTitle || contentSettings.rulesTitle || campaign.ruleTitle || '活動規則'
-  databaseGameConfigForm.ruleContent = settings.ruleContent || settings.rulesText || settings.ruleText || contentSettings.ruleContent || contentSettings.rulesText || contentSettings.ruleText || campaign.ruleContent || ''
-  databaseGameConfigForm.prizeInfoTitle = settings.prizeInfoTitle || contentSettings.prizeInfoTitle || campaign.prizeInfoTitle || '獎品說明'
-  databaseGameConfigForm.prizeInfoContent = settings.prizeInfoContent || settings.prizeInfoText || contentSettings.prizeInfoContent || contentSettings.prizeInfoText || campaign.prizeInfoContent || ''
   databaseGameConfigForm.shareTitle = settings.shareTitle || campaign.shareTitle || '九宮格砸金蛋抽獎活動'
   databaseGameConfigForm.shareDescription = settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.shareUrl = settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
@@ -5871,28 +5863,30 @@ const buildDatabaseGameConfigPayload = () => {
     activityRunningText: databaseGameConfigForm.activityRunningText,
     activityNotStartedText: databaseGameConfigForm.activityNotStartedText,
     activityEndedText: databaseGameConfigForm.activityEndedText,
+
+    // 第 88801～89200 批：正式手機頁讀的是 GameConfig.settings；
+    // 因此規則 / 獎品說明要同時寫 root 與 content，相容舊版玩家頁與新版玩家頁。
+    ruleTitle: campaign.ruleTitle || databaseGameConfigForm.ruleTitle || '活動規則',
+    ruleContent: campaign.ruleContent || databaseGameConfigForm.ruleContent || '',
+    prizeInfoTitle: campaign.prizeInfoTitle || databaseGameConfigForm.prizeInfoTitle || '獎品說明',
+    prizeInfoContent: campaign.prizeInfoContent || databaseGameConfigForm.prizeInfoContent || '',
+    rulesText: campaign.ruleContent || databaseGameConfigForm.ruleContent || '',
+    prizeInfoText: campaign.prizeInfoContent || databaseGameConfigForm.prizeInfoContent || '',
+    content: {
+      ...(originalSettings.content && typeof originalSettings.content === 'object' ? originalSettings.content : {}),
+      rulesTitle: campaign.ruleTitle || databaseGameConfigForm.ruleTitle || '活動規則',
+      rulesText: campaign.ruleContent || databaseGameConfigForm.ruleContent || '',
+      ruleTitle: campaign.ruleTitle || databaseGameConfigForm.ruleTitle || '活動規則',
+      ruleContent: campaign.ruleContent || databaseGameConfigForm.ruleContent || '',
+      prizeInfoTitle: campaign.prizeInfoTitle || databaseGameConfigForm.prizeInfoTitle || '獎品說明',
+      prizeInfoText: campaign.prizeInfoContent || databaseGameConfigForm.prizeInfoContent || '',
+      prizeInfoContent: campaign.prizeInfoContent || databaseGameConfigForm.prizeInfoContent || ''
+    },
+
     showActivityTimeSection: databaseGameConfigForm.showActivityTimeSection,
     showActivityCountdown: databaseGameConfigForm.showActivityCountdown,
     activityCountdownAlwaysShowSeconds: databaseGameConfigForm.activityCountdownAlwaysShowSeconds,
     showBottomNav: databaseGameConfigForm.showBottomNav,
-    showRuleSection: databaseGameConfigForm.showRuleSection !== false,
-    showPrizeInfoSection: databaseGameConfigForm.showPrizeInfoSection !== false,
-    defaultRuleOpen: databaseGameConfigForm.defaultRuleOpen === true,
-    defaultPrizeInfoOpen: databaseGameConfigForm.defaultPrizeInfoOpen === true,
-    ruleTitle: databaseGameConfigForm.ruleTitle || '活動規則',
-    ruleContent: databaseGameConfigForm.ruleContent || '',
-    prizeInfoTitle: databaseGameConfigForm.prizeInfoTitle || '獎品說明',
-    prizeInfoContent: databaseGameConfigForm.prizeInfoContent || '',
-    content: {
-      ...(originalSettings?.content && typeof originalSettings.content === 'object' ? originalSettings.content : {}),
-      rulesTitle: databaseGameConfigForm.ruleTitle || '活動規則',
-      ruleTitle: databaseGameConfigForm.ruleTitle || '活動規則',
-      rulesText: databaseGameConfigForm.ruleContent || '',
-      ruleContent: databaseGameConfigForm.ruleContent || '',
-      prizeInfoTitle: databaseGameConfigForm.prizeInfoTitle || '獎品說明',
-      prizeInfoText: databaseGameConfigForm.prizeInfoContent || '',
-      prizeInfoContent: databaseGameConfigForm.prizeInfoContent || ''
-    },
     eggSize: Number(databaseGameConfigForm.eggSize || 74),
     eggCardSize: Number(databaseGameConfigForm.eggCardSize || 128),
     eggGridGap: Number(databaseGameConfigForm.eggGridGap || 12),
@@ -5942,8 +5936,6 @@ const buildDatabaseGameConfigPayload = () => {
 
 
 const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => {
-  const contentSettings = settings?.content && typeof settings.content === 'object' ? settings.content : {}
-
   return {
     pageTitle: String(settings.pageTitle || campaignData?.title || ''),
     mainTitle: String(settings.mainTitle || campaignData?.title || ''),
@@ -5958,18 +5950,14 @@ const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => 
     activityRunningText: String(settings.activityRunningText || '正式資料庫活動進行中，請輸入序號參加。'),
     activityNotStartedText: String(settings.activityNotStartedText || '活動尚未開始。'),
     activityEndedText: String(settings.activityEndedText || '活動已結束。'),
+    ruleTitle: String(settings.ruleTitle || settings.rulesTitle || settings.content?.ruleTitle || settings.content?.rulesTitle || campaign.ruleTitle || '活動規則'),
+    ruleContent: String(settings.ruleContent || settings.rulesText || settings.content?.ruleContent || settings.content?.rulesText || campaign.ruleContent || ''),
+    prizeInfoTitle: String(settings.prizeInfoTitle || settings.content?.prizeInfoTitle || campaign.prizeInfoTitle || '獎品說明'),
+    prizeInfoContent: String(settings.prizeInfoContent || settings.prizeInfoText || settings.content?.prizeInfoContent || settings.content?.prizeInfoText || campaign.prizeInfoContent || ''),
     showActivityTimeSection: settings.showActivityTimeSection !== false,
     showActivityCountdown: settings.showActivityCountdown !== false,
     activityCountdownAlwaysShowSeconds: settings.activityCountdownAlwaysShowSeconds !== false,
     showBottomNav: settings.showBottomNav !== false,
-    showRuleSection: settings.showRuleSection ?? settings.showRules ?? settings.showFrontRules ?? true,
-    showPrizeInfoSection: settings.showPrizeInfoSection ?? settings.showPrizeInfo ?? settings.showFrontPrizeInfo ?? true,
-    defaultRuleOpen: settings.defaultRuleOpen ?? settings.defaultRulesOpen ?? false,
-    defaultPrizeInfoOpen: settings.defaultPrizeInfoOpen ?? false,
-    ruleTitle: String(settings.ruleTitle || settings.rulesTitle || contentSettings.ruleTitle || contentSettings.rulesTitle || '活動規則'),
-    ruleContent: String(settings.ruleContent || settings.rulesText || settings.ruleText || contentSettings.ruleContent || contentSettings.rulesText || contentSettings.ruleText || ''),
-    prizeInfoTitle: String(settings.prizeInfoTitle || contentSettings.prizeInfoTitle || '獎品說明'),
-    prizeInfoContent: String(settings.prizeInfoContent || settings.prizeInfoText || contentSettings.prizeInfoContent || contentSettings.prizeInfoText || ''),
     eggSize: Number(settings.eggSize ?? 74),
     eggCardSize: Number(settings.eggCardSize ?? 128),
     eggGridGap: Number(settings.eggGridGap ?? settings.eggGap ?? 12),
@@ -6017,18 +6005,14 @@ const databaseGameConfigFormComparable = computed(() => ({
   activityRunningText: String(databaseGameConfigForm.activityRunningText || ''),
   activityNotStartedText: String(databaseGameConfigForm.activityNotStartedText || ''),
   activityEndedText: String(databaseGameConfigForm.activityEndedText || ''),
+  ruleTitle: String(campaign.ruleTitle || databaseGameConfigForm.ruleTitle || ''),
+  ruleContent: String(campaign.ruleContent || databaseGameConfigForm.ruleContent || ''),
+  prizeInfoTitle: String(campaign.prizeInfoTitle || databaseGameConfigForm.prizeInfoTitle || ''),
+  prizeInfoContent: String(campaign.prizeInfoContent || databaseGameConfigForm.prizeInfoContent || ''),
   showActivityTimeSection: Boolean(databaseGameConfigForm.showActivityTimeSection),
   showActivityCountdown: Boolean(databaseGameConfigForm.showActivityCountdown),
   activityCountdownAlwaysShowSeconds: Boolean(databaseGameConfigForm.activityCountdownAlwaysShowSeconds),
   showBottomNav: Boolean(databaseGameConfigForm.showBottomNav),
-  showRuleSection: Boolean(databaseGameConfigForm.showRuleSection),
-  showPrizeInfoSection: Boolean(databaseGameConfigForm.showPrizeInfoSection),
-  defaultRuleOpen: Boolean(databaseGameConfigForm.defaultRuleOpen),
-  defaultPrizeInfoOpen: Boolean(databaseGameConfigForm.defaultPrizeInfoOpen),
-  ruleTitle: String(databaseGameConfigForm.ruleTitle || '活動規則'),
-  ruleContent: String(databaseGameConfigForm.ruleContent || ''),
-  prizeInfoTitle: String(databaseGameConfigForm.prizeInfoTitle || '獎品說明'),
-  prizeInfoContent: String(databaseGameConfigForm.prizeInfoContent || ''),
   eggSize: Number(databaseGameConfigForm.eggSize || 74),
   eggCardSize: Number(databaseGameConfigForm.eggCardSize || 128),
   eggGridGap: Number(databaseGameConfigForm.eggGridGap || 12),
@@ -6089,18 +6073,14 @@ const databaseGameConfigDiffLabelMap = {
   activityRunningText: '活動進行中文字',
   activityNotStartedText: '活動尚未開始文字',
   activityEndedText: '活動已結束文字',
-  showActivityTimeSection: '顯示活動時間區塊',
-  showActivityCountdown: '顯示倒數時間',
-  activityCountdownAlwaysShowSeconds: '倒數顯示秒數',
-  showBottomNav: '顯示底部功能列',
-  showRuleSection: '顯示活動規則區塊',
-  showPrizeInfoSection: '顯示獎品說明區塊',
-  defaultRuleOpen: '活動規則預設展開',
-  defaultPrizeInfoOpen: '獎品說明預設展開',
   ruleTitle: '活動規則標題',
   ruleContent: '活動規則內容',
   prizeInfoTitle: '獎品說明標題',
   prizeInfoContent: '獎品說明內容',
+  showActivityTimeSection: '顯示活動時間區塊',
+  showActivityCountdown: '顯示倒數時間',
+  activityCountdownAlwaysShowSeconds: '倒數顯示秒數',
+  showBottomNav: '顯示底部功能列',
   eggSize: '金蛋大小 eggSize',
   eggCardSize: '金蛋格子大小 eggCardSize',
   eggGridGap: '金蛋間距 eggGridGap',
