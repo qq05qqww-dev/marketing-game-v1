@@ -1,16 +1,18 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 84801～85200 批：砸金蛋後端百分比抽獎對齊版
+// 第 87201～87600 批：三遊戲後台百分比正式抽獎統一修正版
+// 延續第 84801～85200 批：砸金蛋後端百分比抽獎對齊版
 // 延續第 79201～79600 批：九宮格正式後端百分比抽獎對齊版
 //
 // 覆蓋位置：
 // backend/src/services/drawEngine.service.js
 //
 // 本批重點：
-// 1. GRID / PREMIUM_GRID 正式抽獎優先讀取 GameConfig.settings.prizes / gridItems。
-// 2. 後台九宮格「機率 %」會寫入 probabilityPercent / weight / probability，後端抽獎統一正規化後計算。
+// 1. WHEEL / GRID / GOLDEN_EGG 正式抽獎都優先讀取 GameConfig.settings 的後台百分比設定。
+// 2. 後台「機率 %」會寫入 probabilityPercent / weight / probability，後端抽獎統一正規化後計算。
 // 3. 玩家前台只呼叫 /api/draw-engine/campaigns/:id/play，不在前端自行決定正式中獎結果。
 // 4. 保留原本 Prize table fallback，避免舊活動沒有 GameConfig settings 時無法抽獎。
-// 5. 不改 DB schema / router。
+// 5. WHEEL 若後台設定沒有庫存欄位，GameConfig 虛擬獎項預設視為可抽，避免輪盤獎項被 0 庫存濾掉。
+// 6. 不改 DB schema / router。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -70,7 +72,27 @@ const normalizeGameConfigPrizeTitle = (item = {}, index = 0) => {
   )
 }
 
-const normalizeGameConfigPrizeStock = (item = {}) => {
+const hasExplicitGameConfigStock = (item = {}) => {
+  return item.remainStock !== undefined ||
+    item.stock !== undefined ||
+    item.quantity !== undefined ||
+    item.inventory !== undefined ||
+    item.stockTotal !== undefined ||
+    item.total !== undefined
+}
+
+const normalizeGameConfigPrizeStock = (item = {}, gameType = '') => {
+  if (normalizeGameConfigPrizeType(item.type || item.rewardType) === 'LOSE') {
+    return 999999999
+  }
+
+  // 輪盤後台的 prizes 通常只設定百分比 / 顏色 / 文字，不一定有庫存欄位。
+  // 第 87201～87600 批：WHEEL 改為優先吃 GameConfig，因此無庫存欄位時要視為可抽，
+  // 否則會被 0 庫存濾掉，導致又 fallback 或無獎項。
+  if (normalizeGameType(gameType) === 'WHEEL' && !hasExplicitGameConfigStock(item)) {
+    return 999999999
+  }
+
   const stock = Number(
     item.remainStock ??
       item.stock ??
@@ -80,10 +102,6 @@ const normalizeGameConfigPrizeStock = (item = {}) => {
       item.total ??
       0
   )
-
-  if (normalizeGameConfigPrizeType(item.type || item.rewardType) === 'LOSE') {
-    return 999999999
-  }
 
   return Math.max(0, stock)
 }
@@ -114,14 +132,39 @@ const isGameConfigItemEnabled = (item = {}) => {
   return true
 }
 
-const extractGameConfigPrizeItems = (settings = {}) => {
-  const candidates = [
-    settings.eggItems,
+const extractGameConfigPrizeItems = (settings = {}, gameType = '') => {
+  const normalizedGameType = normalizeGameType(gameType)
+  const candidatesByGame = {
+    WHEEL: [
+      settings.prizes,
+      settings.wheelItems,
+      settings.rewards,
+      settings.rewardItems,
+      settings.items
+    ],
+    GRID: [
+      settings.prizes,
+      settings.gridItems,
+      settings.rewards,
+      settings.rewardItems,
+      settings.items
+    ],
+    GOLDEN_EGG: [
+      settings.eggItems,
+      settings.prizes,
+      settings.rewards,
+      settings.rewardItems,
+      settings.items
+    ]
+  }
+
+  const candidates = candidatesByGame[normalizedGameType] || [
     settings.prizes,
-    settings.gridItems,
     settings.rewards,
     settings.rewardItems,
     settings.items,
+    settings.gridItems,
+    settings.eggItems,
     settings.wheelItems
   ]
 
@@ -135,9 +178,10 @@ const extractGameConfigPrizeItems = (settings = {}) => {
 }
 
 const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
+  const gameType = normalizeGameType(campaign.gameType)
   const title = normalizeGameConfigPrizeTitle(item, index)
   const prizeType = normalizeGameConfigPrizeType(item.type || item.rewardType)
-  const remainStock = normalizeGameConfigPrizeStock(item)
+  const remainStock = normalizeGameConfigPrizeStock(item, gameType)
   const probability = normalizeGameConfigPrizeProbability(item)
 
   return {
@@ -164,7 +208,8 @@ const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
 
 const buildGameConfigPrizePool = (campaign = {}) => {
   const settings = campaign.gameConfig?.settings || {}
-  const items = extractGameConfigPrizeItems(settings)
+  const gameType = normalizeGameType(campaign.gameType)
+  const items = extractGameConfigPrizeItems(settings, gameType)
 
   return items
     .filter(isGameConfigItemEnabled)
@@ -179,10 +224,9 @@ const getCampaignPrizePool = (campaign = {}) => {
   const gameType = normalizeGameType(campaign.gameType)
   const gameConfigPool = buildGameConfigPrizePool(campaign)
 
-  // 第 79201～79600 批：九宮格正式抽獎必須以後台 GameConfig settings 的百分比為準。
-  // 第 84801～85200 批：砸金蛋也必須以後台 GameConfig settings 的 eggItems / prizes 百分比為準。
+  // 第 87201～87600 批：三個正式遊戲都必須以後台 GameConfig settings 的百分比為準。
   // 若同一活動仍有舊 Prize table 資料，也不能蓋過商家後台設定。
-  if (['GRID', 'GOLDEN_EGG'].includes(gameType) && gameConfigPool.length) {
+  if (['WHEEL', 'GRID', 'GOLDEN_EGG'].includes(gameType) && gameConfigPool.length) {
     return gameConfigPool
   }
 

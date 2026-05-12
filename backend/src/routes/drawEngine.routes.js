@@ -1,5 +1,6 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 77601～78000 批：商家停用自動封鎖名下活動玩家入口版
+// 第 87201～87600 批：三遊戲後台百分比正式抽獎統一修正版
+// 延續第 77601～78000 批：商家停用自動封鎖名下活動玩家入口版
 //
 // 覆蓋位置：
 // backend/src/routes/drawEngine.routes.js
@@ -8,6 +9,7 @@
 // 1. 商家停用 / 暫停時，抽獎池、序號驗證、正式 play 全部封鎖。
 // 2. 不直接改 campaign.status，避免商家恢復後活動設定遺失。
 // 3. 保留原本 draw-engine controller / service / draw-core，不改抽獎核心。
+// 4. 本檔確認 routes import 維持 src/routes 相對路徑：../controllers 與 ../middleware。
 
 import express from 'express'
 import {
