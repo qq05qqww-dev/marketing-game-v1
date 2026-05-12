@@ -1,3 +1,15 @@
+// Multi Game Platform V2.3 Tenant Edition
+// 第 90401～90800 批：金蛋正式玩家序號驗證後可敲擊防呆修正版
+//
+// 覆蓋位置：
+// frontend/src/views/front/games/GoldenEggGameView.vue
+//
+// 修正重點：
+// 1. 正式玩家頁輸入序號成功後，不再被前端本地獎項庫存判斷擋住。
+// 2. 正式 GOLDEN_EGG 抽獎由後端 Draw Engine 依後台 GameConfig 百分比與庫存正式計算。
+// 3. 前端只負責序號成功後允許點金蛋、送出 play API、顯示後端回傳結果。
+// 4. 「目前獎品已抽完」只保留給離線/模板本地模擬；正式玩家頁由後端回覆真實錯誤。
+
 <script setup>
 /**
  * Multi Game Platform V2.3 第 89601～90000 批：金蛋平台模板與商家活動預覽隔離修正版
@@ -1544,18 +1556,41 @@ const handleCommonEggPlayBoardReset = () => {
 
 
 const availablePrizePool = computed(() => {
-  return activePrizes.value.filter((prize) => Number(prize.stock) > 0 && Number(prize.probability) > 0)
+  return activePrizes.value.filter((prize) => {
+    const probability = Number(prize.probability || 0)
+    const stock = Number(prize.stock ?? prize.remainStock ?? prize.quantity ?? 0)
+    const prizeType = String(prize.type || '').toLowerCase()
+
+    if (probability <= 0) return false
+
+    // 未中獎/謝謝類獎項沒有庫存概念，仍可作為合法抽獎池。
+    if (['lose', 'thanks', 'no_prize', 'none'].includes(prizeType)) return true
+
+    return stock > 0
+  })
+})
+
+const shouldUseBackendDrawPool = computed(() => {
+  // 第 90401～90800 批：正式玩家頁只要序號驗證成功，就允許玩家點金蛋。
+  // 真正獎項是否可抽、庫存是否足夠、百分比是否有效，全部交給後端 Draw Engine 判斷。
+  return Boolean(isOnlineMode.value && onlineCampaignId.value)
+})
+
+const hasPlayablePrizePool = computed(() => {
+  if (shouldUseBackendDrawPool.value) return true
+  return availablePrizePool.value.length > 0
 })
 
 const canPlay = computed(() => {
-  return isActivityPlayable.value && player.chances > 0 && availablePrizePool.value.length > 0 && !isCracking.value
+  return isActivityPlayable.value && player.chances > 0 && hasPlayablePrizePool.value && !isCracking.value
 })
 
 const statusText = computed(() => {
   if (!isActivityPlayable.value) return activityStatusText.value
   if (isCracking.value) return '金蛋敲擊中，請稍候結果揭曉。'
-  if (!availablePrizePool.value.length) return '目前獎品已抽完，請等待主辦單位更新。'
   if (player.chances <= 0) return '目前沒有砸蛋機會，請輸入主辦單位提供的序號兌換。'
+  if (shouldUseBackendDrawPool.value) return `序號已驗證，目前可砸 ${player.chances} 次，請選擇一顆金蛋。`
+  if (!availablePrizePool.value.length) return '目前獎品已抽完，請等待主辦單位更新。'
   return `序號已驗證，目前可砸 ${player.chances} 次，請選擇一顆金蛋。`
 })
 
