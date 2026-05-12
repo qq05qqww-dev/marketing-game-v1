@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 86801～87200 批：金蛋結果彈窗中獎未中獎圖片分流版
+// 第 89601～90000 批：金蛋平台模板與商家活動預覽隔離修正版
 // 延續第 86401～86800 批：結果彈窗正式玩家套用與按鈕色彩補強版
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -38,6 +38,8 @@ const GOLDEN_EGG_SERIAL_REDEEM_LOG_KEY = 'multi_game_platform_golden_egg_serial_
 const GOLDEN_EGG_HISTORY_KEY = 'multi_game_platform_golden_egg_history_v1'
 const GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY = 'multi_game_platform_golden_egg_game_config_operation_log_v1'
 const GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY = 'multi_game_platform_golden_egg_game_config_save_backup_v1'
+const GOLDEN_EGG_PLATFORM_TEMPLATE_STATE_KEY = 'multi_game_platform_golden_egg_platform_template_state_v1'
+const GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY = 'multi_game_platform_golden_egg_platform_template_sync_ping_v1'
 
 
 const cloneByJson = (value) => JSON.parse(JSON.stringify(value))
@@ -69,10 +71,38 @@ const isSingleActivityMode = computed(() => {
   return String(route?.query?.singleGame || '') === '1' || Boolean(queryCampaignId.value)
 })
 
+// 第 89601～90000 批：平台金蛋模板與商家活動必須完全隔離。
+// 從遊戲模板中心進來時，不可以沿用上一個商家的 campaignId / tenantSlug / localStorage 預覽草稿。
+const isPlatformTemplateMode = computed(() => {
+  const mode = String(route?.query?.mode || route?.query?.templateMode || '').trim().toLowerCase()
+  const path = String(route?.path || '').toLowerCase()
+
+  if (queryCampaignId.value || String(route?.query?.singleGame || '') === '1') {
+    return false
+  }
+
+  return Boolean(
+    route?.query?.platformTemplate === '1' ||
+      mode === 'admin' ||
+      mode === 'template' ||
+      path.includes('/games/golden-egg')
+  )
+})
+
+const currentGoldenEggAdminStateKey = computed(() => isPlatformTemplateMode.value
+  ? GOLDEN_EGG_PLATFORM_TEMPLATE_STATE_KEY
+  : GOLDEN_EGG_ADMIN_STATE_KEY
+)
+
+const currentGoldenEggAdminSyncKey = computed(() => isPlatformTemplateMode.value
+  ? GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY
+  : GOLDEN_EGG_ADMIN_SYNC_KEY
+)
 
 const shouldRedirectGoldenEggLegacyAdminEntry = computed(() => {
   const hasCampaignContext = Boolean(
-    isSingleActivityMode.value ||
+    isPlatformTemplateMode.value ||
+      isSingleActivityMode.value ||
       queryCampaignId.value ||
       queryTenantSlug.value ||
       queryPlayerUrl.value
@@ -91,6 +121,10 @@ const queryTenantSlug = computed(() => String(route?.query?.tenantSlug || '').tr
 const queryPlayerUrl = computed(() => String(route?.query?.playerUrl || '').trim())
 
 const getSingleActivityPlayerUrl = () => {
+  if (isPlatformTemplateMode.value) {
+    return '/games/golden-egg'
+  }
+
   const tenantSlug = String(databaseCampaign.value?.tenant?.slug || queryTenantSlug.value || getStoredAdminUser()?.tenantSlug || '').trim()
   const rawPlayerUrl = queryPlayerUrl.value
 
@@ -1083,6 +1117,15 @@ const adminSections = [
 const previewUrl = computed(() => {
   const params = new URLSearchParams()
   params.set('preview', String(previewRefreshKey.value))
+
+  // 第 89601～90000 批：平台模板預覽固定走 /games/golden-egg + templatePreview。
+  // 不帶 tenantSlug / campaignId，避免模板 iframe 讀到某商家的正式活動設定。
+  if (isPlatformTemplateMode.value) {
+    params.set('mode', 'admin')
+    params.set('templatePreview', '1')
+    params.set('templateId', 'golden-egg')
+    return `/games/golden-egg?${params.toString()}`
+  }
 
   const campaignId = Number(databaseCampaignId.value || databaseCampaign.value?.id || queryCampaignId.value || 0)
   const storedUser = getStoredAdminUser()
@@ -2103,9 +2146,9 @@ const operationMessageClass = computed(() => {
 })
 
 const saveState = (message = '') => {
-  localStorage.setItem(GOLDEN_EGG_ADMIN_STATE_KEY, JSON.stringify(payload.value))
+  localStorage.setItem(currentGoldenEggAdminStateKey.value, JSON.stringify(payload.value))
   localStorage.setItem(
-    GOLDEN_EGG_ADMIN_SYNC_KEY,
+    currentGoldenEggAdminSyncKey.value,
     JSON.stringify({
       updatedAt: new Date().toISOString(),
       source: 'golden-egg-admin'
@@ -2133,7 +2176,7 @@ const scheduleSaveState = () => {
 }
 
 const loadState = () => {
-  const saved = safeJsonParse(localStorage.getItem(GOLDEN_EGG_ADMIN_STATE_KEY), null)
+  const saved = safeJsonParse(localStorage.getItem(currentGoldenEggAdminStateKey.value), null)
 
   if (!saved) {
     saveState()
@@ -6844,7 +6887,7 @@ watch(
             砸金蛋單一活動設定｜可還原與備份
           </h1>
           <p class="mt-1 text-sm font-medium text-slate-500">
-            從「我的活動」進入時，只載入目前這一筆砸金蛋活動；右側預覽改用正式玩家網址，且不再帶 commonEgg / adminPreview / formalPlayerPreview 測試參數。
+            {{ isPlatformTemplateMode ? '平台模板模式：只編輯金蛋平台模板預覽，不會讀取或同步任何商家既有活動。' : '從「我的活動」進入時，只載入目前這一筆砸金蛋活動；右側預覽改用正式玩家網址，且不再帶 commonEgg / adminPreview / formalPlayerPreview 測試參數。' }}
           </p>
         </div>
 

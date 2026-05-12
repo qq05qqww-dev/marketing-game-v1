@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
+ * Multi Game Platform V2.3 第 89601～90000 批：金蛋平台模板與商家活動預覽隔離修正版
  *
  * 修正重點：
  * 1. 砸金蛋即使沒有上傳音效網址，也會使用 Web Audio 產生敲擊、裂開、成功提示聲。
@@ -81,6 +81,16 @@ const route = useRoute()
 
 const isAdminMode = computed(() => {
   return route.query?.mode === 'admin' || route.query?.preview !== undefined || route.query?.adminPreview !== undefined
+})
+
+const isPlatformTemplatePreviewMode = computed(() => {
+  const mode = String(route.query?.mode || route.query?.templateMode || '').trim().toLowerCase()
+
+  return Boolean(
+    route.query?.templatePreview === '1' ||
+      route.query?.platformTemplate === '1' ||
+      (mode === 'admin' && !route.query?.campaignId && !route.params?.tenantSlug && !route.query?.tenantSlug)
+  )
 })
 
 const isLegacyEggRoute = computed(() => {
@@ -276,8 +286,18 @@ const remoteCrackDuration = computed(() => 2.8)
 const GOLDEN_EGG_HISTORY_KEY = 'multi_game_platform_golden_egg_history_v1'
 const GOLDEN_EGG_ADMIN_STATE_KEY = 'multi_game_platform_golden_egg_admin_state_v1'
 const GOLDEN_EGG_ADMIN_SYNC_KEY = 'multi_game_platform_golden_egg_admin_sync_ping_v1'
+const GOLDEN_EGG_PLATFORM_TEMPLATE_STATE_KEY = 'multi_game_platform_golden_egg_platform_template_state_v1'
+const GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY = 'multi_game_platform_golden_egg_platform_template_sync_ping_v1'
 const GOLDEN_EGG_SERIAL_CODES_KEY = 'multi_game_platform_golden_egg_serial_codes_v1'
 const GOLDEN_EGG_SERIAL_REDEEM_LOG_KEY = 'multi_game_platform_golden_egg_serial_redeem_log_v1'
+
+const getGoldenEggAdminStateKey = () => isPlatformTemplatePreviewMode.value
+  ? GOLDEN_EGG_PLATFORM_TEMPLATE_STATE_KEY
+  : GOLDEN_EGG_ADMIN_STATE_KEY
+
+const getGoldenEggAdminSyncKey = () => isPlatformTemplatePreviewMode.value
+  ? GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY
+  : GOLDEN_EGG_ADMIN_SYNC_KEY
 
 const cloneByJson = (value) => JSON.parse(JSON.stringify(value))
 
@@ -610,7 +630,7 @@ const syncSectionOpenStateFromCampaign = () => {
 const loadGoldenEggAdminState = () => {
   if (typeof localStorage === 'undefined') return
 
-  const saved = safeJsonParse(localStorage.getItem(GOLDEN_EGG_ADMIN_STATE_KEY), null)
+  const saved = safeJsonParse(localStorage.getItem(getGoldenEggAdminStateKey()), null)
   applyGoldenEggAdminState(saved)
 }
 
@@ -716,7 +736,7 @@ const mapApiPrizeToLocalPrize = (prize = {}, index = 0) => {
 const getLocalAdminCampaignFallback = () => {
   if (typeof localStorage === 'undefined') return null
 
-  const saved = safeJsonParse(localStorage.getItem(GOLDEN_EGG_ADMIN_STATE_KEY), null)
+  const saved = safeJsonParse(localStorage.getItem(getGoldenEggAdminStateKey()), null)
 
   return saved?.campaign || null
 }
@@ -1146,6 +1166,12 @@ const loadGoldenEggRemoteState = async () => {
   const tenantSlug = getRouteTenantSlug()
   let apiCampaign = null
 
+  if (isPlatformTemplatePreviewMode.value) {
+    isOnlineMode.value = false
+    onlineCampaignId.value = null
+    return
+  }
+
   if (!campaignId && !tenantSlug) {
     isOnlineMode.value = false
     onlineCampaignId.value = null
@@ -1200,7 +1226,7 @@ const loadGoldenEggRemoteState = async () => {
 const handleGoldenEggAdminStorageSync = (event) => {
   if (!event) return
 
-  if (event.key === GOLDEN_EGG_ADMIN_STATE_KEY || event.key === GOLDEN_EGG_ADMIN_SYNC_KEY) {
+  if (event.key === getGoldenEggAdminStateKey() || event.key === getGoldenEggAdminSyncKey()) {
     loadGoldenEggAdminState()
   }
 }
