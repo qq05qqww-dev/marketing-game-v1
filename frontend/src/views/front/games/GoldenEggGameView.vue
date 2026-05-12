@@ -381,6 +381,8 @@ const campaign = reactive({
   resultIconBgColor: '#fde047',
   resultIconTextColor: '#991b1b',
   resultImageUrl: '',
+  resultWinImageUrl: '',
+  resultLoseImageUrl: '',
   resultIconSize: 96,
   resultIconTextSize: 48,
   resultBadgeTextSize: 12,
@@ -2064,9 +2066,13 @@ const resultIconStyle = computed(() => {
 
 const resultImageUrl = computed(() => {
   const prizeImageUrl = String(resultPrize.value?.imageUrl || '').trim()
+  const isLoseResult = resultPrize.value?.type === 'lose'
+  const winImageUrl = String(campaign.resultWinImageUrl || '').trim()
+  const loseImageUrl = String(campaign.resultLoseImageUrl || '').trim()
   const globalImageUrl = String(campaign.resultImageUrl || '').trim()
+  const typedImageUrl = isLoseResult ? loseImageUrl : winImageUrl
 
-  return prizeImageUrl || globalImageUrl
+  return prizeImageUrl || typedImageUrl || globalImageUrl
 })
 
 const resultBadgeStyle = computed(() => {

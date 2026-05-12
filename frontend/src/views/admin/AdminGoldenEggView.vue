@@ -1,6 +1,7 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 25501～25900 批：金蛋設定保留正式遠端玩家入口版
+// 第 86801～87200 批：金蛋結果彈窗中獎未中獎圖片分流版
+// 延續第 86401～86800 批：結果彈窗正式玩家套用與按鈕色彩補強版
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
   getAdminGoldenEggCampaign,
@@ -447,6 +448,8 @@ const campaign = reactive({
   resultIconBgColor: '#fde047',
   resultIconTextColor: '#991b1b',
   resultImageUrl: '',
+  resultWinImageUrl: '',
+  resultLoseImageUrl: '',
   resultIconSize: 96,
   resultIconTextSize: 48,
   resultBadgeTextSize: 12,
@@ -815,6 +818,7 @@ const sectionRestoreMap = {
     campaignFields: [
       'resultModalBgFrom', 'resultModalBgTo', 'resultModalBorderColor',
       'resultIconBgColor', 'resultIconTextColor', 'resultImageUrl',
+      'resultWinImageUrl', 'resultLoseImageUrl',
       'resultIconSize', 'resultIconTextSize', 'resultBadgeTextSize',
       'resultTitleTextSize', 'resultTitleColor',
       'resultDescriptionTextSize', 'resultDescriptionColor',
@@ -2444,16 +2448,16 @@ const readImageFileAsDataUrl = (file) => {
   })
 }
 
-const handleResultImageUpload = async (event) => {
+const handleResultImageUploadByField = async (event, field = 'resultImageUrl', label = '全域結果圖片') => {
   const file = event.target?.files?.[0]
 
   if (!file) return
 
   try {
-    campaign.resultImageUrl = await readImageFileAsDataUrl(file)
-    saveState('已上傳全域結果圖片。')
+    campaign[field] = await readImageFileAsDataUrl(file)
+    saveState(`已上傳${label}。`)
   } catch (error) {
-    console.error('上傳全域結果圖片失敗：', error)
+    console.error(`上傳${label}失敗：`, error)
     showOperationError(error.message || '上傳圖片失敗')
   } finally {
     if (event.target) {
@@ -2462,9 +2466,31 @@ const handleResultImageUpload = async (event) => {
   }
 }
 
+const handleResultImageUpload = (event) => {
+  return handleResultImageUploadByField(event, 'resultImageUrl', '全域結果圖片')
+}
+
+const handleResultWinImageUpload = (event) => {
+  return handleResultImageUploadByField(event, 'resultWinImageUrl', '中獎結果圖片')
+}
+
+const handleResultLoseImageUpload = (event) => {
+  return handleResultImageUploadByField(event, 'resultLoseImageUrl', '未中獎結果圖片')
+}
+
 const clearResultImage = () => {
   campaign.resultImageUrl = ''
   saveState('已清除全域結果圖片。')
+}
+
+const clearResultWinImage = () => {
+  campaign.resultWinImageUrl = ''
+  saveState('已清除中獎結果圖片。')
+}
+
+const clearResultLoseImage = () => {
+  campaign.resultLoseImageUrl = ''
+  saveState('已清除未中獎結果圖片。')
 }
 
 const handlePrizeImageUpload = async (event, prize) => {
@@ -13183,10 +13209,10 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         Image Source
                       </p>
                       <h3 class="mt-1 text-base font-black text-slate-950">
-                        結果圖片
+                        結果圖片分流
                       </h3>
                       <p class="mt-1 text-xs font-bold leading-5 text-amber-800/80">
-                        可貼網路圖片，也可上傳本機圖片。獎項本身有圖片時，玩家結果會優先顯示獎項圖片。
+                        可分別設定中獎圖、未中獎圖，也可保留全域備用圖。獎項本身有圖片時仍會優先顯示獎項圖片。
                       </p>
                     </div>
                     <button
@@ -13194,28 +13220,54 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                       class="shrink-0 rounded-2xl bg-white px-3 py-2 text-xs font-black text-rose-600 ring-1 ring-rose-100"
                       @click="clearResultImage"
                     >
-                      清除圖片
+                      清除全域圖
                     </button>
                   </div>
 
-                  <label class="admin-field mt-4">
-                    <span>結果圖片 URL / 上傳後圖片資料</span>
-                    <input
-                      v-model="campaign.resultImageUrl"
-                      type="text"
-                      placeholder="https://example.com/result.png"
-                    />
-                  </label>
+                  <div class="mt-4 grid gap-4">
+                    <div class="rounded-[1.4rem] border border-amber-100 bg-white p-4">
+                      <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-black text-slate-900">中獎結果圖片</p>
+                        <button type="button" class="text-xs font-black text-rose-600" @click="clearResultWinImage">清除</button>
+                      </div>
+                      <label class="admin-field mt-3">
+                        <span>中獎圖片 URL / 本機上傳資料</span>
+                        <input v-model="campaign.resultWinImageUrl" type="text" placeholder="https://example.com/win.png" />
+                      </label>
+                      <div class="mt-3 grid gap-3 md:grid-cols-[160px_1fr]">
+                        <label class="admin-upload-button min-h-[54px] justify-center">
+                          <input type="file" accept="image/*" class="hidden" @change="handleResultWinImageUpload" />
+                          上傳中獎圖
+                        </label>
+                        <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800">
+                          玩家中獎時優先使用：獎項圖片 → 中獎圖片 → 全域結果圖片 → emoji。
+                        </div>
+                      </div>
+                    </div>
 
-                  <div class="mt-3 grid gap-3 md:grid-cols-2">
-                    <label class="admin-upload-button min-h-[54px] justify-center">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        class="hidden"
-                        @change="handleResultImageUpload"
-                      />
-                      選擇本機圖片
+                    <div class="rounded-[1.4rem] border border-slate-200 bg-white p-4">
+                      <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-black text-slate-900">未中獎結果圖片</p>
+                        <button type="button" class="text-xs font-black text-rose-600" @click="clearResultLoseImage">清除</button>
+                      </div>
+                      <label class="admin-field mt-3">
+                        <span>未中獎圖片 URL / 本機上傳資料</span>
+                        <input v-model="campaign.resultLoseImageUrl" type="text" placeholder="https://example.com/lose.png" />
+                      </label>
+                      <div class="mt-3 grid gap-3 md:grid-cols-[160px_1fr]">
+                        <label class="admin-upload-button min-h-[54px] justify-center">
+                          <input type="file" accept="image/*" class="hidden" @change="handleResultLoseImageUpload" />
+                          上傳未中獎圖
+                        </label>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold leading-5 text-slate-600">
+                          玩家未中獎時優先使用：獎項圖片 → 未中獎圖片 → 全域結果圖片 → emoji。
+                        </div>
+                      </div>
+                    </div>
+
+                    <label class="admin-field">
+                      <span>全域備用結果圖片 URL</span>
+                      <input v-model="campaign.resultImageUrl" type="text" placeholder="https://example.com/result.png" />
                     </label>
 
                     <div class="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-xs font-bold leading-5 text-slate-500">
@@ -13396,8 +13448,8 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                       }"
                     >
                       <img
-                        v-if="campaign.resultImageUrl"
-                        :src="campaign.resultImageUrl"
+                        v-if="campaign.resultWinImageUrl || campaign.resultImageUrl"
+                        :src="campaign.resultWinImageUrl || campaign.resultImageUrl"
                         alt="結果圖片"
                         class="h-full w-full object-cover"
                       />
