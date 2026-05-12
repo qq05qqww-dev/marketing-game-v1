@@ -1,3 +1,4 @@
+// 第 87601～88000 批：金蛋機率試算器重複區塊移除版
 <script setup>
 // Multi Game Platform V2.3
 // 第 86801～87200 批：金蛋結果彈窗中獎未中獎圖片分流版
@@ -10942,89 +10943,7 @@ watch(
               百分比總和：{{ probabilityTotal }}%｜{{ probabilityHintText }}
             </div>
 
-            <div class="mt-3 rounded-3xl border border-indigo-100 bg-indigo-50/80 p-4 shadow-sm shadow-indigo-100/70">
-              <div class="mb-3 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black leading-5 text-indigo-700 ring-1 ring-indigo-100">
-                這裡就是金蛋機率試算器：輸入模擬次數後按「開始試算」。結果表預設展開，資料太多可按「收合試算器」。
-              </div>
-              <div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p class="text-[11px] font-black uppercase tracking-[0.22em] text-indigo-500">
-                    Percent Simulator｜第 85201～85600 批｜預設展開
-                  </p>
-                  <h3 class="mt-1 text-base font-black text-slate-950">
-                    金蛋機率試算器（預設展開，可收合）
-                  </h3>
-                  <p class="mt-1 text-xs font-bold leading-5 text-indigo-700">
-                    {{ eggProbabilitySimulatorSummary }}
-                  </p>
-                </div>
-
-                <div class="flex flex-wrap items-center gap-2">
-                  <input
-                    v-model.number="eggProbabilitySimulatorRuns"
-                    type="number"
-                    min="100"
-                    max="10000"
-                    step="100"
-                    class="w-28 rounded-2xl border border-indigo-100 bg-white px-3 py-2 text-sm font-black text-slate-900 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100"
-                  />
-                  <button
-                    type="button"
-                    class="rounded-2xl bg-slate-950 px-4 py-2 text-xs font-black text-white"
-                    @click="runEggProbabilitySimulator"
-                  >
-                    開始試算
-                  </button>
-                  <button
-                    type="button"
-                    class="rounded-2xl bg-white px-4 py-2 text-xs font-black text-indigo-700 ring-1 ring-indigo-100"
-                    @click="eggProbabilitySimulatorOpen = !eggProbabilitySimulatorOpen"
-                  >
-                    {{ eggProbabilitySimulatorOpen ? '收合試算器' : '展開試算器' }}
-                  </button>
-                </div>
-              </div>
-
-              <p v-if="eggProbabilitySimulationAt" class="mt-3 rounded-2xl bg-white/80 px-3 py-2 text-xs font-black text-indigo-700">
-                {{ eggProbabilitySimulationAt }}
-              </p>
-
-              <div
-                v-if="eggProbabilitySimulatorOpen"
-                class="mt-3 max-h-80 overflow-auto rounded-2xl border border-indigo-100 bg-white"
-              >
-                <table class="w-full min-w-[560px] text-left text-xs">
-                  <thead class="sticky top-0 bg-slate-950 text-white">
-                    <tr>
-                      <th class="px-3 py-2">獎項</th>
-                      <th class="px-3 py-2">設定%</th>
-                      <th class="px-3 py-2">理論%</th>
-                      <th class="px-3 py-2">模擬%</th>
-                      <th class="px-3 py-2">次數</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr
-                      v-for="row in (eggProbabilitySimulationResults.length ? eggProbabilitySimulationResults : enabledGoldenEggPrizeRows)"
-                      :key="`egg-probability-sim-${row.id}`"
-                      class="border-b border-slate-100 last:border-b-0"
-                    >
-                      <td class="px-3 py-2 font-black text-slate-800">
-                        {{ row.icon }} {{ row.name }}
-                      </td>
-                      <td class="px-3 py-2 font-black text-slate-700">{{ row.probabilityPercent }}%</td>
-                      <td class="px-3 py-2 font-black text-indigo-700">{{ row.theoreticalPercent }}%</td>
-                      <td class="px-3 py-2 font-black text-emerald-700">
-                        {{ row.simulatedPercent === undefined ? '-' : `${row.simulatedPercent}%` }}
-                      </td>
-                      <td class="px-3 py-2 font-black text-slate-500">
-                        {{ row.count === undefined ? '-' : row.count }}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <!-- 第 87601～88000 批：移除重複的舊版金蛋機率試算器；保留上方強制置頂版本，避免同一區塊出現兩個計算器。 -->
 
             <div class="mt-3 grid grid-cols-2 gap-2">
               <button
