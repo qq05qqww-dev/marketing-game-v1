@@ -39,6 +39,9 @@ const PLATFORM_WHEEL_TEMPLATE_DEFAULT_ID = 'wheel'
 const PLATFORM_PREMIUM_GRID_TEMPLATE_STORAGE_MODE = 'PLATFORM_PREMIUM_GRID_TEMPLATE'
 const PLATFORM_PREMIUM_GRID_TEMPLATE_SLUG_PREFIX = 'platform-premium-grid-template-'
 const PLATFORM_PREMIUM_GRID_TEMPLATE_DEFAULT_ID = 'premium-grid'
+const PLATFORM_GOLDEN_EGG_TEMPLATE_STORAGE_MODE = 'PLATFORM_GOLDEN_EGG_TEMPLATE'
+const PLATFORM_GOLDEN_EGG_TEMPLATE_SLUG_PREFIX = 'platform-golden-egg-template-'
+const PLATFORM_GOLDEN_EGG_TEMPLATE_DEFAULT_ID = 'golden-egg'
 
 const normalizeCampaignId = (id) => {
   const campaignId = Number(id)
@@ -812,6 +815,237 @@ const pickMerchantGridRuntimeOverrides = (settings = {}) => {
   return overrides
 }
 
+
+const normalizePlatformGoldenEggTemplateId = (value = '') => {
+  const normalized = String(value || PLATFORM_GOLDEN_EGG_TEMPLATE_DEFAULT_ID)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return normalized || PLATFORM_GOLDEN_EGG_TEMPLATE_DEFAULT_ID
+}
+
+const getPlatformGoldenEggTemplateSlug = (templateId = PLATFORM_GOLDEN_EGG_TEMPLATE_DEFAULT_ID) => {
+  return `${PLATFORM_GOLDEN_EGG_TEMPLATE_SLUG_PREFIX}${normalizePlatformGoldenEggTemplateId(templateId)}`
+}
+
+const getPayloadGoldenEggTemplateId = (payload = {}) => {
+  return normalizePlatformGoldenEggTemplateId(
+    payload.templateId ||
+      payload.gameId ||
+      payload.templateKey ||
+      payload.templateSlug ||
+      PLATFORM_GOLDEN_EGG_TEMPLATE_DEFAULT_ID
+  )
+}
+
+const isPlatformGoldenEggTemplateStoragePayload = (payload = {}, gameType = '') => {
+  return String(gameType || '').toUpperCase() === 'GOLDEN_EGG' &&
+    String(payload.templateStorageMode || payload.platformTemplateMode || '').trim().toUpperCase() === PLATFORM_GOLDEN_EGG_TEMPLATE_STORAGE_MODE
+}
+
+const buildPlatformGoldenEggTemplateMeta = ({ user = null, payload = {}, templateId = PLATFORM_GOLDEN_EGG_TEMPLATE_DEFAULT_ID } = {}) => ({
+  ...(isPlainObject(payload?.settings?.templateMeta) ? payload.settings.templateMeta : {}),
+  source: 'PLATFORM_GOLDEN_EGG_TEMPLATE',
+  sourceType: 'platform_template',
+  targetType: 'platform_template',
+  cloneMode: 'TEMPLATE_SOURCE_ONLY',
+  cloneBatch: '89201-89600',
+  version: 'v23_batch89201_89600',
+  isMerchantOwnedCopy: false,
+  lockTemplateSync: false,
+  allowAutoSyncFromPlatformTemplate: false,
+  templateId: normalizePlatformGoldenEggTemplateId(templateId),
+  platformTemplateSlug: getPlatformGoldenEggTemplateSlug(templateId),
+  savedAt: new Date().toISOString(),
+  savedByRole: getUserRole(user) || null,
+  savedByUserId: user?.id || null,
+  note: '這是金蛋平台模板本體；商家新建金蛋活動時會複製一次成商家活動副本，活動規則與獎品說明會一起複製到玩家正式畫面。'
+})
+
+const getPlatformGoldenEggTemplateDefaults = () => ({
+  pageTitle: '砸金蛋抽獎',
+  mainTitle: '砸金蛋抽獎',
+  subTitle: 'LUCKY GOLDEN EGG',
+  heroTagline: '輸入序號，砸出專屬好禮',
+  noticeText: '請輸入主辦單位提供的抽獎序號。',
+  serialRedeemTitle: '輸入抽獎序號',
+  serialRedeemDescription: '請輸入主辦單位提供的序號；驗證成功後即可取得砸蛋次數。',
+  serialRedeemButtonText: '驗證序號',
+  serialRedeemSuccessText: '序號驗證成功，請選擇一顆金蛋。',
+  serialRedeemErrorText: '序號無效、已使用或不存在。',
+  activityRunningText: '活動進行中，請輸入序號參加。',
+  activityNotStartedText: '活動尚未開始。',
+  activityEndedText: '活動已結束。',
+  ruleTitle: '活動規則',
+  ruleContent: '請先輸入主辦單位提供的抽獎序號。\n序號驗證成功後，才會取得可用砸蛋次數。\n每次砸蛋會消耗 1 次序號機會。\n獎項數量有限，送完為止。',
+  prizeInfoTitle: '獎品說明',
+  prizeInfoContent: '獎項、兌換方式與使用期限，以主辦單位現場或官方公告為準。',
+  rulesText: '請先輸入主辦單位提供的抽獎序號。\n序號驗證成功後，才會取得可用砸蛋次數。\n每次砸蛋會消耗 1 次序號機會。\n獎項數量有限，送完為止。',
+  prizeInfoText: '獎項、兌換方式與使用期限，以主辦單位現場或官方公告為準。',
+  content: {
+    rulesTitle: '活動規則',
+    rulesText: '請先輸入主辦單位提供的抽獎序號。\n序號驗證成功後，才會取得可用砸蛋次數。\n每次砸蛋會消耗 1 次序號機會。\n獎項數量有限，送完為止。',
+    ruleTitle: '活動規則',
+    ruleContent: '請先輸入主辦單位提供的抽獎序號。\n序號驗證成功後，才會取得可用砸蛋次數。\n每次砸蛋會消耗 1 次序號機會。\n獎項數量有限，送完為止。',
+    prizeInfoTitle: '獎品說明',
+    prizeInfoText: '獎項、兌換方式與使用期限，以主辦單位現場或官方公告為準。',
+    prizeInfoContent: '獎項、兌換方式與使用期限，以主辦單位現場或官方公告為準。'
+  },
+  showActivityTimeSection: true,
+  showActivityCountdown: true,
+  showBottomNav: true,
+  eggSize: 74,
+  eggCardSize: 128,
+  eggGridGap: 12,
+  eggColorTop: '#fff7ad',
+  eggColorMiddle: '#fde047',
+  eggColorBottom: '#b45309',
+  themeBgFrom: '#991b1b',
+  themeBgMiddle: '#dc2626',
+  themeBgTo: '#450a0a',
+  themePanelColor: '#fff7ed',
+  themeAccentColor: '#facc15',
+  themeButtonColor: '#ef4444',
+  themeButtonDarkColor: '#991b1b',
+  eggCardBgFrom: '#ef4444',
+  eggCardBgTo: '#7f1d1d',
+  eggNumberBgColor: '#7f1d1d',
+  eggNumberTextColor: '#fef3c7',
+  probabilityMode: 'BACKEND_DRAW_ENGINE',
+  probabilitySource: 'GOLDEN_EGG_GAME_CONFIG_PERCENT',
+  eggItems: [
+    { id: 1, position: 1, icon: '🥚', title: '金蛋 VIP 折價券', shortName: 'GOLD 1', type: 'WIN', stock: 100, probability: 12, probabilityPercent: 12, weight: 12, enabled: true },
+    { id: 2, position: 2, icon: '🥚', title: '金蛋 200 元折價券', shortName: 'GOLD 2', type: 'WIN', stock: 100, probability: 12, probabilityPercent: 12, weight: 12, enabled: true },
+    { id: 3, position: 3, icon: '🥚', title: '金蛋 100 元折價券', shortName: 'GOLD 3', type: 'WIN', stock: 100, probability: 12, probabilityPercent: 12, weight: 12, enabled: true },
+    { id: 4, position: 4, icon: '🥚', title: '金蛋 小禮物', shortName: 'GOLD 4', type: 'WIN', stock: 100, probability: 12, probabilityPercent: 12, weight: 12, enabled: true },
+    { id: 5, position: 5, icon: '🥚', title: '金蛋 抽獎券', shortName: 'GOLD 5', type: 'WIN', stock: 100, probability: 12, probabilityPercent: 12, weight: 12, enabled: true },
+    { id: 6, position: 6, icon: '🥚', title: '金蛋 加碼券', shortName: 'GOLD 6', type: 'WIN', stock: 100, probability: 12, probabilityPercent: 12, weight: 12, enabled: true },
+    { id: 7, position: 7, icon: '🥚', title: '金蛋 參加獎', shortName: 'GOLD 7', type: 'WIN', stock: 100, probability: 12, probabilityPercent: 12, weight: 12, enabled: true },
+    { id: 8, position: 8, icon: '🥚', title: '金蛋 幸運獎', shortName: 'GOLD 8', type: 'WIN', stock: 100, probability: 8, probabilityPercent: 8, weight: 8, enabled: true },
+    { id: 9, position: 9, icon: '🥚', title: '金蛋 神秘獎', shortName: 'GOLD 9', type: 'WIN', stock: 100, probability: 8, probabilityPercent: 8, weight: 8, enabled: true }
+  ],
+  prizes: []
+})
+
+const resolvePlatformGoldenEggTemplateStorageSettings = (payload = {}, user = null) => {
+  const templateId = getPayloadGoldenEggTemplateId(payload)
+  const normalizedSettings = normalizeSettings(payload)
+  const baseSettings = getPlatformGoldenEggTemplateDefaults()
+  const mergedSettings = hasMeaningfulSettings(normalizedSettings)
+    ? deepMergePlainObject(baseSettings, normalizedSettings)
+    : baseSettings
+
+  return {
+    ...mergedSettings,
+    templateMeta: buildPlatformGoldenEggTemplateMeta({ user, payload, templateId })
+  }
+}
+
+const getPersistedPlatformGoldenEggTemplateSettings = async (templateId = PLATFORM_GOLDEN_EGG_TEMPLATE_DEFAULT_ID) => {
+  const slug = getPlatformGoldenEggTemplateSlug(templateId)
+
+  const templateCampaign = await prisma.campaign.findFirst({
+    where: {
+      slug,
+      gameType: 'GOLDEN_EGG'
+    },
+    include: {
+      gameConfig: true
+    }
+  })
+
+  const settings = templateCampaign?.gameConfig?.settings
+
+  if (!hasMeaningfulSettings(settings)) {
+    return {
+      settings: null,
+      templateCampaignId: templateCampaign?.id || null,
+      slug,
+      templateId: normalizePlatformGoldenEggTemplateId(templateId),
+      found: false
+    }
+  }
+
+  return {
+    settings,
+    templateCampaignId: templateCampaign.id,
+    slug,
+    templateId: normalizePlatformGoldenEggTemplateId(templateId),
+    found: true
+  }
+}
+
+const resolvePlatformGoldenEggTemplateForClone = async (payload = {}) => {
+  const templateId = getPayloadGoldenEggTemplateId(payload)
+  const persisted = await getPersistedPlatformGoldenEggTemplateSettings(templateId)
+  const baseSettings = getPlatformGoldenEggTemplateDefaults()
+  const settings = persisted.found
+    ? deepMergePlainObject(baseSettings, persisted.settings)
+    : baseSettings
+
+  return {
+    settings,
+    templateId,
+    platformTemplateSlug: persisted.slug,
+    templateCampaignId: persisted.templateCampaignId,
+    sourceMode: persisted.found ? 'persisted_platform_template_campaign' : 'static_backend_default',
+    found: persisted.found
+  }
+}
+
+const buildGoldenEggTemplateCloneMeta = ({ tenantId = null, user = null, payload = {}, usedCustomSettings = false, platformTemplateInfo = {} } = {}) => {
+  const payloadTemplateMeta = isPlainObject(payload?.settings?.templateMeta)
+    ? payload.settings.templateMeta
+    : {}
+
+  return {
+    ...payloadTemplateMeta,
+    source: 'PLATFORM_GOLDEN_EGG_TEMPLATE',
+    sourceType: 'platform_template',
+    targetType: 'merchant_campaign',
+    cloneMode: 'CREATE_CAMPAIGN_ONLY',
+    cloneBatch: '89201-89600',
+    version: 'v23_batch89201_89600',
+    isMerchantOwnedCopy: true,
+    lockTemplateSync: true,
+    allowAutoSyncFromPlatformTemplate: false,
+    templateId: platformTemplateInfo.templateId || getPayloadGoldenEggTemplateId(payload),
+    platformTemplateSlug: platformTemplateInfo.platformTemplateSlug || getPlatformGoldenEggTemplateSlug(getPayloadGoldenEggTemplateId(payload)),
+    platformTemplateCampaignId: platformTemplateInfo.templateCampaignId || null,
+    platformTemplateSourceMode: platformTemplateInfo.sourceMode || 'static_backend_default',
+    clonedAt: new Date().toISOString(),
+    clonedForTenantId: tenantId || null,
+    clonedByRole: getUserRole(user) || null,
+    clonedByUserId: user?.id || null,
+    createdFromPayloadSettings: usedCustomSettings,
+    copiedLatestPlatformTemplate: platformTemplateInfo.sourceMode === 'persisted_platform_template_campaign',
+    note: platformTemplateInfo.sourceMode === 'persisted_platform_template_campaign'
+      ? '此設定是建立商家金蛋活動時，由最新已儲存的平台金蛋模板複製的一次性商家副本；活動規則與獎品說明會一起同步到正式玩家畫面，後續平台模板修改不會自動同步到此活動。'
+      : '此設定是建立商家金蛋活動時，由後端預設平台金蛋模板複製的一次性商家副本；活動規則與獎品說明會一起同步到正式玩家畫面，後續平台模板修改不會自動同步到此活動。'
+  }
+}
+
+const attachGoldenEggTemplateCloneMeta = (settings = {}, context = {}) => {
+  return {
+    ...settings,
+    templateMeta: buildGoldenEggTemplateCloneMeta(context)
+  }
+}
+
+const pickMerchantGoldenEggRuntimeOverrides = (settings = {}) => {
+  const overrides = {}
+
+  ;['operationMode', 'requireSerialCode', 'serialPrefix', 'playerHint'].forEach((key) => {
+    if (settings[key] !== undefined) overrides[key] = settings[key]
+  })
+
+  // 商家建立活動頁若送出舊版金蛋預設 settings，這裡不讓它覆蓋平台模板。
+  // 活動規則、獎品說明、獎項百分比、視覺設定都必須由平台金蛋模板複製。
+  return overrides
+}
+
 const resolveInitialGameConfigSettings = async (gameType, payload = {}, context = {}) => {
   const normalizedSettings = normalizeSettings(payload)
 
@@ -871,6 +1105,38 @@ const resolveInitialGameConfigSettings = async (gameType, payload = {}, context 
     const mergedSettings = deepMergePlainObject(platformGridTemplate, merchantRuntimeOverrides)
 
     return attachPremiumGridTemplateCloneMeta(mergedSettings, {
+      ...context,
+      payload,
+      usedCustomSettings: true,
+      platformTemplateInfo
+    })
+  }
+
+  if (gameType === 'GOLDEN_EGG') {
+    if (isPlatformGoldenEggTemplateStoragePayload(payload, gameType)) {
+      return resolvePlatformGoldenEggTemplateStorageSettings(payload, context.user)
+    }
+
+    const platformTemplateInfo = await resolvePlatformGoldenEggTemplateForClone(payload)
+    const platformGoldenEggTemplate = platformTemplateInfo.settings
+    const hasCustomSettings = hasMeaningfulSettings(normalizedSettings)
+    const merchantRuntimeOverrides = pickMerchantGoldenEggRuntimeOverrides(normalizedSettings)
+
+    if (!hasCustomSettings) {
+      return attachGoldenEggTemplateCloneMeta(platformGoldenEggTemplate, {
+        ...context,
+        payload,
+        usedCustomSettings: false,
+        platformTemplateInfo
+      })
+    }
+
+    // 第 89201～89600 批：商家新建金蛋活動必須完整套用平台模板。
+    // 活動規則 / 獎品說明會跟金蛋模板一起複製到 GameConfig.settings，正式玩家頁讀取後會同步顯示。
+    // 建立頁送出的舊版 eggItems / prizes / ruleContent 預設不覆蓋平台模板，只保留執行用欄位。
+    const mergedSettings = deepMergePlainObject(platformGoldenEggTemplate, merchantRuntimeOverrides)
+
+    return attachGoldenEggTemplateCloneMeta(mergedSettings, {
       ...context,
       payload,
       usedCustomSettings: true,
@@ -1032,9 +1298,16 @@ export const createCampaign = async (payload = {}, user = null) => {
     throw createValidationError('活動名稱不能空白')
   }
 
+  const platformTemplateSlug = isPlatformWheelTemplateStoragePayload(payload, gameType)
+    ? getPlatformWheelTemplateSlug(getPayloadTemplateId(payload))
+    : isPlatformPremiumGridTemplateStoragePayload(payload, gameType)
+      ? getPlatformPremiumGridTemplateSlug(getPayloadPremiumGridTemplateId(payload))
+      : isPlatformGoldenEggTemplateStoragePayload(payload, gameType)
+        ? getPlatformGoldenEggTemplateSlug(getPayloadGoldenEggTemplateId(payload))
+        : null
   const slug = payload.slug
     ? String(payload.slug).trim()
-    : null
+    : platformTemplateSlug
   const initialGameConfigSettings = await resolveInitialGameConfigSettings(gameType, payload, { tenantId, user })
 
   const createdCampaign = await prisma.campaign.create({
