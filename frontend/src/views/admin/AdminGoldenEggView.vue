@@ -71,33 +71,82 @@ const isSingleActivityMode = computed(() => {
   return String(route?.query?.singleGame || '') === '1' || Boolean(queryCampaignId.value)
 })
 
-// 第 89601～90000 批：平台金蛋模板與商家活動必須完全隔離。
-// 從遊戲模板中心進來時，不可以沿用上一個商家的 campaignId / tenantSlug / localStorage 預覽草稿。
-const isPlatformTemplateMode = computed(() => {
-  const mode = String(route?.query?.mode || route?.query?.templateMode || '').trim().toLowerCase()
-  const path = String(route?.path || '').toLowerCase()
+// 第 90001～90400 批：平台金蛋模板與商家活動嚴格分流。
+// 問題根因：以前只要 /games/golden-egg?mode=admin 就會被判定為平台模板，
+// 但商家活動設定頁也可能走同一路徑，導致商家修改活動規則時寫到平台模板 localStorage。
+// 新規則：只有明確帶 platformTemplate/templateMode=template/templatePreview 才是平台模板；
+// 有 URL 明確 campaignId / singleGame / tenantSlug / playerUrl 時，一律視為商家活動；
+// localStorage 裡舊的 campaignId 不再拿來判斷模式，避免從模板中心進來時被上一個商家活動污染。
+const normalizeScopePart = (value = '', fallback = 'unknown') => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-')
+  return normalized || fallback
+}
 
-  if (queryCampaignId.value || String(route?.query?.singleGame || '') === '1') {
-    return false
-  }
-
+const hasMerchantActivityScope = computed(() => {
   return Boolean(
-    route?.query?.platformTemplate === '1' ||
-      mode === 'admin' ||
-      mode === 'template' ||
-      path.includes('/games/golden-egg')
+    queryCampaignId.value ||
+      String(route?.query?.singleGame || '') === '1' ||
+      queryTenantSlug.value ||
+      queryPlayerUrl.value
   )
 })
 
-const currentGoldenEggAdminStateKey = computed(() => isPlatformTemplateMode.value
-  ? GOLDEN_EGG_PLATFORM_TEMPLATE_STATE_KEY
-  : GOLDEN_EGG_ADMIN_STATE_KEY
-)
+const isExplicitPlatformTemplateRoute = computed(() => {
+  const mode = String(route?.query?.mode || route?.query?.templateMode || '').trim().toLowerCase()
+  return Boolean(
+    route?.query?.platformTemplate === '1' ||
+      route?.query?.templatePreview === '1' ||
+      route?.query?.templateOnly === '1' ||
+      mode === 'template' ||
+      mode === 'platform-template'
+  )
+})
 
-const currentGoldenEggAdminSyncKey = computed(() => isPlatformTemplateMode.value
-  ? GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY
-  : GOLDEN_EGG_ADMIN_SYNC_KEY
-)
+const isPlatformTemplateMode = computed(() => {
+  if (isExplicitPlatformTemplateRoute.value) return true
+  if (hasMerchantActivityScope.value) return false
+
+  // 舊版模板中心可能只帶 /games/golden-egg?mode=admin。
+  // 只有在完全沒有商家活動上下文時，才允許這個 fallback。
+  const mode = String(route?.query?.mode || '').trim().toLowerCase()
+  const path = String(route?.path || '').toLowerCase()
+  return mode === 'admin' && path.includes('/games/golden-egg')
+})
+
+const currentGoldenEggScopeMeta = computed(() => {
+  if (isPlatformTemplateMode.value) {
+    return {
+      mode: 'platform_template',
+      key: GOLDEN_EGG_PLATFORM_TEMPLATE_STATE_KEY,
+      syncKey: GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY,
+      templateId: 'golden-egg',
+      tenantSlug: '',
+      campaignId: ''
+    }
+  }
+
+  const storedUser = getStoredAdminUser?.() || {}
+  const tenantSlug = normalizeScopePart(
+    databaseCampaign.value?.tenant?.slug || queryTenantSlug.value || storedUser?.tenantSlug,
+    'unknown-tenant'
+  )
+  const campaignId = normalizeScopePart(
+    databaseCampaignId.value || databaseCampaign.value?.id || queryCampaignId.value || 'draft',
+    'draft'
+  )
+
+  return {
+    mode: 'merchant_campaign',
+    key: `${GOLDEN_EGG_ADMIN_STATE_KEY}:tenant:${tenantSlug}:campaign:${campaignId}`,
+    syncKey: `${GOLDEN_EGG_ADMIN_SYNC_KEY}:tenant:${tenantSlug}:campaign:${campaignId}`,
+    templateId: '',
+    tenantSlug,
+    campaignId
+  }
+})
+
+const currentGoldenEggAdminStateKey = computed(() => currentGoldenEggScopeMeta.value.key)
+const currentGoldenEggAdminSyncKey = computed(() => currentGoldenEggScopeMeta.value.syncKey)
 
 const shouldRedirectGoldenEggLegacyAdminEntry = computed(() => {
   const hasCampaignContext = Boolean(
@@ -1451,6 +1500,7 @@ const probabilityHintText = computed(() => {
 const payload = computed(() => {
   return {
     version: 'golden_egg_admin_v1',
+    scope: currentGoldenEggScopeMeta.value,
     updatedAt: new Date().toISOString(),
     campaign: cloneByJson(campaign),
     prizes: cloneByJson(prizes.value)
@@ -2175,10 +2225,27 @@ const scheduleSaveState = () => {
   }, 260)
 }
 
+const isSavedStateForCurrentScope = (saved = {}) => {
+  if (!saved || typeof saved !== 'object') return false
+  const savedScope = saved.scope || {}
+
+  // 舊資料沒有 scope 時，只允許平台模板舊 key 讀進平台模板；商家活動不再讀全域舊 key，避免 A/B 商家互相污染。
+  if (!savedScope.mode) {
+    return isPlatformTemplateMode.value
+  }
+
+  const current = currentGoldenEggScopeMeta.value
+  if (savedScope.mode !== current.mode) return false
+  if (current.mode === 'platform_template') return true
+
+  return String(savedScope.tenantSlug || '') === String(current.tenantSlug || '') &&
+    String(savedScope.campaignId || '') === String(current.campaignId || '')
+}
+
 const loadState = () => {
   const saved = safeJsonParse(localStorage.getItem(currentGoldenEggAdminStateKey.value), null)
 
-  if (!saved) {
+  if (!saved || !isSavedStateForCurrentScope(saved)) {
     saveState()
     return
   }

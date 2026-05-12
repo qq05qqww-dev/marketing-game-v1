@@ -291,13 +291,52 @@ const GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY = 'multi_game_platform_golden_egg_pl
 const GOLDEN_EGG_SERIAL_CODES_KEY = 'multi_game_platform_golden_egg_serial_codes_v1'
 const GOLDEN_EGG_SERIAL_REDEEM_LOG_KEY = 'multi_game_platform_golden_egg_serial_redeem_log_v1'
 
-const getGoldenEggAdminStateKey = () => isPlatformTemplatePreviewMode.value
-  ? GOLDEN_EGG_PLATFORM_TEMPLATE_STATE_KEY
-  : GOLDEN_EGG_ADMIN_STATE_KEY
+const normalizeScopePart = (value = '', fallback = 'unknown') => {
+  const normalized = String(value || '').trim().toLowerCase().replace(/[^a-z0-9_-]+/g, '-')
+  return normalized || fallback
+}
 
-const getGoldenEggAdminSyncKey = () => isPlatformTemplatePreviewMode.value
-  ? GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY
-  : GOLDEN_EGG_ADMIN_SYNC_KEY
+const getGoldenEggPreviewScopeMeta = () => {
+  if (isPlatformTemplatePreviewMode.value) {
+    return {
+      mode: 'platform_template',
+      key: GOLDEN_EGG_PLATFORM_TEMPLATE_STATE_KEY,
+      syncKey: GOLDEN_EGG_PLATFORM_TEMPLATE_SYNC_KEY,
+      tenantSlug: '',
+      campaignId: '',
+      templateId: 'golden-egg'
+    }
+  }
+
+  const tenantSlug = normalizeScopePart(route.params?.tenantSlug || route.query?.tenantSlug || 'unknown-tenant', 'unknown-tenant')
+  const campaignId = normalizeScopePart(route.query?.campaignId || route.query?.onlineCampaignId || route.params?.campaignId || 'draft', 'draft')
+
+  return {
+    mode: 'merchant_campaign',
+    key: `${GOLDEN_EGG_ADMIN_STATE_KEY}:tenant:${tenantSlug}:campaign:${campaignId}`,
+    syncKey: `${GOLDEN_EGG_ADMIN_SYNC_KEY}:tenant:${tenantSlug}:campaign:${campaignId}`,
+    tenantSlug,
+    campaignId,
+    templateId: ''
+  }
+}
+
+const getGoldenEggAdminStateKey = () => getGoldenEggPreviewScopeMeta().key
+const getGoldenEggAdminSyncKey = () => getGoldenEggPreviewScopeMeta().syncKey
+
+const isSavedGoldenEggStateForCurrentScope = (saved = {}) => {
+  if (!saved || typeof saved !== 'object') return false
+  const savedScope = saved.scope || {}
+  const current = getGoldenEggPreviewScopeMeta()
+
+  // 舊資料沒有 scope 時，只允許平台模板預覽讀平台模板舊資料；商家活動不可讀全域舊資料。
+  if (!savedScope.mode) return current.mode === 'platform_template'
+  if (savedScope.mode !== current.mode) return false
+  if (current.mode === 'platform_template') return true
+
+  return String(savedScope.tenantSlug || '') === String(current.tenantSlug || '') &&
+    String(savedScope.campaignId || '') === String(current.campaignId || '')
+}
 
 const cloneByJson = (value) => JSON.parse(JSON.stringify(value))
 
@@ -593,6 +632,7 @@ const defaultPrizesSnapshot = cloneByJson(prizes.value)
 
 const applyGoldenEggAdminState = (payload) => {
   if (!payload || typeof payload !== 'object') return
+  if (!isSavedGoldenEggStateForCurrentScope(payload)) return
 
   if (payload.campaign && typeof payload.campaign === 'object') {
     Object.assign(campaign, {
