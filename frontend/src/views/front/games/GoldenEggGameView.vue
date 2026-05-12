@@ -390,8 +390,12 @@ const campaign = reactive({
   resultDescriptionColor: '#fef3c7',
   resultPrimaryButtonText: '繼續查看',
   resultPrimaryButtonTextSize: 14,
+  resultPrimaryButtonBgColor: '#fde047',
+  resultPrimaryButtonTextColor: '#991b1b',
   resultCopyButtonText: '複製結果',
   resultCopyButtonTextSize: 14,
+  resultCopyButtonBgColor: 'rgba(255,255,255,0.12)',
+  resultCopyButtonTextColor: '#ffffff',
   showResultCopyButton: true,
   showResultShareButton: true,
   shareTitle: '砸金蛋抽獎活動',
@@ -2095,7 +2099,9 @@ const resultPrimaryButtonStyle = computed(() => {
   const fontSize = Math.min(22, Math.max(12, Number(campaign.resultPrimaryButtonTextSize || 14)))
 
   return {
-    fontSize: `${fontSize}px`
+    fontSize: `${fontSize}px`,
+    backgroundColor: campaign.resultPrimaryButtonBgColor || '#fde047',
+    color: campaign.resultPrimaryButtonTextColor || '#991b1b'
   }
 })
 
@@ -2103,7 +2109,9 @@ const resultCopyButtonStyle = computed(() => {
   const fontSize = Math.min(22, Math.max(12, Number(campaign.resultCopyButtonTextSize || 14)))
 
   return {
-    fontSize: `${fontSize}px`
+    fontSize: `${fontSize}px`,
+    backgroundColor: campaign.resultCopyButtonBgColor || 'rgba(255,255,255,0.12)',
+    color: campaign.resultCopyButtonTextColor || '#ffffff'
   }
 })
 

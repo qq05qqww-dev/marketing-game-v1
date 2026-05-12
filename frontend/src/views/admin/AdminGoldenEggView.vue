@@ -456,8 +456,12 @@ const campaign = reactive({
   resultDescriptionColor: '#fef3c7',
   resultPrimaryButtonText: '繼續查看',
   resultPrimaryButtonTextSize: 14,
+  resultPrimaryButtonBgColor: '#fde047',
+  resultPrimaryButtonTextColor: '#991b1b',
   resultCopyButtonText: '複製結果',
   resultCopyButtonTextSize: 14,
+  resultCopyButtonBgColor: '#ffffff',
+  resultCopyButtonTextColor: '#ffffff',
   showResultCopyButton: true,
   showResultShareButton: true,
   shareTitle: '砸金蛋抽獎活動',
@@ -815,7 +819,9 @@ const sectionRestoreMap = {
       'resultTitleTextSize', 'resultTitleColor',
       'resultDescriptionTextSize', 'resultDescriptionColor',
       'resultPrimaryButtonText', 'resultPrimaryButtonTextSize',
+      'resultPrimaryButtonBgColor', 'resultPrimaryButtonTextColor',
       'resultCopyButtonText', 'resultCopyButtonTextSize',
+      'resultCopyButtonBgColor', 'resultCopyButtonTextColor',
       'showResultCopyButton', 'showResultShareButton'
     ]
   },
@@ -13334,6 +13340,26 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                       <span>結果說明顏色</span>
                       <input v-model="campaign.resultDescriptionColor" type="color" />
                     </label>
+
+                    <label class="admin-color-field">
+                      <span>主按鈕底色</span>
+                      <input v-model="campaign.resultPrimaryButtonBgColor" type="color" />
+                    </label>
+
+                    <label class="admin-color-field">
+                      <span>主按鈕文字色</span>
+                      <input v-model="campaign.resultPrimaryButtonTextColor" type="color" />
+                    </label>
+
+                    <label class="admin-color-field">
+                      <span>複製按鈕底色</span>
+                      <input v-model="campaign.resultCopyButtonBgColor" type="color" />
+                    </label>
+
+                    <label class="admin-color-field">
+                      <span>複製按鈕文字色</span>
+                      <input v-model="campaign.resultCopyButtonTextColor" type="color" />
+                    </label>
                   </div>
                 </div>
 
@@ -13396,6 +13422,31 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     >
                       這裡會顯示玩家敲開金蛋後的獎品名稱與兌換提醒。
                     </p>
+
+                    <div class="mt-4 grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        class="rounded-2xl px-3 py-2 font-black shadow"
+                        :style="{
+                          backgroundColor: campaign.resultPrimaryButtonBgColor,
+                          color: campaign.resultPrimaryButtonTextColor,
+                          fontSize: `${campaign.resultPrimaryButtonTextSize}px`
+                        }"
+                      >
+                        {{ campaign.resultPrimaryButtonText }}
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-2xl border border-white/20 px-3 py-2 font-black shadow"
+                        :style="{
+                          backgroundColor: campaign.resultCopyButtonBgColor,
+                          color: campaign.resultCopyButtonTextColor,
+                          fontSize: `${campaign.resultCopyButtonTextSize}px`
+                        }"
+                      >
+                        {{ campaign.resultCopyButtonText }}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
