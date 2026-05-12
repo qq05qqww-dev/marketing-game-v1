@@ -1,4 +1,4 @@
-// 第 87601～88000 批：金蛋機率試算器重複區塊移除版
+// 第 88001～88400 批：金蛋機率試算器結果表資料列修正版
 <script setup>
 // Multi Game Platform V2.3
 // 第 86801～87200 批：金蛋結果彈窗中獎未中獎圖片分流版
@@ -1221,6 +1221,34 @@ const runEggProbabilitySimulator = () => {
   })
   eggProbabilitySimulationAt.value = `已用目前後台百分比模擬 ${runs} 次；正式玩家抽獎由後端 Draw Engine 讀取儲存後的 GameConfig settings。`
 }
+
+
+// 第 88001～88400 批：補上試算結果表格資料列轉換。
+// 前一批移除重複試算器後，畫面仍保留 eggProbabilitySimulationRows，
+// 但 script 沒有對應 computed，造成只看到表頭沒有資料列。
+const eggProbabilitySimulationRows = computed(() => {
+  return eggProbabilitySimulationResults.value.map((item, index) => {
+    const settingPercent = normalizeGoldenEggProbability(
+      item.settingPercent ?? item.probabilityPercent ?? item.probability ?? 0
+    )
+    const theoryPercent = normalizeGoldenEggProbability(
+      item.theoryPercent ?? item.theoreticalPercent ?? settingPercent
+    )
+    const simulatedPercent = Number(item.simulatedPercent)
+    const hitCount = Number(item.count)
+    const icon = String(item.icon || '').trim()
+    const name = String(item.name || item.title || item.label || `獎項 ${index + 1}`).trim()
+
+    return {
+      key: item.id || `golden-egg-simulation-row-${index + 1}`,
+      label: `${icon ? `${icon} ` : ''}${name}`,
+      settingPercent,
+      theoryPercent,
+      simulatedPercentText: Number.isFinite(simulatedPercent) ? `${simulatedPercent}%` : '-',
+      hitCountText: Number.isFinite(hitCount) ? String(hitCount) : '-'
+    }
+  })
+})
 
 const enabledPrizeCount = computed(() => {
   return prizes.value.filter((prize) => prize.isEnabled !== false).length
@@ -10032,7 +10060,7 @@ watch(
           <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
               <p class="text-[11px] font-black uppercase tracking-[0.24em] text-amber-600">
-                Golden Egg Percent Simulator｜第 85601～86000 批｜強制置頂
+                Golden Egg Percent Simulator｜第 88001～88400 批｜結果表修正
               </p>
               <h2 class="mt-1 text-xl font-black text-slate-950">
                 金蛋機率試算器
@@ -10106,7 +10134,7 @@ watch(
           </div>
 
           <p class="mt-3 text-xs font-bold leading-5 text-amber-800">
-            若這裡有出現，就代表目前檔案已經套用第 85601～86000 批；如果線上還看不到，請確認已 git add / commit / push，並等待 Vercel 部署完成。
+            若按「開始試算」後表格仍沒有資料，請重新整理頁面並確認已套用第 88001～88400 批。
           </p>
         </section>
 
