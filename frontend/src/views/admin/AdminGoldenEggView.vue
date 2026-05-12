@@ -10185,7 +10185,7 @@ watch(
               />
             </label>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>頁面名稱顏色</span>
                 <input v-model="campaign.headerTitleColor" type="color" />
@@ -10216,7 +10216,7 @@ watch(
               />
             </label>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>LOGO 背景色</span>
                 <input v-model="campaign.headerLogoBgColor" type="color" />
@@ -10247,7 +10247,7 @@ watch(
               />
             </label>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>網站按鈕背景色</span>
                 <input v-model="campaign.headerWebsiteBgColor" type="color" />
@@ -10500,7 +10500,7 @@ watch(
               控制前台「活動時間」那一塊的背景、文字、時間卡片與狀態標籤大小。
             </p>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>區塊背景色</span>
                 <input v-model="campaign.activityTimeBgColor" type="color" />
@@ -10527,7 +10527,7 @@ watch(
               </label>
             </div>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-field">
                 <span>區塊圓角：{{ campaign.activityTimeRadius }}px</span>
                 <input
@@ -10664,7 +10664,7 @@ watch(
               整體頁面背景
             </h3>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>背景上方</span>
                 <input v-model="campaign.themeBgFrom" type="color" />
@@ -10880,7 +10880,7 @@ watch(
               每顆金蛋底板顏色
             </h3>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>底板上方色</span>
                 <input v-model="campaign.eggCardBgFrom" type="color" />
@@ -10898,7 +10898,7 @@ watch(
               金蛋編號樣式
             </h3>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>編號背景色</span>
                 <input v-model="campaign.eggNumberBgColor" type="color" />
@@ -11472,7 +11472,7 @@ watch(
               序號輸入區樣式
             </h3>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>區塊背景色</span>
                 <input v-model="campaign.serialRedeemBgColor" type="color" />
@@ -11514,7 +11514,7 @@ watch(
               </label>
             </div>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-field">
                 <span>區塊圓角：{{ campaign.serialRedeemRadius }}px</span>
                 <input
@@ -12048,7 +12048,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
               產生抽獎序號
             </h3>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-field">
                 <span>序號前綴</span>
                 <input v-model="serialCodePrefix" type="text" />
@@ -12707,7 +12707,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
               按鈕尺寸
             </h3>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-field">
                 <span>按鈕高度：{{ campaign.bottomNavButtonHeight }}px</span>
                 <input
@@ -13183,14 +13183,14 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
         <section
           v-if="activeSection === 'result'"
-          class="space-y-5"
+          class="space-y-5 overflow-x-hidden"
         >
           <div class="overflow-hidden rounded-[2rem] border border-amber-100 bg-white shadow-sm">
             <div class="relative overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-5">
               <div class="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-amber-300/30 blur-2xl"></div>
               <div class="absolute -bottom-12 left-8 h-24 w-24 rounded-full bg-rose-300/25 blur-2xl"></div>
               <p class="relative text-xs font-black uppercase tracking-[0.26em] text-amber-700">
-                Result Modal Polish｜第 86001～86400 批
+                Result Modal No Clip｜第 87201～87600 批
               </p>
               <h2 class="relative mt-2 text-2xl font-black text-slate-950">
                 金蛋中獎結果彈窗設定
@@ -13200,7 +13200,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
               </p>
             </div>
 
-            <div class="grid gap-5 p-5 xl:grid-cols-[1.05fr_0.95fr]">
+            <div class="space-y-5 overflow-x-hidden p-5">
               <div class="space-y-4">
                 <div class="rounded-[1.6rem] border border-amber-100 bg-amber-50/70 p-4">
                   <div class="flex items-start justify-between gap-3">
@@ -13234,7 +13234,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         <span>中獎圖片 URL / 本機上傳資料</span>
                         <input v-model="campaign.resultWinImageUrl" type="text" placeholder="https://example.com/win.png" />
                       </label>
-                      <div class="mt-3 grid gap-3 md:grid-cols-[160px_1fr]">
+                      <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
                           <input type="file" accept="image/*" class="hidden" @change="handleResultWinImageUpload" />
                           上傳中獎圖
@@ -13254,7 +13254,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         <span>未中獎圖片 URL / 本機上傳資料</span>
                         <input v-model="campaign.resultLoseImageUrl" type="text" placeholder="https://example.com/lose.png" />
                       </label>
-                      <div class="mt-3 grid gap-3 md:grid-cols-[160px_1fr]">
+                      <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
                           <input type="file" accept="image/*" class="hidden" @change="handleResultLoseImageUpload" />
                           上傳未中獎圖
@@ -13284,7 +13284,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     圖片與文字大小
                   </h3>
 
-                  <div class="mt-4 grid gap-4 md:grid-cols-2">
+                  <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     <label class="admin-field">
                       <span>圖片 / 圖示大小：{{ campaign.resultIconSize }}px</span>
                       <input
@@ -13357,7 +13357,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     彈窗顏色與文字色
                   </h3>
 
-                  <div class="mt-4 grid grid-cols-2 gap-3">
+                  <div class="mt-4 grid gap-3 sm:grid-cols-2">
                     <label class="admin-color-field">
                       <span>彈窗上方色</span>
                       <input v-model="campaign.resultModalBgFrom" type="color" />
@@ -13475,7 +13475,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                       這裡會顯示玩家敲開金蛋後的獎品名稱與兌換提醒。
                     </p>
 
-                    <div class="mt-4 grid grid-cols-2 gap-2">
+                    <div class="mt-4 grid gap-2 sm:grid-cols-2">
                       <button
                         type="button"
                         class="rounded-2xl px-3 py-2 font-black shadow"
