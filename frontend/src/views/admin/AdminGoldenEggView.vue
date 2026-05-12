@@ -13151,216 +13151,295 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
         <section
           v-if="activeSection === 'result'"
-          class="space-y-4"
+          class="space-y-5"
         >
-          <div class="rounded-3xl bg-slate-50 p-4">
-            <h2 class="text-lg font-black text-slate-900">
-              中獎結果彈窗
-            </h2>
-            <p class="mt-1 text-sm leading-6 text-slate-500">
-              控制玩家敲開金蛋後顯示的結果視窗樣式、顏色、按鈕文字與功能開關。
-            </p>
-          </div>
-
-          <div class="rounded-3xl border border-yellow-100 bg-yellow-50 p-4">
-            <h3 class="text-base font-black text-yellow-800">
-              結果圖片與大小
-            </h3>
-            <p class="mt-1 text-xs font-bold leading-5 text-yellow-700/80">
-              可貼上全域結果圖片。若獎項本身有圖片，會優先顯示獎項圖片；兩者都沒有才使用 emoji。
-            </p>
-
-            <label class="admin-field mt-4">
-              <span>結果圖片 URL / 上傳後圖片資料</span>
-              <input
-                v-model="campaign.resultImageUrl"
-                type="text"
-                placeholder="例如：https://example.com/win.png，或使用下方上傳"
-              />
-            </label>
-
-            <div class="mt-3 grid grid-cols-2 gap-3">
-              <label class="admin-upload-button">
-                <input
-                  type="file"
-                  accept="image/*"
-                  class="hidden"
-                  @change="handleResultImageUpload"
-                />
-                上傳結果圖片
-              </label>
-
-              <button
-                type="button"
-                class="rounded-2xl bg-rose-50 px-4 py-3 text-sm font-black text-rose-700 ring-1 ring-rose-100"
-                @click="clearResultImage"
-              >
-                清除結果圖片
-              </button>
+          <div class="overflow-hidden rounded-[2rem] border border-amber-100 bg-white shadow-sm">
+            <div class="relative overflow-hidden bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-5">
+              <div class="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-amber-300/30 blur-2xl"></div>
+              <div class="absolute -bottom-12 left-8 h-24 w-24 rounded-full bg-rose-300/25 blur-2xl"></div>
+              <p class="relative text-xs font-black uppercase tracking-[0.26em] text-amber-700">
+                Result Modal Polish｜第 86001～86400 批
+              </p>
+              <h2 class="relative mt-2 text-2xl font-black text-slate-950">
+                金蛋中獎結果彈窗設定
+              </h2>
+              <p class="relative mt-2 text-sm font-bold leading-6 text-slate-600">
+                可設定結果圖片、彈窗底色、文字大小與按鈕顯示，右側玩家頁會套用儲存後的正式設定。
+              </p>
             </div>
 
-            <div
-              v-if="campaign.resultImageUrl"
-              class="mt-3 overflow-hidden rounded-3xl border border-yellow-200 bg-white p-2"
-            >
-              <img
-                :src="campaign.resultImageUrl"
-                alt="結果圖片預覽"
-                class="h-32 w-full rounded-2xl object-cover"
-              />
-            </div>
+            <div class="grid gap-5 p-5 xl:grid-cols-[1.05fr_0.95fr]">
+              <div class="space-y-4">
+                <div class="rounded-[1.6rem] border border-amber-100 bg-amber-50/70 p-4">
+                  <div class="flex items-start justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-black uppercase tracking-[0.22em] text-amber-700">
+                        Image Source
+                      </p>
+                      <h3 class="mt-1 text-base font-black text-slate-950">
+                        結果圖片
+                      </h3>
+                      <p class="mt-1 text-xs font-bold leading-5 text-amber-800/80">
+                        可貼網路圖片，也可上傳本機圖片。獎項本身有圖片時，玩家結果會優先顯示獎項圖片。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      class="shrink-0 rounded-2xl bg-white px-3 py-2 text-xs font-black text-rose-600 ring-1 ring-rose-100"
+                      @click="clearResultImage"
+                    >
+                      清除圖片
+                    </button>
+                  </div>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
-              <label class="admin-field">
-                <span>圖片 / 圖示大小：{{ campaign.resultIconSize }}px</span>
-                <input
-                  v-model.number="campaign.resultIconSize"
-                  type="range"
-                  min="64"
-                  max="150"
-                />
-              </label>
+                  <label class="admin-field mt-4">
+                    <span>結果圖片 URL / 上傳後圖片資料</span>
+                    <input
+                      v-model="campaign.resultImageUrl"
+                      type="text"
+                      placeholder="https://example.com/result.png"
+                    />
+                  </label>
 
-              <label class="admin-field">
-                <span>emoji 圖示文字大小：{{ campaign.resultIconTextSize }}px</span>
-                <input
-                  v-model.number="campaign.resultIconTextSize"
-                  type="range"
-                  min="28"
-                  max="82"
-                />
-              </label>
-            </div>
-          </div>
+                  <div class="mt-3 grid gap-3 md:grid-cols-2">
+                    <label class="admin-upload-button min-h-[54px] justify-center">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        class="hidden"
+                        @change="handleResultImageUpload"
+                      />
+                      選擇本機圖片
+                    </label>
 
-          <div class="rounded-3xl border border-red-100 bg-red-50 p-4">
-            <h3 class="text-base font-black text-red-800">
-              彈窗顏色
-            </h3>
+                    <div class="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-xs font-bold leading-5 text-slate-500">
+                      建議圖片小於 1.5MB；正式上線建議使用 https 圖片網址，載入更穩定。
+                    </div>
+                  </div>
+                </div>
 
-            <div class="mt-4 grid grid-cols-2 gap-3">
-              <label class="admin-color-field">
-                <span>彈窗上方色</span>
-                <input v-model="campaign.resultModalBgFrom" type="color" />
-              </label>
+                <div class="rounded-[1.6rem] border border-violet-100 bg-violet-50/70 p-4">
+                  <p class="text-xs font-black uppercase tracking-[0.22em] text-violet-700">
+                    Size Controls
+                  </p>
+                  <h3 class="mt-1 text-base font-black text-slate-950">
+                    圖片與文字大小
+                  </h3>
 
-              <label class="admin-color-field">
-                <span>彈窗下方色</span>
-                <input v-model="campaign.resultModalBgTo" type="color" />
-              </label>
+                  <div class="mt-4 grid gap-4 md:grid-cols-2">
+                    <label class="admin-field">
+                      <span>圖片 / 圖示大小：{{ campaign.resultIconSize }}px</span>
+                      <input
+                        v-model.number="campaign.resultIconSize"
+                        type="range"
+                        min="64"
+                        max="150"
+                      />
+                    </label>
 
-              <label class="admin-color-field">
-                <span>彈窗邊框色</span>
-                <input v-model="campaign.resultModalBorderColor" type="color" />
-              </label>
+                    <label class="admin-field">
+                      <span>emoji 圖示文字大小：{{ campaign.resultIconTextSize }}px</span>
+                      <input
+                        v-model.number="campaign.resultIconTextSize"
+                        type="range"
+                        min="28"
+                        max="82"
+                      />
+                    </label>
 
-              <label class="admin-color-field">
-                <span>獎品圖示背景</span>
-                <input v-model="campaign.resultIconBgColor" type="color" />
-              </label>
+                    <label class="admin-field">
+                      <span>狀態標籤文字大小：{{ campaign.resultBadgeTextSize }}px</span>
+                      <input
+                        v-model.number="campaign.resultBadgeTextSize"
+                        type="range"
+                        min="10"
+                        max="20"
+                      />
+                    </label>
 
-              <label class="admin-color-field">
-                <span>獎品圖示文字</span>
-                <input v-model="campaign.resultIconTextColor" type="color" />
-              </label>
+                    <label class="admin-field">
+                      <span>結果標題文字大小：{{ campaign.resultTitleTextSize }}px</span>
+                      <input
+                        v-model.number="campaign.resultTitleTextSize"
+                        type="range"
+                        min="16"
+                        max="40"
+                      />
+                    </label>
 
-              <label class="admin-color-field">
-                <span>結果標題顏色</span>
-                <input v-model="campaign.resultTitleColor" type="color" />
-              </label>
+                    <label class="admin-field">
+                      <span>結果說明文字大小：{{ campaign.resultDescriptionTextSize }}px</span>
+                      <input
+                        v-model.number="campaign.resultDescriptionTextSize"
+                        type="range"
+                        min="12"
+                        max="24"
+                      />
+                    </label>
 
-              <label class="admin-color-field">
-                <span>結果說明顏色</span>
-                <input v-model="campaign.resultDescriptionColor" type="color" />
-              </label>
-            </div>
-          </div>
-
-          <div class="rounded-3xl border border-slate-200 bg-white p-4">
-            <h3 class="text-base font-black text-slate-900">
-              彈窗文字大小
-            </h3>
-
-            <div class="mt-4 space-y-4">
-              <label class="admin-field">
-                <span>狀態標籤文字大小：{{ campaign.resultBadgeTextSize }}px</span>
-                <input
-                  v-model.number="campaign.resultBadgeTextSize"
-                  type="range"
-                  min="10"
-                  max="20"
-                />
-              </label>
-
-              <label class="admin-field">
-                <span>結果標題文字大小：{{ campaign.resultTitleTextSize }}px</span>
-                <input
-                  v-model.number="campaign.resultTitleTextSize"
-                  type="range"
-                  min="16"
-                  max="40"
-                />
-              </label>
-
-              <label class="admin-field">
-                <span>結果說明文字大小：{{ campaign.resultDescriptionTextSize }}px</span>
-                <input
-                  v-model.number="campaign.resultDescriptionTextSize"
-                  type="range"
-                  min="12"
-                  max="24"
-                />
-              </label>
-
-              <div class="grid grid-cols-2 gap-3">
-                <label class="admin-field">
-                  <span>主要按鈕文字大小：{{ campaign.resultPrimaryButtonTextSize }}px</span>
-                  <input
-                    v-model.number="campaign.resultPrimaryButtonTextSize"
-                    type="range"
-                    min="12"
-                    max="22"
-                  />
-                </label>
-
-                <label class="admin-field">
-                  <span>複製按鈕文字大小：{{ campaign.resultCopyButtonTextSize }}px</span>
-                  <input
-                    v-model.number="campaign.resultCopyButtonTextSize"
-                    type="range"
-                    min="12"
-                    max="22"
-                  />
-                </label>
+                    <label class="admin-field">
+                      <span>主要按鈕文字大小：{{ campaign.resultPrimaryButtonTextSize }}px</span>
+                      <input
+                        v-model.number="campaign.resultPrimaryButtonTextSize"
+                        type="range"
+                        min="12"
+                        max="22"
+                      />
+                    </label>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div class="rounded-3xl border border-yellow-100 bg-yellow-50 p-4">
-            <h3 class="text-base font-black text-yellow-800">
-              彈窗按鈕與功能
-            </h3>
+              <div class="space-y-4">
+                <div class="rounded-[1.6rem] border border-rose-100 bg-rose-50/70 p-4">
+                  <p class="text-xs font-black uppercase tracking-[0.22em] text-rose-700">
+                    Color Theme
+                  </p>
+                  <h3 class="mt-1 text-base font-black text-slate-950">
+                    彈窗顏色與文字色
+                  </h3>
 
-            <div class="mt-4 space-y-4">
-              <label class="admin-field">
-                <span>主要按鈕文字</span>
-                <input v-model="campaign.resultPrimaryButtonText" type="text" />
-              </label>
+                  <div class="mt-4 grid grid-cols-2 gap-3">
+                    <label class="admin-color-field">
+                      <span>彈窗上方色</span>
+                      <input v-model="campaign.resultModalBgFrom" type="color" />
+                    </label>
 
-              <label class="admin-field">
-                <span>複製按鈕文字</span>
-                <input v-model="campaign.resultCopyButtonText" type="text" />
-              </label>
+                    <label class="admin-color-field">
+                      <span>彈窗下方色</span>
+                      <input v-model="campaign.resultModalBgTo" type="color" />
+                    </label>
 
-              <label class="admin-toggle">
-                <input v-model="campaign.showResultCopyButton" type="checkbox" />
-                <span>顯示複製結果按鈕</span>
-              </label>
+                    <label class="admin-color-field">
+                      <span>彈窗邊框色</span>
+                      <input v-model="campaign.resultModalBorderColor" type="color" />
+                    </label>
 
-              <label class="admin-toggle">
-                <input v-model="campaign.showResultShareButton" type="checkbox" />
-                <span>次數用完時顯示分享增加機會</span>
-              </label>
+                    <label class="admin-color-field">
+                      <span>獎品圖示背景</span>
+                      <input v-model="campaign.resultIconBgColor" type="color" />
+                    </label>
+
+                    <label class="admin-color-field">
+                      <span>獎品圖示文字</span>
+                      <input v-model="campaign.resultIconTextColor" type="color" />
+                    </label>
+
+                    <label class="admin-color-field">
+                      <span>結果標題顏色</span>
+                      <input v-model="campaign.resultTitleColor" type="color" />
+                    </label>
+
+                    <label class="admin-color-field">
+                      <span>結果說明顏色</span>
+                      <input v-model="campaign.resultDescriptionColor" type="color" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="rounded-[1.6rem] border border-yellow-100 bg-white p-4 shadow-sm">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      <p class="text-xs font-black uppercase tracking-[0.22em] text-yellow-700">
+                        Mini Preview
+                      </p>
+                      <h3 class="mt-1 text-base font-black text-slate-950">
+                        小型結果視窗預覽
+                      </h3>
+                    </div>
+                    <span class="rounded-full bg-yellow-100 px-3 py-1 text-[11px] font-black text-yellow-800">
+                      後台預覽
+                    </span>
+                  </div>
+
+                  <div
+                    class="mt-4 rounded-[1.8rem] border p-4 text-center shadow-inner"
+                    :style="{
+                      background: `linear-gradient(145deg, ${campaign.resultModalBgFrom}, ${campaign.resultModalBgTo})`,
+                      borderColor: campaign.resultModalBorderColor
+                    }"
+                  >
+                    <div
+                      class="mx-auto flex items-center justify-center overflow-hidden rounded-[1.35rem] shadow-lg"
+                      :style="{
+                        width: `${campaign.resultIconSize}px`,
+                        height: `${campaign.resultIconSize}px`,
+                        backgroundColor: campaign.resultIconBgColor,
+                        color: campaign.resultIconTextColor,
+                        fontSize: `${campaign.resultIconTextSize}px`
+                      }"
+                    >
+                      <img
+                        v-if="campaign.resultImageUrl"
+                        :src="campaign.resultImageUrl"
+                        alt="結果圖片"
+                        class="h-full w-full object-cover"
+                      />
+                      <span v-else>🏆</span>
+                    </div>
+
+                    <p
+                      class="mt-4 font-black"
+                      :style="{
+                        color: campaign.resultTitleColor,
+                        fontSize: `${campaign.resultTitleTextSize}px`
+                      }"
+                    >
+                      恭喜中獎
+                    </p>
+                    <p
+                      class="mx-auto mt-2 max-w-xs font-bold leading-6"
+                      :style="{
+                        color: campaign.resultDescriptionColor,
+                        fontSize: `${campaign.resultDescriptionTextSize}px`
+                      }"
+                    >
+                      這裡會顯示玩家敲開金蛋後的獎品名稱與兌換提醒。
+                    </p>
+                  </div>
+                </div>
+
+                <div class="rounded-[1.6rem] border border-yellow-100 bg-yellow-50/70 p-4">
+                  <p class="text-xs font-black uppercase tracking-[0.22em] text-yellow-700">
+                    Button Actions
+                  </p>
+                  <h3 class="mt-1 text-base font-black text-slate-950">
+                    彈窗按鈕與功能
+                  </h3>
+
+                  <div class="mt-4 space-y-4">
+                    <label class="admin-field">
+                      <span>主要按鈕文字</span>
+                      <input v-model="campaign.resultPrimaryButtonText" type="text" />
+                    </label>
+
+                    <label class="admin-field">
+                      <span>複製按鈕文字</span>
+                      <input v-model="campaign.resultCopyButtonText" type="text" />
+                    </label>
+
+                    <label class="admin-field">
+                      <span>複製按鈕文字大小：{{ campaign.resultCopyButtonTextSize }}px</span>
+                      <input
+                        v-model.number="campaign.resultCopyButtonTextSize"
+                        type="range"
+                        min="12"
+                        max="22"
+                      />
+                    </label>
+
+                    <label class="admin-toggle">
+                      <input v-model="campaign.showResultCopyButton" type="checkbox" />
+                      <span>顯示複製結果按鈕</span>
+                    </label>
+
+                    <label class="admin-toggle">
+                      <input v-model="campaign.showResultShareButton" type="checkbox" />
+                      <span>次數用完時顯示分享增加機會</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
