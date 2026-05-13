@@ -206,37 +206,89 @@ export const deleteSerialCodeApi = (id) => {
 }
 
 // ===== Prize =====
+// 第 90801～91200 批：獎項管理商家活動資料隔離修正版
+// 正式獎項管理一律走 /api/prizes/campaigns/:campaignId/prizes。
+// 不再使用舊的 /admin/prizes 全域入口，避免 A 商家與 B 商家共用同一批獎項。
+
+const normalizePrizeCampaignId = (value) => {
+  const campaignId = Number(value)
+
+  if (!Number.isInteger(campaignId) || campaignId <= 0) {
+    return null
+  }
+
+  return campaignId
+}
+
+const splitPrizeParams = (params = {}) => {
+  if (typeof params === 'number' || typeof params === 'string') {
+    return {
+      campaignId: normalizePrizeCampaignId(params),
+      query: {}
+    }
+  }
+
+  const campaignId = normalizePrizeCampaignId(params.campaignId)
+  const { campaignId: _campaignId, ...query } = params || {}
+
+  return {
+    campaignId,
+    query
+  }
+}
+
+const assertPrizeCampaignId = (campaignId) => {
+  const normalizedCampaignId = normalizePrizeCampaignId(campaignId)
+
+  if (!normalizedCampaignId) {
+    throw new Error('獎項管理需要指定 campaignId，避免讀取或修改到其他商家的獎項。')
+  }
+
+  return normalizedCampaignId
+}
 
 export const getPrizesApi = (params = {}) => {
-  return http.get('/admin/prizes', {
-    params
-  })
+  return getCampaignPrizesApi(params)
 }
 
 export const getCampaignPrizesApi = (params = {}) => {
-  if (typeof params === 'number' || typeof params === 'string') {
-    return http.get('/admin/prizes', {
-      params: {
-        campaignId: params
-      }
-    })
-  }
+  const { campaignId, query } = splitPrizeParams(params)
+  const normalizedCampaignId = assertPrizeCampaignId(campaignId)
 
-  return http.get('/admin/prizes', {
-    params
+  return http.get(`/prizes/campaigns/${normalizedCampaignId}/prizes`, {
+    params: query
   })
 }
 
-export const createPrizeApi = (data) => {
-  return http.post('/admin/prizes', data)
+export const getCampaignPrizeProbabilitySummaryApi = (campaignId) => {
+  const normalizedCampaignId = assertPrizeCampaignId(campaignId)
+
+  return http.get(`/prizes/campaigns/${normalizedCampaignId}/probability-summary`)
 }
 
-export const updatePrizeApi = (id, data) => {
-  return http.put(`/admin/prizes/${id}`, data)
+export const createPrizeApi = (data = {}) => {
+  const normalizedCampaignId = assertPrizeCampaignId(data.campaignId)
+
+  return http.post(`/prizes/campaigns/${normalizedCampaignId}/prizes`, {
+    ...data,
+    campaignId: normalizedCampaignId
+  })
+}
+
+export const bulkUpdateCampaignPrizesApi = (campaignId, prizes = []) => {
+  const normalizedCampaignId = assertPrizeCampaignId(campaignId)
+
+  return http.put(`/prizes/campaigns/${normalizedCampaignId}/prizes/bulk`, {
+    prizes
+  })
+}
+
+export const updatePrizeApi = (id, data = {}) => {
+  return http.patch(`/prizes/${id}`, data)
 }
 
 export const deletePrizeApi = (id) => {
-  return http.delete(`/admin/prizes/${id}`)
+  return http.delete(`/prizes/${id}`)
 }
 
 // ===== Draw / Game Play =====

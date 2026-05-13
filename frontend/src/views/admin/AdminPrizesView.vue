@@ -21,6 +21,11 @@ import {
 // 4. 可一鍵建立精緻九宮格 8 個預設獎品。
 // 5. 可一鍵補貨目前九宮格活動，避免前台顯示「目前獎品庫存已抽完」。
 // 6. 不動砸金蛋功能，只是在獎品管理頁增加遊戲類型篩選與 GRID 快速工具。
+//
+// 第 90801～91200 批：獎項管理商家活動資料隔離修正版
+// - 本頁必須先選活動 campaignId 才能讀取、新增、更新、刪除獎項。
+// - 前端改走 /api/prizes/campaigns/:campaignId/prizes，不再走舊的 /admin/prizes 全域入口。
+// - A 商家、B 商家的獎項以 campaignId + tenantId 隔離，避免互相同步或誤刪。
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -227,9 +232,10 @@ const selectedCampaignTitle = computed(() => {
 })
 
 const currentCampaignPrizes = computed(() => {
-  if (!filters.campaignId && !prizeForm.campaignId) return prizes.value
-
   const campaignId = filters.campaignId || prizeForm.campaignId
+
+  if (!campaignId) return []
+
   return prizes.value.filter((item) => String(item.campaignId) === String(campaignId))
 })
 
@@ -253,16 +259,27 @@ const fetchCampaigns = async () => {
 }
 
 const fetchPrizes = async () => {
+  const campaignId = filters.campaignId || prizeForm.campaignId
+
+  if (!campaignId) {
+    prizes.value = []
+    loading.value = false
+    return
+  }
+
   loading.value = true
 
   try {
     const res = await getCampaignPrizesApi({
+      campaignId,
       keyword: filters.keyword,
-      campaignId: filters.campaignId,
       gameType: filters.gameType
     })
 
     let list = unwrapList(res)
+
+    // 雙重前端防呆：即使 API 回傳異常，也只保留目前 campaignId 的獎項。
+    list = list.filter((item) => String(item.campaignId) === String(campaignId))
 
     if (filters.keyword) {
       const keyword = String(filters.keyword).trim().toLowerCase()
@@ -272,14 +289,10 @@ const fetchPrizes = async () => {
       })
     }
 
-    if (filters.campaignId) {
-      list = list.filter((item) => String(item.campaignId) === String(filters.campaignId))
-    }
-
     prizes.value = list
   } catch (error) {
     console.error('取得獎項列表失敗:', error)
-    alert(error?.response?.data?.message || '取得獎項列表失敗')
+    alert(error?.response?.data?.message || error?.message || '取得獎項列表失敗')
     prizes.value = []
   } finally {
     loading.value = false
@@ -329,6 +342,22 @@ const buildPrizePayload = (source = prizeForm) => {
   }
 }
 
+const assertPrizeBelongsToSelectedCampaign = (item = {}) => {
+  const selectedCampaignId = filters.campaignId || prizeForm.campaignId
+
+  if (!selectedCampaignId) {
+    alert('請先選擇目前要管理的活動，避免誤操作其他商家的獎項。')
+    return false
+  }
+
+  if (item?.campaignId && String(item.campaignId) !== String(selectedCampaignId)) {
+    alert('這個獎項不屬於目前選擇的活動，已阻止操作，避免 A/B 商家資料互相影響。')
+    return false
+  }
+
+  return true
+}
+
 const validateForm = () => {
   if (!prizeForm.campaignId) {
     alert('請先選擇活動')
@@ -366,6 +395,11 @@ const submitPrize = async () => {
   submitting.value = true
   const payload = buildPrizePayload(prizeForm)
 
+  if (String(payload.campaignId) !== String(filters.campaignId || prizeForm.campaignId)) {
+    alert('目前表單活動與篩選活動不一致，已阻止儲存，避免寫到其他商家活動。')
+    return
+  }
+
   try {
     if (editingPrizeId.value) {
       await updatePrizeApi(editingPrizeId.value, payload)
@@ -386,6 +420,8 @@ const submitPrize = async () => {
 }
 
 const editPrize = (item) => {
+  if (!assertPrizeBelongsToSelectedCampaign(item)) return
+
   prizeForm.campaignId = item.campaignId || ''
   prizeForm.title = item.title || ''
   prizeForm.shortName = item.shortName || ''
@@ -404,6 +440,8 @@ const editPrize = (item) => {
 }
 
 const deletePrize = async (item) => {
+  if (!assertPrizeBelongsToSelectedCampaign(item)) return
+
   const ok = window.confirm(
     `確定要刪除獎項「${item.title}」嗎？\n\n如果已有中獎紀錄，可能會影響報表與發獎資料。`
   )
@@ -675,8 +713,9 @@ const probabilityWarningClass = computed(() => {
 
 watch(
   () => filters.campaignId,
-  () => {
+  async () => {
     syncSelectedCampaignToForm()
+    await fetchPrizes()
   }
 )
 
@@ -710,14 +749,13 @@ onMounted(async () => {
       <div class="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <p class="text-sm font-black text-orange-600">
-            V2.3 Tenant Edition｜Premium Grid Prize Admin
+            V2.3 Tenant Edition｜Scoped Prize Admin
           </p>
           <h1 class="mt-2 text-3xl font-black text-slate-900">
-            精緻九宮格獎品管理
+            獎項管理｜商家活動隔離版
           </h1>
           <p class="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            這裡可以直接替 GRID 精緻九宮格活動新增獎品、補庫存、調整機率與啟用狀態。
-            之後前台抽獎會讀取這裡的設定，不需要每次靠腳本補資料。
+            這裡會依目前選擇的活動 campaignId 讀取與儲存獎項。A 商家與 B 商家的獎項資料不共用；未選活動時不會讀取全域獎項，避免誤刪或互相同步。
           </p>
         </div>
 
