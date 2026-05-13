@@ -1,31 +1,15 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 58401～58800 批：平台輪盤模板最新儲存設定建立活動複製版
+// 第 91201～91600 批：平台模板獎項與商家活動獎項獨立複製版
 //
 // 覆蓋位置：
 // backend/src/services/campaign.service.js
 //
 // 本批重點：
-// 1. 商家建立活動會正式寫入 PostgreSQL。
-// 2. MERCHANT_ADMIN / MERCHANT_STAFF 會依 token 內 tenantId 或 tenantSlug 綁定自己的商家。
-// 3. A 商家只能看到 / 修改 / 刪除 A 商家的活動；B 商家只能看到 B 商家的活動。
-// 4. ADMIN / SUPER_ADMIN 可看全部，也可用 tenantId / tenantSlug 指定商家。
-// 5. createCampaign 會同時建立 Campaign 與 GameConfig settings。
-// 6. 刪除活動時會先檢查 tenant 權限，再用 transaction 清除相關資料。
-//
-// 第 58401～58800 批補強：
-// - 平台模板模式儲存時會建立 / 更新 slug = platform-wheel-template-wheel 的平台模板 Campaign。
-// - 商家建立新的 WHEEL 活動時，後端會優先讀取這份最新平台模板 settings，再複製成商家獨立副本。
-// - 既有商家活動不會被平台模板後續修改自動污染；只有新建活動會複製一次。
-//
-// 第 54401～54800 批補強：
-// - 新建 WHEEL 活動時，gameConfig.settings.templateMeta 會寫入 clonedAt / clonedForTenantId / clonedByRole。
-// - 平台模板複製到商家活動後，明確標記 isMerchantOwnedCopy / lockTemplateSync，避免日後誤做自動同步污染既有活動。
-// - 呼叫端若傳入 settings.templateMeta，後端仍會重新覆寫核心追蹤欄位，避免 A/B 商家模板來源混用。
-//
-// 第 19501～19900 批補強：
-// - DELETE /api/campaigns/:id 會真正同步 PostgreSQL。
-// - 先刪 RewardRecord / PlayRecord / UserReward / SerialCode / Prize / GameConfig / ShareRewardLog。
-// - 最後刪 Campaign，避免舊資料庫 FK cascade 未套用時刪除失敗。
+// 1. 商家新建 WHEEL / GRID / GOLDEN_EGG 活動時，除了 GameConfig settings 之外，也會把平台模板獎項複製成該活動自己的 Prize records。
+// 2. A 商家、B 商家獎項不再共用同一批 Prize ID；新增、編輯、刪除都只影響自己的 campaignId。
+// 3. 平台模板本體只保存模板 settings，不建立商家 Prize records。
+// 4. 既有商家活動不被自動覆蓋；只有新建活動時複製一次。
+// 5. 不改 DB schema / router。
 
 import prisma from '../lib/prisma.js'
 
@@ -365,6 +349,173 @@ const deepMergePlainObject = (base = {}, override = {}) => {
   })
 
   return merged
+}
+
+
+const normalizeTemplatePrizeTitle = (item = {}, index = 0) => {
+  return String(
+    item.title ||
+      item.name ||
+      item.prizeName ||
+      item.shortName ||
+      item.label ||
+      `獎項 ${index + 1}`
+  ).trim() || `獎項 ${index + 1}`
+}
+
+const normalizeTemplatePrizeType = (item = {}) => {
+  const rawType = String(item.type || item.rewardType || '').toUpperCase()
+  const rawTitle = String(item.title || item.name || item.prizeName || item.label || '').trim()
+
+  if (['LOSE', 'THANKS', 'NO_PRIZE', 'NONE'].includes(rawType)) return 'LOSE'
+  if (/未中|沒中|謝謝|再接再厲|銘謝/.test(rawTitle)) return 'LOSE'
+
+  return 'WIN'
+}
+
+const normalizeTemplatePrizeProbability = (item = {}) => {
+  const probability = Number(
+    item.probabilityPercent ??
+      item.percent ??
+      item.probability ??
+      item.weight ??
+      item.chance ??
+      item.rate ??
+      0
+  )
+
+  if (Number.isNaN(probability)) return 0
+
+  return Math.min(100, Math.max(0, probability))
+}
+
+const normalizeTemplatePrizeStock = (item = {}, prizeType = 'WIN') => {
+  if (prizeType === 'LOSE') return 999999999
+
+  const stock = Number(
+    item.remainStock ??
+      item.stock ??
+      item.quantity ??
+      item.inventory ??
+      item.stockTotal ??
+      item.total ??
+      9999
+  )
+
+  if (Number.isNaN(stock)) return 9999
+
+  return Math.max(0, Math.floor(stock))
+}
+
+const isTemplatePrizeEnabled = (item = {}) => {
+  if (!item) return false
+  if (item.enabled === false) return false
+  if (item.isEnabled === false) return false
+  if (String(item.status || '').toUpperCase() === 'DISABLED') return false
+  if (String(item.rewardType || '').toUpperCase() === 'BUTTON') return false
+  if (String(item.type || '').toUpperCase() === 'BUTTON') return false
+  if (item.isButton === true) return false
+
+  return true
+}
+
+const extractTemplatePrizeItems = (settings = {}, gameType = '') => {
+  const normalizedGameType = normalizeGameType(gameType)
+  const candidates = normalizedGameType === 'GOLDEN_EGG'
+    ? [settings.eggItems, settings.prizes, settings.rewards, settings.rewardItems, settings.items]
+    : normalizedGameType === 'GRID'
+      ? [settings.prizes, settings.gridItems, settings.rewards, settings.rewardItems, settings.items]
+      : normalizedGameType === 'WHEEL'
+        ? [settings.prizes, settings.wheelItems, settings.rewards, settings.rewardItems, settings.items]
+        : [settings.prizes, settings.items]
+
+  for (const value of candidates) {
+    if (Array.isArray(value) && value.length) {
+      return value
+    }
+  }
+
+  return []
+}
+
+const buildIndependentPrizeRowsFromTemplateSettings = (settings = {}, gameType = '', campaignId = null, tenantId = null) => {
+  const items = extractTemplatePrizeItems(settings, gameType)
+
+  return items
+    .filter(isTemplatePrizeEnabled)
+    .map((item, index) => {
+      const type = normalizeTemplatePrizeType(item)
+      const stockTotal = normalizeTemplatePrizeStock(item, type)
+      const probability = normalizeTemplatePrizeProbability(item)
+      const title = normalizeTemplatePrizeTitle(item, index)
+
+      return {
+        campaignId,
+        tenantId: tenantId || null,
+        title,
+        shortName: item.shortName || item.label || item.name || title,
+        description: item.description || item.note || null,
+        imageUrl: item.imageUrl || item.image || item.prizeImageUrl || null,
+        icon: item.icon || item.emoji || null,
+        type,
+        status: String(item.status || 'ACTIVE').toUpperCase() === 'DISABLED' ? 'DISABLED' : 'ACTIVE',
+        probability,
+        remainStock: item.remainStock !== undefined
+          ? normalizeTemplatePrizeStock({ remainStock: item.remainStock }, type)
+          : stockTotal,
+        stockTotal,
+        stockUsed: 0,
+        sortOrder: Number(item.sortOrder ?? item.position ?? index + 1)
+      }
+    })
+    .filter((item) => item.title && (item.type === 'LOSE' || Number(item.probability || 0) > 0))
+}
+
+const cloneTemplatePrizeRowsForNewCampaign = async ({ campaignId = null, tenantId = null, gameType = '', settings = {}, isPlatformTemplateSource = false } = {}) => {
+  const normalizedCampaignId = normalizeCampaignId(campaignId)
+
+  if (!normalizedCampaignId || isPlatformTemplateSource) {
+    return {
+      createdCount: 0,
+      skipped: true,
+      reason: isPlatformTemplateSource ? 'platform_template_source' : 'invalid_campaign_id'
+    }
+  }
+
+  const prizeRows = buildIndependentPrizeRowsFromTemplateSettings(settings, gameType, normalizedCampaignId, tenantId)
+
+  if (!prizeRows.length) {
+    return {
+      createdCount: 0,
+      skipped: true,
+      reason: 'no_template_prizes'
+    }
+  }
+
+  // 新建活動只複製一次。若呼叫端已另外建立獎項，避免重複建立。
+  const existingPrizeCount = await prisma.prize.count({
+    where: {
+      campaignId: normalizedCampaignId
+    }
+  })
+
+  if (existingPrizeCount > 0) {
+    return {
+      createdCount: 0,
+      skipped: true,
+      reason: 'campaign_already_has_prizes'
+    }
+  }
+
+  const result = await prisma.prize.createMany({
+    data: prizeRows
+  })
+
+  return {
+    createdCount: result.count || prizeRows.length,
+    skipped: false,
+    reason: null
+  }
 }
 
 const hasMeaningfulSettings = (settings = {}) => {
@@ -1335,7 +1486,29 @@ export const createCampaign = async (payload = {}, user = null) => {
     include: campaignInclude
   })
 
-  return appendTemplateCloneAudit(createdCampaign)
+  const isPlatformTemplateSource = Boolean(platformTemplateSlug) ||
+    initialGameConfigSettings?.templateMeta?.targetType === 'platform_template' ||
+    initialGameConfigSettings?.templateMeta?.cloneMode === 'TEMPLATE_SOURCE_ONLY'
+
+  // 第 91201～91600 批：平台模板與商家活動獎項必須分離。
+  // 商家新建 WHEEL / GRID / GOLDEN_EGG 活動時，將模板 settings 內的 prizes / gridItems / eggItems
+  // 複製成該 campaignId + tenantId 專屬 Prize records，避免 A / B 商家共用同一批 Prize ID。
+  await cloneTemplatePrizeRowsForNewCampaign({
+    campaignId: createdCampaign.id,
+    tenantId: createdCampaign.tenantId || tenantId,
+    gameType,
+    settings: initialGameConfigSettings,
+    isPlatformTemplateSource
+  })
+
+  const isolatedCampaign = await prisma.campaign.findUnique({
+    where: {
+      id: createdCampaign.id
+    },
+    include: campaignInclude
+  })
+
+  return appendTemplateCloneAudit(isolatedCampaign || createdCampaign)
 }
 
 export const updateCampaign = async (id, payload = {}, user = null) => {
