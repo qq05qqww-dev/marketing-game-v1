@@ -1,9 +1,6 @@
 <script setup>
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
-/*
- * 第 96401～96800 批：九宮格移除重疊點擊與舊開始流程乾淨版。
- * 延續第 94001～94400 批：九宮格手機開始抽獎觸控層與單一路徑修正版。
- * 延續第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。*
+/**
  * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
  *
  * 本批只強化九宮格玩家頁抽獎演出：增加跑燈圈數、三段式減速、答答聲、成功音效與手機震動。
@@ -100,7 +97,7 @@ import { getPremiumGridFormalSafetySummary } from '../../config/premiumGridCommo
  * 16. 第 951～1000 批延續正式上線後觀測穩定點，新增穩定營運與版本封存交付資訊。
  */
 
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAdminGameSettings } from '../../composables/useAdminGameSettings'
 import { useDrawHistory } from '../../composables/useDrawHistory'
@@ -152,7 +149,6 @@ const {
 } = useDrawHistory()
 
 const isDrawing = ref(false)
-// 第 96401～96800 批：移除 pointer/touch/click 三重觸發與 tapLock 舊流程，開始抽獎只保留單一 click 路徑。
 const activeIndex = ref(-1)
 const drawPerformanceMessage = ref('')
 const drawPerformancePhase = ref('idle')
@@ -773,29 +769,16 @@ const postGridJson = async (path, body = {}) => {
 const canStartGridDraw = computed(() => {
   if (!shouldRequireSerialCode.value) return canDraw.value
 
-  if (isTenantPremiumGridMode.value) {
-    return Boolean(
-      serialVerify.verified &&
-        normalizedSerialCode.value &&
-        effectiveGridChances.value > 0 &&
-        !isDrawing.value &&
-        !hasTenantPremiumGridBlock.value
-    )
-  }
-
-  const baseReady = Boolean(
+  return Boolean(
     serialVerify.verified &&
       normalizedSerialCode.value &&
       effectiveGridChances.value > 0 &&
+      availablePrizeCount.value > 0 &&
       !isDrawing.value &&
       !tenantPremiumGridLoading.value &&
       !tenantPremiumGridError.value &&
       !hasTenantPremiumGridBlock.value
   )
-
-  if (!baseReady) return false
-
-  return availablePrizeCount.value > 0
 })
 
 const verifySerialCode = async () => {
@@ -2495,22 +2478,7 @@ const availablePrizeCount = computed(() => {
   return getPrizePool().length
 })
 
-const hasTenantPremiumGridPlayableContext = computed(() => {
-  return Boolean(
-    isTenantPremiumGridMode.value &&
-      (tenantCampaignId.value || route.query.campaignId || route.query.id)
-  )
-})
-
 const canDraw = computed(() => {
-  // 第 93201～93600 批：正式商家九宮格玩家頁的開始抽獎守門改成「後端優先」。
-  // 只要序號驗證後仍有次數，就允許點擊送出；活動載入狀態 / 本地獎項池 / 舊前端庫存不再吃掉點擊。
-  if (isTenantPremiumGridMode.value) {
-    return effectiveGridChances.value > 0 &&
-      !isDrawing.value &&
-      !hasTenantPremiumGridBlock.value
-  }
-
   if (tenantPremiumGridLoading.value) return false
   if (tenantPremiumGridError.value) return false
   if (hasTenantPremiumGridBlock.value) return false
@@ -2540,7 +2508,7 @@ const drawButtonText = computed(() => {
 
   if (effectiveGridChances.value <= 0) return '次數用完'
 
-  if (!isTenantPremiumGridMode.value && availablePrizeCount.value <= 0) return '獎品已抽完'
+  if (availablePrizeCount.value <= 0) return '獎品已抽完'
 
   return campaign.buttonText || '點擊抽選'
 })
@@ -2562,7 +2530,7 @@ const playerStatusMessage = computed(() => {
     return '抽獎進行中，請稍候結果出現。'
   }
 
-  if (!isTenantPremiumGridMode.value && availablePrizeCount.value <= 0) {
+  if (availablePrizeCount.value <= 0) {
     return '目前獎品庫存已抽完，請等待主辦單位補貨或更新活動。'
   }
 
@@ -2578,28 +2546,9 @@ const playerStatusMessage = computed(() => {
 })
 
 const drawingStatusText = computed(() => {
-  // 第 94401～94800 批：點擊後即使後端還在等待，也要立即顯示回饋。
-  if (drawPerformanceMessage.value) return drawPerformanceMessage.value
   if (!isDrawing.value) return ''
 
-  return '九宮格正在高速跑燈抽選，請不要關閉畫面。'
-})
-
-const gridStartButtonBusy = computed(() => {
-  return Boolean(
-    isDrawing.value ||
-      drawPerformancePhase.value === 'tap-received' ||
-      drawPerformancePhase.value === 'submitting' ||
-      drawPerformancePhase.value === 'spinning'
-  )
-})
-
-const gridStartButtonLabel = computed(() => {
-  if (drawPerformancePhase.value === 'tap-received') return '已收到，準備抽獎...'
-  if (drawPerformancePhase.value === 'submitting') return '抽獎送出中...'
-  if (drawPerformancePhase.value === 'spinning' || isDrawing.value) return '抽選中，請稍候...'
-
-  return drawButtonText.value
+  return drawPerformanceMessage.value || '九宮格正在高速跑燈抽選，請不要關閉畫面。'
 })
 
 const frontGridRecordRows = computed(() => {
@@ -3583,50 +3532,15 @@ const showShareSuccess = (message) => {
   }, 2600)
 }
 
-const getPremiumGridStartBlockedMessage = () => {
-  if (isDrawing.value) return '抽獎進行中，請稍候結果出現。'
-  if (hasTenantPremiumGridBlock.value) return tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。'
-  if (shouldRequireSerialCode.value && !serialVerify.verified) return '請先輸入商家提供的序號並完成驗證。'
-  if (effectiveGridChances.value <= 0) return '目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。'
-
-  if (!isTenantPremiumGridMode.value && tenantPremiumGridLoading.value) return '活動資料仍在載入中，請稍候。'
-  if (!isTenantPremiumGridMode.value && tenantPremiumGridError.value) return tenantPremiumGridError.value
-  if (!isTenantPremiumGridMode.value && availablePrizeCount.value <= 0) return '目前獎品已抽完，請等待主辦單位更新活動。'
-
-  return '已收到點擊，正在準備送出抽獎。'
-}
-
-const handlePremiumGridStartClick = async (event = null) => {
-  // 第 96401～96800 批：九宮格開始抽獎單一路徑。
-  // 之前中心格、備援按鈕、下方舊按鈕同時綁 pointerup / touchend / click，
-  // 手機會出現假跑、第一次被吃掉、第二次才正式送出的狀況。
-  // 這裡只保留單一 click 入口：點一次 → 立即鎖定 → 立即送後端 → 後端回來後跑正式動畫。
-  event?.preventDefault?.()
-  event?.stopPropagation?.()
-
-  if (isDrawing.value || gridStartButtonBusy.value) {
-    showShareSuccess('抽獎已送出，正在等待結果，請不要重複點擊。')
-    return
-  }
-
-  drawPerformancePhase.value = 'submitting'
-  drawPerformanceMessage.value = '已收到點擊，正在送出正式抽獎。'
-  await nextTick()
-
-  await startDraw()
-}
-
 const startDraw = async () => {
   if (isDrawing.value) return
 
-  const allowTenantBackendDraw = Boolean(hasTenantPremiumGridPlayableContext.value)
-
-  if (tenantPremiumGridLoading.value && !allowTenantBackendDraw) {
+  if (tenantPremiumGridLoading.value) {
     showShareSuccess('活動資料仍在載入中，請稍候。')
     return
   }
 
-  if (tenantPremiumGridError.value && !allowTenantBackendDraw) {
+  if (tenantPremiumGridError.value) {
     showShareSuccess(tenantPremiumGridError.value)
     return
   }
@@ -3647,30 +3561,16 @@ const startDraw = async () => {
   }
 
   isDrawing.value = true
-  drawPerformancePhase.value = 'submitting'
-  drawPerformanceMessage.value = isTenantPremiumGridMode.value
-    ? '已收到抽獎，正在送出後端正式抽獎。'
-    : '已收到抽獎，正在準備正式結果。'
   resultPrize.value = null
   showResultModal.value = false
-
-  // 第 96401～96800 批：乾淨流程，不做任何後端回傳前假跑動畫。
-  // activeIndex 只在後端結果回來後，由 runPremiumGridSpinAnimation 正式控制。
-  activeIndex.value = -1
-  await nextTick()
 
   let prize = null
 
   try {
-    drawPerformancePhase.value = 'waiting-backend'
-    drawPerformanceMessage.value = isTenantPremiumGridMode.value
-      ? '已送出抽獎，正在向後端確認序號、庫存與中獎結果。'
-      : '已送出抽獎，正在準備結果動畫。'
     prize = isTenantPremiumGridMode.value ? await playTenantPremiumGridDraw() : pickPrize()
   } catch (error) {
     console.error('精緻九宮格抽獎失敗：', error)
     isDrawing.value = false
-    activeIndex.value = -1
     drawPerformanceMessage.value = ''
     drawPerformancePhase.value = 'idle'
     showShareSuccess(error?.response?.data?.message || error?.message || '抽獎失敗，請稍後再試。')
@@ -3679,7 +3579,6 @@ const startDraw = async () => {
 
   if (!prize) {
     isDrawing.value = false
-    activeIndex.value = -1
     drawPerformanceMessage.value = ''
     drawPerformancePhase.value = 'idle'
     showShareSuccess('目前獎品已抽完，請等待主辦單位更新活動。')
@@ -3691,22 +3590,8 @@ const startDraw = async () => {
     updateChanceText()
   }
 
-  const targetIndex = gridItems.value.findIndex((item, index) => {
-    if (item.isButton) return false
+  const targetIndex = gridItems.value.findIndex((item) => item.id === prize.id)
 
-    const itemId = String(item.id ?? '')
-    const prizeId = String(prize.id ?? '')
-    const itemName = String(item.name ?? item.title ?? '').trim()
-    const prizeName = String(prize.name ?? prize.title ?? prize.shortName ?? '').trim()
-    const itemPosition = Number(item.position ?? item.sortOrder ?? index + 1)
-    const prizePosition = Number(prize.position ?? prize.sortOrder ?? prize.backendPrize?.position ?? prize.backendPrize?.sortOrder ?? 0)
-
-    return (itemId && prizeId && itemId === prizeId) ||
-      (itemName && prizeName && itemName === prizeName) ||
-      (prizePosition > 0 && itemPosition === prizePosition)
-  })
-
-  drawPerformanceMessage.value = '後端結果已確認，九宮格開始正式跑燈。'
   await runPremiumGridSpinAnimation(targetIndex)
 
   prize.quantity = Math.max(0, Number(prize.quantity || 0) - 1)
@@ -3734,7 +3619,6 @@ const startDraw = async () => {
   drawPerformanceMessage.value = ''
   drawPerformancePhase.value = 'idle'
 }
-
 
 const shareCampaign = async () => {
   if (!canShareCampaign.value) {
@@ -33774,8 +33658,8 @@ const toggleWheelRealFilePrep11011150 = () => {
                           : ''
                       ]"
                       :style="getCellStyle(index)"
-                      :disabled="false"
-                      @click.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
+                      :disabled="item.isButton && !canStartGridDraw"
+                      @click="item.isButton && canStartGridDraw ? startDraw() : null"
                     >
                       <div class="absolute left-2 top-2 h-6 w-6 rounded-full border-l-4 border-t-4 border-white/80 sm:h-8 sm:w-8"></div>
                       <div class="absolute bottom-2 right-2 h-6 w-6 rounded-full border-b-4 border-r-4 border-white/40 sm:h-8 sm:w-8"></div>
@@ -33836,26 +33720,6 @@ const toggleWheelRealFilePrep11011150 = () => {
                       </div>
                     </button>
                   </div>
-                </section>
-
-                <section class="relative mt-4 text-center sm:mt-5">
-                  <button
-                    type="button"
-                    class="mx-auto flex min-h-[52px] w-full max-w-xs items-center justify-center rounded-[999px] border border-white/30 px-5 py-3 text-sm font-black text-white shadow-xl transition active:scale-[0.98] sm:min-h-[58px] sm:text-base"
-                    :class="gridStartButtonBusy
-                      ? 'bg-slate-500/80 cursor-wait animate-pulse'
-                      : canStartGridDraw
-                        ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500'
-                        : 'bg-gradient-to-r from-slate-500 to-slate-600'
-                    "
-                    :disabled="false"
-                    @click.stop.prevent="handlePremiumGridStartClick($event)"
-                  >
-                    {{ gridStartButtonLabel }}
-                  </button>
-                  <p class="mt-2 text-[11px] font-black leading-5 text-white/70">
-                    第 96401～96800 批：只保留單一開始抽獎路徑，移除舊按鈕與假跑流程。
-                  </p>
                 </section>
 
                 <section class="relative mt-5 text-center sm:mt-6">
@@ -33933,7 +33797,15 @@ const toggleWheelRealFilePrep11011150 = () => {
                       ⚙
                     </button>
 
-                    <!-- 第 96401～96800 批：移除這裡舊的第二顆開始抽獎按鈕，避免舊流程與上方正式開始按鈕重疊。 -->
+                    <button
+                      type="button"
+                      class="min-w-[150px] rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
+                      :disabled="!canStartGridDraw"
+                      :class="!canStartGridDraw ? 'cursor-not-allowed opacity-70' : ''"
+                      @click="canStartGridDraw ? startDraw() : null"
+                    >
+                      {{ isDrawing ? '抽選中...' : drawButtonText }}
+                    </button>
 
                     <button
                       v-if="isAdminMode"
