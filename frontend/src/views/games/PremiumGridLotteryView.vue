@@ -1,7 +1,8 @@
 <script setup>
-// 第 80401～80800 批：九宮格即時預覽文字同步修正版
+// 第 93601～94000 批：九宮格開始抽獎單一路徑強制修正版
 /*
- * 第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。*
+ * 第 93601～94000 批：九宮格開始抽獎單一路徑強制修正版。
+ * 第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。
  * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
  *
  * 本批只強化九宮格玩家頁抽獎演出：增加跑燈圈數、三段式減速、答答聲、成功音效與手機震動。
@@ -150,6 +151,8 @@ const {
 } = useDrawHistory()
 
 const isDrawing = ref(false)
+// 第 93601～94000 批：手機點擊保護鎖。避免 pointerup / click 雙事件重複送出，也避免第一次點擊被舊流程吃掉。
+const premiumGridStartClickLocked = ref(false)
 const activeIndex = ref(-1)
 const drawPerformanceMessage = ref('')
 const drawPerformancePhase = ref('idle')
@@ -3562,7 +3565,7 @@ const showShareSuccess = (message) => {
 }
 
 const getPremiumGridStartBlockedMessage = () => {
-  if (isDrawing.value) return '抽獎進行中，請稍候結果出現。'
+  if (isDrawing.value) return '抽獎進行中，請稍候。'
   if (hasTenantPremiumGridBlock.value) return tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。'
   if (shouldRequireSerialCode.value && !serialVerify.verified) return '請先輸入商家提供的序號並完成驗證。'
   if (effectiveGridChances.value <= 0) return '目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。'
@@ -3574,46 +3577,88 @@ const getPremiumGridStartBlockedMessage = () => {
   return '已收到點擊，正在準備送出抽獎。'
 }
 
-const handlePremiumGridStartClick = async () => {
-  // 第 93201～93600 批：按鈕不再用 disabled 吃掉點擊。
-  // 無法抽時顯示原因；可抽時統一進 startDraw，避免玩家需要反覆點擊。
-  if (isDrawing.value) return
-
-  if (!canStartGridDraw.value) {
-    showShareSuccess(getPremiumGridStartBlockedMessage())
-    return
-  }
-
-  await startDraw()
+const releasePremiumGridStartClickLock = () => {
+  window.setTimeout(() => {
+    premiumGridStartClickLocked.value = false
+  }, 280)
 }
 
-const startDraw = async () => {
+const handlePremiumGridStartClick = async (event = null) => {
+  // 第 93601～94000 批：正式商家玩家頁改成「單一路徑」。
+  // 手機 touch / pointer / click 只要進來一次，就直接交給 startDraw；不再先被 canStartGridDraw / 本地獎項池擋掉。
+  event?.preventDefault?.()
+  event?.stopPropagation?.()
+
+  if (isDrawing.value || premiumGridStartClickLocked.value) return
+
+  premiumGridStartClickLocked.value = true
+  drawPerformancePhase.value = 'submitting'
+  drawPerformanceMessage.value = '已收到點擊，正在送出抽獎。'
+
+  try {
+    if (isTenantPremiumGridMode.value) {
+      await startDraw({ forceTenantBackend: true })
+      return
+    }
+
+    if (!canStartGridDraw.value) {
+      drawPerformancePhase.value = 'idle'
+      drawPerformanceMessage.value = ''
+      showShareSuccess(getPremiumGridStartBlockedMessage())
+      return
+    }
+
+    await startDraw()
+  } finally {
+    releasePremiumGridStartClickLock()
+  }
+}
+
+const startDraw = async (options = {}) => {
   if (isDrawing.value) return
 
-  const allowTenantBackendDraw = Boolean(hasTenantPremiumGridPlayableContext.value)
+  const forceTenantBackend = Boolean(options?.forceTenantBackend && isTenantPremiumGridMode.value)
+  const allowTenantBackendDraw = Boolean(hasTenantPremiumGridPlayableContext.value || forceTenantBackend)
 
   if (tenantPremiumGridLoading.value && !allowTenantBackendDraw) {
     showShareSuccess('活動資料仍在載入中，請稍候。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (tenantPremiumGridError.value && !allowTenantBackendDraw) {
     showShareSuccess(tenantPremiumGridError.value)
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (hasTenantPremiumGridBlock.value) {
     showShareSuccess(tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (shouldRequireSerialCode.value && !serialVerify.verified) {
     showShareSuccess('請先輸入商家提供的序號並完成驗證。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
+    return
+  }
+
+  if (shouldRequireSerialCode.value && !normalizedSerialCode.value) {
+    showShareSuccess('請輸入已驗證的序號後再開始抽獎。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (effectiveGridChances.value <= 0) {
     showShareSuccess('目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
@@ -3651,7 +3696,19 @@ const startDraw = async () => {
     updateChanceText()
   }
 
-  const targetIndex = gridItems.value.findIndex((item) => item.id === prize.id)
+  let targetIndex = gridItems.value.findIndex((item) => {
+    if (item.isButton) return false
+
+    return String(item.id || '') === String(prize.id || '') ||
+      String(item.name || '') === String(prize.name || '') ||
+      String(item.title || '') === String(prize.title || '')
+  })
+
+  // 後端 Draw Engine 可能回傳 virtual prize id，與前端格子 id 不完全相同。
+  // 找不到格子時仍要跑燈，不可讓玩家以為沒反應。
+  if (targetIndex < 0) {
+    targetIndex = gridItems.value.findIndex((item) => !item.isButton)
+  }
 
   await runPremiumGridSpinAnimation(targetIndex)
 
@@ -33702,7 +33759,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                       :key="item.id"
                       type="button"
                       :aria-label="getGridPrizeCellAriaLabel(item, index)"
-                      class="relative aspect-square overflow-hidden rounded-2xl border border-orange-200/80 text-center transition duration-150 sm:rounded-3xl"
+                      class="relative aspect-square touch-manipulation select-none overflow-hidden rounded-2xl border border-orange-200/80 text-center transition duration-150 sm:rounded-3xl"
                       :class="[
                         item.isButton
                           ? canStartGridDraw
@@ -33720,7 +33777,8 @@ const toggleWheelRealFilePrep11011150 = () => {
                       ]"
                       :style="getCellStyle(index)"
                       :disabled="item.isButton && isDrawing"
-                      @click="item.isButton ? handlePremiumGridStartClick() : null"
+                      @pointerup.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
+                      @click.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
                     >
                       <div class="absolute left-2 top-2 h-6 w-6 rounded-full border-l-4 border-t-4 border-white/80 sm:h-8 sm:w-8"></div>
                       <div class="absolute bottom-2 right-2 h-6 w-6 rounded-full border-b-4 border-r-4 border-white/40 sm:h-8 sm:w-8"></div>
@@ -33860,10 +33918,11 @@ const toggleWheelRealFilePrep11011150 = () => {
 
                     <button
                       type="button"
-                      class="min-w-[150px] rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
+                      class="min-w-[150px] touch-manipulation select-none rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
                       :disabled="isDrawing"
                       :class="!canStartGridDraw && !isDrawing ? 'cursor-not-allowed opacity-70' : ''"
-                      @click="handlePremiumGridStartClick"
+                      @pointerup.stop.prevent="handlePremiumGridStartClick($event)"
+                      @click.stop.prevent="handlePremiumGridStartClick($event)"
                     >
                       {{ isDrawing ? '抽選中...' : drawButtonText }}
                     </button>
