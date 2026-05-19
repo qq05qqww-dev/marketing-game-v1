@@ -1,7 +1,8 @@
 <script setup>
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
- * 第 94801～95200 批：九宮格立即啟動動畫等待後端結果版。
+ * 第 95201～95600 批：九宮格移除假跑並合併正式抽獎流程修正版。
+ * 延續第 94801～95200 批：九宮格立即啟動動畫等待後端結果版。
  * 延續第 94001～94400 批：九宮格手機開始抽獎觸控層與單一路徑修正版。
  * 延續第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。*
  * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
@@ -154,6 +155,9 @@ const {
 const isDrawing = ref(false)
 // 第 94001～94400 批：手機瀏覽器 tap / click 可能同時觸發或被延遲，統一用短暫鎖避免重複送出。
 const gridStartTapLock = ref(false)
+// 第 95201～95600 批：正式抽獎送出中鎖定。避免手機 pointer/touch/click 多事件造成第一次假跑、第二次才正式送出。
+const gridStartLastTouchAt = ref(0)
+const gridDrawRequestInFlight = ref(false)
 const activeIndex = ref(-1)
 const drawPerformanceMessage = ref('')
 const drawPerformancePhase = ref('idle')
@@ -3598,13 +3602,26 @@ const getPremiumGridStartBlockedMessage = () => {
 }
 
 const handlePremiumGridStartClick = async (event = null) => {
-  // 第 94001～94400 批：九宮格手機點擊統一入口。
-  // 之前只有 @click 時，部分手機瀏覽器或外層動畫層會讓第一次點擊像沒反應。
-  // 現在 pointerup / touchend / click 都導到這裡，並且不再由 template disabled 吃掉點擊。
+  // 第 95201～95600 批：手機點擊只允許進入同一條正式抽獎流程。
+  // 之前 pointerup / touchend / click 都綁同一顆按鈕，部分手機會先觸發一段預跑動畫，
+  // 但正式 play API 被下一個事件或 lock 打斷，看起來像「假跑一下又復原，第二次才正式抽」。
   event?.preventDefault?.()
   event?.stopPropagation?.()
 
-  if (isDrawing.value) {
+  const now = Date.now()
+  const eventType = String(event?.type || '')
+
+  // 行動裝置同一次觸控常會先有 pointerup/touchend，再補一個 click。
+  // click 若緊跟在觸控事件後面，視為同一次點擊的合成事件，直接忽略，避免重複進流程。
+  if (eventType === 'click' && now - Number(gridStartLastTouchAt.value || 0) < 900) {
+    return
+  }
+
+  if (eventType === 'pointerup' || eventType === 'touchend') {
+    gridStartLastTouchAt.value = now
+  }
+
+  if (isDrawing.value || gridDrawRequestInFlight.value) {
     showShareSuccess('抽獎已送出，正在等待結果，請不要重複點擊。')
     return
   }
@@ -3614,58 +3631,115 @@ const handlePremiumGridStartClick = async (event = null) => {
   gridStartTapLock.value = true
   window.setTimeout(() => {
     gridStartTapLock.value = false
-  }, 680)
+  }, 420)
 
   drawPerformancePhase.value = 'tap-received'
-  drawPerformanceMessage.value = '已收到點擊，正在檢查序號與送出抽獎。'
+  drawPerformanceMessage.value = '已收到點擊，正在送出正式抽獎。'
 
-  // 不先用 canStartGridDraw 擋掉點擊；所有原因交給 startDraw 顯示。
-  // 第 94401～94800 批：先讓 Vue 把『已收到點擊』回饋畫出來，再送後端，避免玩家覺得完全沒反應。
-  await nextTick()
+  // 不讓這裡只做假跑；正式送出與動畫啟動都由 startDraw 同一條流程控制。
   await startDraw()
 }
 
+const resolvePremiumGridPrizeTargetIndex = (prize = {}) => {
+  if (!prize) return -1
+
+  const candidates = [
+    prize.id,
+    prize.backendPrize?.id,
+    prize.backendPrize?.sourcePayload?.id,
+    prize.backendPrize?.sourcePayload?.position,
+    prize.backendPrize?.sourcePayload?.sortOrder,
+    prize.sourcePayload?.id,
+    prize.sourcePayload?.position,
+    prize.sourcePayload?.sortOrder,
+    prize.position,
+    prize.sortOrder
+  ]
+    .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
+    .map((value) => String(value))
+
+  let index = gridItems.value.findIndex((item, itemIndex) => {
+    if (item.isButton) return false
+
+    const itemCandidates = [
+      item.id,
+      item.position,
+      item.sortOrder,
+      itemIndex + 1
+    ]
+      .filter((value) => value !== undefined && value !== null && String(value).trim() !== '')
+      .map((value) => String(value))
+
+    return candidates.some((candidate) => itemCandidates.includes(candidate))
+  })
+
+  if (index >= 0) return index
+
+  const title = String(prize.name || prize.title || prize.shortName || prize.backendPrize?.title || prize.backendPrize?.name || '').trim()
+
+  if (title) {
+    index = gridItems.value.findIndex((item) => {
+      if (item.isButton) return false
+
+      return [item.name, item.title, item.shortName, item.label]
+        .some((value) => String(value || '').trim() === title)
+    })
+
+    if (index >= 0) return index
+  }
+
+  return gridItems.value.findIndex((item) => !item.isButton)
+}
+
 const startDraw = async () => {
-  if (isDrawing.value) return
+  if (isDrawing.value || gridDrawRequestInFlight.value) return
 
   const allowTenantBackendDraw = Boolean(hasTenantPremiumGridPlayableContext.value)
 
   if (tenantPremiumGridLoading.value && !allowTenantBackendDraw) {
     showShareSuccess('活動資料仍在載入中，請稍候。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (tenantPremiumGridError.value && !allowTenantBackendDraw) {
     showShareSuccess(tenantPremiumGridError.value)
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (hasTenantPremiumGridBlock.value) {
     showShareSuccess(tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (shouldRequireSerialCode.value && !serialVerify.verified) {
     showShareSuccess('請先輸入商家提供的序號並完成驗證。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (effectiveGridChances.value <= 0) {
     showShareSuccess('目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   isDrawing.value = true
-  drawPerformancePhase.value = 'spinning'
+  gridDrawRequestInFlight.value = true
+  drawPerformancePhase.value = 'submitting'
   drawPerformanceMessage.value = isTenantPremiumGridMode.value
-    ? '已開始抽獎，九宮格正在跑燈，系統同步計算結果。'
+    ? '正式抽獎已送出，九宮格正在跑燈等待後端結果。'
     : '已開始抽獎，九宮格正在跑燈。'
   resultPrize.value = null
   showResultModal.value = false
 
-  // 第 94801～95200 批：立即啟動等待動畫。
-  // 正式抽獎結果仍然由後端 Draw Engine 回傳，但玩家一點擊就先看到九宮格跑燈，
-  // 不再乾等 Render / 網路回應造成「點了沒反應」的體感。
   let waitStep = 0
   let waitingLoopTimer = null
 
@@ -3682,13 +3756,15 @@ const startDraw = async () => {
     if (!Array.isArray(drawPath) || !drawPath.length) return
 
     activeIndex.value = drawPath[0]
+    drawPerformancePhase.value = 'spinning'
+
     waitingLoopTimer = window.setInterval(() => {
       waitStep += 1
       activeIndex.value = drawPath[waitStep % drawPath.length]
 
       if (waitStep % 6 === 0) {
         drawPerformanceMessage.value = isTenantPremiumGridMode.value
-          ? '九宮格已開始跑燈，正在等待後端確認中獎結果。'
+          ? '九宮格跑燈中，正式結果由後端確認中。'
           : '九宮格跑燈中，正在抽選獎項。'
       }
 
@@ -3698,32 +3774,39 @@ const startDraw = async () => {
     }, 78)
   }
 
+  // 第 95201～95600 批：正式 play API 與跑燈動畫同時啟動，但不能分成「假跑」與「正式抽」兩次。
+  const drawPromise = isTenantPremiumGridMode.value
+    ? playTenantPremiumGridDraw()
+    : Promise.resolve(pickPrize())
+
   startWaitingLoop()
   await nextTick()
 
   let prize = null
 
   try {
-    prize = isTenantPremiumGridMode.value ? await playTenantPremiumGridDraw() : pickPrize()
+    prize = await drawPromise
   } catch (error) {
     stopWaitingLoop()
     console.error('精緻九宮格抽獎失敗：', error)
-    isDrawing.value = false
     activeIndex.value = -1
     drawPerformanceMessage.value = ''
     drawPerformancePhase.value = 'idle'
     showShareSuccess(error?.response?.data?.message || error?.message || '抽獎失敗，請稍後再試。')
+    isDrawing.value = false
+    gridDrawRequestInFlight.value = false
     return
   }
 
   stopWaitingLoop()
 
   if (!prize) {
-    isDrawing.value = false
     activeIndex.value = -1
     drawPerformanceMessage.value = ''
     drawPerformancePhase.value = 'idle'
     showShareSuccess('目前獎品已抽完，請等待主辦單位更新活動。')
+    isDrawing.value = false
+    gridDrawRequestInFlight.value = false
     return
   }
 
@@ -3732,7 +3815,7 @@ const startDraw = async () => {
     updateChanceText()
   }
 
-  const targetIndex = gridItems.value.findIndex((item) => item.id === prize.id)
+  const targetIndex = resolvePremiumGridPrizeTargetIndex(prize)
 
   drawPerformanceMessage.value = '後端結果已確認，九宮格準備停在本次獎項。'
   await runPremiumGridSpinAnimation(targetIndex)
@@ -3759,10 +3842,10 @@ const startDraw = async () => {
   await sleep(180)
   showResultModal.value = true
   isDrawing.value = false
+  gridDrawRequestInFlight.value = false
   drawPerformanceMessage.value = ''
   drawPerformancePhase.value = 'idle'
 }
-
 
 const shareCampaign = async () => {
   if (!canShareCampaign.value) {
@@ -33804,7 +33887,6 @@ const toggleWheelRealFilePrep11011150 = () => {
                       :style="getCellStyle(index)"
                       :disabled="false"
                       @pointerup.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
-                      @touchend.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
                       @click.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
                     >
                       <div class="absolute left-2 top-2 h-6 w-6 rounded-full border-l-4 border-t-4 border-white/80 sm:h-8 sm:w-8"></div>
@@ -33820,7 +33902,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                             class="font-black leading-tight text-white"
                             :style="getAdminPreviewTextStyle('buttonTextSize', 16)"
                           >
-                            {{ drawButtonText }}
+                            {{ gridStartButtonLabel }}
                           </span>
                         </template>
 
@@ -33880,7 +33962,6 @@ const toggleWheelRealFilePrep11011150 = () => {
                     "
                     :disabled="false"
                     @pointerup.stop.prevent="handlePremiumGridStartClick($event)"
-                    @touchend.stop.prevent="handlePremiumGridStartClick($event)"
                     @click.stop.prevent="handlePremiumGridStartClick($event)"
                   >
                     {{ gridStartButtonLabel }}
@@ -33970,7 +34051,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                       class="min-w-[150px] rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
                       :disabled="isDrawing"
                       :class="!canStartGridDraw && !isDrawing ? 'cursor-not-allowed opacity-70' : ''"
-                      @click="handlePremiumGridStartClick"
+                      @click="handlePremiumGridStartClick($event)"
                     >
                       {{ gridStartButtonLabel }}
                     </button>
