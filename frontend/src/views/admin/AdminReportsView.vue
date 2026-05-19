@@ -1,7 +1,8 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 44001-1 批：報表中心四區塊展開收合修正版
-import { computed, onMounted, ref } from 'vue'
+// 第 96801～97200 批：報表中心 5 秒自動更新與獎項成效手動重新整理版
+// 延續第 44001-1 批：報表中心四區塊展開收合修正版
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   getReportSummaryApi,
   getReportDailyApi,
@@ -15,8 +16,12 @@ import {
 import http from '../../api/http'
 
 const API_BASE = http?.defaults?.baseURL || 'http://localhost:3000/api'
+const REPORT_AUTO_REFRESH_MS = 5000
 
 const loading = ref(true)
+const reportRefreshing = ref(false)
+const lastReportRefreshAt = ref('')
+const reportAutoRefreshTimer = ref(null)
 const exporting = ref(false)
 const advancedFiltersOpen = ref(false)
 const savedQueriesOpen = ref(true)
@@ -488,8 +493,18 @@ const getWinRateBarHeight = (rate) => {
   return `${Math.max(6, Math.min(100, Math.round(Number(rate || 0))))}%`
 }
 
-const fetchReports = async () => {
-  loading.value = true
+const fetchReports = async (options = {}) => {
+  const silent = options?.silent === true
+
+  if (reportRefreshing.value) {
+    return
+  }
+
+  reportRefreshing.value = true
+
+  if (!silent) {
+    loading.value = true
+  }
 
   try {
     const commonParams = {
@@ -575,9 +590,18 @@ const fetchReports = async () => {
       total: Number(rewardP.total || 0),
       totalPages: Number(rewardP.totalPages || 1)
     }
+    lastReportRefreshAt.value = new Date().toLocaleTimeString('zh-TW', {
+      hour12: false,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    })
   } catch (error) {
     console.error('取得報表資料失敗', error)
-    alert(error?.response?.data?.message || '取得報表資料失敗')
+
+    if (!silent) {
+      alert(error?.response?.data?.message || '取得報表資料失敗')
+    }
     summary.value = emptySummary()
     dailyRows.value = []
     playRows.value = []
@@ -588,7 +612,11 @@ const fetchReports = async () => {
     rewardPagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
     prizePagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
   } finally {
-    loading.value = false
+    reportRefreshing.value = false
+
+    if (!silent) {
+      loading.value = false
+    }
   }
 }
 
@@ -942,10 +970,44 @@ const getSectionToggleIcon = (key) => {
   return reportSectionsOpen.value[key] ? '▲' : '▼'
 }
 
+const reportRefreshStatusText = computed(() => {
+  if (reportRefreshing.value) return '更新中…'
+
+  return lastReportRefreshAt.value
+    ? `最後更新：${lastReportRefreshAt.value}`
+    : '尚未更新'
+})
+
+const handleManualReportRefresh = async () => {
+  await fetchReports()
+}
+
+const stopReportAutoRefresh = () => {
+  if (reportAutoRefreshTimer.value) {
+    window.clearInterval(reportAutoRefreshTimer.value)
+    reportAutoRefreshTimer.value = null
+  }
+}
+
+const startReportAutoRefresh = () => {
+  if (typeof window === 'undefined') return
+
+  stopReportAutoRefresh()
+
+  reportAutoRefreshTimer.value = window.setInterval(() => {
+    fetchReports({ silent: true })
+  }, REPORT_AUTO_REFRESH_MS)
+}
+
 onMounted(async () => {
   loadSavedQueries()
   await fetchTenantOptions()
   await fetchReports()
+  startReportAutoRefresh()
+})
+
+onUnmounted(() => {
+  stopReportAutoRefresh()
 })
 </script>
 
@@ -966,11 +1028,15 @@ onMounted(async () => {
 
         <div class="flex flex-wrap gap-3">
           <button
-            @click="fetchReports"
-            class="rounded-2xl bg-slate-900 px-6 py-3 font-bold text-white transition hover:bg-slate-800"
+            @click="handleManualReportRefresh"
+            class="rounded-2xl bg-slate-900 px-6 py-3 font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="reportRefreshing"
           >
-            重新整理
+            {{ reportRefreshing ? '更新中…' : '重新整理' }}
           </button>
+          <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700">
+            每 5 秒自動更新｜{{ reportRefreshStatusText }}
+          </div>
         </div>
       </div>
 
@@ -1538,6 +1604,17 @@ onMounted(async () => {
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
+          <button
+            type="button"
+            class="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            :disabled="reportRefreshing"
+            @click="handleManualReportRefresh"
+          >
+            {{ reportRefreshing ? '更新中…' : '重新整理' }}
+          </button>
+          <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700">
+            每 5 秒自動更新｜{{ reportRefreshStatusText }}
+          </div>
           <div class="rounded-2xl bg-violet-50 px-5 py-3 text-sm font-black text-violet-700">
             目前顯示 {{ prizePageStart }} - {{ prizePageEnd }} 筆，共 {{ totalPrizePerformanceRows }} 筆
           </div>
