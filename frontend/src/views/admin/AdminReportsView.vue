@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 96801～97200 批：報表中心 5 秒自動更新與獎項成效手動重新整理版
+// 第 97201～97600 批：報表中心 30 秒自動更新版
 // 延續第 44001-1 批：報表中心四區塊展開收合修正版
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
@@ -16,7 +16,7 @@ import {
 import http from '../../api/http'
 
 const API_BASE = http?.defaults?.baseURL || 'http://localhost:3000/api'
-const REPORT_AUTO_REFRESH_MS = 5000
+const REPORT_AUTO_REFRESH_MS = 30000
 
 const loading = ref(true)
 const reportRefreshing = ref(false)
@@ -1035,7 +1035,7 @@ onUnmounted(() => {
             {{ reportRefreshing ? '更新中…' : '重新整理' }}
           </button>
           <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700">
-            每 5 秒自動更新｜{{ reportRefreshStatusText }}
+            每 30 秒自動更新｜{{ reportRefreshStatusText }}
           </div>
         </div>
       </div>
@@ -1613,7 +1613,7 @@ onUnmounted(() => {
             {{ reportRefreshing ? '更新中…' : '重新整理' }}
           </button>
           <div class="rounded-2xl border border-emerald-100 bg-emerald-50 px-5 py-3 text-sm font-black text-emerald-700">
-            每 5 秒自動更新｜{{ reportRefreshStatusText }}
+            每 30 秒自動更新｜{{ reportRefreshStatusText }}
           </div>
           <div class="rounded-2xl bg-violet-50 px-5 py-3 text-sm font-black text-violet-700">
             目前顯示 {{ prizePageStart }} - {{ prizePageEnd }} 筆，共 {{ totalPrizePerformanceRows }} 筆
