@@ -1,5 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 87201～87600 批：三遊戲後台百分比正式抽獎統一修正版
+// 第 92001～92400 批：正式抽獎中獎後同步扣除獎項庫存修正版
 // 延續第 84801～85200 批：砸金蛋後端百分比抽獎對齊版
 // 延續第 79201～79600 批：九宮格正式後端百分比抽獎對齊版
 //
@@ -13,6 +13,8 @@
 // 4. 保留原本 Prize table fallback，避免舊活動沒有 GameConfig settings 時無法抽獎。
 // 5. WHEEL 若後台設定沒有庫存欄位，GameConfig 虛擬獎項預設視為可抽，避免輪盤獎項被 0 庫存濾掉。
 // 6. 不改 DB schema / router。
+// 7. 修正 GameConfig 虛擬獎項中獎後不會扣 Prize table 庫存的問題。
+// 8. 虛擬獎項會用 prizeId / id / title / shortName / sortOrder 對應回真實 Prize，成功後寫入 playRecord / rewardRecord.prizeId。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -120,6 +122,83 @@ const normalizeGameConfigPrizeProbability = (item = {}) => {
   return Math.max(0, probability)
 }
 
+const normalizeComparableText = (value = '') => {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+}
+
+const getGameConfigLinkedPrizeId = (item = {}) => {
+  return normalizeId(
+    item.prizeId ??
+      item.realPrizeId ??
+      item.prizeTableId ??
+      item.rewardId ??
+      item.id
+  )
+}
+
+const findMatchingPrizeTableItem = (virtualPrize = {}, campaignPrizes = []) => {
+  const linkedPrizeId = normalizeId(virtualPrize.linkedPrizeId)
+
+  if (linkedPrizeId) {
+    const matchedById = campaignPrizes.find((prize) => normalizeId(prize.id) === linkedPrizeId)
+
+    if (matchedById) return matchedById
+  }
+
+  const sourcePayload = virtualPrize.sourcePayload || {}
+  const titleKey = normalizeComparableText(virtualPrize.title)
+  const shortNameKey = normalizeComparableText(virtualPrize.shortName)
+  const sourceTitleKey = normalizeComparableText(
+    sourcePayload.title ||
+      sourcePayload.name ||
+      sourcePayload.prizeName ||
+      sourcePayload.shortName ||
+      sourcePayload.label
+  )
+  const sortOrder = Number(virtualPrize.sortOrder || sourcePayload.sortOrder || sourcePayload.position || 0)
+
+  return campaignPrizes.find((prize) => {
+    if (!prize || String(prize.status || '').toUpperCase() !== 'ACTIVE') return false
+    if (String(prize.type || '').toUpperCase() === 'LOSE') return false
+
+    const prizeTitleKey = normalizeComparableText(prize.title)
+    const prizeShortNameKey = normalizeComparableText(prize.shortName)
+
+    if (titleKey && (titleKey === prizeTitleKey || titleKey === prizeShortNameKey)) return true
+    if (shortNameKey && (shortNameKey === prizeTitleKey || shortNameKey === prizeShortNameKey)) return true
+    if (sourceTitleKey && (sourceTitleKey === prizeTitleKey || sourceTitleKey === prizeShortNameKey)) return true
+
+    if (sortOrder > 0 && Number(prize.sortOrder || 0) === sortOrder) {
+      return true
+    }
+
+    return false
+  }) || null
+}
+
+const attachPrizeTableLinkToVirtualPrize = (virtualPrize = {}, campaignPrizes = []) => {
+  if (!virtualPrize?.isVirtualGameConfigPrize) return virtualPrize
+
+  const matchedPrize = findMatchingPrizeTableItem(virtualPrize, campaignPrizes)
+
+  if (!matchedPrize) {
+    return virtualPrize
+  }
+
+  return {
+    ...virtualPrize,
+    linkedPrizeId: matchedPrize.id,
+    linkedPrize: matchedPrize,
+    remainStock: getPrizeAvailableStock(matchedPrize),
+    stockTotal: matchedPrize.stockTotal,
+    stockUsed: matchedPrize.stockUsed,
+    prizeTableTitle: matchedPrize.title
+  }
+}
+
 const isGameConfigItemEnabled = (item = {}) => {
   if (!item) return false
   if (item.enabled === false) return false
@@ -201,6 +280,8 @@ const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
     stockTotal: remainStock,
     stockUsed: 0,
     sortOrder: Number(item.sortOrder ?? item.position ?? index + 1),
+    linkedPrizeId: getGameConfigLinkedPrizeId(item),
+    linkedPrize: null,
     source: 'GAME_CONFIG_SETTINGS',
     sourcePayload: item
   }
@@ -211,9 +292,12 @@ const buildGameConfigPrizePool = (campaign = {}) => {
   const gameType = normalizeGameType(campaign.gameType)
   const items = extractGameConfigPrizeItems(settings, gameType)
 
+  const campaignPrizes = Array.isArray(campaign.prizes) ? campaign.prizes : []
+
   return items
     .filter(isGameConfigItemEnabled)
     .map((item, index) => normalizeGameConfigPrize(item, index, campaign))
+    .map((prize) => attachPrizeTableLinkToVirtualPrize(prize, campaignPrizes))
     .filter((prize) => {
       if (prize.type === 'LOSE') return true
       return Number(prize.remainStock || 0) > 0 && Number(prize.probability || 0) > 0
@@ -255,6 +339,7 @@ const toResponsePrize = (prize = null) => {
     stockTotal: prize.stockTotal,
     stockUsed: prize.stockUsed,
     sortOrder: prize.sortOrder,
+    linkedPrizeId: prize.linkedPrizeId || null,
     isVirtualGameConfigPrize: Boolean(prize.isVirtualGameConfigPrize),
     source: prize.source || 'PRIZE_TABLE'
   }
@@ -262,7 +347,10 @@ const toResponsePrize = (prize = null) => {
 
 const getPrizeIdForWrite = (prize = null) => {
   if (!prize) return null
-  if (prize.isVirtualGameConfigPrize) return null
+
+  if (prize.isVirtualGameConfigPrize) {
+    return normalizeId(prize.linkedPrizeId)
+  }
 
   return normalizeId(prize.id)
 }
@@ -503,16 +591,39 @@ const validateSerialCodeForDraw = async (tx, campaignId, payload = {}) => {
 }
 
 const reserveWinningPrizeStock = async (tx, prize) => {
-  if (!prize || prize.type === 'LOSE' || prize.isVirtualGameConfigPrize) {
+  if (!prize || prize.type === 'LOSE') {
     return prize
   }
 
-  const stockTotal = Number(prize.stockTotal || 0)
+  const prizeIdForReserve = prize.isVirtualGameConfigPrize
+    ? normalizeId(prize.linkedPrizeId)
+    : normalizeId(prize.id)
+
+  if (!prizeIdForReserve) {
+    throw createHttpError('此獎項尚未連結真實庫存，請先到獎項管理重新儲存此活動獎項', 409)
+  }
+
+  const currentPrize = await tx.prize.findFirst({
+    where: {
+      id: prizeIdForReserve,
+      campaignId: normalizeId(prize.campaignId),
+      tenantId: prize.tenantId || null,
+      status: 'ACTIVE'
+    }
+  })
+
+  if (!currentPrize) {
+    throw createHttpError('找不到此活動對應的真實獎項庫存，請重新整理獎項管理', 409)
+  }
+
+  const stockTotal = Number(currentPrize.stockTotal || 0)
 
   if (stockTotal > 0) {
     const result = await tx.prize.updateMany({
       where: {
-        id: prize.id,
+        id: currentPrize.id,
+        campaignId: currentPrize.campaignId,
+        tenantId: currentPrize.tenantId || null,
         status: 'ACTIVE',
         stockUsed: {
           lt: stockTotal
@@ -537,14 +648,16 @@ const reserveWinningPrizeStock = async (tx, prize) => {
 
     return tx.prize.findUnique({
       where: {
-        id: prize.id
+        id: currentPrize.id
       }
     })
   }
 
   const result = await tx.prize.updateMany({
     where: {
-      id: prize.id,
+      id: currentPrize.id,
+      campaignId: currentPrize.campaignId,
+      tenantId: currentPrize.tenantId || null,
       status: 'ACTIVE',
       remainStock: {
         gt: 0
@@ -566,7 +679,7 @@ const reserveWinningPrizeStock = async (tx, prize) => {
 
   return tx.prize.findUnique({
     where: {
-      id: prize.id
+      id: currentPrize.id
     }
   })
 }
@@ -687,6 +800,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
           frontUrl: trafficPayload.frontUrl,
           referrer: trafficPayload.referrer,
           selectedPrizeId: prize.id,
+          selectedPrizeTableId: prizeIdForWrite,
           selectedPrizeTitle: prize.title,
           selectedPrizeProbability: prize.probability,
           selectedPrizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
@@ -752,7 +866,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       },
       result: {
         isWin,
-        prizeId: prize.id,
+        prizeId: prizeIdForWrite || prize.id,
         prizeTitle: prize.title,
         prizeType: prize.type,
         prizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
@@ -829,6 +943,7 @@ export const previewDrawPool = async (campaignId) => {
       stockUsed: prize.stockUsed,
       availableStock: prize.isVirtualGameConfigPrize ? Number(prize.remainStock || 0) : getPrizeAvailableStock(prize),
       isAvailable: isPrizeAvailable(prize),
+      linkedPrizeId: prize.linkedPrizeId || null,
       isVirtualGameConfigPrize: Boolean(prize.isVirtualGameConfigPrize),
       source: prize.source || 'PRIZE_TABLE'
     }))
