@@ -149,6 +149,9 @@ const {
 } = useDrawHistory()
 
 const isDrawing = ref(false)
+// 第 92401～92800 批：九宮格正式玩家開始抽獎點擊穩定鎖。
+// 避免手機快速點擊、iframe 預覽同步、按鈕與中間格 click 重疊時，第一次點擊被舊狀態吃掉。
+const gridDrawRequestLocked = ref(false)
 const activeIndex = ref(-1)
 const drawPerformanceMessage = ref('')
 const drawPerformancePhase = ref('idle')
@@ -769,17 +772,36 @@ const postGridJson = async (path, body = {}) => {
 const canStartGridDraw = computed(() => {
   if (!shouldRequireSerialCode.value) return canDraw.value
 
-  return Boolean(
+  const baseReady = Boolean(
     serialVerify.verified &&
       normalizedSerialCode.value &&
       effectiveGridChances.value > 0 &&
-      availablePrizeCount.value > 0 &&
       !isDrawing.value &&
+      !gridDrawRequestLocked.value &&
       !tenantPremiumGridLoading.value &&
       !tenantPremiumGridError.value &&
       !hasTenantPremiumGridBlock.value
   )
+
+  // 正式玩家頁抽獎以後端 Draw Engine 為準；
+  // 前端本地獎項池可能只是預覽資料，不能拿來阻擋第一下點擊。
+  if (isTenantPremiumGridMode.value) {
+    return baseReady
+  }
+
+  return baseReady && availablePrizeCount.value > 0
 })
+
+const handleGridStartButtonClick = async () => {
+  // 第 92401～92800 批：統一九宮格中間格與下方按鈕點擊入口。
+  // 不再在 template 裡用三元判斷吞掉點擊，讓玩家每次點擊都有明確回饋。
+  if (!canStartGridDraw.value) {
+    showShareSuccess(playerStatusMessage.value || drawButtonText.value || '目前尚不能開始抽獎。')
+    return
+  }
+
+  await startDraw()
+}
 
 const verifySerialCode = async () => {
   serialVerify.error = ''
@@ -2482,8 +2504,15 @@ const canDraw = computed(() => {
   if (tenantPremiumGridLoading.value) return false
   if (tenantPremiumGridError.value) return false
   if (hasTenantPremiumGridBlock.value) return false
+  if (isDrawing.value || gridDrawRequestLocked.value) return false
 
-  return effectiveGridChances.value > 0 && availablePrizeCount.value > 0 && !isDrawing.value
+  // 正式商家玩家頁已由後端 Draw Engine 決定獎項 / 庫存 / 機率，
+  // 不再用前端本地 gridItems 的 quantity / weight 擋住開始抽獎。
+  if (isTenantPremiumGridMode.value) {
+    return effectiveGridChances.value > 0
+  }
+
+  return effectiveGridChances.value > 0 && availablePrizeCount.value > 0
 })
 
 const canShareCampaign = computed(() => {
@@ -2508,7 +2537,7 @@ const drawButtonText = computed(() => {
 
   if (effectiveGridChances.value <= 0) return '次數用完'
 
-  if (availablePrizeCount.value <= 0) return '獎品已抽完'
+  if (!isTenantPremiumGridMode.value && availablePrizeCount.value <= 0) return '獎品已抽完'
 
   return campaign.buttonText || '點擊抽選'
 })
@@ -2530,7 +2559,7 @@ const playerStatusMessage = computed(() => {
     return '抽獎進行中，請稍候結果出現。'
   }
 
-  if (availablePrizeCount.value <= 0) {
+  if (!isTenantPremiumGridMode.value && availablePrizeCount.value <= 0) {
     return '目前獎品庫存已抽完，請等待主辦單位補貨或更新活動。'
   }
 
@@ -3533,29 +3562,36 @@ const showShareSuccess = (message) => {
 }
 
 const startDraw = async () => {
-  if (isDrawing.value) return
+  if (isDrawing.value || gridDrawRequestLocked.value) return
+
+  gridDrawRequestLocked.value = true
 
   if (tenantPremiumGridLoading.value) {
+    gridDrawRequestLocked.value = false
     showShareSuccess('活動資料仍在載入中，請稍候。')
     return
   }
 
   if (tenantPremiumGridError.value) {
+    gridDrawRequestLocked.value = false
     showShareSuccess(tenantPremiumGridError.value)
     return
   }
 
   if (hasTenantPremiumGridBlock.value) {
+    gridDrawRequestLocked.value = false
     showShareSuccess(tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。')
     return
   }
 
   if (shouldRequireSerialCode.value && !serialVerify.verified) {
+    gridDrawRequestLocked.value = false
     showShareSuccess('請先輸入商家提供的序號並完成驗證。')
     return
   }
 
   if (effectiveGridChances.value <= 0) {
+    gridDrawRequestLocked.value = false
     showShareSuccess('目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。')
     return
   }
@@ -3571,6 +3607,7 @@ const startDraw = async () => {
   } catch (error) {
     console.error('精緻九宮格抽獎失敗：', error)
     isDrawing.value = false
+    gridDrawRequestLocked.value = false
     drawPerformanceMessage.value = ''
     drawPerformancePhase.value = 'idle'
     showShareSuccess(error?.response?.data?.message || error?.message || '抽獎失敗，請稍後再試。')
@@ -3579,6 +3616,7 @@ const startDraw = async () => {
 
   if (!prize) {
     isDrawing.value = false
+    gridDrawRequestLocked.value = false
     drawPerformanceMessage.value = ''
     drawPerformancePhase.value = 'idle'
     showShareSuccess('目前獎品已抽完，請等待主辦單位更新活動。')
@@ -3616,6 +3654,7 @@ const startDraw = async () => {
   await sleep(180)
   showResultModal.value = true
   isDrawing.value = false
+  gridDrawRequestLocked.value = false
   drawPerformanceMessage.value = ''
   drawPerformancePhase.value = 'idle'
 }
@@ -33658,8 +33697,8 @@ const toggleWheelRealFilePrep11011150 = () => {
                           : ''
                       ]"
                       :style="getCellStyle(index)"
-                      :disabled="item.isButton && !canStartGridDraw"
-                      @click="item.isButton && canStartGridDraw ? startDraw() : null"
+                      :disabled="item.isButton && (isDrawing || gridDrawRequestLocked)"
+                      @click.stop="item.isButton ? handleGridStartButtonClick() : null"
                     >
                       <div class="absolute left-2 top-2 h-6 w-6 rounded-full border-l-4 border-t-4 border-white/80 sm:h-8 sm:w-8"></div>
                       <div class="absolute bottom-2 right-2 h-6 w-6 rounded-full border-b-4 border-r-4 border-white/40 sm:h-8 sm:w-8"></div>
@@ -33800,9 +33839,9 @@ const toggleWheelRealFilePrep11011150 = () => {
                     <button
                       type="button"
                       class="min-w-[150px] rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
-                      :disabled="!canStartGridDraw"
+                      :disabled="isDrawing || gridDrawRequestLocked"
                       :class="!canStartGridDraw ? 'cursor-not-allowed opacity-70' : ''"
-                      @click="canStartGridDraw ? startDraw() : null"
+                      @click="handleGridStartButtonClick"
                     >
                       {{ isDrawing ? '抽選中...' : drawButtonText }}
                     </button>
