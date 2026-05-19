@@ -1,7 +1,7 @@
 <script setup>
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
- * 第 94401～94800 批：九宮格抽獎等待回饋與防連點體驗優化版。
+ * 第 94801～95200 批：九宮格立即啟動動畫等待後端結果版。
  * 延續第 94001～94400 批：九宮格手機開始抽獎觸控層與單一路徑修正版。
  * 延續第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。*
  * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
@@ -3656,28 +3656,71 @@ const startDraw = async () => {
   }
 
   isDrawing.value = true
-  drawPerformancePhase.value = 'submitting'
+  drawPerformancePhase.value = 'spinning'
   drawPerformanceMessage.value = isTenantPremiumGridMode.value
-    ? '已送出抽獎，正在等待後端計算結果。'
-    : '已開始抽獎，正在準備跑燈。'
+    ? '已開始抽獎，九宮格正在跑燈，系統同步計算結果。'
+    : '已開始抽獎，九宮格正在跑燈。'
   resultPrize.value = null
   showResultModal.value = false
+
+  // 第 94801～95200 批：立即啟動等待動畫。
+  // 正式抽獎結果仍然由後端 Draw Engine 回傳，但玩家一點擊就先看到九宮格跑燈，
+  // 不再乾等 Render / 網路回應造成「點了沒反應」的體感。
+  let waitStep = 0
+  let waitingLoopTimer = null
+
+  const stopWaitingLoop = () => {
+    if (waitingLoopTimer) {
+      window.clearInterval(waitingLoopTimer)
+      waitingLoopTimer = null
+    }
+  }
+
+  const startWaitingLoop = () => {
+    stopWaitingLoop()
+
+    if (!Array.isArray(drawPath) || !drawPath.length) return
+
+    activeIndex.value = drawPath[0]
+    waitingLoopTimer = window.setInterval(() => {
+      waitStep += 1
+      activeIndex.value = drawPath[waitStep % drawPath.length]
+
+      if (waitStep % 6 === 0) {
+        drawPerformanceMessage.value = isTenantPremiumGridMode.value
+          ? '九宮格已開始跑燈，正在等待後端確認中獎結果。'
+          : '九宮格跑燈中，正在抽選獎項。'
+      }
+
+      if (waitStep % 4 === 0) {
+        playGridTickSound(waitStep, 0.42)
+      }
+    }, 78)
+  }
+
+  startWaitingLoop()
+  await nextTick()
 
   let prize = null
 
   try {
     prize = isTenantPremiumGridMode.value ? await playTenantPremiumGridDraw() : pickPrize()
   } catch (error) {
+    stopWaitingLoop()
     console.error('精緻九宮格抽獎失敗：', error)
     isDrawing.value = false
+    activeIndex.value = -1
     drawPerformanceMessage.value = ''
     drawPerformancePhase.value = 'idle'
     showShareSuccess(error?.response?.data?.message || error?.message || '抽獎失敗，請稍後再試。')
     return
   }
 
+  stopWaitingLoop()
+
   if (!prize) {
     isDrawing.value = false
+    activeIndex.value = -1
     drawPerformanceMessage.value = ''
     drawPerformancePhase.value = 'idle'
     showShareSuccess('目前獎品已抽完，請等待主辦單位更新活動。')
@@ -3691,6 +3734,7 @@ const startDraw = async () => {
 
   const targetIndex = gridItems.value.findIndex((item) => item.id === prize.id)
 
+  drawPerformanceMessage.value = '後端結果已確認，九宮格準備停在本次獎項。'
   await runPremiumGridSpinAnimation(targetIndex)
 
   prize.quantity = Math.max(0, Number(prize.quantity || 0) - 1)
@@ -3718,6 +3762,7 @@ const startDraw = async () => {
   drawPerformanceMessage.value = ''
   drawPerformancePhase.value = 'idle'
 }
+
 
 const shareCampaign = async () => {
   if (!canShareCampaign.value) {
