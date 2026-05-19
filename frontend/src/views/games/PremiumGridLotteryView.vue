@@ -1,7 +1,8 @@
 <script setup>
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
- * 第 94001～94400 批：九宮格手機開始抽獎觸控層與單一路徑修正版。
+ * 第 94401～94800 批：九宮格抽獎等待回饋與防連點體驗優化版。
+ * 延續第 94001～94400 批：九宮格手機開始抽獎觸控層與單一路徑修正版。
  * 延續第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。*
  * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
  *
@@ -99,7 +100,7 @@ import { getPremiumGridFormalSafetySummary } from '../../config/premiumGridCommo
  * 16. 第 951～1000 批延續正式上線後觀測穩定點，新增穩定營運與版本封存交付資訊。
  */
 
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAdminGameSettings } from '../../composables/useAdminGameSettings'
 import { useDrawHistory } from '../../composables/useDrawHistory'
@@ -2578,9 +2579,28 @@ const playerStatusMessage = computed(() => {
 })
 
 const drawingStatusText = computed(() => {
+  // 第 94401～94800 批：點擊後即使後端還在等待，也要立即顯示回饋。
+  if (drawPerformanceMessage.value) return drawPerformanceMessage.value
   if (!isDrawing.value) return ''
 
-  return drawPerformanceMessage.value || '九宮格正在高速跑燈抽選，請不要關閉畫面。'
+  return '九宮格正在高速跑燈抽選，請不要關閉畫面。'
+})
+
+const gridStartButtonBusy = computed(() => {
+  return Boolean(
+    isDrawing.value ||
+      drawPerformancePhase.value === 'tap-received' ||
+      drawPerformancePhase.value === 'submitting' ||
+      drawPerformancePhase.value === 'spinning'
+  )
+})
+
+const gridStartButtonLabel = computed(() => {
+  if (drawPerformancePhase.value === 'tap-received') return '已收到，準備抽獎...'
+  if (drawPerformancePhase.value === 'submitting') return '抽獎送出中...'
+  if (drawPerformancePhase.value === 'spinning' || isDrawing.value) return '抽選中，請稍候...'
+
+  return drawButtonText.value
 })
 
 const frontGridRecordRows = computed(() => {
@@ -3600,7 +3620,8 @@ const handlePremiumGridStartClick = async (event = null) => {
   drawPerformanceMessage.value = '已收到點擊，正在檢查序號與送出抽獎。'
 
   // 不先用 canStartGridDraw 擋掉點擊；所有原因交給 startDraw 顯示。
-  // 這樣玩家點一下就一定會有畫面回饋，不會像沒有反應。
+  // 第 94401～94800 批：先讓 Vue 把『已收到點擊』回饋畫出來，再送後端，避免玩家覺得完全沒反應。
+  await nextTick()
   await startDraw()
 }
 
@@ -33806,8 +33827,8 @@ const toggleWheelRealFilePrep11011150 = () => {
                   <button
                     type="button"
                     class="mx-auto flex min-h-[52px] w-full max-w-xs items-center justify-center rounded-[999px] border border-white/30 px-5 py-3 text-sm font-black text-white shadow-xl transition active:scale-[0.98] sm:min-h-[58px] sm:text-base"
-                    :class="isDrawing
-                      ? 'bg-slate-500/80 cursor-wait'
+                    :class="gridStartButtonBusy
+                      ? 'bg-slate-500/80 cursor-wait animate-pulse'
                       : canStartGridDraw
                         ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500'
                         : 'bg-gradient-to-r from-slate-500 to-slate-600'
@@ -33817,10 +33838,10 @@ const toggleWheelRealFilePrep11011150 = () => {
                     @touchend.stop.prevent="handlePremiumGridStartClick($event)"
                     @click.stop.prevent="handlePremiumGridStartClick($event)"
                   >
-                    {{ isDrawing ? '抽選中，請稍候...' : drawButtonText }}
+                    {{ gridStartButtonLabel }}
                   </button>
                   <p class="mt-2 text-[11px] font-black leading-5 text-white/70">
-                    第 94001～94400 批：手機觸控備援按鈕，點一下就會顯示狀態或送出抽獎。
+                    第 94401～94800 批：點擊後立即顯示等待回饋；後端較慢時也不會像沒反應。
                   </p>
                 </section>
 
@@ -33906,7 +33927,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                       :class="!canStartGridDraw && !isDrawing ? 'cursor-not-allowed opacity-70' : ''"
                       @click="handlePremiumGridStartClick"
                     >
-                      {{ isDrawing ? '抽選中...' : drawButtonText }}
+                      {{ gridStartButtonLabel }}
                     </button>
 
                     <button
