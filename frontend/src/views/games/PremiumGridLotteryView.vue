@@ -1,8 +1,8 @@
 <script setup>
-// 第 93601～94000 批：九宮格開始抽獎單一路徑強制修正版
+// 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
- * 第 93601～94000 批：九宮格開始抽獎單一路徑強制修正版。
- * 第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。
+ * 第 94001～94400 批：九宮格手機開始抽獎觸控層與單一路徑修正版。
+ * 延續第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。*
  * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
  *
  * 本批只強化九宮格玩家頁抽獎演出：增加跑燈圈數、三段式減速、答答聲、成功音效與手機震動。
@@ -151,8 +151,8 @@ const {
 } = useDrawHistory()
 
 const isDrawing = ref(false)
-// 第 93601～94000 批：手機點擊保護鎖。避免 pointerup / click 雙事件重複送出，也避免第一次點擊被舊流程吃掉。
-const premiumGridStartClickLocked = ref(false)
+// 第 94001～94400 批：手機瀏覽器 tap / click 可能同時觸發或被延遲，統一用短暫鎖避免重複送出。
+const gridStartTapLock = ref(false)
 const activeIndex = ref(-1)
 const drawPerformanceMessage = ref('')
 const drawPerformancePhase = ref('idle')
@@ -3565,7 +3565,7 @@ const showShareSuccess = (message) => {
 }
 
 const getPremiumGridStartBlockedMessage = () => {
-  if (isDrawing.value) return '抽獎進行中，請稍候。'
+  if (isDrawing.value) return '抽獎進行中，請稍候結果出現。'
   if (hasTenantPremiumGridBlock.value) return tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。'
   if (shouldRequireSerialCode.value && !serialVerify.verified) return '請先輸入商家提供的序號並完成驗證。'
   if (effectiveGridChances.value <= 0) return '目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。'
@@ -3577,88 +3577,60 @@ const getPremiumGridStartBlockedMessage = () => {
   return '已收到點擊，正在準備送出抽獎。'
 }
 
-const releasePremiumGridStartClickLock = () => {
-  window.setTimeout(() => {
-    premiumGridStartClickLocked.value = false
-  }, 280)
-}
-
 const handlePremiumGridStartClick = async (event = null) => {
-  // 第 93601～94000 批：正式商家玩家頁改成「單一路徑」。
-  // 手機 touch / pointer / click 只要進來一次，就直接交給 startDraw；不再先被 canStartGridDraw / 本地獎項池擋掉。
+  // 第 94001～94400 批：九宮格手機點擊統一入口。
+  // 之前只有 @click 時，部分手機瀏覽器或外層動畫層會讓第一次點擊像沒反應。
+  // 現在 pointerup / touchend / click 都導到這裡，並且不再由 template disabled 吃掉點擊。
   event?.preventDefault?.()
   event?.stopPropagation?.()
 
-  if (isDrawing.value || premiumGridStartClickLocked.value) return
-
-  premiumGridStartClickLocked.value = true
-  drawPerformancePhase.value = 'submitting'
-  drawPerformanceMessage.value = '已收到點擊，正在送出抽獎。'
-
-  try {
-    if (isTenantPremiumGridMode.value) {
-      await startDraw({ forceTenantBackend: true })
-      return
-    }
-
-    if (!canStartGridDraw.value) {
-      drawPerformancePhase.value = 'idle'
-      drawPerformanceMessage.value = ''
-      showShareSuccess(getPremiumGridStartBlockedMessage())
-      return
-    }
-
-    await startDraw()
-  } finally {
-    releasePremiumGridStartClickLock()
+  if (isDrawing.value) {
+    showShareSuccess('抽獎已送出，正在等待結果，請不要重複點擊。')
+    return
   }
+
+  if (gridStartTapLock.value) return
+
+  gridStartTapLock.value = true
+  window.setTimeout(() => {
+    gridStartTapLock.value = false
+  }, 680)
+
+  drawPerformancePhase.value = 'tap-received'
+  drawPerformanceMessage.value = '已收到點擊，正在檢查序號與送出抽獎。'
+
+  // 不先用 canStartGridDraw 擋掉點擊；所有原因交給 startDraw 顯示。
+  // 這樣玩家點一下就一定會有畫面回饋，不會像沒有反應。
+  await startDraw()
 }
 
-const startDraw = async (options = {}) => {
+const startDraw = async () => {
   if (isDrawing.value) return
 
-  const forceTenantBackend = Boolean(options?.forceTenantBackend && isTenantPremiumGridMode.value)
-  const allowTenantBackendDraw = Boolean(hasTenantPremiumGridPlayableContext.value || forceTenantBackend)
+  const allowTenantBackendDraw = Boolean(hasTenantPremiumGridPlayableContext.value)
 
   if (tenantPremiumGridLoading.value && !allowTenantBackendDraw) {
     showShareSuccess('活動資料仍在載入中，請稍候。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   if (tenantPremiumGridError.value && !allowTenantBackendDraw) {
     showShareSuccess(tenantPremiumGridError.value)
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   if (hasTenantPremiumGridBlock.value) {
     showShareSuccess(tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   if (shouldRequireSerialCode.value && !serialVerify.verified) {
     showShareSuccess('請先輸入商家提供的序號並完成驗證。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
-    return
-  }
-
-  if (shouldRequireSerialCode.value && !normalizedSerialCode.value) {
-    showShareSuccess('請輸入已驗證的序號後再開始抽獎。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   if (effectiveGridChances.value <= 0) {
     showShareSuccess('目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
@@ -3696,19 +3668,7 @@ const startDraw = async (options = {}) => {
     updateChanceText()
   }
 
-  let targetIndex = gridItems.value.findIndex((item) => {
-    if (item.isButton) return false
-
-    return String(item.id || '') === String(prize.id || '') ||
-      String(item.name || '') === String(prize.name || '') ||
-      String(item.title || '') === String(prize.title || '')
-  })
-
-  // 後端 Draw Engine 可能回傳 virtual prize id，與前端格子 id 不完全相同。
-  // 找不到格子時仍要跑燈，不可讓玩家以為沒反應。
-  if (targetIndex < 0) {
-    targetIndex = gridItems.value.findIndex((item) => !item.isButton)
-  }
+  const targetIndex = gridItems.value.findIndex((item) => item.id === prize.id)
 
   await runPremiumGridSpinAnimation(targetIndex)
 
@@ -33759,7 +33719,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                       :key="item.id"
                       type="button"
                       :aria-label="getGridPrizeCellAriaLabel(item, index)"
-                      class="relative aspect-square touch-manipulation select-none overflow-hidden rounded-2xl border border-orange-200/80 text-center transition duration-150 sm:rounded-3xl"
+                      class="relative aspect-square overflow-hidden rounded-2xl border border-orange-200/80 text-center transition duration-150 sm:rounded-3xl"
                       :class="[
                         item.isButton
                           ? canStartGridDraw
@@ -33776,8 +33736,9 @@ const toggleWheelRealFilePrep11011150 = () => {
                           : ''
                       ]"
                       :style="getCellStyle(index)"
-                      :disabled="item.isButton && isDrawing"
+                      :disabled="false"
                       @pointerup.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
+                      @touchend.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
                       @click.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
                     >
                       <div class="absolute left-2 top-2 h-6 w-6 rounded-full border-l-4 border-t-4 border-white/80 sm:h-8 sm:w-8"></div>
@@ -33839,6 +33800,28 @@ const toggleWheelRealFilePrep11011150 = () => {
                       </div>
                     </button>
                   </div>
+                </section>
+
+                <section class="relative mt-4 text-center sm:mt-5">
+                  <button
+                    type="button"
+                    class="mx-auto flex min-h-[52px] w-full max-w-xs items-center justify-center rounded-[999px] border border-white/30 px-5 py-3 text-sm font-black text-white shadow-xl transition active:scale-[0.98] sm:min-h-[58px] sm:text-base"
+                    :class="isDrawing
+                      ? 'bg-slate-500/80 cursor-wait'
+                      : canStartGridDraw
+                        ? 'bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-400 hover:to-red-500'
+                        : 'bg-gradient-to-r from-slate-500 to-slate-600'
+                    "
+                    :disabled="false"
+                    @pointerup.stop.prevent="handlePremiumGridStartClick($event)"
+                    @touchend.stop.prevent="handlePremiumGridStartClick($event)"
+                    @click.stop.prevent="handlePremiumGridStartClick($event)"
+                  >
+                    {{ isDrawing ? '抽選中，請稍候...' : drawButtonText }}
+                  </button>
+                  <p class="mt-2 text-[11px] font-black leading-5 text-white/70">
+                    第 94001～94400 批：手機觸控備援按鈕，點一下就會顯示狀態或送出抽獎。
+                  </p>
                 </section>
 
                 <section class="relative mt-5 text-center sm:mt-6">
@@ -33918,11 +33901,10 @@ const toggleWheelRealFilePrep11011150 = () => {
 
                     <button
                       type="button"
-                      class="min-w-[150px] touch-manipulation select-none rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
+                      class="min-w-[150px] rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
                       :disabled="isDrawing"
                       :class="!canStartGridDraw && !isDrawing ? 'cursor-not-allowed opacity-70' : ''"
-                      @pointerup.stop.prevent="handlePremiumGridStartClick($event)"
-                      @click.stop.prevent="handlePremiumGridStartClick($event)"
+                      @click="handlePremiumGridStartClick"
                     >
                       {{ isDrawing ? '抽選中...' : drawButtonText }}
                     </button>
