@@ -1,4 +1,5 @@
 <script setup>
+// 第 96001～96400 批：九宮格正式抽獎流程乾淨重整版
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
  * 第 94801～95200 批：九宮格立即啟動動畫等待後端結果版。
@@ -154,6 +155,7 @@ const {
 const isDrawing = ref(false)
 // 第 94001～94400 批：手機瀏覽器 tap / click 可能同時觸發或被延遲，統一用短暫鎖避免重複送出。
 const gridStartTapLock = ref(false)
+const gridPendingSpinToken = ref(0)
 const activeIndex = ref(-1)
 const drawPerformanceMessage = ref('')
 const drawPerformancePhase = ref('idle')
@@ -3598,9 +3600,9 @@ const getPremiumGridStartBlockedMessage = () => {
 }
 
 const handlePremiumGridStartClick = async (event = null) => {
-  // 第 94001～94400 批：九宮格手機點擊統一入口。
-  // 之前只有 @click 時，部分手機瀏覽器或外層動畫層會讓第一次點擊像沒反應。
-  // 現在 pointerup / touchend / click 都導到這裡，並且不再由 template disabled 吃掉點擊。
+  // 第 96001～96400 批：正式抽獎入口乾淨重整。
+  // 手機上 pointer / touch / click 可能重複觸發，真正防連點交給 isDrawing。
+  // 不再先用 tapLock 擋第一次點擊，避免第一下被鎖吃掉後要連點多次。
   event?.preventDefault?.()
   event?.stopPropagation?.()
 
@@ -3609,78 +3611,104 @@ const handlePremiumGridStartClick = async (event = null) => {
     return
   }
 
-  if (gridStartTapLock.value) return
-
-  gridStartTapLock.value = true
-  window.setTimeout(() => {
-    gridStartTapLock.value = false
-  }, 680)
-
   drawPerformancePhase.value = 'tap-received'
-  drawPerformanceMessage.value = '已收到點擊，正在檢查序號與送出抽獎。'
+  drawPerformanceMessage.value = '已收到點擊，正在送出正式抽獎。'
 
-  // 不先用 canStartGridDraw 擋掉點擊；所有原因交給 startDraw 顯示。
-  // 第 94401～94800 批：先讓 Vue 把『已收到點擊』回饋畫出來，再送後端，避免玩家覺得完全沒反應。
   await nextTick()
   await startDraw()
 }
 
+const startPremiumGridBackendWaitingSpin = async (token) => {
+  const path = Array.isArray(drawPath) && drawPath.length ? drawPath : [0, 1, 2, 5, 8, 7, 6, 3]
+  let step = 0
+
+  while (
+    isDrawing.value &&
+    gridPendingSpinToken.value === token &&
+    drawPerformancePhase.value === 'waiting-backend'
+  ) {
+    activeIndex.value = path[step % path.length]
+    drawPerformanceMessage.value = '已送出正式抽獎，正在向後端確認序號、庫存與中獎結果。'
+    step += 1
+    await sleep(105)
+  }
+}
+
+const stopPremiumGridBackendWaitingSpin = () => {
+  gridPendingSpinToken.value += 1
+}
+
 const startDraw = async () => {
+  // 第 96001～96400 批：九宮格正式抽獎流程乾淨重整版。
+  // 只保留一條正式流程：
+  // 點擊 -> 驗證基本條件 -> 立即鎖定 -> 立即送後端 play API -> 等待時持續跑燈 -> 後端回結果後正式停格。
   if (isDrawing.value) return
 
   const allowTenantBackendDraw = Boolean(hasTenantPremiumGridPlayableContext.value)
 
   if (tenantPremiumGridLoading.value && !allowTenantBackendDraw) {
     showShareSuccess('活動資料仍在載入中，請稍候。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (tenantPremiumGridError.value && !allowTenantBackendDraw) {
     showShareSuccess(tenantPremiumGridError.value)
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (hasTenantPremiumGridBlock.value) {
     showShareSuccess(tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (shouldRequireSerialCode.value && !serialVerify.verified) {
     showShareSuccess('請先輸入商家提供的序號並完成驗證。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   if (effectiveGridChances.value <= 0) {
     showShareSuccess('目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。')
+    drawPerformancePhase.value = 'idle'
+    drawPerformanceMessage.value = ''
     return
   }
 
   isDrawing.value = true
-  drawPerformancePhase.value = 'spinning'
-  drawPerformanceMessage.value = isTenantPremiumGridMode.value
-    ? '已收到抽獎，正在向後端確認結果。'
-    : '已收到抽獎，正在準備結果。'
   resultPrize.value = null
   showResultModal.value = false
+  drawPerformancePhase.value = 'waiting-backend'
+  drawPerformanceMessage.value = isTenantPremiumGridMode.value
+    ? '已送出正式抽獎，正在向後端確認序號、庫存與中獎結果。'
+    : '已收到抽獎，正在準備結果。'
 
-  // 第 95601～96000 批：移除假跑等待動畫。
-  // 上一批為了降低等待感，在後端結果回來前先讓九宮格跑燈，
-  // 但手機端會出現「假跑一半又復原，再點一次才像正式開始」的錯覺。
-  // 這裡改成：第一次點擊只立即顯示送出中提示，不先改 activeIndex；
-  // 後端 Draw Engine 回傳正式結果後，才啟動唯一一次正式跑燈動畫。
-  activeIndex.value = -1
+  const waitingSpinToken = gridPendingSpinToken.value + 1
+  gridPendingSpinToken.value = waitingSpinToken
+
+  // 等待後端期間持續跑燈，不再做「跑一半復原」的假跑。
+  // 這個跑燈會持續到後端回傳，接著無縫切到正式停格動畫。
+  if (isTenantPremiumGridMode.value) {
+    startPremiumGridBackendWaitingSpin(waitingSpinToken)
+  } else {
+    activeIndex.value = -1
+  }
+
   await nextTick()
 
   let prize = null
 
   try {
-    drawPerformancePhase.value = 'waiting-backend'
-    drawPerformanceMessage.value = isTenantPremiumGridMode.value
-      ? '已送出抽獎，正在向後端確認序號、庫存與中獎結果。'
-      : '已送出抽獎，正在準備結果動畫。'
     prize = isTenantPremiumGridMode.value ? await playTenantPremiumGridDraw() : pickPrize()
   } catch (error) {
     console.error('精緻九宮格抽獎失敗：', error)
+    stopPremiumGridBackendWaitingSpin()
     isDrawing.value = false
     activeIndex.value = -1
     drawPerformanceMessage.value = ''
@@ -3688,6 +3716,8 @@ const startDraw = async () => {
     showShareSuccess(error?.response?.data?.message || error?.message || '抽獎失敗，請稍後再試。')
     return
   }
+
+  stopPremiumGridBackendWaitingSpin()
 
   if (!prize) {
     isDrawing.value = false
@@ -3718,7 +3748,7 @@ const startDraw = async () => {
       (prizePosition > 0 && itemPosition === prizePosition)
   })
 
-  drawPerformanceMessage.value = '後端結果已確認，九宮格開始正式跑燈。'
+  drawPerformanceMessage.value = '後端結果已確認，九宮格正在正式停格。'
   await runPremiumGridSpinAnimation(targetIndex)
 
   prize.quantity = Math.max(0, Number(prize.quantity || 0) - 1)
