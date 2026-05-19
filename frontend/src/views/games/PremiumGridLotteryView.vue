@@ -1,8 +1,7 @@
 <script setup>
-// 第 96001～96400 批：九宮格正式抽獎流程乾淨重整版
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
- * 第 94801～95200 批：九宮格立即啟動動畫等待後端結果版。
+ * 第 96401～96800 批：九宮格移除重疊點擊與舊開始流程乾淨版。
  * 延續第 94001～94400 批：九宮格手機開始抽獎觸控層與單一路徑修正版。
  * 延續第 93201～93600 批：九宮格開始抽獎 disabled / click / loading 衝突整理版。*
  * Multi Game Platform V2.3 第 46001～46400 批：玩家手機畫面清潔化與前台顯示項目隱藏版
@@ -153,9 +152,7 @@ const {
 } = useDrawHistory()
 
 const isDrawing = ref(false)
-// 第 94001～94400 批：手機瀏覽器 tap / click 可能同時觸發或被延遲，統一用短暫鎖避免重複送出。
-const gridStartTapLock = ref(false)
-const gridPendingSpinToken = ref(0)
+// 第 96401～96800 批：移除 pointer/touch/click 三重觸發與 tapLock 舊流程，開始抽獎只保留單一 click 路徑。
 const activeIndex = ref(-1)
 const drawPerformanceMessage = ref('')
 const drawPerformancePhase = ref('idle')
@@ -3600,115 +3597,78 @@ const getPremiumGridStartBlockedMessage = () => {
 }
 
 const handlePremiumGridStartClick = async (event = null) => {
-  // 第 96001～96400 批：正式抽獎入口乾淨重整。
-  // 手機上 pointer / touch / click 可能重複觸發，真正防連點交給 isDrawing。
-  // 不再先用 tapLock 擋第一次點擊，避免第一下被鎖吃掉後要連點多次。
+  // 第 96401～96800 批：九宮格開始抽獎單一路徑。
+  // 之前中心格、備援按鈕、下方舊按鈕同時綁 pointerup / touchend / click，
+  // 手機會出現假跑、第一次被吃掉、第二次才正式送出的狀況。
+  // 這裡只保留單一 click 入口：點一次 → 立即鎖定 → 立即送後端 → 後端回來後跑正式動畫。
   event?.preventDefault?.()
   event?.stopPropagation?.()
 
-  if (isDrawing.value) {
+  if (isDrawing.value || gridStartButtonBusy.value) {
     showShareSuccess('抽獎已送出，正在等待結果，請不要重複點擊。')
     return
   }
 
-  drawPerformancePhase.value = 'tap-received'
+  drawPerformancePhase.value = 'submitting'
   drawPerformanceMessage.value = '已收到點擊，正在送出正式抽獎。'
-
   await nextTick()
+
   await startDraw()
 }
 
-const startPremiumGridBackendWaitingSpin = async (token) => {
-  const path = Array.isArray(drawPath) && drawPath.length ? drawPath : [0, 1, 2, 5, 8, 7, 6, 3]
-  let step = 0
-
-  while (
-    isDrawing.value &&
-    gridPendingSpinToken.value === token &&
-    drawPerformancePhase.value === 'waiting-backend'
-  ) {
-    activeIndex.value = path[step % path.length]
-    drawPerformanceMessage.value = '已送出正式抽獎，正在向後端確認序號、庫存與中獎結果。'
-    step += 1
-    await sleep(105)
-  }
-}
-
-const stopPremiumGridBackendWaitingSpin = () => {
-  gridPendingSpinToken.value += 1
-}
-
 const startDraw = async () => {
-  // 第 96001～96400 批：九宮格正式抽獎流程乾淨重整版。
-  // 只保留一條正式流程：
-  // 點擊 -> 驗證基本條件 -> 立即鎖定 -> 立即送後端 play API -> 等待時持續跑燈 -> 後端回結果後正式停格。
   if (isDrawing.value) return
 
   const allowTenantBackendDraw = Boolean(hasTenantPremiumGridPlayableContext.value)
 
   if (tenantPremiumGridLoading.value && !allowTenantBackendDraw) {
     showShareSuccess('活動資料仍在載入中，請稍候。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   if (tenantPremiumGridError.value && !allowTenantBackendDraw) {
     showShareSuccess(tenantPremiumGridError.value)
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   if (hasTenantPremiumGridBlock.value) {
     showShareSuccess(tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   if (shouldRequireSerialCode.value && !serialVerify.verified) {
     showShareSuccess('請先輸入商家提供的序號並完成驗證。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   if (effectiveGridChances.value <= 0) {
     showShareSuccess('目前沒有抽獎機會，請重新驗證可用序號或聯絡商家確認次數。')
-    drawPerformancePhase.value = 'idle'
-    drawPerformanceMessage.value = ''
     return
   }
 
   isDrawing.value = true
+  drawPerformancePhase.value = 'submitting'
+  drawPerformanceMessage.value = isTenantPremiumGridMode.value
+    ? '已收到抽獎，正在送出後端正式抽獎。'
+    : '已收到抽獎，正在準備正式結果。'
   resultPrize.value = null
   showResultModal.value = false
-  drawPerformancePhase.value = 'waiting-backend'
-  drawPerformanceMessage.value = isTenantPremiumGridMode.value
-    ? '已送出正式抽獎，正在向後端確認序號、庫存與中獎結果。'
-    : '已收到抽獎，正在準備結果。'
 
-  const waitingSpinToken = gridPendingSpinToken.value + 1
-  gridPendingSpinToken.value = waitingSpinToken
-
-  // 等待後端期間持續跑燈，不再做「跑一半復原」的假跑。
-  // 這個跑燈會持續到後端回傳，接著無縫切到正式停格動畫。
-  if (isTenantPremiumGridMode.value) {
-    startPremiumGridBackendWaitingSpin(waitingSpinToken)
-  } else {
-    activeIndex.value = -1
-  }
-
+  // 第 96401～96800 批：乾淨流程，不做任何後端回傳前假跑動畫。
+  // activeIndex 只在後端結果回來後，由 runPremiumGridSpinAnimation 正式控制。
+  activeIndex.value = -1
   await nextTick()
 
   let prize = null
 
   try {
+    drawPerformancePhase.value = 'waiting-backend'
+    drawPerformanceMessage.value = isTenantPremiumGridMode.value
+      ? '已送出抽獎，正在向後端確認序號、庫存與中獎結果。'
+      : '已送出抽獎，正在準備結果動畫。'
     prize = isTenantPremiumGridMode.value ? await playTenantPremiumGridDraw() : pickPrize()
   } catch (error) {
     console.error('精緻九宮格抽獎失敗：', error)
-    stopPremiumGridBackendWaitingSpin()
     isDrawing.value = false
     activeIndex.value = -1
     drawPerformanceMessage.value = ''
@@ -3716,8 +3676,6 @@ const startDraw = async () => {
     showShareSuccess(error?.response?.data?.message || error?.message || '抽獎失敗，請稍後再試。')
     return
   }
-
-  stopPremiumGridBackendWaitingSpin()
 
   if (!prize) {
     isDrawing.value = false
@@ -3748,7 +3706,7 @@ const startDraw = async () => {
       (prizePosition > 0 && itemPosition === prizePosition)
   })
 
-  drawPerformanceMessage.value = '後端結果已確認，九宮格正在正式停格。'
+  drawPerformanceMessage.value = '後端結果已確認，九宮格開始正式跑燈。'
   await runPremiumGridSpinAnimation(targetIndex)
 
   prize.quantity = Math.max(0, Number(prize.quantity || 0) - 1)
@@ -33817,8 +33775,6 @@ const toggleWheelRealFilePrep11011150 = () => {
                       ]"
                       :style="getCellStyle(index)"
                       :disabled="false"
-                      @pointerup.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
-                      @touchend.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
                       @click.stop.prevent="item.isButton ? handlePremiumGridStartClick($event) : null"
                     >
                       <div class="absolute left-2 top-2 h-6 w-6 rounded-full border-l-4 border-t-4 border-white/80 sm:h-8 sm:w-8"></div>
@@ -33893,14 +33849,12 @@ const toggleWheelRealFilePrep11011150 = () => {
                         : 'bg-gradient-to-r from-slate-500 to-slate-600'
                     "
                     :disabled="false"
-                    @pointerup.stop.prevent="handlePremiumGridStartClick($event)"
-                    @touchend.stop.prevent="handlePremiumGridStartClick($event)"
                     @click.stop.prevent="handlePremiumGridStartClick($event)"
                   >
                     {{ gridStartButtonLabel }}
                   </button>
                   <p class="mt-2 text-[11px] font-black leading-5 text-white/70">
-                    第 94401～94800 批：點擊後立即顯示等待回饋；後端較慢時也不會像沒反應。
+                    第 96401～96800 批：只保留單一開始抽獎路徑，移除舊按鈕與假跑流程。
                   </p>
                 </section>
 
@@ -33979,15 +33933,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                       ⚙
                     </button>
 
-                    <button
-                      type="button"
-                      class="min-w-[150px] rounded-full bg-white px-6 py-3 text-base font-black text-orange-600 shadow-xl transition hover:-translate-y-0.5 hover:bg-yellow-50 sm:min-w-[170px] sm:px-8"
-                      :disabled="isDrawing"
-                      :class="!canStartGridDraw && !isDrawing ? 'cursor-not-allowed opacity-70' : ''"
-                      @click="handlePremiumGridStartClick"
-                    >
-                      {{ gridStartButtonLabel }}
-                    </button>
+                    <!-- 第 96401～96800 批：移除這裡舊的第二顆開始抽獎按鈕，避免舊流程與上方正式開始按鈕重疊。 -->
 
                     <button
                       v-if="isAdminMode"
