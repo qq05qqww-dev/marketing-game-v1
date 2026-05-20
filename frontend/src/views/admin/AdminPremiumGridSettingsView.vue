@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 98401～98800 批：九宮格機率儲存同步 gridItems 修正版
+// 第 83201～83600 批：九宮格平台模板正式資料庫儲存版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -568,25 +568,108 @@ const drawLogs = [
   { id: 5, icon: '🎟️', prizeName: '加碼抽獎券', createdAt: '05/05 下午10:55' }
 ]
 
+
+// 第 98801～99200 批：九宮格舊 BUTTON 標記清除與機率總和修正
+// 問題來源：部分格子曾經是「中間開始按鈕」，即使後來改成獎項，資料仍殘留 isButton / BUTTON，
+// 導致上方總和、試算器、正式 gridItems 儲存都漏算該格。
+const getGridPrizePercent = (item = {}) => {
+  return Math.max(0, Number(item.probabilityPercent ?? item.weight ?? item.probability ?? item.percent ?? 0))
+}
+
+const normalizeGridPrizeTitleKey = (value = '') => {
+  return String(value || '').trim().replace(/\s+/g, '')
+}
+
+const isLegacyButtonMarkedItem = (item = {}) => {
+  return item.isButton === true ||
+    String(item.type || '').toUpperCase() === 'BUTTON' ||
+    String(item.rewardType || '').toUpperCase() === 'BUTTON'
+}
+
+const isActualGridStartButtonItem = (item = {}) => {
+  if (!isLegacyButtonMarkedItem(item)) return false
+
+  const percent = getGridPrizePercent(item)
+  const titleKey = normalizeGridPrizeTitleKey(item.title || item.name || item.shortName || item.label)
+  const buttonText = ['點擊抽獎', '開始抽獎', '開始', '抽獎按鈕']
+
+  // 只有「沒有機率」且文字仍像開始按鈕時，才視為真正按鈕。
+  // 若商家把舊按鈕格改成「銘謝惠顧 / 再接再厲」並填 41%，它必須被當成正式獎項計算。
+  return percent <= 0 && buttonText.some((text) => titleKey.includes(text))
+}
+
+const isDrawableGridPrizeItem = (item = {}) => {
+  if (!item) return false
+  if (item.enabled === false || item.isEnabled === false) return false
+  return !isActualGridStartButtonItem(item)
+}
+
+const inferGridPrizeType = (item = {}) => {
+  const titleKey = normalizeGridPrizeTitleKey(item.title || item.name || item.shortName || item.label)
+  const existingType = String(item.type || item.rewardType || '').toUpperCase()
+
+  if (existingType === 'LOSE') return 'LOSE'
+  if (/銘謝|再接|未中|謝謝|落空|不中/.test(titleKey)) return 'LOSE'
+
+  return 'WIN'
+}
+
+const sanitizeGridPrizeItemForSave = (item = {}, index = 0) => {
+  const percent = getGridPrizePercent(item)
+  const title = item.title || item.name || item.shortName || item.label || `第 ${index + 1} 格`
+  const isActualButton = isActualGridStartButtonItem(item)
+  const normalizedType = isActualButton ? 'BUTTON' : inferGridPrizeType({ ...item, title })
+
+  return {
+    ...item,
+    id: item.id || `grid_${index + 1}`,
+    position: Number(item.position || index + 1),
+    title,
+    name: item.name || title,
+    shortName: item.shortName || item.label || title,
+    label: item.label || item.shortName || title,
+    enabled: item.enabled !== false,
+    isEnabled: item.enabled !== false,
+    probabilityPercent: isActualButton ? 0 : percent,
+    weight: isActualButton ? 0 : percent,
+    probability: isActualButton ? 0 : percent,
+    percent: isActualButton ? 0 : percent,
+    type: normalizedType,
+    rewardType: normalizedType,
+    isButton: isActualButton
+  }
+}
+
+const sanitizeGridPrizeListForSave = (list = []) => {
+  return Array.isArray(list)
+    ? list.map((item, index) => sanitizeGridPrizeItemForSave(item, index))
+    : []
+}
+
+const getEffectiveGridPrizeList = () => {
+  return sanitizeGridPrizeListForSave(settings.prizes).filter(isDrawableGridPrizeItem)
+}
+
 const activeSectionInfo = computed(() => {
   return sections.find((item) => item.key === activeSection.value) || sections[0]
 })
 
 const enabledPrizes = computed(() => {
-  return settings.prizes.filter((item) => item.enabled)
+  return getEffectiveGridPrizeList()
 })
 
 const totalWeight = computed(() => {
-  return settings.prizes.reduce((sum, item) => {
-    return sum + (item.enabled ? Number(item.weight || 0) : 0)
+  return getEffectiveGridPrizeList().reduce((sum, item) => {
+    return sum + getGridPrizePercent(item)
   }, 0)
 })
 
 const totalProbabilityPercent = computed(() => {
-  return settings.prizes.reduce((sum, item) => {
-    if (item.isButton || !item.enabled) return sum
-    return sum + Number(item.probabilityPercent || 0)
+  const total = getEffectiveGridPrizeList().reduce((sum, item) => {
+    return sum + getGridPrizePercent(item)
   }, 0)
+
+  return Number(total.toFixed(2))
 })
 
 const probabilityStatusText = computed(() => {
@@ -610,17 +693,16 @@ const probabilityBackendGuard = computed(() => {
     ok,
     badge: ok ? '後端可準確依 100% 抽選' : '請先修正到 100%',
     title: '正式玩家抽獎由後端 Draw Engine 計算',
-    description: '商家後台儲存後，九宮格玩家頁會呼叫 /api/draw-engine/campaigns/:id/play，由後端讀取 GameConfig settings.prizes 的 probabilityPercent / weight 來加權抽選；玩家前台不自行決定中獎結果。',
+    description: '商家後台儲存後，九宮格玩家頁會呼叫 /api/draw-engine/campaigns/:id/play，由後端讀取 GameConfig settings.gridItems 的 probabilityPercent / weight 來加權抽選；玩家前台不自行決定中獎結果。',
     source: canUseGameConfigApi.value ? `campaignId: ${normalizedCampaignId.value} / GameConfig settings` : '目前沒有正式活動 ID，僅能做模板與預覽。',
     totalText: `目前機率總和：${total}%`
   }
 })
 
 const probabilitySimulationItems = computed(() => {
-  return settings.prizes
-    .filter((item) => item && !item.isButton && item.enabled !== false)
+  return getEffectiveGridPrizeList()
     .map((item, index) => {
-      const percent = Number(item.probabilityPercent ?? item.weight ?? 0)
+      const percent = getGridPrizePercent(item)
       return {
         id: item.id || `grid-prize-${index + 1}`,
         title: item.title || item.name || `第 ${index + 1} 格`,
@@ -731,61 +813,20 @@ const normalizeGameConfigMeta = (response) => {
   }
 }
 
-const normalizePremiumGridPrizeForSave = (item = {}, index = 0) => {
-  const probabilityValue = Number(
-    item.probabilityPercent ??
-      item.weight ??
-      item.probability ??
-      item.percent ??
-      0
-  )
-  const position = Number(item.position || index + 1)
-  const title = item.title || item.name || item.shortName || `第 ${position} 格`
-  const quantity = Number(
-    item.quantity ??
-      item.stock ??
-      item.remainStock ??
-      item.inventory ??
-      0
-  )
-
-  return {
-    ...item,
-    id: item.id || `grid_${position}`,
-    position,
-    sortOrder: Number(item.sortOrder || position),
-    title,
-    name: item.name || title,
-    shortName: item.shortName || title,
-    label: item.label || title,
-    quantity,
-    stock: quantity,
-    remainStock: quantity,
-    inventory: quantity,
-    probabilityPercent: probabilityValue,
-    weight: probabilityValue,
-    probability: probabilityValue,
-    percent: probabilityValue,
-    enabled: item.enabled !== false,
-    isButton: Boolean(item.isButton || position === 5),
-    type: item.isButton || position === 5
-      ? 'BUTTON'
-      : (item.type || item.rewardType || 'WIN')
-  }
-}
-
 const buildSettingsSavePayload = () => {
   const payload = cloneJson(settings)
-  const normalizedGridItems = Array.isArray(payload.prizes)
-    ? payload.prizes.map((item, index) => normalizePremiumGridPrizeForSave(item, index))
-    : []
+  const normalizedPrizes = sanitizeGridPrizeListForSave(payload.prizes)
 
-  // 第 98401～98800 批：
-  // 九宮格後端正式抽獎來源是 settings.gridItems。
-  // 後台畫面仍用 settings.prizes 當表單資料；儲存時必須同步寫入 gridItems，
-  // 讓「後台設定機率 / 試算器 / 正式玩家抽獎 / 報表」全部吃同一份資料。
-  payload.gridItems = normalizedGridItems
-  payload.prizes = normalizedGridItems
+  // 九宮格正式 Draw Engine 以 settings.gridItems 為第一來源。
+  // prizes 同步保留給舊版畫面 / 舊活動 fallback，但不能再與 gridItems 不一致。
+  payload.prizes = normalizedPrizes
+  payload.gridItems = normalizedPrizes.map((item) => ({
+    ...item,
+    source: 'ADMIN_PREMIUM_GRID_SETTINGS',
+    probabilityPercent: getGridPrizePercent(item),
+    weight: getGridPrizePercent(item),
+    probability: getGridPrizePercent(item)
+  }))
 
   return {
     ...payload,
@@ -794,8 +835,8 @@ const buildSettingsSavePayload = () => {
       savedAt: new Date().toISOString(),
       campaignId: normalizedCampaignId.value,
       tenantSlug: previewTenantSlug.value,
-      gridItemsSyncedFromPrizes: true,
-      batch: '98401-98800'
+      gridItemsSynced: true,
+      batch: '98801-99200'
     }
   }
 }
@@ -960,16 +1001,18 @@ const loadPlatformTemplateFromDatabase = async () => {
 }
 
 const mergeSettingsIntoDraft = (incoming = {}) => {
-  // 第 98401～98800 批：
-  // 九宮格正式抽獎後端已改為優先讀取 GameConfig.settings.gridItems。
-  // 因此讀取草稿 / 資料庫設定時，也必須讓後台表單優先吃 gridItems，
-  // 避免畫面顯示 prizes 舊資料、正式抽獎吃 gridItems 新資料，造成機率看起來不一致。
-  const incomingGridItems = Array.isArray(incoming?.gridItems) ? incoming.gridItems : []
-  const incomingPrizes = Array.isArray(incoming?.prizes) ? incoming.prizes : []
-  const prizeSource = incomingGridItems.length ? incomingGridItems : incomingPrizes
+  const preferredGridPrizeSource = Array.isArray(incoming?.gridItems) && incoming.gridItems.length
+    ? incoming.gridItems
+    : Array.isArray(incoming?.prizes)
+      ? incoming.prizes
+      : null
 
-  if (prizeSource.length) {
-    settings.prizes.splice(0, settings.prizes.length, ...prizeSource)
+  if (preferredGridPrizeSource) {
+    settings.prizes.splice(
+      0,
+      settings.prizes.length,
+      ...sanitizeGridPrizeListForSave(preferredGridPrizeSource)
+    )
   }
 
   Object.entries(incoming || {}).forEach(([key, value]) => {
@@ -1220,7 +1263,7 @@ const resetSectionSettings = (sectionKey) => {
 }
 
 const normalizeProbabilityTo100 = () => {
-  const editablePrizes = settings.prizes.filter((item) => item.enabled && !item.isButton)
+  const editablePrizes = settings.prizes.filter(isDrawableGridPrizeItem)
   if (!editablePrizes.length) return
 
   const average = Math.floor((100 / editablePrizes.length) * 100) / 100
@@ -1241,8 +1284,18 @@ const normalizeProbabilityTo100 = () => {
 }
 
 const syncPrizeWeightFromPercent = (item) => {
-  item.probabilityPercent = Number(item.probabilityPercent || 0)
-  item.weight = item.probabilityPercent
+  const percent = getGridPrizePercent(item)
+  item.probabilityPercent = percent
+  item.weight = percent
+  item.probability = percent
+
+  // 只要商家把舊的開始按鈕格改成有機率獎項，就清除舊 BUTTON 標記。
+  if (percent > 0 || !isActualGridStartButtonItem(item)) {
+    item.isButton = false
+    item.type = inferGridPrizeType(item)
+    item.rewardType = item.type
+  }
+
   probabilitySimulationResults.value = []
 }
 
