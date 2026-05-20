@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 83201～83600 批：九宮格平台模板正式資料庫儲存版
+// 第 98401～98800 批：九宮格機率儲存同步 gridItems 修正版
 //
 // 覆蓋位置：
 // frontend/src/views/admin/AdminPremiumGridSettingsView.vue
@@ -731,16 +731,61 @@ const normalizeGameConfigMeta = (response) => {
   }
 }
 
+const normalizePremiumGridPrizeForSave = (item = {}, index = 0) => {
+  const probabilityValue = Number(
+    item.probabilityPercent ??
+      item.weight ??
+      item.probability ??
+      item.percent ??
+      0
+  )
+  const position = Number(item.position || index + 1)
+  const title = item.title || item.name || item.shortName || `第 ${position} 格`
+  const quantity = Number(
+    item.quantity ??
+      item.stock ??
+      item.remainStock ??
+      item.inventory ??
+      0
+  )
+
+  return {
+    ...item,
+    id: item.id || `grid_${position}`,
+    position,
+    sortOrder: Number(item.sortOrder || position),
+    title,
+    name: item.name || title,
+    shortName: item.shortName || title,
+    label: item.label || title,
+    quantity,
+    stock: quantity,
+    remainStock: quantity,
+    inventory: quantity,
+    probabilityPercent: probabilityValue,
+    weight: probabilityValue,
+    probability: probabilityValue,
+    percent: probabilityValue,
+    enabled: item.enabled !== false,
+    isButton: Boolean(item.isButton || position === 5),
+    type: item.isButton || position === 5
+      ? 'BUTTON'
+      : (item.type || item.rewardType || 'WIN')
+  }
+}
+
 const buildSettingsSavePayload = () => {
   const payload = cloneJson(settings)
-  payload.prizes = Array.isArray(payload.prizes)
-    ? payload.prizes.map((item) => ({
-        ...item,
-        probabilityPercent: Number(item.probabilityPercent ?? item.weight ?? 0),
-        weight: Number(item.probabilityPercent ?? item.weight ?? 0),
-        probability: Number(item.probabilityPercent ?? item.weight ?? 0)
-      }))
+  const normalizedGridItems = Array.isArray(payload.prizes)
+    ? payload.prizes.map((item, index) => normalizePremiumGridPrizeForSave(item, index))
     : []
+
+  // 第 98401～98800 批：
+  // 九宮格後端正式抽獎來源是 settings.gridItems。
+  // 後台畫面仍用 settings.prizes 當表單資料；儲存時必須同步寫入 gridItems，
+  // 讓「後台設定機率 / 試算器 / 正式玩家抽獎 / 報表」全部吃同一份資料。
+  payload.gridItems = normalizedGridItems
+  payload.prizes = normalizedGridItems
 
   return {
     ...payload,
@@ -748,7 +793,9 @@ const buildSettingsSavePayload = () => {
       source: 'AdminPremiumGridSettingsView',
       savedAt: new Date().toISOString(),
       campaignId: normalizedCampaignId.value,
-      tenantSlug: previewTenantSlug.value
+      tenantSlug: previewTenantSlug.value,
+      gridItemsSyncedFromPrizes: true,
+      batch: '98401-98800'
     }
   }
 }
@@ -913,9 +960,20 @@ const loadPlatformTemplateFromDatabase = async () => {
 }
 
 const mergeSettingsIntoDraft = (incoming = {}) => {
+  // 第 98401～98800 批：
+  // 九宮格正式抽獎後端已改為優先讀取 GameConfig.settings.gridItems。
+  // 因此讀取草稿 / 資料庫設定時，也必須讓後台表單優先吃 gridItems，
+  // 避免畫面顯示 prizes 舊資料、正式抽獎吃 gridItems 新資料，造成機率看起來不一致。
+  const incomingGridItems = Array.isArray(incoming?.gridItems) ? incoming.gridItems : []
+  const incomingPrizes = Array.isArray(incoming?.prizes) ? incoming.prizes : []
+  const prizeSource = incomingGridItems.length ? incomingGridItems : incomingPrizes
+
+  if (prizeSource.length) {
+    settings.prizes.splice(0, settings.prizes.length, ...prizeSource)
+  }
+
   Object.entries(incoming || {}).forEach(([key, value]) => {
-    if (key === 'prizes' && Array.isArray(value)) {
-      settings.prizes.splice(0, settings.prizes.length, ...value)
+    if (key === 'prizes' || key === 'gridItems') {
       return
     }
 
