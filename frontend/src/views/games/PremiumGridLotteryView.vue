@@ -2829,13 +2829,8 @@ const getPremiumGridPlayableIndexes = () => {
   return indexes.length ? indexes : drawPath.slice()
 }
 
-const getPremiumGridRandomIndex = (indexes = [], previousIndex = -1, targetIndex = -1, avoidTarget = false) => {
-  const filtered = indexes.filter((index) => {
-    if (index === previousIndex) return false
-    if (avoidTarget && index === targetIndex) return false
-
-    return true
-  })
+const getPremiumGridRandomIndex = (indexes = [], previousIndex = -1) => {
+  const filtered = indexes.filter((index) => index !== previousIndex)
   const pool = filtered.length ? filtered : indexes
 
   if (!pool.length) return previousIndex >= 0 ? previousIndex : 0
@@ -2850,14 +2845,40 @@ const buildPremiumGridRandomJumpPath = (targetIndex, totalSteps) => {
     : (indexes[indexes.length - 1] ?? targetIndex)
   const path = []
   let previousIndex = activeIndex.value >= 0 ? activeIndex.value : -1
+  const safeTotalSteps = Math.max(8, totalSteps)
 
-  for (let step = 0; step < Math.max(1, totalSteps - 1); step += 1) {
-    const progress = totalSteps <= 1 ? 1 : step / (totalSteps - 1)
-    const avoidTarget = progress < 0.78
-    const nextIndex = getPremiumGridRandomIndex(indexes, previousIndex, finalTargetIndex, avoidTarget)
+  // 第 100401～100800 批：跑燈過程不可再刻意避開最終中獎格。
+  // 舊版在前 78% 跑燈避開 target，玩家會看出「很少亮到的格子最後一定中」。
+  // 新版讓最終中獎格在過程中自然出現數次，只保留最後一步停在後端結果。
+  for (let step = 0; step < Math.max(1, safeTotalSteps - 1); step += 1) {
+    const nextIndex = getPremiumGridRandomIndex(indexes, previousIndex)
 
     path.push(nextIndex)
     previousIndex = nextIndex
+  }
+
+  const injectableIndexes = path
+    .map((_, index) => index)
+    .filter((index) => index > 1 && index < path.length - 2)
+  const targetPreviewCount = Math.min(
+    4,
+    Math.max(2, Math.floor(path.length / Math.max(indexes.length * 2, 1)))
+  )
+
+  for (let count = 0; count < targetPreviewCount && injectableIndexes.length; count += 1) {
+    const randomSlotIndex = Math.floor(Math.random() * injectableIndexes.length)
+    const pathIndex = injectableIndexes.splice(randomSlotIndex, 1)[0]
+
+    if (path[pathIndex - 1] !== finalTargetIndex && path[pathIndex + 1] !== finalTargetIndex) {
+      path[pathIndex] = finalTargetIndex
+    }
+  }
+
+  if (path[path.length - 1] === finalTargetIndex) {
+    path[path.length - 1] = getPremiumGridRandomIndex(
+      indexes.filter((index) => index !== finalTargetIndex),
+      path[path.length - 2] ?? -1
+    )
   }
 
   path.push(finalTargetIndex)
