@@ -1,20 +1,16 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 92001～92400 批：正式抽獎中獎後同步扣除獎項庫存修正版
-// 延續第 84801～85200 批：砸金蛋後端百分比抽獎對齊版
-// 延續第 79201～79600 批：九宮格正式後端百分比抽獎對齊版
+// 第 98001～98400 批：九宮格正式抽獎池改讀 gridItems 優先修正版
+// 延續第 92001～92400 批：正式抽獎中獎後同步扣除獎項庫存修正版
 //
 // 覆蓋位置：
 // backend/src/services/drawEngine.service.js
 //
 // 本批重點：
-// 1. WHEEL / GRID / GOLDEN_EGG 正式抽獎都優先讀取 GameConfig.settings 的後台百分比設定。
-// 2. 後台「機率 %」會寫入 probabilityPercent / weight / probability，後端抽獎統一正規化後計算。
-// 3. 玩家前台只呼叫 /api/draw-engine/campaigns/:id/play，不在前端自行決定正式中獎結果。
-// 4. 保留原本 Prize table fallback，避免舊活動沒有 GameConfig settings 時無法抽獎。
-// 5. WHEEL 若後台設定沒有庫存欄位，GameConfig 虛擬獎項預設視為可抽，避免輪盤獎項被 0 庫存濾掉。
-// 6. 不改 DB schema / router。
-// 7. 修正 GameConfig 虛擬獎項中獎後不會扣 Prize table 庫存的問題。
-// 8. 虛擬獎項會用 prizeId / id / title / shortName / sortOrder 對應回真實 Prize，成功後寫入 playRecord / rewardRecord.prizeId。
+// 1. 修正 GRID / PREMIUM_GRID 正式後端抽獎池來源順序。
+// 2. 九宮格後台目前設定的是 GameConfig.settings.gridItems，正式抽獎必須優先吃 gridItems。
+// 3. settings.prizes 只保留給舊活動 fallback，避免舊資料蓋過九宮格目前設定。
+// 4. 修正咖啡卷 5% 卻異常高、銘謝惠顧 41% 卻幾乎不中的來源錯誤。
+// 5. 不改 DB schema / router / 前台玩家頁 / 報表中心。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -88,9 +84,6 @@ const normalizeGameConfigPrizeStock = (item = {}, gameType = '') => {
     return 999999999
   }
 
-  // 輪盤後台的 prizes 通常只設定百分比 / 顏色 / 文字，不一定有庫存欄位。
-  // 第 87201～87600 批：WHEEL 改為優先吃 GameConfig，因此無庫存欄位時要視為可抽，
-  // 否則會被 0 庫存濾掉，導致又 fallback 或無獎項。
   if (normalizeGameType(gameType) === 'WHEEL' && !hasExplicitGameConfigStock(item)) {
     return 999999999
   }
@@ -211,33 +204,46 @@ const isGameConfigItemEnabled = (item = {}) => {
   return true
 }
 
+const getFirstNonEmptyArray = (arrays = []) => {
+  return arrays.find((value) => Array.isArray(value) && value.length) || []
+}
+
 const extractGameConfigPrizeItems = (settings = {}, gameType = '') => {
   const normalizedGameType = normalizeGameType(gameType)
-  const candidatesByGame = {
-    WHEEL: [
+
+  if (normalizedGameType === 'GRID') {
+    // 第 98001～98400 批：九宮格正式抽獎必須以 gridItems 為第一來源。
+    // settings.prizes 只當舊活動 fallback，避免舊 prizes 資料蓋過後台九宮格目前設定。
+    return getFirstNonEmptyArray([
+      settings.gridItems,
+      settings.prizes,
+      settings.rewards,
+      settings.rewardItems,
+      settings.items
+    ])
+  }
+
+  if (normalizedGameType === 'WHEEL') {
+    return getFirstNonEmptyArray([
       settings.prizes,
       settings.wheelItems,
       settings.rewards,
       settings.rewardItems,
       settings.items
-    ],
-    GRID: [
-      settings.prizes,
-      settings.gridItems,
-      settings.rewards,
-      settings.rewardItems,
-      settings.items
-    ],
-    GOLDEN_EGG: [
+    ])
+  }
+
+  if (normalizedGameType === 'GOLDEN_EGG') {
+    return getFirstNonEmptyArray([
       settings.eggItems,
       settings.prizes,
       settings.rewards,
       settings.rewardItems,
       settings.items
-    ]
+    ])
   }
 
-  const candidates = candidatesByGame[normalizedGameType] || [
+  return getFirstNonEmptyArray([
     settings.prizes,
     settings.rewards,
     settings.rewardItems,
@@ -245,15 +251,7 @@ const extractGameConfigPrizeItems = (settings = {}, gameType = '') => {
     settings.gridItems,
     settings.eggItems,
     settings.wheelItems
-  ]
-
-  for (const value of candidates) {
-    if (Array.isArray(value) && value.length) {
-      return value
-    }
-  }
-
-  return []
+  ])
 }
 
 const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
@@ -308,8 +306,6 @@ const getCampaignPrizePool = (campaign = {}) => {
   const gameType = normalizeGameType(campaign.gameType)
   const gameConfigPool = buildGameConfigPrizePool(campaign)
 
-  // 第 87201～87600 批：三個正式遊戲都必須以後台 GameConfig settings 的百分比為準。
-  // 若同一活動仍有舊 Prize table 資料，也不能蓋過商家後台設定。
   if (['WHEEL', 'GRID', 'GOLDEN_EGG'].includes(gameType) && gameConfigPool.length) {
     return gameConfigPool
   }
