@@ -2865,27 +2865,47 @@ const buildPremiumGridRandomJumpPath = (targetIndex, totalSteps) => {
   return path
 }
 
-const shufflePremiumGridPrizePositionsForDraw = () => {
-  // 第 99201～99600 批：每次抽獎前把九宮格外圈獎項重新洗牌。
-  // 只改玩家畫面當下陣列順序，不改獎項 id / 機率 / 庫存 / 後端結果。
-  // 中間開始按鈕固定在中心，正式中獎仍由後端 Draw Engine 決定。
+const shouldRandomizePremiumGridPrizeDisplay = () => {
+  // 第 100001～100400 批：正式玩家頁要每次進入 / 每次抽獎前都重新洗牌。
+  // 後台 iframe 即時預覽不洗牌，避免管理員正在調整獎項時位置一直跳動。
+  if (route.query.adminPreviewDraft === '1') return false
+
+  return true
+}
+
+const randomizePremiumGridPrizePositionsForDisplay = (reason = 'display') => {
+  if (!shouldRandomizePremiumGridPrizeDisplay()) return false
+
+  // 第 100001～100400 批：只洗九宮格外圈獎項，中心「開始抽獎」固定在第 5 格。
+  // 這裡只改玩家畫面的顯示順序，不改後台資料庫、不改機率、不改庫存、不改後端抽獎結果。
   const prizeIndexes = drawPath.filter((index) => {
     const item = gridItems.value?.[index]
 
     return item && !item.isButton
   })
 
-  if (prizeIndexes.length <= 1) return
+  if (prizeIndexes.length <= 1) return false
 
-  const prizes = prizeIndexes.map((index) => gridItems.value[index])
+  const originalPrizeKeys = prizeIndexes.map((index) => {
+    const item = gridItems.value[index] || {}
+
+    return String(item.id ?? item.backendPrize?.id ?? item.name ?? item.title ?? index)
+  })
+
+  const prizes = prizeIndexes.map((index) => ({
+    ...gridItems.value[index],
+    originalGridIndex: gridItems.value[index]?.originalGridIndex ?? index,
+    lastRandomizedReason: reason
+  }))
 
   for (let index = prizes.length - 1; index > 0; index -= 1) {
     const swapIndex = Math.floor(Math.random() * (index + 1))
     ;[prizes[index], prizes[swapIndex]] = [prizes[swapIndex], prizes[index]]
   }
 
-  // 避免剛好洗完完全沒變，體感像沒有洗牌。
-  const unchanged = prizeIndexes.every((gridIndex, index) => gridItems.value[gridIndex] === prizes[index])
+  // 避免剛好洗完完全沒變，玩家體感像位置沒有隨機。
+  const shuffledPrizeKeys = prizes.map((item, index) => String(item.id ?? item.backendPrize?.id ?? item.name ?? item.title ?? index))
+  const unchanged = originalPrizeKeys.every((key, index) => key === shuffledPrizeKeys[index])
 
   if (unchanged && prizes.length > 1) {
     prizes.push(prizes.shift())
@@ -2896,8 +2916,18 @@ const shufflePremiumGridPrizePositionsForDraw = () => {
 
     if (prizeIndex < 0) return item
 
-    return prizes[prizeIndex]
+    return {
+      ...prizes[prizeIndex],
+      visualSlotIndex: index,
+      visualPosition: index + 1
+    }
   })
+
+  return true
+}
+
+const shufflePremiumGridPrizePositionsForDraw = () => {
+  return randomizePremiumGridPrizePositionsForDisplay('before-draw')
 }
 
 const runPremiumGridSpinAnimation = async (targetIndex) => {
@@ -3023,6 +3053,7 @@ const applyTenantPremiumGridCampaign = (campaignData = {}) => {
     player.chances = Number(campaignData?.dailyLimit || campaignData?.totalLimit || player.chances || 1)
   }
   updateChanceText()
+  randomizePremiumGridPrizePositionsForDisplay('tenant-campaign-loaded')
   tenantPremiumGridLoadedAt.value = new Date().toLocaleString('zh-TW')
 }
 
@@ -3118,6 +3149,7 @@ const applyPremiumGridGameConfigSettingsToLiveState = (settings = {}) => {
 
   updateChanceText()
   applyAdminPreviewDraftToCampaign()
+  randomizePremiumGridPrizePositionsForDisplay('game-config-loaded')
 }
 
 const premiumGridBackendProbabilitySummary = computed(() => {
@@ -3481,6 +3513,7 @@ const loadPremiumGridState = () => {
   }
 
   updateChanceText()
+  randomizePremiumGridPrizePositionsForDisplay('local-state-restored')
 
   setTimeout(() => {
     isApplyingPremiumGridRemoteState.value = false
@@ -3626,6 +3659,7 @@ const importPremiumGridState = () => {
   logoImageError.value = false
   bannerImageError.value = false
   updateChanceText()
+  randomizePremiumGridPrizePositionsForDisplay('import-state-restored')
   savePremiumGridState()
   showStorageMessage('已匯入精緻九宮格示範資料，品牌橫幅設定已同步還原。')
 }
