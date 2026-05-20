@@ -1,6 +1,7 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 97201～97600 批：報表中心 30 秒自動更新版
+// 第 97601～98000 批：報表中心抽中結果含未中獎統計修正版
+// 延續第 97201～97600 批：報表中心 30 秒自動更新版
 // 延續第 44001-1 批：報表中心四區塊展開收合修正版
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
@@ -63,6 +64,7 @@ const playRows = ref([])
 const rewardRows = ref([])
 const prizePerformanceRows = ref([])
 const prizeRankingRows = ref([])
+const playResultSummaryRows = ref([])
 
 const playPagination = ref({
   page: 1,
@@ -210,6 +212,19 @@ const deleteSavedQuery = (id) => {
 }
 
 const safeArray = (value) => (Array.isArray(value) ? value : [])
+
+const extractPagedRows = (payload = null) => {
+  if (Array.isArray(payload)) return safeArray(payload)
+
+  return safeArray(
+    payload?.items ||
+      payload?.rows ||
+      payload?.records ||
+      payload?.playRecords ||
+      payload?.data ||
+      []
+  )
+}
 
 const apiData = (response, fallback = null) => {
   return response?.data?.data ?? response?.data ?? fallback
@@ -452,6 +467,100 @@ const hasChartData = computed(() => {
 })
 
 
+
+const getPlayPrizeTitle = (row = {}) => {
+  const payload = row?.resultPayload || {}
+
+  return row?.prize?.title ||
+    row?.prizeTitle ||
+    payload.selectedPrizeTitle ||
+    payload.prizeTitle ||
+    payload.result?.prizeTitle ||
+    payload.virtualPrize?.title ||
+    payload.prize?.title ||
+    (row?.isWin ? '未命名獎項' : '未中獎 / 銘謝惠顧')
+}
+
+const getPlayPrizeType = (row = {}) => {
+  const payload = row?.resultPayload || {}
+  const rawType = row?.prize?.type ||
+    row?.prizeType ||
+    payload.selectedPrizeType ||
+    payload.prizeType ||
+    payload.result?.prizeType ||
+    payload.virtualPrize?.type ||
+    (row?.isWin ? 'WIN' : 'LOSE')
+
+  const normalized = String(rawType || '').toUpperCase()
+
+  if (['LOSE', 'THANKS', 'NO_PRIZE', 'NONE'].includes(normalized)) return 'LOSE'
+
+  return row?.isWin ? 'WIN' : (normalized || 'LOSE')
+}
+
+const buildPlayResultSummaryRows = (rows = []) => {
+  const groups = new Map()
+
+  safeArray(rows).forEach((row) => {
+    const title = getPlayPrizeTitle(row)
+    const type = getPlayPrizeType(row)
+    const key = `${title}__${type}`
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        id: key,
+        prizeTitle: title,
+        prizeType: type,
+        playCount: 0,
+        winCount: 0,
+        loseCount: 0
+      })
+    }
+
+    const target = groups.get(key)
+    target.playCount += 1
+
+    if (row?.isWin) {
+      target.winCount += 1
+    } else {
+      target.loseCount += 1
+    }
+  })
+
+  const total = Math.max(1, safeArray(rows).length)
+
+  return Array.from(groups.values())
+    .map((row) => ({
+      ...row,
+      percent: Number(((Number(row.playCount || 0) / total) * 100).toFixed(2))
+    }))
+    .sort((a, b) => Number(b.playCount || 0) - Number(a.playCount || 0))
+}
+
+const totalPlayResultSummaryCount = computed(() => {
+  return playResultSummaryRows.value.reduce((sum, row) => sum + Number(row.playCount || 0), 0)
+})
+
+const maxPlayResultCount = computed(() => {
+  return Math.max(1, ...playResultSummaryRows.value.map((row) => Number(row.playCount || 0)))
+})
+
+const getPlayResultBarWidth = (count) => {
+  return `${Math.max(3, Math.round((Number(count || 0) / maxPlayResultCount.value) * 100))}%`
+}
+
+const getPlayResultTypeText = (row = {}) => {
+  return String(row.prizeType || '').toUpperCase() === 'LOSE' || Number(row.loseCount || 0) > 0
+    ? '未中獎結果'
+    : '實際發獎'
+}
+
+const getPlayResultTypeClass = (row = {}) => {
+  return String(row.prizeType || '').toUpperCase() === 'LOSE' || Number(row.loseCount || 0) > 0
+    ? 'bg-slate-100 text-slate-600'
+    : 'bg-emerald-100 text-emerald-700'
+}
+
 const topPrizePerformanceRows = computed(() => {
   const sourceRows = safeArray(prizeRankingRows.value).length
     ? safeArray(prizeRankingRows.value)
@@ -518,7 +627,7 @@ const fetchReports = async (options = {}) => {
       serialCode: filters.value.serialCode
     }
 
-    const [summaryRes, dailyRes, playRes, rewardRes, prizePerformanceRes] = await Promise.all([
+    const [summaryRes, dailyRes, playRes, rewardRes, prizePerformanceRes, playFullRes] = await Promise.all([
       getReportSummaryApi({
         ...commonParams,
         isWin: filters.value.isWin,
@@ -548,6 +657,12 @@ const fetchReports = async (options = {}) => {
           page: filters.value.prizePage,
           pageSize: filters.value.pageSize
         }
+      }),
+      getPlayRecordsApi({
+        ...commonParams,
+        isWin: filters.value.isWin,
+        page: 1,
+        pageSize: 1000
       })
     ])
 
@@ -557,8 +672,11 @@ const fetchReports = async (options = {}) => {
     }
 
     dailyRows.value = safeArray(apiData(dailyRes, []))
-    playRows.value = safeArray(apiData(playRes, []))
-    rewardRows.value = safeArray(apiData(rewardRes, []))
+    playRows.value = extractPagedRows(apiData(playRes, []))
+    rewardRows.value = extractPagedRows(apiData(rewardRes, []))
+
+    const fullPlayRows = extractPagedRows(apiData(playFullRes, []))
+    playResultSummaryRows.value = buildPlayResultSummaryRows(fullPlayRows)
     const prizePayload = apiData(prizePerformanceRes, [])
     prizePerformanceRows.value = Array.isArray(prizePayload)
       ? safeArray(prizePayload)
@@ -608,6 +726,7 @@ const fetchReports = async (options = {}) => {
     rewardRows.value = []
     prizePerformanceRows.value = []
     prizeRankingRows.value = []
+    playResultSummaryRows.value = []
     playPagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
     rewardPagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
     prizePagination.value = { page: 1, pageSize: filters.value.pageSize, total: 0, totalPages: 1 }
@@ -729,7 +848,7 @@ const getCampaignTitle = (row) => {
 }
 
 const getPrizeTitle = (row) => {
-  return row?.prize?.title || row?.prizeTitle || '未命名獎項'
+  return getPlayPrizeTitle(row)
 }
 
 const getPlayRowClass = (row = {}) => {
@@ -1600,7 +1719,7 @@ onUnmounted(() => {
           <p class="text-xs font-black uppercase tracking-[0.35em] text-violet-500">Prize Performance</p>
           <h3 class="mt-2 text-2xl font-black text-slate-900">獎項成效統計</h3>
           <p class="mt-2 text-slate-500">
-            依目前商家與日期篩選統計各獎項的中獎、發放、核銷與庫存狀態。
+            依目前商家與日期篩選統計實際發獎、核銷與庫存狀態；未中獎 / 銘謝惠顧請看上方「抽中結果統計」。
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
@@ -1629,6 +1748,56 @@ onUnmounted(() => {
       </div>
 
       <div v-show="reportSectionsOpen.prizePerformance" class="space-y-6">
+        <div class="rounded-[28px] border border-cyan-100 bg-cyan-50 p-5">
+          <div class="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+            <div>
+              <p class="text-xs font-black uppercase tracking-[0.25em] text-cyan-600">Draw Result Including Lose</p>
+              <h4 class="mt-2 text-xl font-black text-slate-900">抽中結果統計（含未中獎）</h4>
+              <p class="mt-2 text-sm font-bold leading-6 text-slate-600">
+                這區依遊玩紀錄 PlayRecord 的實際抽中結果統計，會把「銘謝惠顧 / 未中獎」一起列入；下方獎項成效表則偏向實際發獎、待發獎與庫存狀態。
+              </p>
+            </div>
+            <div class="rounded-2xl bg-white px-5 py-3 text-sm font-black text-cyan-700 shadow-sm">
+              本次統計 {{ totalPlayResultSummaryCount }} 筆遊玩結果
+            </div>
+          </div>
+
+          <div v-if="playResultSummaryRows.length === 0" class="mt-4 rounded-2xl border border-dashed border-cyan-200 bg-white/70 p-5 text-center text-sm font-bold text-slate-500">
+            目前篩選條件下沒有可統計的抽中結果。
+          </div>
+
+          <div v-else class="mt-4 overflow-x-auto rounded-3xl border border-cyan-100 bg-white">
+            <table class="min-w-full divide-y divide-slate-100 text-left text-sm">
+              <thead class="bg-cyan-50 text-xs uppercase tracking-wider text-cyan-700">
+                <tr>
+                  <th class="px-5 py-4">抽中結果</th>
+                  <th class="px-5 py-4">類型</th>
+                  <th class="px-5 py-4">抽中次數</th>
+                  <th class="px-5 py-4">佔比</th>
+                  <th class="px-5 py-4">視覺比例</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr v-for="row in playResultSummaryRows" :key="`play-result-${row.id}`" class="hover:bg-cyan-50/40">
+                  <td class="px-5 py-4 font-black text-slate-900">{{ row.prizeTitle }}</td>
+                  <td class="px-5 py-4">
+                    <span class="rounded-full px-3 py-1 text-xs font-black" :class="getPlayResultTypeClass(row)">
+                      {{ getPlayResultTypeText(row) }}
+                    </span>
+                  </td>
+                  <td class="px-5 py-4 font-black text-slate-900">{{ row.playCount }}</td>
+                  <td class="px-5 py-4 font-black text-cyan-700">{{ row.percent }}%</td>
+                  <td class="px-5 py-4 min-w-[180px]">
+                    <div class="h-3 overflow-hidden rounded-full bg-slate-100">
+                      <div class="h-full rounded-full bg-cyan-500" :style="{ width: getPlayResultBarWidth(row.playCount) }"></div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
       <div v-if="!hasPrizePerformanceData && !loading" class="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-slate-500">
         目前篩選條件下沒有獎項成效資料。
       </div>
