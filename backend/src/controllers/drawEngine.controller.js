@@ -43,6 +43,8 @@ export const playDrawHandler = async (req, res) => {
   try {
     const result = await runDrawEngine(req.params.campaignId, {
       ...req.body,
+      routeFlow: 'DRAW_ENGINE_ROUTE',
+      controllerFlow: 'playDrawHandler',
       userId: req.user?.id || req.body?.userId || null,
       playerIp: req.ip,
       userAgent: req.headers['user-agent'] || '',

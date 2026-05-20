@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3 Tenant Edition
-// 第 97601～98000 批：報表中心抽中結果含未中獎統計修正版
+// 第 99601～100000 批：報表中心 Draw Engine 抽中結果統計強化版
 // 延續第 97201～97600 批：報表中心 30 秒自動更新版
 // 延續第 44001-1 批：報表中心四區塊展開收合修正版
 import { computed, onMounted, onUnmounted, ref } from 'vue'
@@ -471,9 +471,10 @@ const hasChartData = computed(() => {
 const getPlayPrizeTitle = (row = {}) => {
   const payload = row?.resultPayload || {}
 
-  return row?.prize?.title ||
+  return payload.selectedPrizeTitle ||
+    payload.selectedPrizeName ||
+    row?.prize?.title ||
     row?.prizeTitle ||
-    payload.selectedPrizeTitle ||
     payload.prizeTitle ||
     payload.result?.prizeTitle ||
     payload.virtualPrize?.title ||
@@ -483,9 +484,14 @@ const getPlayPrizeTitle = (row = {}) => {
 
 const getPlayPrizeType = (row = {}) => {
   const payload = row?.resultPayload || {}
-  const rawType = row?.prize?.type ||
+  const selectedIsWin = payload.selectedPrizeIsWin
+
+  if (selectedIsWin === false) return 'LOSE'
+  if (selectedIsWin === true) return 'WIN'
+
+  const rawType = payload.selectedPrizeType ||
+    row?.prize?.type ||
     row?.prizeType ||
-    payload.selectedPrizeType ||
     payload.prizeType ||
     payload.result?.prizeType ||
     payload.virtualPrize?.type ||
@@ -513,7 +519,9 @@ const buildPlayResultSummaryRows = (rows = []) => {
         prizeType: type,
         playCount: 0,
         winCount: 0,
-        loseCount: 0
+        loseCount: 0,
+        probability: Number(row?.resultPayload?.selectedPrizeProbability ?? row?.resultPayload?.prizeProbability ?? row?.probability ?? 0),
+        source: row?.resultPayload?.selectedPrizeSource || row?.resultPayload?.prizeSource || 'PLAY_RECORD'
       })
     }
 
@@ -1773,6 +1781,7 @@ onUnmounted(() => {
                   <th class="px-5 py-4">抽中結果</th>
                   <th class="px-5 py-4">類型</th>
                   <th class="px-5 py-4">抽中次數</th>
+                  <th class="px-5 py-4">後台機率</th>
                   <th class="px-5 py-4">佔比</th>
                   <th class="px-5 py-4">視覺比例</th>
                 </tr>
@@ -1786,6 +1795,7 @@ onUnmounted(() => {
                     </span>
                   </td>
                   <td class="px-5 py-4 font-black text-slate-900">{{ row.playCount }}</td>
+                  <td class="px-5 py-4 font-black text-slate-600">{{ row.probability || 0 }}%</td>
                   <td class="px-5 py-4 font-black text-cyan-700">{{ row.percent }}%</td>
                   <td class="px-5 py-4 min-w-[180px]">
                     <div class="h-3 overflow-hidden rounded-full bg-slate-100">

@@ -293,16 +293,50 @@ export const deletePrizeApi = (id) => {
 
 // ===== Draw / Game Play =====
 
-export const playDrawApi = (data) => {
+// 第 99601～100000 批：九宮格正式抽獎統一走 Draw Engine。
+// 若舊頁面或舊元件仍呼叫 playDrawApi / playGameApi / drawPlayApi，
+// 只要 gameType 是 GRID / PREMIUM_GRID，就強制改打 /draw-engine/campaigns/:id/play，
+// 避免誤進舊的 /api/draw/play → playDrawWithPrisma() 流程。
+const isPremiumGridDrawPayload = (data = {}) => {
+  const gameType = String(data?.gameType || data?.clientMeta?.gameType || '').toUpperCase()
+  return gameType === 'GRID' || gameType === 'PREMIUM_GRID' || gameType === 'PREMIUM-GRID'
+}
+
+const getCampaignIdFromDrawPayload = (data = {}) => {
+  const campaignId = Number(data?.campaignId || data?.id || data?.campaign?.id || 0)
+  return Number.isFinite(campaignId) && campaignId > 0 ? campaignId : null
+}
+
+const postLegacyCompatibleDrawApi = (data = {}) => {
+  const campaignId = getCampaignIdFromDrawPayload(data)
+
+  if (isPremiumGridDrawPayload(data) && campaignId) {
+    return playDrawEngineCampaignApi(campaignId, {
+      ...data,
+      gameType: 'GRID',
+      resultPayload: {
+        ...(data.resultPayload || {}),
+        legacyHelperRedirected: true,
+        legacyHelperName: 'playDrawApi',
+        probabilitySource: 'GAME_CONFIG_SETTINGS',
+        probabilityMode: 'BACKEND_DRAW_ENGINE'
+      }
+    })
+  }
+
   return http.post('/draw/play', data)
+}
+
+export const playDrawApi = (data) => {
+  return postLegacyCompatibleDrawApi(data)
 }
 
 export const playGameApi = (data) => {
-  return http.post('/draw/play', data)
+  return postLegacyCompatibleDrawApi(data)
 }
 
 export const drawPlayApi = (data) => {
-  return http.post('/draw/play', data)
+  return postLegacyCompatibleDrawApi(data)
 }
 
 // ===== Reports / Dashboard =====

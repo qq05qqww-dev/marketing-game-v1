@@ -8,6 +8,10 @@ const toNumberOrNull = (value) => {
 const normalizeGameType = (value) => {
   const gameType = String(value || '').toUpperCase()
 
+  if (gameType === 'PREMIUM_GRID' || gameType === 'PREMIUM-GRID') {
+    return 'GRID'
+  }
+
   if (['WHEEL', 'FLIP', 'GRID', 'SCRATCH'].includes(gameType)) {
     return gameType
   }
@@ -46,6 +50,21 @@ export const playDraw = async (req, res) => {
     }
 
     const clientMeta = buildClientMeta(req.body)
+
+    // 第 99601～100000 批：GRID / PREMIUM_GRID 不允許再走舊 /api/draw/play。
+    // 正式九宮格玩家抽獎必須走 /api/draw-engine/campaigns/:id/play → runDrawEngine()，
+    // 才會讀 GameConfig.settings.gridItems 與寫入完整 PlayRecord 統計欄位。
+    if (clientMeta.gameType === 'GRID') {
+      return res.status(409).json({
+        success: false,
+        message: '九宮格正式抽獎已統一改走 Draw Engine，請呼叫 /api/draw-engine/campaigns/:campaignId/play',
+        data: {
+          requiredEndpoint: `/api/draw-engine/campaigns/${campaignId}/play`,
+          blockedLegacyFlow: 'playDrawWithPrisma',
+          probabilitySource: 'GameConfig.settings.gridItems'
+        }
+      })
+    }
 
     const result = await playDrawWithPrisma({
       userId,

@@ -3222,7 +3222,9 @@ const playTenantPremiumGridDraw = async () => {
       frontUrl: getShareUrl(),
       template: 'premium-grid',
       probabilitySource: 'GAME_CONFIG_SETTINGS',
-      probabilityMode: 'BACKEND_DRAW_ENGINE'
+      probabilityMode: 'BACKEND_DRAW_ENGINE',
+      routeFlow: 'FRONTEND_PREMIUM_GRID_PLAYER',
+      requiredEndpoint: '/api/draw-engine/campaigns/:campaignId/play'
     }
   })
 

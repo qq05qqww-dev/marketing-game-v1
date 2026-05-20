@@ -365,6 +365,12 @@ export const playDrawWithPrisma = async ({
 
     const gameType = normalizeGameType(campaign.gameType || clientMeta.gameType)
 
+    // 第 99601～100000 批：後端舊 service 再加一道保護。
+    // 即使有舊 controller / 舊 helper 誤打進來，GRID 也不再使用 campaign.prizes 舊流程。
+    if (gameType === 'GRID') {
+      throw new Error('九宮格正式抽獎已統一改走 Draw Engine，請使用 /api/draw-engine/campaigns/:campaignId/play')
+    }
+
     const availablePrizes = campaign.prizes.filter((item) => {
       return toNumber(item.remainStock, 0) > 0
     })

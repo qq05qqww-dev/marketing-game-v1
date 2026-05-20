@@ -1,16 +1,16 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 98001～98400 批：九宮格正式抽獎池改讀 gridItems 優先修正版
+// 第 99601～100000 批：九宮格正式抽獎統一走 Draw Engine 修正版
 // 延續第 92001～92400 批：正式抽獎中獎後同步扣除獎項庫存修正版
 //
 // 覆蓋位置：
 // backend/src/services/drawEngine.service.js
 //
 // 本批重點：
-// 1. 修正 GRID / PREMIUM_GRID 正式後端抽獎池來源順序。
-// 2. 九宮格後台目前設定的是 GameConfig.settings.gridItems，正式抽獎必須優先吃 gridItems。
-// 3. settings.prizes 只保留給舊活動 fallback，避免舊資料蓋過九宮格目前設定。
-// 4. 修正咖啡卷 5% 卻異常高、銘謝惠顧 41% 卻幾乎不中的來源錯誤。
-// 5. 不改 DB schema / router / 前台玩家頁 / 報表中心。
+// 1. GRID / PREMIUM_GRID 正式後端抽獎固定以 GameConfig.settings.gridItems 為第一來源。
+// 2. 舊資料若把「銘謝惠顧 / 再接再厲」殘留 isButton / BUTTON 標記，但仍有機率值，後端會納入抽獎池。
+// 3. 實際中心開始按鈕若機率為 0，仍不會進入抽獎池。
+// 4. PlayRecord 補齊 selectedPrizeTitle / selectedPrizeProbability / selectedPrizeSource / probabilityMode / selectedPrizeType。
+// 5. 未中獎項會寫入 PlayRecord 統計，但不建立 RewardRecord。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -49,10 +49,34 @@ const normalizeGameType = (value) => {
   return 'GOLDEN_EGG'
 }
 
-const normalizeGameConfigPrizeType = (value) => {
-  const rawType = String(value || '').toUpperCase()
+const normalizeLoseLikeTitle = (value = '') => {
+  const text = String(value || '').trim().toLowerCase().replace(/\s+/g, '')
 
-  if (['LOSE', 'THANKS', 'NO_PRIZE', 'NONE', 'BUTTON'].includes(rawType)) {
+  return text.includes('銘謝惠顧') ||
+    text.includes('再接再厲') ||
+    text.includes('謝謝參加') ||
+    text.includes('未中獎') ||
+    text.includes('no_prize') ||
+    text.includes('noprize') ||
+    text.includes('thanks') ||
+    text.includes('lose')
+}
+
+const normalizeGameConfigPrizeType = (value, item = {}) => {
+  const rawType = String(value || '').toUpperCase()
+  const title = normalizeGameConfigPrizeTitle(item)
+
+  if (['LOSE', 'THANKS', 'NO_PRIZE', 'NONE'].includes(rawType)) {
+    return 'LOSE'
+  }
+
+  // 舊九宮格資料可能把「銘謝惠顧 / 再接再厲」誤殘留為 BUTTON / isButton。
+  // 只要標題明確是未中獎語意，就視為 LOSE，避免後台 40% 未中獎不進抽獎池。
+  if ((rawType === 'BUTTON' || item?.isButton === true) && normalizeLoseLikeTitle(title)) {
+    return 'LOSE'
+  }
+
+  if (normalizeLoseLikeTitle(title)) {
     return 'LOSE'
   }
 
@@ -80,7 +104,7 @@ const hasExplicitGameConfigStock = (item = {}) => {
 }
 
 const normalizeGameConfigPrizeStock = (item = {}, gameType = '') => {
-  if (normalizeGameConfigPrizeType(item.type || item.rewardType) === 'LOSE') {
+  if (normalizeGameConfigPrizeType(item.type || item.rewardType, item) === 'LOSE') {
     return 999999999
   }
 
@@ -197,9 +221,16 @@ const isGameConfigItemEnabled = (item = {}) => {
   if (item.enabled === false) return false
   if (item.isEnabled === false) return false
   if (String(item.status || '').toUpperCase() === 'DISABLED') return false
-  if (String(item.rewardType || '').toUpperCase() === 'BUTTON') return false
-  if (String(item.type || '').toUpperCase() === 'BUTTON') return false
-  if (item.isButton === true) return false
+
+  const rawType = String(item.type || item.rewardType || '').toUpperCase()
+  const probability = normalizeGameConfigPrizeProbability(item)
+  const title = normalizeGameConfigPrizeTitle(item)
+
+  // 第 99601～100000 批：舊資料如果殘留 BUTTON / isButton，不能一律排除。
+  // 有機率且標題是「銘謝惠顧 / 再接再厲 / 未中獎」時，必須進正式抽獎池。
+  if (rawType === 'BUTTON' || item.isButton === true) {
+    return probability > 0 && normalizeLoseLikeTitle(title)
+  }
 
   return true
 }
@@ -257,7 +288,7 @@ const extractGameConfigPrizeItems = (settings = {}, gameType = '') => {
 const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
   const gameType = normalizeGameType(campaign.gameType)
   const title = normalizeGameConfigPrizeTitle(item, index)
-  const prizeType = normalizeGameConfigPrizeType(item.type || item.rewardType)
+  const prizeType = normalizeGameConfigPrizeType(item.type || item.rewardType, item)
   const remainStock = normalizeGameConfigPrizeStock(item, gameType)
   const probability = normalizeGameConfigPrizeProbability(item)
 
@@ -297,7 +328,7 @@ const buildGameConfigPrizePool = (campaign = {}) => {
     .map((item, index) => normalizeGameConfigPrize(item, index, campaign))
     .map((prize) => attachPrizeTableLinkToVirtualPrize(prize, campaignPrizes))
     .filter((prize) => {
-      if (prize.type === 'LOSE') return true
+      if (prize.type === 'LOSE') return Number(prize.probability || 0) > 0
       return Number(prize.remainStock || 0) > 0 && Number(prize.probability || 0) > 0
     })
 }
@@ -798,9 +829,14 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
           selectedPrizeId: prize.id,
           selectedPrizeTableId: prizeIdForWrite,
           selectedPrizeTitle: prize.title,
+          selectedPrizeName: prize.title,
+          selectedPrizeType: prize.type,
+          selectedPrizeIsWin: isWin,
           selectedPrizeProbability: prize.probability,
           selectedPrizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
           probabilityMode: 'BACKEND_DRAW_ENGINE',
+          routeFlow: payload.routeFlow || 'DRAW_ENGINE_ROUTE',
+          controllerFlow: payload.controllerFlow || 'playDrawHandler',
           virtualPrize: prize.isVirtualGameConfigPrize ? prizeForResponse : null
         }
       },
