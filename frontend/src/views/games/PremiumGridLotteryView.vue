@@ -3969,7 +3969,19 @@ const closeResultAndContinue = () => {
 
 const goGameHistory = () => {
   showResultModal.value = false
-  router.push('/game-history')
+
+  if (typeof window === 'undefined') return
+
+  window.requestAnimationFrame(() => {
+    const historySection = document.getElementById('premium-grid-inline-history')
+
+    if (historySection) {
+      historySection.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      return
+    }
+
+    showShareSuccess('抽獎紀錄已顯示在活動頁下方。')
+  })
 }
 
 const goGamesCenter = () => {
@@ -3989,7 +4001,7 @@ const getResultModalHint = () => {
     return `獎項已寫入我的遊戲紀錄。你還有 ${effectiveGridChances.value} 次抽獎機會，可以繼續參加。`
   }
 
-  return '獎項已寫入我的遊戲紀錄。你目前沒有剩餘抽獎機會，可先查看紀錄或分享活動增加次數。'
+  return '獎項已寫入我的抽獎紀錄。你目前沒有剩餘抽獎機會，可在活動頁下方查看紀錄。'
 }
 
 const premiumGridResultModalSettings = computed(() => {
@@ -35308,25 +35320,16 @@ const toggleWheelRealFilePrep11011150 = () => {
 
                 <section
                   v-if="frontDisplay.showHistoryButton"
+                  id="premium-grid-inline-history"
                   class="relative mt-4 rounded-3xl bg-white/95 p-4 text-slate-900 shadow-xl"
                 >
-                  <div class="flex items-center justify-between gap-3">
-                    <div>
-                      <p class="text-sm font-black text-slate-900">
-                        我的抽獎紀錄
-                      </p>
-                      <p class="mt-1 text-xs font-bold text-slate-400">
-                        最近 {{ frontGridRecordRows.length }} 筆紀錄直接顯示在前台
-                      </p>
-                    </div>
-
-                    <button
-                      type="button"
-                      class="rounded-full bg-orange-50 px-3 py-1.5 text-xs font-black text-orange-600"
-                      @click="goGameHistory"
-                    >
-                      全部紀錄
-                    </button>
+                  <div>
+                    <p class="text-sm font-black text-slate-900">
+                      我的抽獎紀錄
+                    </p>
+                    <p class="mt-1 text-xs font-bold text-slate-400">
+                      最近 {{ frontGridRecordRows.length }} 筆紀錄直接顯示在前台，不再跳轉到獨立紀錄頁。
+                    </p>
                   </div>
 
                   <div v-if="frontGridRecordRows.length" class="mt-3 grid gap-2">
@@ -35704,7 +35707,7 @@ const toggleWheelRealFilePrep11011150 = () => {
                 class="w-full rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                 @click="goGameHistory"
               >
-                查看我的遊戲紀錄
+                查看下方抽獎紀錄
               </button>
             </div>
           </div>
