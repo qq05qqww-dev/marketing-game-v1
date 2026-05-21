@@ -350,12 +350,44 @@ const normalizeCampaignStatus = (value = '') => {
   return String(value || '').trim().toUpperCase()
 }
 
+// 第 101201～101600 批：
+// 修正九宮格活動時間被瀏覽器把後端 ISO Z 時區再加 8 小時的問題。
+// 商家後台設定 2026/05/21 13:00 時，部分 API 會回傳 2026-05-21T13:00:00.000Z，
+// 這裡在玩家頁視為「商家設定的本地牆上時間」，避免錯顯為 21:00 並誤判尚未開始。
+const parseCampaignLocalDateTime = (value) => {
+  if (!value) return null
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : new Date(value.getTime())
+  }
+
+  const raw = String(value || '').trim()
+  if (!raw) return null
+
+  const isoWallTimeMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
+
+  if (isoWallTimeMatch) {
+    const [, year, month, day, hour, minute, second = '0'] = isoWallTimeMatch
+    const localDate = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second)
+    )
+
+    return Number.isNaN(localDate.getTime()) ? null : localDate
+  }
+
+  const parsed = new Date(raw)
+  return Number.isNaN(parsed.getTime()) ? null : parsed
+}
+
 const formatCampaignDateTime = (value) => {
-  if (!value) return ''
+  const date = parseCampaignLocalDateTime(value)
 
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) return ''
+  if (!date) return ''
 
   return date.toLocaleString('zh-TW', {
     year: 'numeric',
@@ -366,12 +398,23 @@ const formatCampaignDateTime = (value) => {
   })
 }
 
+const getPremiumGridConfiguredActivityTime = (key = 'startAt') => {
+  const settings = premiumGridGameConfigSettings.value || {}
+  const activityTime = settings?.activityTime || settings?.activity || settings?.timeSettings || {}
+
+  if (key === 'startAt') {
+    return activityTime?.startAt || activityTime?.startTime || activityTime?.startedAt || ''
+  }
+
+  return activityTime?.endAt || activityTime?.endTime || activityTime?.endedAt || ''
+}
+
 const getCampaignStartTime = (campaignData = {}) => {
-  return campaignData?.startAt || campaignData?.startTime || campaignData?.startedAt || campaignData?.publishedAt || ''
+  return getPremiumGridConfiguredActivityTime('startAt') || campaignData?.startAt || campaignData?.startTime || campaignData?.startedAt || campaignData?.publishedAt || ''
 }
 
 const getCampaignEndTime = (campaignData = {}) => {
-  return campaignData?.endAt || campaignData?.endTime || campaignData?.endedAt || campaignData?.expiredAt || ''
+  return getPremiumGridConfiguredActivityTime('endAt') || campaignData?.endAt || campaignData?.endTime || campaignData?.endedAt || campaignData?.expiredAt || ''
 }
 
 const campaign = reactive({
@@ -2082,8 +2125,8 @@ const tenantPremiumGridStatusInfo = computed(() => {
   const status = normalizeCampaignStatus(data?.status || data?.publishStatus || data?.state)
   const startValue = getCampaignStartTime(data)
   const endValue = getCampaignEndTime(data)
-  const startDate = startValue ? new Date(startValue) : null
-  const endDate = endValue ? new Date(endValue) : null
+  const startDate = parseCampaignLocalDateTime(startValue)
+  const endDate = parseCampaignLocalDateTime(endValue)
   const now = new Date()
 
   if (['DRAFT', 'INACTIVE', 'DISABLED', 'ARCHIVED', 'PAUSED', 'UNPUBLISHED'].includes(status)) {
