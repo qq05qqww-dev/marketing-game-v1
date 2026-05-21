@@ -63,15 +63,35 @@ export const getCampaignGameConfigApi = (id) => {
   })
 }
 
-export const saveCampaignGameConfigApi = (id, settings = {}) => {
-  const body = {
+const getPremiumGridActivityTimeForCampaignSync = (settings = {}) => {
+  const activityTime = settings?.activityTime || settings?.activity || settings?.timeSettings || {}
+
+  return {
+    startAt: activityTime?.startAt || activityTime?.startTime || activityTime?.startedAt || undefined,
+    endAt: activityTime?.endAt || activityTime?.endTime || activityTime?.endedAt || undefined
+  }
+}
+
+const buildCampaignGameConfigSaveBody = (settings = {}) => {
+  const activityTimeSync = getPremiumGridActivityTimeForCampaignSync(settings)
+
+  return {
     settings,
     gameConfig: {
       settings
     },
+    // 第 102001～102400 批：讓九宮格後台活動時間成為統一來源。
+    // 支援後端 game-config handler 若有同步 Campaign.startAt/endAt，也支援 fallback PATCH /campaigns/:id。
+    startAt: activityTimeSync.startAt,
+    endAt: activityTimeSync.endAt,
+    activityTimeSource: 'GAME_CONFIG_SETTINGS_ACTIVITY_TIME',
     source: 'AdminPremiumGridSettingsView',
     savedAt: new Date().toISOString()
   }
+}
+
+export const saveCampaignGameConfigApi = (id, settings = {}) => {
+  const body = buildCampaignGameConfigSaveBody(settings)
 
   return requestWithFallback(GAME_CONFIG_SAVE_CANDIDATE_URLS(id), async (url) => {
     if (url.includes('/game-config')) {
@@ -79,10 +99,7 @@ export const saveCampaignGameConfigApi = (id, settings = {}) => {
     }
 
     return http.patch(url, {
-      settings,
-      gameConfig: {
-        settings
-      },
+      ...body,
       title:
         settings?.basicText?.pageTitle ||
         settings?.basicText?.headline ||

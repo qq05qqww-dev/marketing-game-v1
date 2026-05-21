@@ -420,11 +420,13 @@ const createHttpError = (message, status = 500) => {
 }
 
 
-// 第 101601～102000 批：九宮格正式抽獎後端活動時間判斷修正。
-// 目前舊資料可能把商家後台輸入的台灣本地時間 2026/05/21 13:00
-// 存成 2026-05-21T13:00:00.000Z。若後端直接 new Date()，會被視為 UTC 13:00，
-// 玩家端台灣時間就會變成 21:00，verify/play API 也會誤判「活動尚未開始」。
-// GRID / PREMIUM_GRID 這裡改成把 ISO 字串中的年月日時分秒視為 Asia/Taipei 牆上時間。
+// 第 102001～102400 批：九宮格活動時間統一後台設定為主修正。
+// 問題根因：
+// 1. 玩家頁上方狀態已改看 GameConfig.settings.activityTime，所以會顯示活動進行中。
+// 2. verify-serial / play 後端仍可能只拿 campaign.startAt / endAt，而且 Prisma 取出的 Date 物件
+//    會保留 2026-05-21T13:00:00.000Z 的 UTC timestamp，導致後端誤判台灣時間 21:00 才開始。
+// 3. 因此本批讓 GRID / PREMIUM_GRID 的後端守門完全以後台 GameConfig.settings.activityTime 為第一來源，
+//    再 fallback Campaign.startAt / endAt；字串與 Date 物件都用「台灣本地牆上時間」判斷。
 const PREMIUM_GRID_LOCAL_TIMEZONE_OFFSET_MINUTES = 8 * 60
 
 const isPremiumGridCampaign = (campaign = {}) => {
@@ -432,12 +434,38 @@ const isPremiumGridCampaign = (campaign = {}) => {
   return ['GRID', 'PREMIUM_GRID'].includes(gameType)
 }
 
+const parsePremiumGridDatePartsAsTaipeiTimestamp = ({ year, month, day, hour, minute, second = 0 }) => {
+  const utcTimestamp = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second)
+  )
+
+  if (Number.isNaN(utcTimestamp)) return null
+
+  return utcTimestamp - PREMIUM_GRID_LOCAL_TIMEZONE_OFFSET_MINUTES * 60 * 1000
+}
+
 const parsePremiumGridWallTimeAsTaipeiTimestamp = (value) => {
   if (!value) return null
 
   if (value instanceof Date) {
-    const timestamp = value.getTime()
-    return Number.isNaN(timestamp) ? null : timestamp
+    if (Number.isNaN(value.getTime())) return null
+
+    // Prisma 取回的 Date 可能是 2026-05-21T13:00:00.000Z。
+    // 這裡不能直接 value.getTime()，否則會被當作 UTC 13:00。
+    // 九宮格舊資料要把 UTC 欄位 13:00 視為商家後台輸入的台灣 13:00。
+    return parsePremiumGridDatePartsAsTaipeiTimestamp({
+      year: value.getUTCFullYear(),
+      month: value.getUTCMonth() + 1,
+      day: value.getUTCDate(),
+      hour: value.getUTCHours(),
+      minute: value.getUTCMinutes(),
+      second: value.getUTCSeconds()
+    })
   }
 
   const raw = String(value || '').trim()
@@ -447,26 +475,36 @@ const parsePremiumGridWallTimeAsTaipeiTimestamp = (value) => {
 
   if (match) {
     const [, year, month, day, hour, minute, second = '0'] = match
-    const utcTimestamp = Date.UTC(
-      Number(year),
-      Number(month) - 1,
-      Number(day),
-      Number(hour),
-      Number(minute),
-      Number(second)
-    )
 
-    if (Number.isNaN(utcTimestamp)) return null
-
-    return utcTimestamp - PREMIUM_GRID_LOCAL_TIMEZONE_OFFSET_MINUTES * 60 * 1000
+    return parsePremiumGridDatePartsAsTaipeiTimestamp({
+      year,
+      month,
+      day,
+      hour,
+      minute,
+      second
+    })
   }
 
   const parsed = new Date(raw).getTime()
   return Number.isNaN(parsed) ? null : parsed
 }
 
+const getPremiumGridGameConfigActivityTimeValue = (campaign = {}, key = 'startAt') => {
+  const settings = campaign?.gameConfig?.settings || {}
+  const activityTime = settings.activityTime || settings.activity || settings.timeSettings || {}
+
+  if (key === 'startAt') {
+    return activityTime.startAt || activityTime.startTime || activityTime.startedAt || null
+  }
+
+  return activityTime.endAt || activityTime.endTime || activityTime.endedAt || null
+}
+
 const getCampaignAvailabilityTimestamp = (campaign = {}, key = 'startAt') => {
-  const value = campaign?.[key]
+  const value = isPremiumGridCampaign(campaign)
+    ? (getPremiumGridGameConfigActivityTimeValue(campaign, key) || campaign?.[key])
+    : campaign?.[key]
 
   if (!value) return null
 
@@ -1059,6 +1097,9 @@ export const verifySerialCodeForDraw = async (campaignId, code) => {
   const campaign = await prisma.campaign.findUnique({
     where: {
       id: normalizedCampaignId
+    },
+    include: {
+      gameConfig: true
     }
   })
 
