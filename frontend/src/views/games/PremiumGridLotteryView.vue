@@ -2249,11 +2249,13 @@ const stableChecklist = computed(() => {
 })
 
 const websiteButtonText = computed(() => {
-  return String(campaign.websiteText || '').trim() || '官方網站'
+  return String(campaign.officialLinkLabel || campaign.websiteText || '').trim() || '官方網站'
 })
 
 const safeWebsiteUrl = computed(() => {
-  const value = String(campaign.websiteUrl || '').trim()
+  if (campaign.officialLinkEnabled === false) return ''
+
+  const value = String(campaign.officialLinkUrl || campaign.websiteUrl || '').trim()
 
   if (!value) return ''
 
@@ -3199,10 +3201,29 @@ const applyPremiumGridGameConfigSettingsToLiveState = (settings = {}) => {
   const basic = settings.basicText || {}
   if (basic.pageTitle) campaign.pageTitle = basic.pageTitle
   if (basic.brandName) campaign.brandName = basic.brandName
+  if (basic.brandSubtitle) campaign.brandTagline = basic.brandSubtitle
   if (basic.headline) campaign.mainTitle = basic.headline
-  if (basic.subtitle) campaign.subTitle = basic.subtitle
-  if (basic.badgeText) campaign.heroTagline = basic.badgeText
+
+  // 第 102801～103200 批：九宮格正式玩家頁文字欄位與後台預覽一致修正版。
+  // 後台欄位定義：subtitle = 副標題（大字第二行）、badgeText = 標籤文字（膠囊小標）。
+  // 舊版正式玩家頁曾把兩者反向套用，導致後台預覽與玩家手機畫面不同步。
+  if (basic.subtitle) campaign.heroTagline = basic.subtitle
+  if (basic.badgeText) campaign.subTitle = basic.badgeText
   if (basic.playButtonText) campaign.buttonText = basic.playButtonText
+
+  const officialLink = settings.officialLink || {}
+  if (typeof officialLink.enabled === 'boolean') campaign.officialLinkEnabled = officialLink.enabled
+  if (officialLink.label) {
+    campaign.officialLinkLabel = officialLink.label
+    campaign.websiteText = officialLink.label
+  }
+  if (officialLink.url) {
+    campaign.officialLinkUrl = officialLink.url
+    campaign.websiteUrl = officialLink.url
+  }
+  if (officialLink.textSize) campaign.officialLinkTextSize = Number(officialLink.textSize || campaign.officialLinkTextSize)
+  if (officialLink.textColor) campaign.officialLinkTextColor = officialLink.textColor
+  if (officialLink.backgroundColor) campaign.officialLinkBackgroundColor = officialLink.backgroundColor
 
   if (settings.display?.chanceText) campaign.chanceText = settings.display.chanceText
 
