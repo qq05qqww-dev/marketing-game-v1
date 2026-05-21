@@ -419,6 +419,65 @@ const createHttpError = (message, status = 500) => {
   return error
 }
 
+
+// 第 101601～102000 批：九宮格正式抽獎後端活動時間判斷修正。
+// 目前舊資料可能把商家後台輸入的台灣本地時間 2026/05/21 13:00
+// 存成 2026-05-21T13:00:00.000Z。若後端直接 new Date()，會被視為 UTC 13:00，
+// 玩家端台灣時間就會變成 21:00，verify/play API 也會誤判「活動尚未開始」。
+// GRID / PREMIUM_GRID 這裡改成把 ISO 字串中的年月日時分秒視為 Asia/Taipei 牆上時間。
+const PREMIUM_GRID_LOCAL_TIMEZONE_OFFSET_MINUTES = 8 * 60
+
+const isPremiumGridCampaign = (campaign = {}) => {
+  const gameType = String(campaign?.gameType || campaign?.type || '').trim().toUpperCase()
+  return ['GRID', 'PREMIUM_GRID'].includes(gameType)
+}
+
+const parsePremiumGridWallTimeAsTaipeiTimestamp = (value) => {
+  if (!value) return null
+
+  if (value instanceof Date) {
+    const timestamp = value.getTime()
+    return Number.isNaN(timestamp) ? null : timestamp
+  }
+
+  const raw = String(value || '').trim()
+  if (!raw) return null
+
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
+
+  if (match) {
+    const [, year, month, day, hour, minute, second = '0'] = match
+    const utcTimestamp = Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second)
+    )
+
+    if (Number.isNaN(utcTimestamp)) return null
+
+    return utcTimestamp - PREMIUM_GRID_LOCAL_TIMEZONE_OFFSET_MINUTES * 60 * 1000
+  }
+
+  const parsed = new Date(raw).getTime()
+  return Number.isNaN(parsed) ? null : parsed
+}
+
+const getCampaignAvailabilityTimestamp = (campaign = {}, key = 'startAt') => {
+  const value = campaign?.[key]
+
+  if (!value) return null
+
+  if (isPremiumGridCampaign(campaign)) {
+    return parsePremiumGridWallTimeAsTaipeiTimestamp(value)
+  }
+
+  const timestamp = new Date(value).getTime()
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
 const createClaimCode = () => {
   const randomText = crypto.randomBytes(6).toString('hex').toUpperCase()
 
@@ -444,7 +503,10 @@ const isCampaignAvailable = (campaign) => {
     }
   }
 
-  if (campaign.startAt && new Date(campaign.startAt).getTime() > now) {
+  const campaignStartTimestamp = getCampaignAvailabilityTimestamp(campaign, 'startAt')
+  const campaignEndTimestamp = getCampaignAvailabilityTimestamp(campaign, 'endAt')
+
+  if (campaignStartTimestamp && campaignStartTimestamp > now) {
     return {
       ok: false,
       status: 409,
@@ -452,7 +514,7 @@ const isCampaignAvailable = (campaign) => {
     }
   }
 
-  if (campaign.endAt && new Date(campaign.endAt).getTime() < now) {
+  if (campaignEndTimestamp && campaignEndTimestamp < now) {
     return {
       ok: false,
       status: 409,
