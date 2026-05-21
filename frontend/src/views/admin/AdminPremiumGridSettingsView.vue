@@ -2309,7 +2309,7 @@ onMounted(() => {
                 </div>
               </div>
 
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">圖片大小</span><input v-model.number="settings.resultModal.imageSize" type="range" min="56" max="180" step="2" class="w-full" /><p class="text-sm font-black text-slate-500">{{ settings.resultModal.imageSize }} px</p></label>
+              <label class="space-y-2"><span class="text-sm font-black text-slate-700">圖片大小</span><input v-model.number="settings.resultModal.imageSize" type="range" min="56" max="320" step="4" class="w-full" /><p class="text-sm font-black text-slate-500">{{ settings.resultModal.imageSize }} px</p></label>
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">彈窗背景色</span><input v-model="settings.resultModal.modalBackgroundColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">上方漸層起始色</span><input v-model="settings.resultModal.headerFromColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">上方漸層結束色</span><input v-model="settings.resultModal.headerToColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>

@@ -4088,7 +4088,7 @@ const resultModalHeaderStyle = computed(() => ({
 }))
 
 const resultModalImageBoxStyle = computed(() => {
-  const size = Math.max(56, Math.min(180, Number(premiumGridResultModalSettings.value.imageSize || 96)))
+  const size = Math.max(56, Math.min(320, Number(premiumGridResultModalSettings.value.imageSize || 96)))
 
   return {
     width: `${size}px`,
