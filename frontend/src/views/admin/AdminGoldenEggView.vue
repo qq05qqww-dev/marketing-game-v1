@@ -1,7 +1,7 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 89601～90000 批：金蛋平台模板與商家活動預覽隔離修正版
-// 延續第 86401～86800 批：結果彈窗正式玩家套用與按鈕色彩補強版
+// 第 106401～106800 批：金蛋後台移除大型 localStorage 設定來源，正式資料庫單一來源修正版
+// 延續第 89601～90000 批：金蛋平台模板與商家活動預覽隔離修正版
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
   getAdminGoldenEggCampaign,
@@ -27,7 +27,6 @@ import {
   getAdminGoldenEggDrawPool
 } from '../../api/goldenEggAdminApi.js'
 import { useRoute, useRouter } from 'vue-router'
-import { uploadCampaignImageApi } from '../../api/uploadApi.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -51,6 +50,46 @@ const safeJsonParse = (value, fallback = null) => {
   } catch (error) {
     console.warn('Golden egg admin JSON parse failed:', error)
     return fallback
+  }
+}
+
+// 第 106401～106800 批：金蛋後台正式資料庫單一來源。
+// 舊版會把整包 campaign / prizes / base64 圖片寫進 localStorage，造成
+// multi_game_platform_golden_egg_game_config_save_backup_v1 exceeded the quota。
+// 這裡統一清掉舊的大型本機暫存；後台設定以 PostgreSQL GameConfig.settings 為主。
+const GOLDEN_EGG_OVERSIZED_LOCAL_STORAGE_PATTERNS = [
+  'multi_game_platform_golden_egg_game_config_save_backup_v1',
+  'multi_game_platform_golden_egg_admin_state_v1',
+  'multi_game_platform_golden_egg_admin_sync_ping_v1',
+  'multi_game_platform_golden_egg_platform_template_state_v1',
+  'multi_game_platform_golden_egg_platform_template_sync_ping_v1',
+  'game_config_save_backup'
+]
+
+const isGoldenEggOversizedLocalStorageKey = (key = '') => {
+  const normalizedKey = String(key || '')
+  return GOLDEN_EGG_OVERSIZED_LOCAL_STORAGE_PATTERNS.some((pattern) => normalizedKey.includes(pattern))
+}
+
+const clearGoldenEggOversizedLocalStorage = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return
+
+  try {
+    Object.keys(window.localStorage)
+      .filter(isGoldenEggOversizedLocalStorageKey)
+      .forEach((key) => window.localStorage.removeItem(key))
+  } catch (error) {
+    console.warn('清除金蛋大型本機暫存失敗，已忽略，不影響資料庫讀取：', error)
+  }
+}
+
+const safeRemoveLocalStorageItem = (key = '') => {
+  if (typeof window === 'undefined' || !window.localStorage || !key) return
+
+  try {
+    window.localStorage.removeItem(key)
+  } catch (error) {
+    console.warn('移除 localStorage 暫存失敗，已忽略：', error)
   }
 }
 
@@ -989,198 +1028,44 @@ const getCurrentAdminSectionLabel = () => {
   return sectionRestoreMap[activeSection.value]?.label || '目前功能'
 }
 
-// 第 106001～106400 批：正式停用金蛋 GameConfig 儲存前 localStorage 大型備份。
-// 原因：舊備份 key 若塞入 base64 圖片會造成 QuotaExceededError，導致正式資料庫儲存被中斷。
-// 此處不再從 localStorage 還原備份，只保留本頁記憶體狀態。
 const lastSaveBackup = ref(null)
 
 const hasLastSaveBackup = computed(() => {
   return Boolean(lastSaveBackup.value?.settings && Number(lastSaveBackup.value?.campaignId) === Number(normalizedDatabaseCampaignId.value))
 })
 
-// 第 104801～105200 批：避免本機上傳圖片的 base64 被寫進 localStorage 備份造成 QuotaExceededError。
-// 正式前台圖片仍會寫入 PostgreSQL GameConfig；本機瀏覽器備份只保留欄位存在狀態，不保存大圖內容。
-const isGoldenEggInlineImageDataUrl = (value = '') => {
-  return typeof value === 'string' && /^data:image\//i.test(value)
-}
-
-const stripInlineImageDataUrlsForLocalBackup = (value, seen = new WeakSet()) => {
-  if (Array.isArray(value)) {
-    return value.map((item) => stripInlineImageDataUrlsForLocalBackup(item, seen))
-  }
-
-  if (value && typeof value === 'object') {
-    if (seen.has(value)) return null
-    seen.add(value)
-
-    return Object.entries(value).reduce((acc, [key, item]) => {
-      acc[key] = stripInlineImageDataUrlsForLocalBackup(item, seen)
-      return acc
-    }, {})
-  }
-
-  if (isGoldenEggInlineImageDataUrl(value)) {
-    return '[本機圖片 Data URL 已省略，請以資料庫 GameConfig 為準]'
-  }
-
-  return value
-}
-
-const safeSetLocalStorageJson = (key, value, fallbackValue = null) => {
-  if (typeof window === 'undefined') return true
-
-  // 第 106001～106400 批：這個大型備份 key 完全禁止寫入。
-  // 舊版 bundle 曾在此 key 寫入整包 GameConfig + base64 圖片，造成 QuotaExceededError。
-  if (key === GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY) {
-    try {
-      localStorage.removeItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY)
-    } catch (error) {
-      console.warn('金蛋後台大型備份 key 清除失敗，已略過：', error)
-    }
-    return false
-  }
-
-  // 任何要寫入 localStorage 的內容，都先移除 data:image/base64。
-  // 不再先嘗試寫完整 payload，避免瀏覽器直接丟出 quota error。
-  const primaryValue = stripInlineImageDataUrlsForLocalBackup(value)
-  const fallback = fallbackValue !== null
-    ? stripInlineImageDataUrlsForLocalBackup(fallbackValue)
-    : primaryValue
-
-  try {
-    localStorage.setItem(key, JSON.stringify(primaryValue))
-    return true
-  } catch (error) {
-    try {
-      localStorage.setItem(key, JSON.stringify(fallback))
-      return true
-    } catch (fallbackError) {
-      console.warn('金蛋後台本機暫存寫入失敗，已略過，不影響正式資料庫儲存：', fallbackError)
-      return false
-    }
-  }
-}
-
 const persistLastSaveBackup = (backup = null) => {
-  // 第 105201～105600 批：完全停止把 GameConfig 儲存前備份寫入 localStorage。
-  // 原因：商家上傳本機圖片後會形成大型 data:image/base64，
-  // 即使壓縮或省略，瀏覽器仍可能因舊備份/其他暫存佔滿而在 setItem 階段丟出 QuotaExceededError，
-  // 進而中斷正式資料庫儲存流程。此備份改為僅保留在本頁記憶體，正式資料以 PostgreSQL GameConfig 為準。
-  lastSaveBackup.value = backup
-
-  if (typeof window === 'undefined') return
-
-  try {
-    localStorage.removeItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY)
-  } catch (error) {
-    console.warn('金蛋後台本機備份清除失敗，已略過：', error)
-  }
+  // 第 106401～106800 批：停用上次儲存前整包備份。
+  // 只要獎項圖或結果圖含 base64 就會爆 quota，並中斷正式 GameConfig 儲存。
+  // 現在一律不寫入 localStorage，只清除舊 key；正式來源改以資料庫 GameConfig.settings 為主。
+  lastSaveBackup.value = null
+  safeRemoveLocalStorageItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY)
 }
-
-const cleanupGoldenEggOversizedLocalStorage = () => {
-  if (typeof window === 'undefined') return
-
-  const removableKeys = [
-    GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY,
-    currentGoldenEggAdminStateKey.value,
-    currentGoldenEggAdminSyncKey.value
-  ].filter(Boolean)
-
-  Object.keys(localStorage)
-    .filter((key) => key.includes('golden_egg') || key.includes('goldenEgg'))
-    .forEach((key) => {
-      if (!removableKeys.includes(key) && !key.includes('game_config_save_backup')) return
-      try {
-        localStorage.removeItem(key)
-      } catch (error) {
-        console.warn('金蛋後台舊暫存清除失敗，已略過：', key, error)
-      }
-    })
-}
-
 
 const createBeforeSaveGameConfigBackup = () => {
-  // 第 106001～106400 批：儲存前備份改為輕量摘要，不再複製 campaign / prizes / databaseForm 全量資料。
-  // 這些資料可能包含多張 data:image/base64，本機暫存會爆容量；正式資料以 PostgreSQL GameConfig 為準。
+  // 第 106401～106800 批：不再建立含圖片/base64 的本機備份。
+  // 保留函式名稱避免舊流程呼叫失敗，但回傳輕量資訊，不寫 localStorage。
   const backup = {
-    type: 'before-save-game-config-light-backup',
-    version: 'v2.3-batch106001-106400',
+    type: 'database-source-only-no-local-backup',
+    version: 'v2.3-batch106401-106800',
     campaignId: normalizedDatabaseCampaignId.value,
     campaignTitle: databaseCampaign.value?.title || '',
     createdAt: new Date().toISOString(),
-    resultImageUrlExists: Boolean(databaseGameConfigForm.resultImageUrl || campaign.resultImageUrl),
-    resultWinImageUrlExists: Boolean(databaseGameConfigForm.resultWinImageUrl || campaign.resultWinImageUrl),
-    resultLoseImageUrlExists: Boolean(databaseGameConfigForm.resultLoseImageUrl || campaign.resultLoseImageUrl),
-    prizeCount: Array.isArray(prizes.value) ? prizes.value.length : 0,
-    note: '大型圖片與完整設定不再寫入 localStorage；請以資料庫 GameConfig.settings 為正式來源。'
+    note: '金蛋後台已停用大型 localStorage 備份，正式設定以 PostgreSQL GameConfig.settings 為唯一來源。'
   }
 
-  persistLastSaveBackup(backup)
+  persistLastSaveBackup(null)
 
   return backup
 }
 
 const restoreLastSaveBackup = async () => {
-  if (!hasLastSaveBackup.value) {
-    showOperationInfo('目前沒有可回復的上次儲存前備份。')
-    return
-  }
-
-  const confirmed = window.confirm('確定要回復到「上次儲存前」的版本嗎？回復後會直接寫回資料庫。')
-  if (!confirmed) return
-
-  isSavingDatabaseGameConfig.value = true
-
-  try {
-    const backup = lastSaveBackup.value
-
-    await updateAdminGoldenEggGameConfig(
-      normalizedDatabaseCampaignId.value,
-      cloneByJson(backup.settings || {})
-    )
-
-    if (backup.campaignSnapshot) {
-      Object.assign(campaign, cloneByJson(backup.campaignSnapshot))
-    }
-
-    if (backup.prizesSnapshot) {
-      prizes.value = cloneByJson(backup.prizesSnapshot)
-    }
-
-    if (backup.databaseFormSnapshot) {
-      Object.assign(databaseGameConfigForm, cloneByJson(backup.databaseFormSnapshot))
-    }
-
-    previewRefreshKey.value = Date.now()
-    restoreNotice.value = '已回復到上次儲存前版本，並已寫回資料庫。'
-    showOperationSuccess('已回復到上次儲存前版本，資料庫已同步。')
-
-    addGameConfigOperationLog({
-      title: '回復上次儲存前版本',
-      description: `已將活動 #${normalizedDatabaseCampaignId.value} 的 GameConfig.settings 回復到 ${backup.createdAt || '上次儲存前'} 的備份。`,
-      type: 'success'
-    })
-
-    await loadDatabaseGoldenEggCampaign()
-  } catch (error) {
-    console.error('回復上次儲存前版本失敗：', error)
-    showOperationError(error.message || '回復上次儲存前版本失敗。')
-    addGameConfigOperationLog({
-      title: '回復上次儲存前版本失敗',
-      description: error.message || '回復 GameConfig.settings 失敗。',
-      type: 'error'
-    })
-  } finally {
-    isSavingDatabaseGameConfig.value = false
-  }
+  showOperationInfo('金蛋後台已改為正式資料庫單一來源，已停用本機備份回復。需要回復請重新讀取資料庫或使用匯出的 JSON。')
 }
 
 const clearLastSaveBackup = () => {
-  const confirmed = window.confirm('確定要清除上次儲存前備份嗎？清除後不能用這個備份回復。')
-  if (!confirmed) return
-
   persistLastSaveBackup(null)
-  showOperationSuccess('已清除上次儲存前備份。')
+  showOperationSuccess('已清除金蛋舊版本機備份。')
 }
 
 
@@ -1664,10 +1549,9 @@ const formatGameConfigOperationTime = (date = new Date()) => {
 
 const persistGameConfigOperationLogs = () => {
   if (typeof window === 'undefined') return
-  safeSetLocalStorageJson(
+  localStorage.setItem(
     GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY,
-    gameConfigOperationLogs.value.slice(0, 12),
-    stripInlineImageDataUrlsForLocalBackup(gameConfigOperationLogs.value.slice(0, 6))
+    JSON.stringify(gameConfigOperationLogs.value.slice(0, 12))
   )
 }
 
@@ -2292,21 +2176,9 @@ const operationMessageClass = computed(() => {
 })
 
 const saveState = (message = '') => {
-  // 第 106001～106400 批：右側預覽不再依賴寫入整包 localStorage。
-  // 只寫入一個很小的同步標記，避免圖片 URL / 舊 base64 讓瀏覽器暫存爆容量。
-  const stateSaved = safeSetLocalStorageJson(
-    currentGoldenEggAdminSyncKey.value,
-    {
-      updatedAt: new Date().toISOString(),
-      source: 'golden-egg-admin',
-      localStateSaved: false,
-      note: '正式同步來源為 PostgreSQL GameConfig；本機大型預覽暫存已停用。'
-    }
-  )
-
-  if (!stateSaved) {
-    showOperationInfo('本機預覽暫存空間不足，已略過；不影響「儲存前台設定」寫入資料庫。')
-  }
+  // 第 106401～106800 批：停用金蛋後台大型 localStorage 狀態寫入。
+  // 右側預覽改由目前記憶體狀態與重新讀取正式資料庫控制，不再把整包 campaign / prizes 寫進瀏覽器。
+  clearGoldenEggOversizedLocalStorage()
 
   if (isAutoPreviewEnabled.value) {
     previewRefreshKey.value = Date.now()
@@ -2346,36 +2218,9 @@ const isSavedStateForCurrentScope = (saved = {}) => {
 }
 
 const loadState = () => {
-  const saved = safeJsonParse(localStorage.getItem(currentGoldenEggAdminStateKey.value), null)
-
-  if (!saved || !isSavedStateForCurrentScope(saved)) {
-    saveState()
-    return
-  }
-
-  if (saved.campaign) {
-    Object.assign(campaign, {
-      ...cloneByJson(defaultCampaignSnapshot),
-      ...saved.campaign
-    })
-  }
-
-  if (Array.isArray(saved.prizes) && saved.prizes.length) {
-    prizes.value = saved.prizes.map((prize, index) => ({
-      id: prize.id || `admin-prize-${index + 1}`,
-      name: prize.name || `獎項 ${index + 1}`,
-      shortName: prize.shortName || prize.name || `獎${index + 1}`,
-      description: prize.description || '請洽主辦單位兌換。',
-      icon: prize.icon || '🎁',
-      imageUrl: prize.imageUrl || '',
-      isEnabled: prize.isEnabled !== false,
-      probability: normalizePrizeProbability(prize.probability),
-      stock: Number(prize.stock ?? 0),
-      type: prize.type === 'lose' ? 'lose' : 'win',
-      rank: prize.rank || (prize.type === 'lose' ? 'none' : 'normal')
-    }))
-  }
-
+  // 第 106401～106800 批：不再讀取金蛋後台本機暫存，避免舊 base64 圖片覆蓋資料庫。
+  // 進入頁面時只清理舊暫存；正式資料由 autoLoadMerchantDefaultCampaign / loadDatabaseGoldenEggCampaign 流程讀 PostgreSQL。
+  clearGoldenEggOversizedLocalStorage()
   previewRefreshKey.value = Date.now()
 }
 
@@ -2401,28 +2246,6 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
   databaseGameConfigForm.shareDescription = campaign.shareDescription || databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.shareUrl = campaign.shareUrl || databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
   databaseGameConfigForm.shareImageUrl = campaign.shareImageUrl || databaseGameConfigForm.shareImageUrl || ''
-
-  // 第 104001～104400 批：結果彈窗也屬於正式前台設定，立即同步時必須一起寫入資料庫表單。
-  databaseGameConfigForm.resultModalBgFrom = campaign.resultModalBgFrom || databaseGameConfigForm.resultModalBgFrom || '#dc2626'
-  databaseGameConfigForm.resultModalBgTo = campaign.resultModalBgTo || databaseGameConfigForm.resultModalBgTo || '#450a0a'
-  databaseGameConfigForm.resultModalBorderColor = campaign.resultModalBorderColor || databaseGameConfigForm.resultModalBorderColor || '#fde68a'
-  databaseGameConfigForm.resultIconBgColor = campaign.resultIconBgColor || databaseGameConfigForm.resultIconBgColor || '#fde047'
-  databaseGameConfigForm.resultIconTextColor = campaign.resultIconTextColor || databaseGameConfigForm.resultIconTextColor || '#991b1b'
-  databaseGameConfigForm.resultImageUrl = campaign.resultImageUrl || databaseGameConfigForm.resultImageUrl || ''
-  databaseGameConfigForm.resultWinImageUrl = campaign.resultWinImageUrl || databaseGameConfigForm.resultWinImageUrl || ''
-  databaseGameConfigForm.resultLoseImageUrl = campaign.resultLoseImageUrl || databaseGameConfigForm.resultLoseImageUrl || ''
-  databaseGameConfigForm.resultIconSize = Number(campaign.resultIconSize || databaseGameConfigForm.resultIconSize || 96)
-  databaseGameConfigForm.resultIconTextSize = Number(campaign.resultIconTextSize || databaseGameConfigForm.resultIconTextSize || 48)
-  databaseGameConfigForm.resultBadgeTextSize = Number(campaign.resultBadgeTextSize || databaseGameConfigForm.resultBadgeTextSize || 12)
-  databaseGameConfigForm.resultTitleTextSize = Number(campaign.resultTitleTextSize || databaseGameConfigForm.resultTitleTextSize || 24)
-  databaseGameConfigForm.resultTitleColor = campaign.resultTitleColor || databaseGameConfigForm.resultTitleColor || '#ffffff'
-  databaseGameConfigForm.resultDescriptionTextSize = Number(campaign.resultDescriptionTextSize || databaseGameConfigForm.resultDescriptionTextSize || 14)
-  databaseGameConfigForm.resultDescriptionColor = campaign.resultDescriptionColor || databaseGameConfigForm.resultDescriptionColor || '#fef3c7'
-  databaseGameConfigForm.resultPrimaryButtonText = campaign.resultPrimaryButtonText || databaseGameConfigForm.resultPrimaryButtonText || '繼續查看'
-  databaseGameConfigForm.resultPrimaryButtonBgColor = campaign.resultPrimaryButtonBgColor || databaseGameConfigForm.resultPrimaryButtonBgColor || '#fde047'
-  databaseGameConfigForm.resultPrimaryButtonTextColor = campaign.resultPrimaryButtonTextColor || databaseGameConfigForm.resultPrimaryButtonTextColor || '#991b1b'
-  databaseGameConfigForm.resultCopyButtonText = campaign.resultCopyButtonText || databaseGameConfigForm.resultCopyButtonText || '複製結果'
-
   databaseGameConfigForm.systemShareText = campaign.systemShareText || databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.lineShareText = campaign.lineShareText || databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
   databaseGameConfigForm.telegramShareText = campaign.telegramShareText || databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
@@ -2516,7 +2339,7 @@ const syncToFrontNow = async () => {
   showOperationSuccess('已同步到右側預覽。')
   addGameConfigOperationLog({
     title: '同步到右側預覽',
-    description: '已更新本機預覽設定。若已載入正式 campaignId，會把右側預覽與結果彈窗圖片同步寫入正式 GameConfig.settings。',
+    description: '已更新本機預覽設定。若已載入正式 campaignId，接著會同步寫入資料庫。',
     type: 'info'
   })
 
@@ -2677,34 +2500,7 @@ const readImageFileAsDataUrl = (file) => {
     const reader = new FileReader()
 
     reader.onload = () => {
-      const originalDataUrl = String(reader.result || '')
-
-      // 第 104801～105200 批：本機圖片先壓縮再轉 Data URL，避免 localStorage / GameConfig JSON 太肥。
-      const image = new Image()
-      image.onload = () => {
-        const maxSize = 1200
-        const ratio = Math.min(1, maxSize / Math.max(image.width || maxSize, image.height || maxSize))
-        const width = Math.max(1, Math.round((image.width || maxSize) * ratio))
-        const height = Math.max(1, Math.round((image.height || maxSize) * ratio))
-
-        try {
-          const canvas = document.createElement('canvas')
-          canvas.width = width
-          canvas.height = height
-          const context = canvas.getContext('2d')
-          context.drawImage(image, 0, 0, width, height)
-          resolve(canvas.toDataURL('image/jpeg', 0.82))
-        } catch (error) {
-          console.warn('圖片壓縮失敗，改用原始 Data URL：', error)
-          resolve(originalDataUrl)
-        }
-      }
-
-      image.onerror = () => {
-        resolve(originalDataUrl)
-      }
-
-      image.src = originalDataUrl
+      resolve(String(reader.result || ''))
     }
 
     reader.onerror = () => {
@@ -2715,65 +2511,14 @@ const readImageFileAsDataUrl = (file) => {
   })
 }
 
-
-// 第 105601～106000 批：金蛋圖片改走雲端上傳。
-// 原因：本機圖片轉成 data:image/base64 會塞爆 localStorage / GameConfig JSON。
-// 新規則：後台選擇本機圖片後，先 POST 到後端雲端上傳 API，回傳 https 圖片 URL 後才寫入設定。
-const uploadGoldenEggImageToCloud = async (file, usage = 'golden-egg-image') => {
-  if (!file) return ''
-
-  if (!String(file.type || '').startsWith('image/')) {
-    throw new Error('請選擇圖片檔案')
-  }
-
-  const campaignId = Number(normalizedDatabaseCampaignId.value || databaseCampaign.value?.id || queryCampaignId.value || 0)
-  const response = await uploadCampaignImageApi(file, {
-    campaignId,
-    gameType: 'GOLDEN_EGG',
-    usage,
-    folder: 'golden-egg'
-  })
-
-  const url = String(
-    response?.url ||
-      response?.secureUrl ||
-      response?.imageUrl ||
-      response?.data?.url ||
-      response?.data?.secureUrl ||
-      ''
-  ).trim()
-
-  if (!url) {
-    throw new Error('雲端上傳成功但沒有取得圖片網址')
-  }
-
-  return url
-}
-
-// 第 104401～104800 批：金蛋結果彈窗圖片欄位強制雙向同步。
-// 問題根因：手動貼 URL 時只改到 campaign 預覽狀態，沒有同步到 databaseGameConfigForm，
-// 造成右側預覽已變，但 PUT /campaigns/:id/game-config 沒有寫入 resultModal / resultWinImageUrl / resultLoseImageUrl。
-const syncResultModalImageFieldsToDatabaseForm = () => {
-  databaseGameConfigForm.resultImageUrl = String(campaign.resultImageUrl || databaseGameConfigForm.resultImageUrl || '').trim()
-  databaseGameConfigForm.resultWinImageUrl = String(campaign.resultWinImageUrl || databaseGameConfigForm.resultWinImageUrl || '').trim()
-  databaseGameConfigForm.resultLoseImageUrl = String(campaign.resultLoseImageUrl || databaseGameConfigForm.resultLoseImageUrl || '').trim()
-}
-
 const handleResultImageUploadByField = async (event, field = 'resultImageUrl', label = '全域結果圖片') => {
   const file = event.target?.files?.[0]
 
   if (!file) return
 
   try {
-    const cloudUrl = await uploadGoldenEggImageToCloud(file, field)
-    campaign[field] = cloudUrl
-
-    showOperationInfo(`${label}已上傳到雲端並取得圖片 URL，請按「儲存前台設定」寫入正式資料庫。`)
-
-    // 第 104401～104800 批：本機上傳後也走同一個雙向同步入口。
-    syncResultModalImageFieldsToDatabaseForm()
-
-    saveState(`已上傳${label}到雲端。`)
+    campaign[field] = await readImageFileAsDataUrl(file)
+    saveState(`已上傳${label}。`)
   } catch (error) {
     console.error(`上傳${label}失敗：`, error)
     showOperationError(error.message || '上傳圖片失敗')
@@ -2798,22 +2543,16 @@ const handleResultLoseImageUpload = (event) => {
 
 const clearResultImage = () => {
   campaign.resultImageUrl = ''
-  databaseGameConfigForm.resultImageUrl = ''
-  syncResultModalImageFieldsToDatabaseForm()
   saveState('已清除全域結果圖片。')
 }
 
 const clearResultWinImage = () => {
   campaign.resultWinImageUrl = ''
-  databaseGameConfigForm.resultWinImageUrl = ''
-  syncResultModalImageFieldsToDatabaseForm()
   saveState('已清除中獎結果圖片。')
 }
 
 const clearResultLoseImage = () => {
   campaign.resultLoseImageUrl = ''
-  databaseGameConfigForm.resultLoseImageUrl = ''
-  syncResultModalImageFieldsToDatabaseForm()
   saveState('已清除未中獎結果圖片。')
 }
 
@@ -2823,8 +2562,8 @@ const handlePrizeImageUpload = async (event, prize) => {
   if (!file || !prize) return
 
   try {
-    prize.imageUrl = await uploadGoldenEggImageToCloud(file, `prize-${prize.id || prize.position || 'image'}`)
-    saveState(`已上傳「${prize.name || '獎項'}」圖片到雲端。`)
+    prize.imageUrl = await readImageFileAsDataUrl(file)
+    saveState(`已上傳「${prize.name || '獎項'}」圖片。`)
   } catch (error) {
     console.error('上傳獎項圖片失敗：', error)
     showOperationError(error.message || '上傳圖片失敗')
@@ -6235,47 +5974,6 @@ const buildDatabaseGameConfigPayload = () => {
     shareDescription: databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！',
     shareUrl: databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`,
     shareImageUrl: databaseGameConfigForm.shareImageUrl || '',
-
-    // 第 104001～104400 批：正式前台結果彈窗圖片與樣式一律寫入 GameConfig.settings。
-    // 手機玩家頁只讀這裡，避免右側預覽已變、正式前台仍顯示舊笑臉圖。
-    resultModalBgFrom: databaseGameConfigForm.resultModalBgFrom || '#dc2626',
-    resultModalBgTo: databaseGameConfigForm.resultModalBgTo || '#450a0a',
-    resultModalBorderColor: databaseGameConfigForm.resultModalBorderColor || '#fde68a',
-    resultIconBgColor: databaseGameConfigForm.resultIconBgColor || '#fde047',
-    resultIconTextColor: databaseGameConfigForm.resultIconTextColor || '#991b1b',
-    resultImageUrl: databaseGameConfigForm.resultImageUrl || '',
-    resultWinImageUrl: databaseGameConfigForm.resultWinImageUrl || '',
-    resultLoseImageUrl: databaseGameConfigForm.resultLoseImageUrl || '',
-    resultIconSize: Number(databaseGameConfigForm.resultIconSize || 96),
-    resultIconTextSize: Number(databaseGameConfigForm.resultIconTextSize || 48),
-    resultBadgeTextSize: Number(databaseGameConfigForm.resultBadgeTextSize || 12),
-    resultTitleTextSize: Number(databaseGameConfigForm.resultTitleTextSize || 24),
-    resultTitleColor: databaseGameConfigForm.resultTitleColor || '#ffffff',
-    resultDescriptionTextSize: Number(databaseGameConfigForm.resultDescriptionTextSize || 14),
-    resultDescriptionColor: databaseGameConfigForm.resultDescriptionColor || '#fef3c7',
-    resultPrimaryButtonText: databaseGameConfigForm.resultPrimaryButtonText || '繼續查看',
-    resultPrimaryButtonTextSize: Number(databaseGameConfigForm.resultPrimaryButtonTextSize || 14),
-    resultPrimaryButtonBgColor: databaseGameConfigForm.resultPrimaryButtonBgColor || '#fde047',
-    resultPrimaryButtonTextColor: databaseGameConfigForm.resultPrimaryButtonTextColor || '#991b1b',
-    resultCopyButtonText: databaseGameConfigForm.resultCopyButtonText || '複製結果',
-    resultCopyButtonTextSize: Number(databaseGameConfigForm.resultCopyButtonTextSize || 14),
-    resultCopyButtonBgColor: databaseGameConfigForm.resultCopyButtonBgColor || 'rgba(255,255,255,0.12)',
-    resultCopyButtonTextColor: databaseGameConfigForm.resultCopyButtonTextColor || '#ffffff',
-    resultModal: {
-      ...(originalSettings.resultModal && typeof originalSettings.resultModal === 'object' ? originalSettings.resultModal : {}),
-      imageUrl: databaseGameConfigForm.resultImageUrl || '',
-      winImageUrl: databaseGameConfigForm.resultWinImageUrl || '',
-      loseImageUrl: databaseGameConfigForm.resultLoseImageUrl || '',
-      updatedAt: new Date().toISOString(),
-      source: 'AdminGoldenEggView.databaseGameConfigForm'
-    },
-    syncMeta: {
-      ...(originalSettings.syncMeta && typeof originalSettings.syncMeta === 'object' ? originalSettings.syncMeta : {}),
-      lastGoldenEggFrontendSyncAt: new Date().toISOString(),
-      lastGoldenEggFrontendSyncBatch: '104401-104800',
-      campaignId: normalizedDatabaseCampaignId.value || null
-    },
-
     systemShareButtonText: '系統分享',
   systemShareButtonTextSize: 14,
   systemShareButtonBgColor: '#7f1d1d',
@@ -6339,12 +6037,6 @@ const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => 
     shareDescription: String(settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'),
     shareUrl: String(settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`),
     shareImageUrl: String(settings.shareImageUrl || campaign.shareImageUrl || ''),
-    resultModalBgFrom: String(settings.resultModalBgFrom || campaign.resultModalBgFrom || '#dc2626'),
-    resultModalBgTo: String(settings.resultModalBgTo || campaign.resultModalBgTo || '#450a0a'),
-    resultModalBorderColor: String(settings.resultModalBorderColor || campaign.resultModalBorderColor || '#fde68a'),
-    resultImageUrl: String(settings.resultImageUrl || settings.resultModal?.imageUrl || campaign.resultImageUrl || ''),
-    resultWinImageUrl: String(settings.resultWinImageUrl || settings.resultModal?.winImageUrl || campaign.resultWinImageUrl || ''),
-    resultLoseImageUrl: String(settings.resultLoseImageUrl || settings.resultModal?.loseImageUrl || campaign.resultLoseImageUrl || ''),
     systemShareButtonText: String(settings.systemShareButtonText || campaign.systemShareButtonText || '系統分享'),
     systemShareButtonTextSize: Number(settings.systemShareButtonTextSize || campaign.systemShareButtonTextSize || 14),
     systemShareButtonBgColor: String(settings.systemShareButtonBgColor || campaign.systemShareButtonBgColor || '#7f1d1d'),
@@ -6400,12 +6092,6 @@ const databaseGameConfigFormComparable = computed(() => ({
   shareDescription: String(databaseGameConfigForm.shareDescription || ''),
   shareUrl: String(databaseGameConfigForm.shareUrl || ''),
   shareImageUrl: String(databaseGameConfigForm.shareImageUrl || ''),
-  resultModalBgFrom: String(databaseGameConfigForm.resultModalBgFrom || '#dc2626'),
-  resultModalBgTo: String(databaseGameConfigForm.resultModalBgTo || '#450a0a'),
-  resultModalBorderColor: String(databaseGameConfigForm.resultModalBorderColor || '#fde68a'),
-  resultImageUrl: String(databaseGameConfigForm.resultImageUrl || ''),
-  resultWinImageUrl: String(databaseGameConfigForm.resultWinImageUrl || ''),
-  resultLoseImageUrl: String(databaseGameConfigForm.resultLoseImageUrl || ''),
   systemShareButtonText: String(databaseGameConfigForm.systemShareButtonText || '系統分享'),
   systemShareButtonTextSize: Number(databaseGameConfigForm.systemShareButtonTextSize || 14),
   systemShareButtonBgColor: String(databaseGameConfigForm.systemShareButtonBgColor || '#7f1d1d'),
@@ -6474,12 +6160,6 @@ const databaseGameConfigDiffLabelMap = {
   shareDescription: '分享描述 shareDescription',
   shareUrl: '分享網址 shareUrl',
   shareImageUrl: '分享圖片網址 shareImageUrl',
-  resultImageUrl: '全域結果彈窗圖片',
-  resultWinImageUrl: '中獎結果彈窗圖片',
-  resultLoseImageUrl: '未中獎結果彈窗圖片',
-  resultModalBgFrom: '結果彈窗背景上方色',
-  resultModalBgTo: '結果彈窗背景下方色',
-  resultModalBorderColor: '結果彈窗邊框色',
   systemShareButtonText: '系統分享按鈕文字',
   systemShareButtonTextSize: '系統分享文字大小',
   systemShareButtonBgColor: '系統分享按鈕背景色',
@@ -6584,11 +6264,6 @@ const saveDatabaseGameConfig = async () => {
     return
   }
 
-  // 第 104401～104800 批：按「儲存前台設定」時先把右側預覽 campaign 狀態同步回正式資料庫表單。
-  // 這可避免商家手動貼結果圖片 URL 後，右側 iframe 有變，但 PostgreSQL GameConfig 沒有 resultModal 圖片欄位。
-  syncPreviewVisualSettingsToDatabaseForm()
-  syncResultModalImageFieldsToDatabaseForm()
-
   if (!confirmDatabaseGameConfigSave()) {
     showOperationInfo('已取消儲存前台設定，資料庫未變更。')
     return
@@ -6608,33 +6283,21 @@ const saveDatabaseGameConfig = async () => {
   try {
     const beforeSaveBackup = createBeforeSaveGameConfigBackup()
 
-    const payload = buildDatabaseGameConfigPayload()
-
     await updateAdminGoldenEggGameConfig(
       normalizedDatabaseCampaignId.value,
-      payload
+      buildDatabaseGameConfigPayload()
     )
-
-    // 第 104001～104400 批：儲存後立刻重新讀取正式活動，確認資料庫已吃到結果彈窗圖片。
-    // 若正式前台仍不同步，可直接從操作紀錄判斷是「沒存進 DB」還是「玩家頁沒讀到」。
-    const savedCampaign = await getAdminGoldenEggCampaign(normalizedDatabaseCampaignId.value)
-    const savedSettings = savedCampaign?.gameConfig?.settings || {}
-    const savedResultImageSummary = [
-      savedSettings.resultWinImageUrl ? '中獎圖已存' : '中獎圖空白',
-      savedSettings.resultLoseImageUrl ? '未中獎圖已存' : '未中獎圖空白',
-      savedSettings.resultImageUrl ? '全域圖已存' : '全域圖空白'
-    ].join(' / ')
 
     showOperationSuccess(
       databaseGameConfigChangedCount.value
         ? `已同步 ${databaseGameConfigChangedCount.value} 個前台設定到 PostgreSQL gameConfig.settings。`
         : '已確認資料庫前台設定，沒有偵測到新的差異。'
     )
-    setDatabasePreviewSyncMessage(`資料庫前台設定已更新：背景 ${databaseGameConfigForm.themeBgFrom} / ${databaseGameConfigForm.themeBgMiddle} / ${databaseGameConfigForm.themeBgTo}，結果圖：${savedResultImageSummary}`)
+    setDatabasePreviewSyncMessage(`資料庫前台設定已更新：背景 ${databaseGameConfigForm.themeBgFrom} / ${databaseGameConfigForm.themeBgMiddle} / ${databaseGameConfigForm.themeBgTo}，金蛋 ${databaseGameConfigForm.eggColorTop} / ${databaseGameConfigForm.eggColorMiddle} / ${databaseGameConfigForm.eggColorBottom}`)
     addGameConfigOperationLog({
       title: '儲存前台設定',
       description: changedCountBeforeSave
-        ? `已同步 ${changedCountBeforeSave} 個欄位到 PostgreSQL GameConfig.settings；大型本機備份已停用。結果圖驗證：${savedResultImageSummary}。${changedLabelsBeforeSave ? `主要欄位：${changedLabelsBeforeSave}` : ''}`
+        ? `已同步 ${changedCountBeforeSave} 個欄位到 PostgreSQL GameConfig.settings，且已保留儲存前備份。${changedLabelsBeforeSave ? `主要欄位：${changedLabelsBeforeSave}` : ''}`
         : '已重新確認資料庫前台設定，沒有偵測到新的差異。',
       type: 'success',
       changedCount: changedCountBeforeSave
@@ -7036,9 +6699,6 @@ onMounted(async () => {
   redirectGoldenEggLegacyAdminEntry()
 
   if (shouldRedirectGoldenEggLegacyAdminEntry.value) return
-
-  // 第 106001～106400 批：進入後台先清掉舊版 base64 暫存，避免一按儲存就被舊 localStorage 卡住。
-  cleanupGoldenEggOversizedLocalStorage()
 
   loadState()
   loadSerialCodes()
@@ -13678,16 +13338,16 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         <button type="button" class="text-xs font-black text-rose-600" @click="clearResultWinImage">清除</button>
                       </div>
                       <label class="admin-field mt-3">
-                        <span>中獎圖片 URL / 上傳到雲端</span>
-                        <input v-model="campaign.resultWinImageUrl" type="text" placeholder="https://example.com/win.png" @input="syncResultModalImageFieldsToDatabaseForm" />
+                        <span>中獎圖片 URL / 本機上傳資料</span>
+                        <input v-model="campaign.resultWinImageUrl" type="text" placeholder="https://example.com/win.png" />
                       </label>
                       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
                           <input type="file" accept="image/*" class="hidden" @change="handleResultWinImageUpload" />
-                          上傳中獎圖到雲端
+                          上傳中獎圖
                         </label>
                         <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800">
-                          玩家中獎時優先使用：中獎圖片 → 全域結果圖片 → 獎項圖片 → emoji。
+                          玩家中獎時優先使用：獎項圖片 → 中獎圖片 → 全域結果圖片 → emoji。
                         </div>
                       </div>
                     </div>
@@ -13698,27 +13358,27 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         <button type="button" class="text-xs font-black text-rose-600" @click="clearResultLoseImage">清除</button>
                       </div>
                       <label class="admin-field mt-3">
-                        <span>未中獎圖片 URL / 上傳到雲端</span>
-                        <input v-model="campaign.resultLoseImageUrl" type="text" placeholder="https://example.com/lose.png" @input="syncResultModalImageFieldsToDatabaseForm" />
+                        <span>未中獎圖片 URL / 本機上傳資料</span>
+                        <input v-model="campaign.resultLoseImageUrl" type="text" placeholder="https://example.com/lose.png" />
                       </label>
                       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
                           <input type="file" accept="image/*" class="hidden" @change="handleResultLoseImageUpload" />
-                          上傳未中獎圖到雲端
+                          上傳未中獎圖
                         </label>
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold leading-5 text-slate-600">
-                          玩家未中獎時優先使用：未中獎圖片 → 全域結果圖片 → 獎項圖片 → emoji。
+                          玩家未中獎時優先使用：獎項圖片 → 未中獎圖片 → 全域結果圖片 → emoji。
                         </div>
                       </div>
                     </div>
 
                     <label class="admin-field">
                       <span>全域備用結果圖片 URL</span>
-                      <input v-model="campaign.resultImageUrl" type="text" placeholder="https://example.com/result.png" @input="syncResultModalImageFieldsToDatabaseForm" />
+                      <input v-model="campaign.resultImageUrl" type="text" placeholder="https://example.com/result.png" />
                     </label>
 
                     <div class="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-xs font-bold leading-5 text-slate-500">
-                      本批已改為本機圖片先上傳雲端，資料庫只保存 https 圖片 URL，不再保存 data:image/base64。
+                      建議圖片小於 1.5MB；正式上線建議使用 https 圖片網址，載入更穩定。
                     </div>
                   </div>
                 </div>
@@ -13877,155 +13537,77 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </span>
                   </div>
 
-                  <div class="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div
+                    class="mt-4 rounded-[1.8rem] border p-4 text-center shadow-inner"
+                    :style="{
+                      background: `linear-gradient(145deg, ${campaign.resultModalBgFrom}, ${campaign.resultModalBgTo})`,
+                      borderColor: campaign.resultModalBorderColor
+                    }"
+                  >
                     <div
-                      class="rounded-[1.8rem] border p-4 text-center shadow-inner"
+                      class="mx-auto flex items-center justify-center overflow-hidden rounded-[1.35rem] shadow-lg"
                       :style="{
-                        background: `linear-gradient(145deg, ${campaign.resultModalBgFrom}, ${campaign.resultModalBgTo})`,
-                        borderColor: campaign.resultModalBorderColor
+                        width: `${campaign.resultIconSize}px`,
+                        height: `${campaign.resultIconSize}px`,
+                        backgroundColor: campaign.resultIconBgColor,
+                        color: campaign.resultIconTextColor,
+                        fontSize: `${campaign.resultIconTextSize}px`
                       }"
                     >
-                      <span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100">
-                        中獎預覽
-                      </span>
-                      <div
-                        class="mx-auto mt-3 flex items-center justify-center overflow-hidden rounded-[1.35rem] shadow-lg"
-                        :style="{
-                          width: `${campaign.resultIconSize}px`,
-                          height: `${campaign.resultIconSize}px`,
-                          backgroundColor: campaign.resultIconBgColor,
-                          color: campaign.resultIconTextColor,
-                          fontSize: `${campaign.resultIconTextSize}px`
-                        }"
-                      >
-                        <img
-                          v-if="campaign.resultWinImageUrl || campaign.resultImageUrl"
-                          :src="campaign.resultWinImageUrl || campaign.resultImageUrl"
-                          alt="中獎結果圖片"
-                          class="h-full w-full object-cover"
-                        />
-                        <span v-else>🏆</span>
-                      </div>
-
-                      <p
-                        class="mt-4 font-black"
-                        :style="{
-                          color: campaign.resultTitleColor,
-                          fontSize: `${campaign.resultTitleTextSize}px`
-                        }"
-                      >
-                        恭喜中獎
-                      </p>
-                      <p
-                        class="mx-auto mt-2 max-w-xs font-bold leading-6"
-                        :style="{
-                          color: campaign.resultDescriptionColor,
-                          fontSize: `${campaign.resultDescriptionTextSize}px`
-                        }"
-                      >
-                        這裡會顯示玩家敲開金蛋後的獎品名稱與兌換提醒。
-                      </p>
-
-                      <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                        <button
-                          type="button"
-                          class="rounded-2xl px-3 py-2 font-black shadow"
-                          :style="{
-                            backgroundColor: campaign.resultPrimaryButtonBgColor,
-                            color: campaign.resultPrimaryButtonTextColor,
-                            fontSize: `${campaign.resultPrimaryButtonTextSize}px`
-                          }"
-                        >
-                          {{ campaign.resultPrimaryButtonText }}
-                        </button>
-                        <button
-                          type="button"
-                          class="rounded-2xl border border-white/20 px-3 py-2 font-black shadow"
-                          :style="{
-                            backgroundColor: campaign.resultCopyButtonBgColor,
-                            color: campaign.resultCopyButtonTextColor,
-                            fontSize: `${campaign.resultCopyButtonTextSize}px`
-                          }"
-                        >
-                          {{ campaign.resultCopyButtonText }}
-                        </button>
-                      </div>
+                      <img
+                        v-if="campaign.resultWinImageUrl || campaign.resultImageUrl"
+                        :src="campaign.resultWinImageUrl || campaign.resultImageUrl"
+                        alt="結果圖片"
+                        class="h-full w-full object-cover"
+                      />
+                      <span v-else>🏆</span>
                     </div>
 
-                    <div
-                      class="rounded-[1.8rem] border p-4 text-center shadow-inner"
+                    <p
+                      class="mt-4 font-black"
                       :style="{
-                        background: `linear-gradient(145deg, ${campaign.resultModalBgFrom}, ${campaign.resultModalBgTo})`,
-                        borderColor: campaign.resultModalBorderColor
+                        color: campaign.resultTitleColor,
+                        fontSize: `${campaign.resultTitleTextSize}px`
                       }"
                     >
-                      <span class="inline-flex rounded-full bg-rose-50 px-3 py-1 text-[11px] font-black text-rose-700 ring-1 ring-rose-100">
-                        未中獎預覽
-                      </span>
-                      <div
-                        class="mx-auto mt-3 flex items-center justify-center overflow-hidden rounded-[1.35rem] shadow-lg"
-                        :style="{
-                          width: `${campaign.resultIconSize}px`,
-                          height: `${campaign.resultIconSize}px`,
-                          backgroundColor: campaign.resultIconBgColor,
-                          color: campaign.resultIconTextColor,
-                          fontSize: `${campaign.resultIconTextSize}px`
-                        }"
-                      >
-                        <img
-                          v-if="campaign.resultLoseImageUrl || campaign.resultImageUrl"
-                          :src="campaign.resultLoseImageUrl || campaign.resultImageUrl"
-                          alt="未中獎結果圖片"
-                          class="h-full w-full object-cover"
-                        />
-                        <span v-else>🙂</span>
-                      </div>
+                      恭喜中獎
+                    </p>
+                    <p
+                      class="mx-auto mt-2 max-w-xs font-bold leading-6"
+                      :style="{
+                        color: campaign.resultDescriptionColor,
+                        fontSize: `${campaign.resultDescriptionTextSize}px`
+                      }"
+                    >
+                      這裡會顯示玩家敲開金蛋後的獎品名稱與兌換提醒。
+                    </p>
 
-                      <p
-                        class="mt-4 font-black"
+                    <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        class="rounded-2xl px-3 py-2 font-black shadow"
                         :style="{
-                          color: campaign.resultTitleColor,
-                          fontSize: `${campaign.resultTitleTextSize}px`
+                          backgroundColor: campaign.resultPrimaryButtonBgColor,
+                          color: campaign.resultPrimaryButtonTextColor,
+                          fontSize: `${campaign.resultPrimaryButtonTextSize}px`
                         }"
                       >
-                        銘謝惠顧
-                      </p>
-                      <p
-                        class="mx-auto mt-2 max-w-xs font-bold leading-6"
+                        {{ campaign.resultPrimaryButtonText }}
+                      </button>
+                      <button
+                        type="button"
+                        class="rounded-2xl border border-white/20 px-3 py-2 font-black shadow"
                         :style="{
-                          color: campaign.resultDescriptionColor,
-                          fontSize: `${campaign.resultDescriptionTextSize}px`
+                          backgroundColor: campaign.resultCopyButtonBgColor,
+                          color: campaign.resultCopyButtonTextColor,
+                          fontSize: `${campaign.resultCopyButtonTextSize}px`
                         }"
                       >
-                        這裡會顯示未中獎提示與再接再厲文字。
-                      </p>
-
-                      <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                        <button
-                          type="button"
-                          class="rounded-2xl px-3 py-2 font-black shadow"
-                          :style="{
-                            backgroundColor: campaign.resultPrimaryButtonBgColor,
-                            color: campaign.resultPrimaryButtonTextColor,
-                            fontSize: `${campaign.resultPrimaryButtonTextSize}px`
-                          }"
-                        >
-                          {{ campaign.resultPrimaryButtonText }}
-                        </button>
-                        <button
-                          type="button"
-                          class="rounded-2xl border border-white/20 px-3 py-2 font-black shadow"
-                          :style="{
-                            backgroundColor: campaign.resultCopyButtonBgColor,
-                            color: campaign.resultCopyButtonTextColor,
-                            fontSize: `${campaign.resultCopyButtonTextSize}px`
-                          }"
-                        >
-                          {{ campaign.resultCopyButtonText }}
-                        </button>
-                      </div>
+                        {{ campaign.resultCopyButtonText }}
+                      </button>
                     </div>
                   </div>
+                </div>
 
                 <div class="rounded-[1.6rem] border border-yellow-100 bg-yellow-50/70 p-4">
                   <p class="text-xs font-black uppercase tracking-[0.22em] text-yellow-700">
