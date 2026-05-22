@@ -807,6 +807,47 @@ const buildGoldenEggPrizeSettingsPayload = () => {
   })
 }
 
+// 第 106801～107200 批：金蛋後台獎項列表也改成正式 GameConfig 單一來源。
+// 重新讀取資料庫後，左側獎項表單必須從 settings.eggItems / settings.prizes 回填，
+// 避免右側預覽與手機正式頁讀到不同的獎項圖片。
+const normalizeGoldenEggStoredPrizeForAdmin = (prize = {}, index = 0) => {
+  const rawType = String(prize.type || prize.rewardType || '').trim().toUpperCase()
+  const isLose = rawType === 'LOSE' || /未中|沒中|謝謝|再接再厲|銘謝/.test(String(prize.title || prize.name || '').trim())
+  const stock = normalizeGoldenEggStock({
+    ...prize,
+    type: isLose ? 'lose' : 'win',
+    stock: prize.stock ?? prize.remainStock ?? prize.quantity ?? prize.inventory ?? prize.stockTotal
+  })
+
+  return {
+    id: prize.id || `golden-egg-prize-${index + 1}`,
+    name: prize.name || prize.title || prize.shortName || `獎項 ${index + 1}`,
+    shortName: prize.shortName || prize.label || prize.name || prize.title || `獎${index + 1}`,
+    description: prize.description || prize.note || '',
+    icon: prize.icon || prize.emoji || (isLose ? '🙂' : '🎁'),
+    imageUrl: prize.imageUrl || prize.image || prize.prizeImageUrl || prize.iconUrl || '',
+    isEnabled: prize.isEnabled !== false && prize.enabled !== false && String(prize.status || 'ACTIVE').toUpperCase() !== 'DISABLED',
+    probability: normalizeGoldenEggProbability(
+      prize.probabilityPercent ?? prize.probability ?? prize.percent ?? prize.weight ?? prize.chance ?? 0
+    ),
+    stock,
+    type: isLose ? 'lose' : 'win',
+    rank: prize.rank || (isLose ? 'none' : 'normal')
+  }
+}
+
+const extractGoldenEggStoredPrizeSettings = (settings = {}) => {
+  const candidates = [settings.eggItems, settings.prizes, settings.rewards, settings.rewardItems, settings.items]
+
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length) {
+      return candidate
+    }
+  }
+
+  return []
+}
+
 
 const updateLoadedRestoreSnapshot = () => {
   loadedCampaignSnapshot.value = cloneByJson(campaign)
@@ -5901,6 +5942,14 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.eggCardBgTo = settings.eggCardBgTo || '#7f1d1d'
   databaseGameConfigForm.eggNumberBgColor = settings.eggNumberBgColor || '#7f1d1d'
   databaseGameConfigForm.eggNumberTextColor = settings.eggNumberTextColor || '#fef3c7'
+
+  // 第 106801～107200 批：讀正式資料庫時同步回填左側獎項編輯清單。
+  // 後台儲存與手機玩家頁都以 GameConfig.settings.eggItems / prizes 為準。
+  const storedPrizeSettings = extractGoldenEggStoredPrizeSettings(settings)
+  if (storedPrizeSettings.length) {
+    prizes.value = storedPrizeSettings.map(normalizeGoldenEggStoredPrizeForAdmin)
+    loadedPrizesSnapshot.value = cloneByJson(prizes.value)
+  }
 }
 
 const buildDatabaseGameConfigPayload = () => {
@@ -13529,7 +13578,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         Mini Preview
                       </p>
                       <h3 class="mt-1 text-base font-black text-slate-950">
-                        小型結果視窗預覽
+                        目前選中獎項彈窗預覽
                       </h3>
                     </div>
                     <span class="rounded-full bg-yellow-100 px-3 py-1 text-[11px] font-black text-yellow-800">
@@ -13579,7 +13628,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         fontSize: `${campaign.resultDescriptionTextSize}px`
                       }"
                     >
-                      這裡會顯示玩家敲開金蛋後的獎品名稱與兌換提醒。
+                      這裡預覽目前獎項圖片與彈窗樣式；手機實際會依抽中的獎項顯示對應圖片。
                     </p>
 
                     <div class="mt-4 grid gap-2 sm:grid-cols-2">

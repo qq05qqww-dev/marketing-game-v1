@@ -820,45 +820,6 @@ const normalizeRemoteGoldenEggSettings = (apiCampaign = {}) => {
   }
 }
 
-
-// 第 104001～104400 批：玩家頁不再只相信 /campaigns/:id 的附帶 gameConfig。
-// 正式前台每次載入活動時會再讀 /campaigns/:id/game-config，確保後台剛儲存的彈窗圖片立即成為唯一來源。
-const mergeGoldenEggGameConfigIntoCampaign = (apiCampaign = {}, gameConfigPayload = null) => {
-  const gameConfig = gameConfigPayload?.settings
-    ? gameConfigPayload
-    : gameConfigPayload?.gameConfig?.settings
-      ? gameConfigPayload.gameConfig
-      : null
-
-  if (!gameConfig?.settings || typeof gameConfig.settings !== 'object') {
-    return apiCampaign
-  }
-
-  return {
-    ...apiCampaign,
-    gameConfig: {
-      ...(apiCampaign.gameConfig || {}),
-      ...gameConfig,
-      settings: {
-        ...(apiCampaign.gameConfig?.settings || {}),
-        ...(gameConfig.settings || {})
-      }
-    }
-  }
-}
-
-const appendImageCacheVersion = (url = '') => {
-  const value = String(url || '').trim()
-
-  if (!value || value.startsWith('data:') || value.startsWith('blob:')) return value
-
-  const syncAt = String(campaign.syncMeta?.lastGoldenEggFrontendSyncAt || campaign.resultModal?.updatedAt || '').trim()
-  const version = syncAt || String(onlineCampaignId.value || getRouteCampaignId() || Date.now())
-  const separator = value.includes('?') ? '&' : '?'
-
-  return `${value}${separator}v=${encodeURIComponent(version)}`
-}
-
 const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}) => {
   const {
     rawSettings = {},
@@ -992,39 +953,32 @@ const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}
   campaign.primaryColor = theme.primaryColor || rawSettings.primaryColor || campaign.primaryColor
   campaign.accentColor = theme.accentColor || rawSettings.accentColor || campaign.accentColor
   campaign.textColor = theme.textColor || rawSettings.textColor || campaign.textColor
-
-  // 第 104001～104400 批：正式手機頁結果彈窗只以後台 GameConfig.settings 為主。
-  // 支援 root 欄位與 resultModal 巢狀欄位，避免後台已存圖但玩家頁仍吃舊 fallback。
-  const resultModal = rawSettings.resultModal && typeof rawSettings.resultModal === 'object' ? rawSettings.resultModal : {}
-  campaign.resultModal = resultModal
-  campaign.syncMeta = rawSettings.syncMeta && typeof rawSettings.syncMeta === 'object' ? rawSettings.syncMeta : {}
-  campaign.resultModalBgFrom = rawSettings.resultModalBgFrom || resultModal.bgFrom || campaign.resultModalBgFrom
-  campaign.resultModalBgTo = rawSettings.resultModalBgTo || resultModal.bgTo || campaign.resultModalBgTo
-  campaign.resultModalBorderColor = rawSettings.resultModalBorderColor || resultModal.borderColor || campaign.resultModalBorderColor
-  campaign.resultIconBgColor = rawSettings.resultIconBgColor || resultModal.iconBgColor || campaign.resultIconBgColor
-  campaign.resultIconTextColor = rawSettings.resultIconTextColor || resultModal.iconTextColor || campaign.resultIconTextColor
-  campaign.resultImageUrl = rawSettings.resultImageUrl || resultModal.imageUrl || campaign.resultImageUrl || ''
-  campaign.resultWinImageUrl = rawSettings.resultWinImageUrl || resultModal.winImageUrl || campaign.resultWinImageUrl || ''
-  campaign.resultLoseImageUrl = rawSettings.resultLoseImageUrl || resultModal.loseImageUrl || campaign.resultLoseImageUrl || ''
 }
 
 const normalizeRemotePrizeSettings = (apiCampaign = {}, normalized = {}) => {
   const { prizeSettings = [] } = normalized
 
   if (Array.isArray(prizeSettings) && prizeSettings.length) {
-    return prizeSettings.map((prize, index) => ({
-      id: prize.id || `remote-setting-prize-${index + 1}`,
-      name: prize.name || prize.title || prize.shortName || `獎項 ${index + 1}`,
-      shortName: prize.shortName || prize.name || prize.title || `獎項 ${index + 1}`,
-      description: prize.description || prize.note || '',
-      type: prize.type || prize.rewardType || 'normal',
-      probability: Number(prize.probability ?? prize.chance ?? prize.weight ?? 10),
-      weight: Number(prize.weight ?? prize.probability ?? prize.chance ?? 10),
-      inventory: Number(prize.inventory ?? prize.stock ?? prize.quantity ?? 0),
-      imageUrl: prize.imageUrl || prize.image || prize.iconUrl || '',
-      icon: prize.icon || prize.emoji || '🎁',
-      isEnabled: prize.isEnabled !== false
-    }))
+    return prizeSettings.map((prize, index) => {
+      const rawType = String(prize.type || prize.rewardType || '').trim().toUpperCase()
+      const title = prize.name || prize.title || prize.shortName || `獎項 ${index + 1}`
+      const isLose = rawType === 'LOSE' || /未中|沒中|謝謝|再接再厲|銘謝/.test(String(title || ''))
+
+      return {
+        id: prize.id || `remote-setting-prize-${index + 1}`,
+        name: title,
+        title,
+        shortName: prize.shortName || prize.label || prize.name || prize.title || `獎項 ${index + 1}`,
+        description: prize.description || prize.note || '',
+        type: isLose ? 'lose' : 'win',
+        probability: Number(prize.probabilityPercent ?? prize.probability ?? prize.percent ?? prize.chance ?? prize.weight ?? 10),
+        weight: Number(prize.weight ?? prize.probabilityPercent ?? prize.probability ?? prize.chance ?? 10),
+        inventory: Number(prize.inventory ?? prize.stock ?? prize.quantity ?? prize.remainStock ?? 0),
+        imageUrl: prize.imageUrl || prize.image || prize.prizeImageUrl || prize.iconUrl || '',
+        icon: prize.icon || prize.emoji || (isLose ? '🙂' : '🎁'),
+        isEnabled: prize.isEnabled !== false && prize.enabled !== false && String(prize.status || 'ACTIVE').toUpperCase() !== 'DISABLED'
+      }
+    })
   }
 
   if (Array.isArray(apiCampaign.prizes) && apiCampaign.prizes.length) {
@@ -1032,6 +986,78 @@ const normalizeRemotePrizeSettings = (apiCampaign = {}, normalized = {}) => {
   }
 
   return []
+}
+
+// 第 106801～107200 批：正式玩家彈窗圖片依「實際抽中的獎項」回查最新 GameConfig。
+// 目的：後台改 A 獎項圖片，玩家抽到 A 時才顯示 A；抽到 B 時顯示 B，避免看起來不同步。
+const normalizePrizeLookupValue = (value = '') => {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+}
+
+const getPrizeLookupCandidates = (prize = {}) => {
+  return [
+    prize.id,
+    prize.prizeId,
+    prize.rewardId,
+    prize.title,
+    prize.name,
+    prize.shortName,
+    prize.label
+  ]
+    .map(normalizePrizeLookupValue)
+    .filter(Boolean)
+}
+
+const findLatestPrizeSettingForResult = (rawPrize = {}, fallbackPrize = {}) => {
+  const candidates = new Set([
+    ...getPrizeLookupCandidates(rawPrize),
+    ...getPrizeLookupCandidates(fallbackPrize)
+  ])
+
+  if (!candidates.size) return null
+
+  return prizes.value.find((item) => {
+    return getPrizeLookupCandidates(item).some((key) => candidates.has(key))
+  }) || null
+}
+
+const mergeLatestPrizeImageForResult = (rawPrize = {}, fallbackPrize = {}) => {
+  const latestPrize = findLatestPrizeSettingForResult(rawPrize, fallbackPrize)
+
+  if (!latestPrize) return fallbackPrize
+
+  return {
+    ...fallbackPrize,
+    id: fallbackPrize.id || latestPrize.id,
+    name: latestPrize.name || latestPrize.title || fallbackPrize.name,
+    title: latestPrize.title || latestPrize.name || fallbackPrize.title,
+    shortName: latestPrize.shortName || fallbackPrize.shortName,
+    description: latestPrize.description || fallbackPrize.description,
+    icon: latestPrize.icon || fallbackPrize.icon,
+    imageUrl: latestPrize.imageUrl || fallbackPrize.imageUrl || '',
+    type: String(latestPrize.type || fallbackPrize.type || '').toLowerCase() === 'lose' ? 'lose' : 'win',
+    __imageSource: latestPrize.imageUrl ? 'LATEST_GAME_CONFIG_PRIZE_IMAGE' : 'DRAW_ENGINE_RESULT_IMAGE'
+  }
+}
+
+const mergeLatestGameConfigIntoCampaignPayload = async (campaignId, apiCampaign = {}) => {
+  try {
+    const latestGameConfigPayload = unwrapApiPayload(await getCampaignGameConfigApi(campaignId))
+
+    if (latestGameConfigPayload?.settings && typeof latestGameConfigPayload.settings === 'object') {
+      return {
+        ...apiCampaign,
+        gameConfig: latestGameConfigPayload
+      }
+    }
+  } catch (error) {
+    console.warn('重新讀取金蛋 GameConfig 失敗，暫以活動詳情內資料顯示：', error)
+  }
+
+  return apiCampaign
 }
 
 const applyRemoteCampaignData = (apiCampaign = {}) => {
@@ -1303,13 +1329,8 @@ const loadGoldenEggRemoteState = async () => {
       apiCampaign = unwrapApiPayload(await getCampaignDetailApi(campaignId))
     }
 
-    // 第 104001～104400 批：正式玩家頁再讀一次 game-config，避免 /campaigns/:id 快取或附帶資料不是最新。
-    try {
-      const gameConfigPayload = unwrapApiPayload(await getCampaignGameConfigApi(campaignId))
-      apiCampaign = mergeGoldenEggGameConfigIntoCampaign(apiCampaign, gameConfigPayload)
-    } catch (gameConfigError) {
-      console.warn('讀取金蛋 game-config 失敗，改用 campaign detail 內附設定：', gameConfigError)
-    }
+    // 第 106801～107200 批：正式玩家頁再讀一次 /game-config，確保吃到後台最新儲存的獎項圖片。
+    apiCampaign = await mergeLatestGameConfigIntoCampaignPayload(campaignId, apiCampaign)
 
     onlineCampaignId.value = campaignId
     isOnlineMode.value = true
@@ -2259,16 +2280,16 @@ const resultIconStyle = computed(() => {
 })
 
 const resultImageUrl = computed(() => {
+  const latestPrize = findLatestPrizeSettingForResult(resultPrize.value || {}, resultPrize.value || {})
+  const latestPrizeImageUrl = String(latestPrize?.imageUrl || '').trim()
   const prizeImageUrl = String(resultPrize.value?.imageUrl || '').trim()
-  const isLoseResult = resultPrize.value?.type === 'lose'
-  const winImageUrl = String(campaign.resultWinImageUrl || campaign.resultModal?.winImageUrl || '').trim()
-  const loseImageUrl = String(campaign.resultLoseImageUrl || campaign.resultModal?.loseImageUrl || '').trim()
-  const globalImageUrl = String(campaign.resultImageUrl || campaign.resultModal?.imageUrl || '').trim()
+  const isLoseResult = String(latestPrize?.type || resultPrize.value?.type || '').toLowerCase() === 'lose'
+  const winImageUrl = String(campaign.resultWinImageUrl || '').trim()
+  const loseImageUrl = String(campaign.resultLoseImageUrl || '').trim()
+  const globalImageUrl = String(campaign.resultImageUrl || '').trim()
   const typedImageUrl = isLoseResult ? loseImageUrl : winImageUrl
 
-  // 第 104001～104400 批：結果彈窗圖片以後台 GameConfig 設定優先，獎項圖只當 fallback。
-  // 這樣商家改「中獎 / 未中獎彈窗圖片」後，手機正式頁不會再被舊獎項圖或預設笑臉覆蓋。
-  return appendImageCacheVersion(typedImageUrl || globalImageUrl || prizeImageUrl)
+  return latestPrizeImageUrl || prizeImageUrl || typedImageUrl || globalImageUrl
 })
 
 const resultBadgeStyle = computed(() => {
@@ -2625,7 +2646,11 @@ const crackEggWithRemoteApi = async (egg) => {
       Math.max(0, Number(player.chances || 0) - 1)
     )
 
-    const prize = mapApiPrizeToLocalPrize(drawResult?.prize || drawResult?.result || {}, 0)
+    const rawPrizeFromDraw = drawResult?.prize || drawResult?.result || {}
+    const prize = mergeLatestPrizeImageForResult(
+      rawPrizeFromDraw,
+      mapApiPrizeToLocalPrize(rawPrizeFromDraw, 0)
+    )
 
     window.setTimeout(async () => {
 
