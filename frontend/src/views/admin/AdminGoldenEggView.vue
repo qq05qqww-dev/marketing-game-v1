@@ -994,6 +994,56 @@ const hasLastSaveBackup = computed(() => {
   return Boolean(lastSaveBackup.value?.settings && Number(lastSaveBackup.value?.campaignId) === Number(normalizedDatabaseCampaignId.value))
 })
 
+// 第 104801～105200 批：避免本機上傳圖片的 base64 被寫進 localStorage 備份造成 QuotaExceededError。
+// 正式前台圖片仍會寫入 PostgreSQL GameConfig；本機瀏覽器備份只保留欄位存在狀態，不保存大圖內容。
+const isGoldenEggInlineImageDataUrl = (value = '') => {
+  return typeof value === 'string' && /^data:image\//i.test(value)
+}
+
+const stripInlineImageDataUrlsForLocalBackup = (value, seen = new WeakSet()) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripInlineImageDataUrlsForLocalBackup(item, seen))
+  }
+
+  if (value && typeof value === 'object') {
+    if (seen.has(value)) return null
+    seen.add(value)
+
+    return Object.entries(value).reduce((acc, [key, item]) => {
+      acc[key] = stripInlineImageDataUrlsForLocalBackup(item, seen)
+      return acc
+    }, {})
+  }
+
+  if (isGoldenEggInlineImageDataUrl(value)) {
+    return '[本機圖片 Data URL 已省略，請以資料庫 GameConfig 為準]'
+  }
+
+  return value
+}
+
+const safeSetLocalStorageJson = (key, value, fallbackValue = null) => {
+  if (typeof window === 'undefined') return true
+
+  try {
+    localStorage.setItem(key, JSON.stringify(value))
+    return true
+  } catch (error) {
+    if (fallbackValue !== null) {
+      try {
+        localStorage.setItem(key, JSON.stringify(fallbackValue))
+        return true
+      } catch (fallbackError) {
+        console.warn('金蛋後台本機暫存寫入失敗，已略過：', fallbackError)
+        return false
+      }
+    }
+
+    console.warn('金蛋後台本機暫存寫入失敗，已略過：', error)
+    return false
+  }
+}
+
 const persistLastSaveBackup = (backup = null) => {
   lastSaveBackup.value = backup
 
@@ -1002,7 +1052,16 @@ const persistLastSaveBackup = (backup = null) => {
     return
   }
 
-  localStorage.setItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY, JSON.stringify(backup))
+  const localBackup = {
+    ...backup,
+    localStorageNote: '第 104801～105200 批：本機上傳圖片 Data URL 不寫入瀏覽器備份，避免超出 localStorage 容量。',
+    settings: stripInlineImageDataUrlsForLocalBackup(backup.settings),
+    campaignSnapshot: stripInlineImageDataUrlsForLocalBackup(backup.campaignSnapshot),
+    prizesSnapshot: stripInlineImageDataUrlsForLocalBackup(backup.prizesSnapshot),
+    databaseFormSnapshot: stripInlineImageDataUrlsForLocalBackup(backup.databaseFormSnapshot)
+  }
+
+  safeSetLocalStorageJson(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY, localBackup)
 }
 
 const createBeforeSaveGameConfigBackup = () => {
@@ -1569,9 +1628,10 @@ const formatGameConfigOperationTime = (date = new Date()) => {
 
 const persistGameConfigOperationLogs = () => {
   if (typeof window === 'undefined') return
-  localStorage.setItem(
+  safeSetLocalStorageJson(
     GOLDEN_EGG_GAME_CONFIG_OPERATION_LOG_KEY,
-    JSON.stringify(gameConfigOperationLogs.value.slice(0, 12))
+    gameConfigOperationLogs.value.slice(0, 12),
+    stripInlineImageDataUrlsForLocalBackup(gameConfigOperationLogs.value.slice(0, 6))
   )
 }
 
@@ -2196,14 +2256,25 @@ const operationMessageClass = computed(() => {
 })
 
 const saveState = (message = '') => {
-  localStorage.setItem(currentGoldenEggAdminStateKey.value, JSON.stringify(payload.value))
-  localStorage.setItem(
-    currentGoldenEggAdminSyncKey.value,
-    JSON.stringify({
-      updatedAt: new Date().toISOString(),
-      source: 'golden-egg-admin'
-    })
+  const statePayload = payload.value
+  const stateSaved = safeSetLocalStorageJson(
+    currentGoldenEggAdminStateKey.value,
+    statePayload,
+    stripInlineImageDataUrlsForLocalBackup(statePayload)
   )
+
+  safeSetLocalStorageJson(
+    currentGoldenEggAdminSyncKey.value,
+    {
+      updatedAt: new Date().toISOString(),
+      source: 'golden-egg-admin',
+      localStateSaved: stateSaved
+    }
+  )
+
+  if (!stateSaved) {
+    showOperationInfo('本機預覽暫存空間不足，已略過大型圖片暫存；請按「儲存前台設定」寫入資料庫。')
+  }
 
   if (isAutoPreviewEnabled.value) {
     previewRefreshKey.value = Date.now()
@@ -2574,7 +2645,34 @@ const readImageFileAsDataUrl = (file) => {
     const reader = new FileReader()
 
     reader.onload = () => {
-      resolve(String(reader.result || ''))
+      const originalDataUrl = String(reader.result || '')
+
+      // 第 104801～105200 批：本機圖片先壓縮再轉 Data URL，避免 localStorage / GameConfig JSON 太肥。
+      const image = new Image()
+      image.onload = () => {
+        const maxSize = 1200
+        const ratio = Math.min(1, maxSize / Math.max(image.width || maxSize, image.height || maxSize))
+        const width = Math.max(1, Math.round((image.width || maxSize) * ratio))
+        const height = Math.max(1, Math.round((image.height || maxSize) * ratio))
+
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = width
+          canvas.height = height
+          const context = canvas.getContext('2d')
+          context.drawImage(image, 0, 0, width, height)
+          resolve(canvas.toDataURL('image/jpeg', 0.82))
+        } catch (error) {
+          console.warn('圖片壓縮失敗，改用原始 Data URL：', error)
+          resolve(originalDataUrl)
+        }
+      }
+
+      image.onerror = () => {
+        resolve(originalDataUrl)
+      }
+
+      image.src = originalDataUrl
     }
 
     reader.onerror = () => {
@@ -2601,6 +2699,8 @@ const handleResultImageUploadByField = async (event, field = 'resultImageUrl', l
 
   try {
     campaign[field] = await readImageFileAsDataUrl(file)
+
+    showOperationInfo(`${label}已壓縮並暫存，請按「儲存前台設定」寫入正式資料庫。`)
 
     // 第 104401～104800 批：本機上傳後也走同一個雙向同步入口。
     syncResultModalImageFieldsToDatabaseForm()
@@ -13706,77 +13806,155 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </span>
                   </div>
 
-                  <div
-                    class="mt-4 rounded-[1.8rem] border p-4 text-center shadow-inner"
-                    :style="{
-                      background: `linear-gradient(145deg, ${campaign.resultModalBgFrom}, ${campaign.resultModalBgTo})`,
-                      borderColor: campaign.resultModalBorderColor
-                    }"
-                  >
+                  <div class="mt-4 grid gap-4 lg:grid-cols-2">
                     <div
-                      class="mx-auto flex items-center justify-center overflow-hidden rounded-[1.35rem] shadow-lg"
+                      class="rounded-[1.8rem] border p-4 text-center shadow-inner"
                       :style="{
-                        width: `${campaign.resultIconSize}px`,
-                        height: `${campaign.resultIconSize}px`,
-                        backgroundColor: campaign.resultIconBgColor,
-                        color: campaign.resultIconTextColor,
-                        fontSize: `${campaign.resultIconTextSize}px`
+                        background: `linear-gradient(145deg, ${campaign.resultModalBgFrom}, ${campaign.resultModalBgTo})`,
+                        borderColor: campaign.resultModalBorderColor
                       }"
                     >
-                      <img
-                        v-if="campaign.resultWinImageUrl || campaign.resultImageUrl"
-                        :src="campaign.resultWinImageUrl || campaign.resultImageUrl"
-                        alt="結果圖片"
-                        class="h-full w-full object-cover"
-                      />
-                      <span v-else>🏆</span>
+                      <span class="inline-flex rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-black text-emerald-700 ring-1 ring-emerald-100">
+                        中獎預覽
+                      </span>
+                      <div
+                        class="mx-auto mt-3 flex items-center justify-center overflow-hidden rounded-[1.35rem] shadow-lg"
+                        :style="{
+                          width: `${campaign.resultIconSize}px`,
+                          height: `${campaign.resultIconSize}px`,
+                          backgroundColor: campaign.resultIconBgColor,
+                          color: campaign.resultIconTextColor,
+                          fontSize: `${campaign.resultIconTextSize}px`
+                        }"
+                      >
+                        <img
+                          v-if="campaign.resultWinImageUrl || campaign.resultImageUrl"
+                          :src="campaign.resultWinImageUrl || campaign.resultImageUrl"
+                          alt="中獎結果圖片"
+                          class="h-full w-full object-cover"
+                        />
+                        <span v-else>🏆</span>
+                      </div>
+
+                      <p
+                        class="mt-4 font-black"
+                        :style="{
+                          color: campaign.resultTitleColor,
+                          fontSize: `${campaign.resultTitleTextSize}px`
+                        }"
+                      >
+                        恭喜中獎
+                      </p>
+                      <p
+                        class="mx-auto mt-2 max-w-xs font-bold leading-6"
+                        :style="{
+                          color: campaign.resultDescriptionColor,
+                          fontSize: `${campaign.resultDescriptionTextSize}px`
+                        }"
+                      >
+                        這裡會顯示玩家敲開金蛋後的獎品名稱與兌換提醒。
+                      </p>
+
+                      <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          class="rounded-2xl px-3 py-2 font-black shadow"
+                          :style="{
+                            backgroundColor: campaign.resultPrimaryButtonBgColor,
+                            color: campaign.resultPrimaryButtonTextColor,
+                            fontSize: `${campaign.resultPrimaryButtonTextSize}px`
+                          }"
+                        >
+                          {{ campaign.resultPrimaryButtonText }}
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-2xl border border-white/20 px-3 py-2 font-black shadow"
+                          :style="{
+                            backgroundColor: campaign.resultCopyButtonBgColor,
+                            color: campaign.resultCopyButtonTextColor,
+                            fontSize: `${campaign.resultCopyButtonTextSize}px`
+                          }"
+                        >
+                          {{ campaign.resultCopyButtonText }}
+                        </button>
+                      </div>
                     </div>
 
-                    <p
-                      class="mt-4 font-black"
+                    <div
+                      class="rounded-[1.8rem] border p-4 text-center shadow-inner"
                       :style="{
-                        color: campaign.resultTitleColor,
-                        fontSize: `${campaign.resultTitleTextSize}px`
+                        background: `linear-gradient(145deg, ${campaign.resultModalBgFrom}, ${campaign.resultModalBgTo})`,
+                        borderColor: campaign.resultModalBorderColor
                       }"
                     >
-                      恭喜中獎
-                    </p>
-                    <p
-                      class="mx-auto mt-2 max-w-xs font-bold leading-6"
-                      :style="{
-                        color: campaign.resultDescriptionColor,
-                        fontSize: `${campaign.resultDescriptionTextSize}px`
-                      }"
-                    >
-                      這裡會顯示玩家敲開金蛋後的獎品名稱與兌換提醒。
-                    </p>
+                      <span class="inline-flex rounded-full bg-rose-50 px-3 py-1 text-[11px] font-black text-rose-700 ring-1 ring-rose-100">
+                        未中獎預覽
+                      </span>
+                      <div
+                        class="mx-auto mt-3 flex items-center justify-center overflow-hidden rounded-[1.35rem] shadow-lg"
+                        :style="{
+                          width: `${campaign.resultIconSize}px`,
+                          height: `${campaign.resultIconSize}px`,
+                          backgroundColor: campaign.resultIconBgColor,
+                          color: campaign.resultIconTextColor,
+                          fontSize: `${campaign.resultIconTextSize}px`
+                        }"
+                      >
+                        <img
+                          v-if="campaign.resultLoseImageUrl || campaign.resultImageUrl"
+                          :src="campaign.resultLoseImageUrl || campaign.resultImageUrl"
+                          alt="未中獎結果圖片"
+                          class="h-full w-full object-cover"
+                        />
+                        <span v-else>🙂</span>
+                      </div>
 
-                    <div class="mt-4 grid gap-2 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        class="rounded-2xl px-3 py-2 font-black shadow"
+                      <p
+                        class="mt-4 font-black"
                         :style="{
-                          backgroundColor: campaign.resultPrimaryButtonBgColor,
-                          color: campaign.resultPrimaryButtonTextColor,
-                          fontSize: `${campaign.resultPrimaryButtonTextSize}px`
+                          color: campaign.resultTitleColor,
+                          fontSize: `${campaign.resultTitleTextSize}px`
                         }"
                       >
-                        {{ campaign.resultPrimaryButtonText }}
-                      </button>
-                      <button
-                        type="button"
-                        class="rounded-2xl border border-white/20 px-3 py-2 font-black shadow"
+                        銘謝惠顧
+                      </p>
+                      <p
+                        class="mx-auto mt-2 max-w-xs font-bold leading-6"
                         :style="{
-                          backgroundColor: campaign.resultCopyButtonBgColor,
-                          color: campaign.resultCopyButtonTextColor,
-                          fontSize: `${campaign.resultCopyButtonTextSize}px`
+                          color: campaign.resultDescriptionColor,
+                          fontSize: `${campaign.resultDescriptionTextSize}px`
                         }"
                       >
-                        {{ campaign.resultCopyButtonText }}
-                      </button>
+                        這裡會顯示未中獎提示與再接再厲文字。
+                      </p>
+
+                      <div class="mt-4 grid gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          class="rounded-2xl px-3 py-2 font-black shadow"
+                          :style="{
+                            backgroundColor: campaign.resultPrimaryButtonBgColor,
+                            color: campaign.resultPrimaryButtonTextColor,
+                            fontSize: `${campaign.resultPrimaryButtonTextSize}px`
+                          }"
+                        >
+                          {{ campaign.resultPrimaryButtonText }}
+                        </button>
+                        <button
+                          type="button"
+                          class="rounded-2xl border border-white/20 px-3 py-2 font-black shadow"
+                          :style="{
+                            backgroundColor: campaign.resultCopyButtonBgColor,
+                            color: campaign.resultCopyButtonTextColor,
+                            fontSize: `${campaign.resultCopyButtonTextSize}px`
+                          }"
+                        >
+                          {{ campaign.resultCopyButtonText }}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
 
                 <div class="rounded-[1.6rem] border border-yellow-100 bg-yellow-50/70 p-4">
                   <p class="text-xs font-black uppercase tracking-[0.22em] text-yellow-700">
