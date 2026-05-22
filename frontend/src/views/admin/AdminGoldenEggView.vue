@@ -2585,6 +2585,15 @@ const readImageFileAsDataUrl = (file) => {
   })
 }
 
+// 第 104401～104800 批：金蛋結果彈窗圖片欄位強制雙向同步。
+// 問題根因：手動貼 URL 時只改到 campaign 預覽狀態，沒有同步到 databaseGameConfigForm，
+// 造成右側預覽已變，但 PUT /campaigns/:id/game-config 沒有寫入 resultModal / resultWinImageUrl / resultLoseImageUrl。
+const syncResultModalImageFieldsToDatabaseForm = () => {
+  databaseGameConfigForm.resultImageUrl = String(campaign.resultImageUrl || databaseGameConfigForm.resultImageUrl || '').trim()
+  databaseGameConfigForm.resultWinImageUrl = String(campaign.resultWinImageUrl || databaseGameConfigForm.resultWinImageUrl || '').trim()
+  databaseGameConfigForm.resultLoseImageUrl = String(campaign.resultLoseImageUrl || databaseGameConfigForm.resultLoseImageUrl || '').trim()
+}
+
 const handleResultImageUploadByField = async (event, field = 'resultImageUrl', label = '全域結果圖片') => {
   const file = event.target?.files?.[0]
 
@@ -2593,11 +2602,8 @@ const handleResultImageUploadByField = async (event, field = 'resultImageUrl', l
   try {
     campaign[field] = await readImageFileAsDataUrl(file)
 
-    // 第 104001～104400 批：後台圖片上傳後，正式前台同步來源一律跟著更新。
-    // 以前只更新右側預覽 campaign[field]，但手機正式頁讀的是 databaseGameConfigForm -> GameConfig.settings。
-    if (Object.prototype.hasOwnProperty.call(databaseGameConfigForm, field)) {
-      databaseGameConfigForm[field] = campaign[field]
-    }
+    // 第 104401～104800 批：本機上傳後也走同一個雙向同步入口。
+    syncResultModalImageFieldsToDatabaseForm()
 
     saveState(`已上傳${label}。`)
   } catch (error) {
@@ -2625,18 +2631,21 @@ const handleResultLoseImageUpload = (event) => {
 const clearResultImage = () => {
   campaign.resultImageUrl = ''
   databaseGameConfigForm.resultImageUrl = ''
+  syncResultModalImageFieldsToDatabaseForm()
   saveState('已清除全域結果圖片。')
 }
 
 const clearResultWinImage = () => {
   campaign.resultWinImageUrl = ''
   databaseGameConfigForm.resultWinImageUrl = ''
+  syncResultModalImageFieldsToDatabaseForm()
   saveState('已清除中獎結果圖片。')
 }
 
 const clearResultLoseImage = () => {
   campaign.resultLoseImageUrl = ''
   databaseGameConfigForm.resultLoseImageUrl = ''
+  syncResultModalImageFieldsToDatabaseForm()
   saveState('已清除未中獎結果圖片。')
 }
 
@@ -6095,7 +6104,7 @@ const buildDatabaseGameConfigPayload = () => {
     syncMeta: {
       ...(originalSettings.syncMeta && typeof originalSettings.syncMeta === 'object' ? originalSettings.syncMeta : {}),
       lastGoldenEggFrontendSyncAt: new Date().toISOString(),
-      lastGoldenEggFrontendSyncBatch: '104001-104400',
+      lastGoldenEggFrontendSyncBatch: '104401-104800',
       campaignId: normalizedDatabaseCampaignId.value || null
     },
 
@@ -6406,6 +6415,11 @@ const saveDatabaseGameConfig = async () => {
     showOperationError('請先輸入並讀取正式活動 campaignId。')
     return
   }
+
+  // 第 104401～104800 批：按「儲存前台設定」時先把右側預覽 campaign 狀態同步回正式資料庫表單。
+  // 這可避免商家手動貼結果圖片 URL 後，右側 iframe 有變，但 PostgreSQL GameConfig 沒有 resultModal 圖片欄位。
+  syncPreviewVisualSettingsToDatabaseForm()
+  syncResultModalImageFieldsToDatabaseForm()
 
   if (!confirmDatabaseGameConfigSave()) {
     showOperationInfo('已取消儲存前台設定，資料庫未變更。')
@@ -13494,7 +13508,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                       </div>
                       <label class="admin-field mt-3">
                         <span>中獎圖片 URL / 本機上傳資料</span>
-                        <input v-model="campaign.resultWinImageUrl" type="text" placeholder="https://example.com/win.png" />
+                        <input v-model="campaign.resultWinImageUrl" type="text" placeholder="https://example.com/win.png" @input="syncResultModalImageFieldsToDatabaseForm" />
                       </label>
                       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
@@ -13502,7 +13516,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                           上傳中獎圖
                         </label>
                         <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800">
-                          玩家中獎時優先使用：獎項圖片 → 中獎圖片 → 全域結果圖片 → emoji。
+                          玩家中獎時優先使用：中獎圖片 → 全域結果圖片 → 獎項圖片 → emoji。
                         </div>
                       </div>
                     </div>
@@ -13514,7 +13528,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                       </div>
                       <label class="admin-field mt-3">
                         <span>未中獎圖片 URL / 本機上傳資料</span>
-                        <input v-model="campaign.resultLoseImageUrl" type="text" placeholder="https://example.com/lose.png" />
+                        <input v-model="campaign.resultLoseImageUrl" type="text" placeholder="https://example.com/lose.png" @input="syncResultModalImageFieldsToDatabaseForm" />
                       </label>
                       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
@@ -13522,14 +13536,14 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                           上傳未中獎圖
                         </label>
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold leading-5 text-slate-600">
-                          玩家未中獎時優先使用：獎項圖片 → 未中獎圖片 → 全域結果圖片 → emoji。
+                          玩家未中獎時優先使用：未中獎圖片 → 全域結果圖片 → 獎項圖片 → emoji。
                         </div>
                       </div>
                     </div>
 
                     <label class="admin-field">
                       <span>全域備用結果圖片 URL</span>
-                      <input v-model="campaign.resultImageUrl" type="text" placeholder="https://example.com/result.png" />
+                      <input v-model="campaign.resultImageUrl" type="text" placeholder="https://example.com/result.png" @input="syncResultModalImageFieldsToDatabaseForm" />
                     </label>
 
                     <div class="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-xs font-bold leading-5 text-slate-500">
