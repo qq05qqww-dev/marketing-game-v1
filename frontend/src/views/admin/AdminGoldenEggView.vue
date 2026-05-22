@@ -1184,6 +1184,10 @@ const scheduleDatabaseGameConfigAutoSave = (reason = '前台設定已變更，�
   if (typeof window === 'undefined') return
   if (!normalizedDatabaseCampaignId.value) return
 
+  // 第 109601～110000 批：任何會自動儲存資料庫的欄位，先同步到右側 iframe 的輕量即時預覽。
+  // 等資料庫背景儲存完成後也不重載 iframe，避免畫面閃回舊資料。
+  syncDatabaseGameConfigFormToLivePreview(reason, { autoSave: false })
+
   if (databaseGameConfigAutoSaveTimer) {
     window.clearTimeout(databaseGameConfigAutoSaveTimer)
   }
@@ -2031,7 +2035,6 @@ const syncDatabaseCampaignToLivePreview = (campaignData = databaseCampaign.value
   })
 
   saveState(message)
-  previewRefreshKey.value = Date.now()
 }
 
 const importDatabaseGameConfigBackupJson = async (event) => {
@@ -2420,14 +2423,86 @@ const operationMessageClass = computed(() => {
   return 'border-blue-200 bg-blue-50 text-blue-700'
 })
 
-const saveState = (message = '') => {
-  // 第 106401～106800 批：停用金蛋後台大型 localStorage 狀態寫入。
-  // 右側預覽改由目前記憶體狀態與重新讀取正式資料庫控制，不再把整包 campaign / prizes 寫進瀏覽器。
-  clearGoldenEggOversizedLocalStorage()
+const sanitizeGoldenEggPreviewValue = (value) => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
 
-  // 第 108401～108800 批：saveState 不再直接重載 iframe。
-  // iframe 是正式前台，會重新讀 PostgreSQL；若在尚未儲存時重載，會看到舊資料並造成畫面跳回。
-  // 只有資料庫儲存完成或手動按「重新整理預覽」時才刷新 iframe。
+    // 第 109601～110000 批：即時預覽只允許輕量資料進 localStorage。
+    // 本機 base64 圖片會造成 quota exceeded；正式圖片應使用雲端 URL，資料庫只存 URL。
+    if (trimmed.startsWith('data:image/') || trimmed.length > 24000) {
+      return ''
+    }
+
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizeGoldenEggPreviewValue(item))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, sanitizeGoldenEggPreviewValue(item)])
+    )
+  }
+
+  return value
+}
+
+const buildGoldenEggLivePreviewPayload = () => ({
+  version: 'golden_egg_admin_live_preview_v2',
+  scope: currentGoldenEggScopeMeta.value,
+  updatedAt: new Date().toISOString(),
+  previewOnly: true,
+  source: 'AdminGoldenEggView-live-preview',
+  campaign: sanitizeGoldenEggPreviewValue(cloneByJson(campaign)),
+  prizes: sanitizeGoldenEggPreviewValue(cloneByJson(prizes.value))
+})
+
+const writeGoldenEggLivePreviewState = () => {
+  if (typeof window === 'undefined' || !window.localStorage) return
+
+  const previewPayload = buildGoldenEggLivePreviewPayload()
+  const syncPayload = {
+    updatedAt: new Date().toISOString(),
+    source: 'golden-egg-admin-live-preview',
+    mode: 'no-iframe-remount'
+  }
+
+  try {
+    // 先清掉舊版大型暫存，再寫入已移除 base64 的輕量即時預覽資料。
+    clearGoldenEggOversizedLocalStorage()
+    window.localStorage.setItem(currentGoldenEggAdminStateKey.value, JSON.stringify(previewPayload))
+    window.localStorage.setItem(currentGoldenEggAdminSyncKey.value, JSON.stringify(syncPayload))
+  } catch (error) {
+    console.warn('寫入金蛋右側即時預覽暫存失敗，已略過，不影響正式資料庫儲存：', error)
+
+    try {
+      clearGoldenEggOversizedLocalStorage()
+      window.localStorage.setItem(currentGoldenEggAdminStateKey.value, JSON.stringify({
+        ...previewPayload,
+        campaign: sanitizeGoldenEggPreviewValue({
+          ...previewPayload.campaign,
+          resultImageUrl: '',
+          resultWinImageUrl: '',
+          resultLoseImageUrl: ''
+        }),
+        prizes: (previewPayload.prizes || []).map((item) => ({
+          ...item,
+          imageUrl: ''
+        }))
+      }))
+      window.localStorage.setItem(currentGoldenEggAdminSyncKey.value, JSON.stringify(syncPayload))
+    } catch (fallbackError) {
+      console.warn('寫入金蛋右側即時預覽最小暫存仍失敗，已略過：', fallbackError)
+    }
+  }
+}
+
+const saveState = (message = '') => {
+  // 第 109601～110000 批：右側預覽改成「輕量 localStorage + storage event」即時同步。
+  // 不再 remount iframe，所以左側輸入後右側會直接變更，不會先閃回資料庫舊畫面。
+  writeGoldenEggLivePreviewState()
 
   if (message) {
     showSavedMessage(message)
@@ -14495,7 +14570,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
             class="mx-auto overflow-hidden rounded-[2rem] border-[10px] border-slate-800 bg-black shadow-2xl transition-all duration-300"
             :style="previewFrameStyle"
           >
-            <!-- 第 381 批：右側預覽是 iframe，需靠 previewRefreshKey 重新掛載讀 localStorage。 -->
+            <!-- 第 109601～110000 批：右側預覽不再每次輸入都 remount；改由 storage event 即時套用輕量預覽資料，手動刷新才重掛 iframe。 -->
             <iframe
               :key="previewRefreshKey"
               :src="previewUrl"
