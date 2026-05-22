@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 108001～108400 批：金蛋基本文字與頂部樣式正式資料庫單一來源修正版
+// 第 109201～109600 批：金蛋獎項圖片點擊放大與彈窗樣式備用圖簡化版
 // 延續第 89601～90000 批：金蛋平台模板與商家活動預覽隔離修正版
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -95,6 +95,24 @@ const safeRemoveLocalStorageItem = (key = '') => {
 
 const previewRefreshKey = ref(Date.now())
 const previewDevice = ref('mobile')
+const enlargedPreviewImage = ref(null)
+
+const openImagePreview = (src = '', title = '圖片預覽', subtitle = '') => {
+  const imageUrl = String(src || '').trim()
+
+  if (!imageUrl) return
+
+  enlargedPreviewImage.value = {
+    src: imageUrl,
+    title: String(title || '圖片預覽'),
+    subtitle: String(subtitle || '')
+  }
+}
+
+const closeImagePreview = () => {
+  enlargedPreviewImage.value = null
+}
+
 const savedMessage = ref('')
 const savedMessageType = ref('success')
 const operationMessage = ref('')
@@ -1026,7 +1044,7 @@ const sectionRestoreMap = {
     ]
   },
   result: {
-    label: '結果彈窗',
+    label: '彈窗樣式 / 備用圖',
     campaignFields: [
       'resultModalBgFrom', 'resultModalBgTo', 'resultModalBorderColor',
       'resultIconBgColor', 'resultIconTextColor', 'resultImageUrl',
@@ -1239,7 +1257,7 @@ const adminSections = [
   },
   {
     key: 'result',
-    label: '結果彈窗',
+    label: '彈窗樣式',
     icon: '窗'
   },
   {
@@ -11765,16 +11783,21 @@ watch(
                   </button>
                 </div>
 
-                <div
+                <button
                   v-if="prize.imageUrl"
-                  class="col-span-2 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-2"
+                  type="button"
+                  class="col-span-2 group overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 p-2 text-left transition hover:border-yellow-300 hover:bg-yellow-50"
+                  @click="openImagePreview(prize.imageUrl, prize.name || `獎項 ${index + 1}`, '獎項圖片預覽｜點擊外側或右上角可關閉')"
                 >
                   <img
                     :src="prize.imageUrl"
                     alt="獎項圖片預覽"
-                    class="h-24 w-full rounded-xl object-cover"
+                    class="h-24 w-full rounded-xl object-cover transition group-hover:scale-[1.02]"
                   />
-                </div>
+                  <p class="mt-2 text-center text-[11px] font-black text-amber-700">
+                    點擊放大查看圖片
+                  </p>
+                </button>
 
                 <label class="admin-field compact col-span-2">
                   <span>獎項名稱</span>
@@ -13843,10 +13866,10 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                 Result Modal No Clip｜第 87201～87600 批
               </p>
               <h2 class="relative mt-2 text-2xl font-black text-slate-950">
-                金蛋中獎結果彈窗設定
+                金蛋結果彈窗樣式 / 備用圖設定
               </h2>
               <p class="relative mt-2 text-sm font-bold leading-6 text-slate-600">
-                可設定結果圖片、彈窗底色、文字大小與按鈕顯示，右側玩家頁會套用儲存後的正式設定。
+                主要獎項圖片請在「獎項百分比」每個獎項內設定；這裡只保留彈窗底色、文字大小、按鈕樣式與全域備用圖。
               </p>
             </div>
 
@@ -13859,10 +13882,10 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         Image Source
                       </p>
                       <h3 class="mt-1 text-base font-black text-slate-950">
-                        結果圖片分流
+                        全域備用圖片（可留空）
                       </h3>
                       <p class="mt-1 text-xs font-bold leading-5 text-amber-800/80">
-                        可分別設定中獎圖、未中獎圖，也可保留全域備用圖。獎項本身有圖片時仍會優先顯示獎項圖片。
+                        正式玩家彈窗會優先使用「獎項百分比」內該獎項自己的圖片；這裡只在獎項沒有圖片時當備用圖。
                       </p>
                     </div>
                     <button
@@ -14104,7 +14127,8 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         v-if="databaseGameConfigForm.resultWinImageUrl || databaseGameConfigForm.resultImageUrl"
                         :src="databaseGameConfigForm.resultWinImageUrl || databaseGameConfigForm.resultImageUrl"
                         alt="結果圖片"
-                        class="h-full w-full object-cover"
+                        class="h-full w-full cursor-zoom-in object-cover"
+                        @click.stop="openImagePreview(databaseGameConfigForm.resultWinImageUrl || databaseGameConfigForm.resultImageUrl, '結果彈窗備用圖', '這裡是全域備用圖；實際玩家彈窗會優先使用抽中獎項自己的圖片。')"
                       />
                       <span v-else>🏆</span>
                     </div>
@@ -14487,6 +14511,44 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
           </p>
         </div>
       </section>
+
+
+    <div
+      v-if="enlargedPreviewImage"
+      class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      @click.self="closeImagePreview"
+    >
+      <div class="relative w-full max-w-4xl overflow-hidden rounded-[2rem] bg-white shadow-2xl">
+        <div class="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4">
+          <div>
+            <p class="text-xs font-black uppercase tracking-[0.24em] text-amber-600">
+              Image Preview
+            </p>
+            <h3 class="mt-1 text-xl font-black text-slate-950">
+              {{ enlargedPreviewImage.title }}
+            </h3>
+            <p v-if="enlargedPreviewImage.subtitle" class="mt-1 text-sm font-bold text-slate-500">
+              {{ enlargedPreviewImage.subtitle }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-xl font-black text-slate-700 transition hover:bg-rose-100 hover:text-rose-600"
+            @click="closeImagePreview"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="max-h-[76vh] overflow-auto bg-slate-950 p-4">
+          <img
+            :src="enlargedPreviewImage.src"
+            alt="放大圖片預覽"
+            class="mx-auto max-h-[72vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl"
+          />
+        </div>
+      </div>
+    </div>
     </main>
   </div>
 </template>
