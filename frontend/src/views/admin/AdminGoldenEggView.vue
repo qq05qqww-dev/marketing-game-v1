@@ -461,7 +461,33 @@ const databaseGameConfigForm = reactive({
   eggCardBgFrom: '#ef4444',
   eggCardBgTo: '#7f1d1d',
   eggNumberBgColor: '#7f1d1d',
-  eggNumberTextColor: '#fef3c7'
+  eggNumberTextColor: '#fef3c7',
+  // 第 108801～109200 批：結果彈窗圖片、大小、文字、顏色改成正式資料庫表單單一來源。
+  resultModalBgFrom: '#dc2626',
+  resultModalBgTo: '#450a0a',
+  resultModalBorderColor: '#fde68a',
+  resultIconBgColor: '#fde047',
+  resultIconTextColor: '#991b1b',
+  resultImageUrl: '',
+  resultWinImageUrl: '',
+  resultLoseImageUrl: '',
+  resultIconSize: 96,
+  resultIconTextSize: 48,
+  resultBadgeTextSize: 12,
+  resultTitleTextSize: 24,
+  resultTitleColor: '#ffffff',
+  resultDescriptionTextSize: 14,
+  resultDescriptionColor: '#fef3c7',
+  resultPrimaryButtonText: '繼續查看',
+  resultPrimaryButtonTextSize: 14,
+  resultPrimaryButtonBgColor: '#fde047',
+  resultPrimaryButtonTextColor: '#991b1b',
+  resultCopyButtonText: '複製結果',
+  resultCopyButtonTextSize: 14,
+  resultCopyButtonBgColor: '#ffffff',
+  resultCopyButtonTextColor: '#ffffff',
+  showResultCopyButton: true,
+  showResultShareButton: true
 })
 const isAutoPreviewEnabled = ref(true)
 const serialCodes = ref([])
@@ -1842,6 +1868,31 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
     eggCardBgTo: databaseGameConfigForm.eggCardBgTo || campaign.eggCardBgTo,
     eggNumberBgColor: databaseGameConfigForm.eggNumberBgColor || campaign.eggNumberBgColor,
     eggNumberTextColor: databaseGameConfigForm.eggNumberTextColor || campaign.eggNumberTextColor,
+    resultModalBgFrom: databaseGameConfigForm.resultModalBgFrom || campaign.resultModalBgFrom,
+    resultModalBgTo: databaseGameConfigForm.resultModalBgTo || campaign.resultModalBgTo,
+    resultModalBorderColor: databaseGameConfigForm.resultModalBorderColor || campaign.resultModalBorderColor,
+    resultIconBgColor: databaseGameConfigForm.resultIconBgColor || campaign.resultIconBgColor,
+    resultIconTextColor: databaseGameConfigForm.resultIconTextColor || campaign.resultIconTextColor,
+    resultImageUrl: databaseGameConfigForm.resultImageUrl || campaign.resultImageUrl,
+    resultWinImageUrl: databaseGameConfigForm.resultWinImageUrl || campaign.resultWinImageUrl,
+    resultLoseImageUrl: databaseGameConfigForm.resultLoseImageUrl || campaign.resultLoseImageUrl,
+    resultIconSize: Number(databaseGameConfigForm.resultIconSize || campaign.resultIconSize || 96),
+    resultIconTextSize: Number(databaseGameConfigForm.resultIconTextSize || campaign.resultIconTextSize || 48),
+    resultBadgeTextSize: Number(databaseGameConfigForm.resultBadgeTextSize || campaign.resultBadgeTextSize || 12),
+    resultTitleTextSize: Number(databaseGameConfigForm.resultTitleTextSize || campaign.resultTitleTextSize || 24),
+    resultTitleColor: databaseGameConfigForm.resultTitleColor || campaign.resultTitleColor,
+    resultDescriptionTextSize: Number(databaseGameConfigForm.resultDescriptionTextSize || campaign.resultDescriptionTextSize || 14),
+    resultDescriptionColor: databaseGameConfigForm.resultDescriptionColor || campaign.resultDescriptionColor,
+    resultPrimaryButtonText: databaseGameConfigForm.resultPrimaryButtonText || campaign.resultPrimaryButtonText,
+    resultPrimaryButtonTextSize: Number(databaseGameConfigForm.resultPrimaryButtonTextSize || campaign.resultPrimaryButtonTextSize || 14),
+    resultPrimaryButtonBgColor: databaseGameConfigForm.resultPrimaryButtonBgColor || campaign.resultPrimaryButtonBgColor,
+    resultPrimaryButtonTextColor: databaseGameConfigForm.resultPrimaryButtonTextColor || campaign.resultPrimaryButtonTextColor,
+    resultCopyButtonText: databaseGameConfigForm.resultCopyButtonText || campaign.resultCopyButtonText,
+    resultCopyButtonTextSize: Number(databaseGameConfigForm.resultCopyButtonTextSize || campaign.resultCopyButtonTextSize || 14),
+    resultCopyButtonBgColor: databaseGameConfigForm.resultCopyButtonBgColor || campaign.resultCopyButtonBgColor,
+    resultCopyButtonTextColor: databaseGameConfigForm.resultCopyButtonTextColor || campaign.resultCopyButtonTextColor,
+    showResultCopyButton: databaseGameConfigForm.showResultCopyButton !== false,
+    showResultShareButton: databaseGameConfigForm.showResultShareButton !== false,
     startAt: databaseCampaign.value?.startAt || campaign.startAt || '',
     endAt: databaseCampaign.value?.endAt || campaign.endAt || '',
     activityStartAt: databaseCampaign.value?.startAt || databaseGameConfigForm.activityStartAt || campaign.activityStartAt || '',
@@ -2693,8 +2744,10 @@ const handleResultImageUploadByField = async (event, field = 'resultImageUrl', l
   if (!file) return
 
   try {
-    campaign[field] = await readImageFileAsDataUrl(file)
-    saveState(`已上傳${label}。`)
+    const imageUrl = await readImageFileAsDataUrl(file)
+    databaseGameConfigForm[field] = imageUrl
+    campaign[field] = imageUrl
+    scheduleDatabaseGameConfigAutoSave(`已上傳${label}，正在同步到正式資料庫。`)
   } catch (error) {
     console.error(`上傳${label}失敗：`, error)
     showOperationError(error.message || '上傳圖片失敗')
@@ -2718,18 +2771,21 @@ const handleResultLoseImageUpload = (event) => {
 }
 
 const clearResultImage = () => {
+  databaseGameConfigForm.resultImageUrl = ''
   campaign.resultImageUrl = ''
-  saveState('已清除全域結果圖片。')
+  scheduleDatabaseGameConfigAutoSave('已清除全域結果圖片，正在同步到正式資料庫。')
 }
 
 const clearResultWinImage = () => {
+  databaseGameConfigForm.resultWinImageUrl = ''
   campaign.resultWinImageUrl = ''
-  saveState('已清除中獎結果圖片。')
+  scheduleDatabaseGameConfigAutoSave('已清除中獎結果圖片，正在同步到正式資料庫。')
 }
 
 const clearResultLoseImage = () => {
+  databaseGameConfigForm.resultLoseImageUrl = ''
   campaign.resultLoseImageUrl = ''
-  saveState('已清除未中獎結果圖片。')
+  scheduleDatabaseGameConfigAutoSave('已清除未中獎結果圖片，正在同步到正式資料庫。')
 }
 
 const handlePrizeImageUpload = async (event, prize) => {
@@ -6117,6 +6173,61 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.eggNumberBgColor = settings.eggNumberBgColor || '#7f1d1d'
   databaseGameConfigForm.eggNumberTextColor = settings.eggNumberTextColor || '#fef3c7'
 
+  const resultModalSettings = settings.resultModal && typeof settings.resultModal === 'object' ? settings.resultModal : {}
+  databaseGameConfigForm.resultModalBgFrom = settings.resultModalBgFrom || resultModalSettings.bgFrom || '#dc2626'
+  databaseGameConfigForm.resultModalBgTo = settings.resultModalBgTo || resultModalSettings.bgTo || '#450a0a'
+  databaseGameConfigForm.resultModalBorderColor = settings.resultModalBorderColor || resultModalSettings.borderColor || '#fde68a'
+  databaseGameConfigForm.resultIconBgColor = settings.resultIconBgColor || resultModalSettings.iconBgColor || '#fde047'
+  databaseGameConfigForm.resultIconTextColor = settings.resultIconTextColor || resultModalSettings.iconTextColor || '#991b1b'
+  databaseGameConfigForm.resultImageUrl = settings.resultImageUrl || resultModalSettings.imageUrl || ''
+  databaseGameConfigForm.resultWinImageUrl = settings.resultWinImageUrl || resultModalSettings.winImageUrl || ''
+  databaseGameConfigForm.resultLoseImageUrl = settings.resultLoseImageUrl || resultModalSettings.loseImageUrl || ''
+  databaseGameConfigForm.resultIconSize = Number(settings.resultIconSize || resultModalSettings.iconSize || 96)
+  databaseGameConfigForm.resultIconTextSize = Number(settings.resultIconTextSize || resultModalSettings.iconTextSize || 48)
+  databaseGameConfigForm.resultBadgeTextSize = Number(settings.resultBadgeTextSize || resultModalSettings.badgeTextSize || 12)
+  databaseGameConfigForm.resultTitleTextSize = Number(settings.resultTitleTextSize || resultModalSettings.titleTextSize || 24)
+  databaseGameConfigForm.resultTitleColor = settings.resultTitleColor || resultModalSettings.titleColor || '#ffffff'
+  databaseGameConfigForm.resultDescriptionTextSize = Number(settings.resultDescriptionTextSize || resultModalSettings.descriptionTextSize || 14)
+  databaseGameConfigForm.resultDescriptionColor = settings.resultDescriptionColor || resultModalSettings.descriptionColor || '#fef3c7'
+  databaseGameConfigForm.resultPrimaryButtonText = settings.resultPrimaryButtonText || resultModalSettings.primaryButtonText || '繼續查看'
+  databaseGameConfigForm.resultPrimaryButtonTextSize = Number(settings.resultPrimaryButtonTextSize || resultModalSettings.primaryButtonTextSize || 14)
+  databaseGameConfigForm.resultPrimaryButtonBgColor = settings.resultPrimaryButtonBgColor || resultModalSettings.primaryButtonBgColor || '#fde047'
+  databaseGameConfigForm.resultPrimaryButtonTextColor = settings.resultPrimaryButtonTextColor || resultModalSettings.primaryButtonTextColor || '#991b1b'
+  databaseGameConfigForm.resultCopyButtonText = settings.resultCopyButtonText || resultModalSettings.copyButtonText || '複製結果'
+  databaseGameConfigForm.resultCopyButtonTextSize = Number(settings.resultCopyButtonTextSize || resultModalSettings.copyButtonTextSize || 14)
+  databaseGameConfigForm.resultCopyButtonBgColor = settings.resultCopyButtonBgColor || resultModalSettings.copyButtonBgColor || '#ffffff'
+  databaseGameConfigForm.resultCopyButtonTextColor = settings.resultCopyButtonTextColor || resultModalSettings.copyButtonTextColor || '#ffffff'
+  databaseGameConfigForm.showResultCopyButton = settings.showResultCopyButton !== false
+  databaseGameConfigForm.showResultShareButton = settings.showResultShareButton !== false
+
+  Object.assign(campaign, {
+    resultModalBgFrom: databaseGameConfigForm.resultModalBgFrom,
+    resultModalBgTo: databaseGameConfigForm.resultModalBgTo,
+    resultModalBorderColor: databaseGameConfigForm.resultModalBorderColor,
+    resultIconBgColor: databaseGameConfigForm.resultIconBgColor,
+    resultIconTextColor: databaseGameConfigForm.resultIconTextColor,
+    resultImageUrl: databaseGameConfigForm.resultImageUrl,
+    resultWinImageUrl: databaseGameConfigForm.resultWinImageUrl,
+    resultLoseImageUrl: databaseGameConfigForm.resultLoseImageUrl,
+    resultIconSize: databaseGameConfigForm.resultIconSize,
+    resultIconTextSize: databaseGameConfigForm.resultIconTextSize,
+    resultBadgeTextSize: databaseGameConfigForm.resultBadgeTextSize,
+    resultTitleTextSize: databaseGameConfigForm.resultTitleTextSize,
+    resultTitleColor: databaseGameConfigForm.resultTitleColor,
+    resultDescriptionTextSize: databaseGameConfigForm.resultDescriptionTextSize,
+    resultDescriptionColor: databaseGameConfigForm.resultDescriptionColor,
+    resultPrimaryButtonText: databaseGameConfigForm.resultPrimaryButtonText,
+    resultPrimaryButtonTextSize: databaseGameConfigForm.resultPrimaryButtonTextSize,
+    resultPrimaryButtonBgColor: databaseGameConfigForm.resultPrimaryButtonBgColor,
+    resultPrimaryButtonTextColor: databaseGameConfigForm.resultPrimaryButtonTextColor,
+    resultCopyButtonText: databaseGameConfigForm.resultCopyButtonText,
+    resultCopyButtonTextSize: databaseGameConfigForm.resultCopyButtonTextSize,
+    resultCopyButtonBgColor: databaseGameConfigForm.resultCopyButtonBgColor,
+    resultCopyButtonTextColor: databaseGameConfigForm.resultCopyButtonTextColor,
+    showResultCopyButton: databaseGameConfigForm.showResultCopyButton,
+    showResultShareButton: databaseGameConfigForm.showResultShareButton
+  })
+
   // 第 106801～107200 批：讀正式資料庫時同步回填左側獎項編輯清單。
   // 後台儲存與手機玩家頁都以 GameConfig.settings.eggItems / prizes 為準。
   const storedPrizeSettings = extractGoldenEggStoredPrizeSettings(settings)
@@ -6217,6 +6328,58 @@ const buildDatabaseGameConfigPayload = () => {
     eggCardBgTo: databaseGameConfigForm.eggCardBgTo || '#7f1d1d',
     eggNumberBgColor: databaseGameConfigForm.eggNumberBgColor || '#7f1d1d',
     eggNumberTextColor: databaseGameConfigForm.eggNumberTextColor || '#fef3c7',
+    // 第 108801～109200 批：結果彈窗圖片 / 大小 / 文字 / 顏色必須寫入正式 GameConfig，不能只停在 campaign 預覽暫存。
+    resultModalBgFrom: databaseGameConfigForm.resultModalBgFrom || '#dc2626',
+    resultModalBgTo: databaseGameConfigForm.resultModalBgTo || '#450a0a',
+    resultModalBorderColor: databaseGameConfigForm.resultModalBorderColor || '#fde68a',
+    resultIconBgColor: databaseGameConfigForm.resultIconBgColor || '#fde047',
+    resultIconTextColor: databaseGameConfigForm.resultIconTextColor || '#991b1b',
+    resultImageUrl: databaseGameConfigForm.resultImageUrl || '',
+    resultWinImageUrl: databaseGameConfigForm.resultWinImageUrl || '',
+    resultLoseImageUrl: databaseGameConfigForm.resultLoseImageUrl || '',
+    resultIconSize: Number(databaseGameConfigForm.resultIconSize || 96),
+    resultIconTextSize: Number(databaseGameConfigForm.resultIconTextSize || 48),
+    resultBadgeTextSize: Number(databaseGameConfigForm.resultBadgeTextSize || 12),
+    resultTitleTextSize: Number(databaseGameConfigForm.resultTitleTextSize || 24),
+    resultTitleColor: databaseGameConfigForm.resultTitleColor || '#ffffff',
+    resultDescriptionTextSize: Number(databaseGameConfigForm.resultDescriptionTextSize || 14),
+    resultDescriptionColor: databaseGameConfigForm.resultDescriptionColor || '#fef3c7',
+    resultPrimaryButtonText: databaseGameConfigForm.resultPrimaryButtonText || '繼續查看',
+    resultPrimaryButtonTextSize: Number(databaseGameConfigForm.resultPrimaryButtonTextSize || 14),
+    resultPrimaryButtonBgColor: databaseGameConfigForm.resultPrimaryButtonBgColor || '#fde047',
+    resultPrimaryButtonTextColor: databaseGameConfigForm.resultPrimaryButtonTextColor || '#991b1b',
+    resultCopyButtonText: databaseGameConfigForm.resultCopyButtonText || '複製結果',
+    resultCopyButtonTextSize: Number(databaseGameConfigForm.resultCopyButtonTextSize || 14),
+    resultCopyButtonBgColor: databaseGameConfigForm.resultCopyButtonBgColor || '#ffffff',
+    resultCopyButtonTextColor: databaseGameConfigForm.resultCopyButtonTextColor || '#ffffff',
+    showResultCopyButton: databaseGameConfigForm.showResultCopyButton !== false,
+    showResultShareButton: databaseGameConfigForm.showResultShareButton !== false,
+    resultModal: {
+      ...(originalSettings.resultModal && typeof originalSettings.resultModal === 'object' ? originalSettings.resultModal : {}),
+      bgFrom: databaseGameConfigForm.resultModalBgFrom || '#dc2626',
+      bgTo: databaseGameConfigForm.resultModalBgTo || '#450a0a',
+      borderColor: databaseGameConfigForm.resultModalBorderColor || '#fde68a',
+      iconBgColor: databaseGameConfigForm.resultIconBgColor || '#fde047',
+      iconTextColor: databaseGameConfigForm.resultIconTextColor || '#991b1b',
+      imageUrl: databaseGameConfigForm.resultImageUrl || '',
+      winImageUrl: databaseGameConfigForm.resultWinImageUrl || '',
+      loseImageUrl: databaseGameConfigForm.resultLoseImageUrl || '',
+      iconSize: Number(databaseGameConfigForm.resultIconSize || 96),
+      iconTextSize: Number(databaseGameConfigForm.resultIconTextSize || 48),
+      badgeTextSize: Number(databaseGameConfigForm.resultBadgeTextSize || 12),
+      titleTextSize: Number(databaseGameConfigForm.resultTitleTextSize || 24),
+      titleColor: databaseGameConfigForm.resultTitleColor || '#ffffff',
+      descriptionTextSize: Number(databaseGameConfigForm.resultDescriptionTextSize || 14),
+      descriptionColor: databaseGameConfigForm.resultDescriptionColor || '#fef3c7',
+      primaryButtonText: databaseGameConfigForm.resultPrimaryButtonText || '繼續查看',
+      primaryButtonTextSize: Number(databaseGameConfigForm.resultPrimaryButtonTextSize || 14),
+      primaryButtonBgColor: databaseGameConfigForm.resultPrimaryButtonBgColor || '#fde047',
+      primaryButtonTextColor: databaseGameConfigForm.resultPrimaryButtonTextColor || '#991b1b',
+      copyButtonText: databaseGameConfigForm.resultCopyButtonText || '複製結果',
+      copyButtonTextSize: Number(databaseGameConfigForm.resultCopyButtonTextSize || 14),
+      copyButtonBgColor: databaseGameConfigForm.resultCopyButtonBgColor || '#ffffff',
+      copyButtonTextColor: databaseGameConfigForm.resultCopyButtonTextColor || '#ffffff'
+    },
     // 第 84801～85200 批：金蛋正式抽獎機率由後台百分比設定寫入 GameConfig。
     // 後端 Draw Engine 會優先讀取 eggItems / prizes 的 probabilityPercent / weight / probability。
     eggItems: buildGoldenEggPrizeSettingsPayload(),
@@ -6301,6 +6464,31 @@ const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => 
     eggCardBgTo: String(settings.eggCardBgTo || '#7f1d1d'),
     eggNumberBgColor: String(settings.eggNumberBgColor || '#7f1d1d'),
     eggNumberTextColor: String(settings.eggNumberTextColor || '#fef3c7'),
+    resultModalBgFrom: String(settings.resultModalBgFrom || settings.resultModal?.bgFrom || '#dc2626'),
+    resultModalBgTo: String(settings.resultModalBgTo || settings.resultModal?.bgTo || '#450a0a'),
+    resultModalBorderColor: String(settings.resultModalBorderColor || settings.resultModal?.borderColor || '#fde68a'),
+    resultIconBgColor: String(settings.resultIconBgColor || settings.resultModal?.iconBgColor || '#fde047'),
+    resultIconTextColor: String(settings.resultIconTextColor || settings.resultModal?.iconTextColor || '#991b1b'),
+    resultImageUrl: String(settings.resultImageUrl || settings.resultModal?.imageUrl || ''),
+    resultWinImageUrl: String(settings.resultWinImageUrl || settings.resultModal?.winImageUrl || ''),
+    resultLoseImageUrl: String(settings.resultLoseImageUrl || settings.resultModal?.loseImageUrl || ''),
+    resultIconSize: Number(settings.resultIconSize || settings.resultModal?.iconSize || 96),
+    resultIconTextSize: Number(settings.resultIconTextSize || settings.resultModal?.iconTextSize || 48),
+    resultBadgeTextSize: Number(settings.resultBadgeTextSize || settings.resultModal?.badgeTextSize || 12),
+    resultTitleTextSize: Number(settings.resultTitleTextSize || settings.resultModal?.titleTextSize || 24),
+    resultTitleColor: String(settings.resultTitleColor || settings.resultModal?.titleColor || '#ffffff'),
+    resultDescriptionTextSize: Number(settings.resultDescriptionTextSize || settings.resultModal?.descriptionTextSize || 14),
+    resultDescriptionColor: String(settings.resultDescriptionColor || settings.resultModal?.descriptionColor || '#fef3c7'),
+    resultPrimaryButtonText: String(settings.resultPrimaryButtonText || settings.resultModal?.primaryButtonText || '繼續查看'),
+    resultPrimaryButtonTextSize: Number(settings.resultPrimaryButtonTextSize || settings.resultModal?.primaryButtonTextSize || 14),
+    resultPrimaryButtonBgColor: String(settings.resultPrimaryButtonBgColor || settings.resultModal?.primaryButtonBgColor || '#fde047'),
+    resultPrimaryButtonTextColor: String(settings.resultPrimaryButtonTextColor || settings.resultModal?.primaryButtonTextColor || '#991b1b'),
+    resultCopyButtonText: String(settings.resultCopyButtonText || settings.resultModal?.copyButtonText || '複製結果'),
+    resultCopyButtonTextSize: Number(settings.resultCopyButtonTextSize || settings.resultModal?.copyButtonTextSize || 14),
+    resultCopyButtonBgColor: String(settings.resultCopyButtonBgColor || settings.resultModal?.copyButtonBgColor || '#ffffff'),
+    resultCopyButtonTextColor: String(settings.resultCopyButtonTextColor || settings.resultModal?.copyButtonTextColor || '#ffffff'),
+    showResultCopyButton: settings.showResultCopyButton !== false,
+    showResultShareButton: settings.showResultShareButton !== false,
     shareTitle: String(settings.shareTitle || campaign.shareTitle || '九宮格砸金蛋抽獎活動'),
     shareDescription: String(settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'),
     shareUrl: String(settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`),
@@ -6371,6 +6559,31 @@ const databaseGameConfigFormComparable = computed(() => ({
   eggCardBgTo: String(databaseGameConfigForm.eggCardBgTo || '#7f1d1d'),
   eggNumberBgColor: String(databaseGameConfigForm.eggNumberBgColor || '#7f1d1d'),
   eggNumberTextColor: String(databaseGameConfigForm.eggNumberTextColor || '#fef3c7'),
+  resultModalBgFrom: String(databaseGameConfigForm.resultModalBgFrom || '#dc2626'),
+  resultModalBgTo: String(databaseGameConfigForm.resultModalBgTo || '#450a0a'),
+  resultModalBorderColor: String(databaseGameConfigForm.resultModalBorderColor || '#fde68a'),
+  resultIconBgColor: String(databaseGameConfigForm.resultIconBgColor || '#fde047'),
+  resultIconTextColor: String(databaseGameConfigForm.resultIconTextColor || '#991b1b'),
+  resultImageUrl: String(databaseGameConfigForm.resultImageUrl || ''),
+  resultWinImageUrl: String(databaseGameConfigForm.resultWinImageUrl || ''),
+  resultLoseImageUrl: String(databaseGameConfigForm.resultLoseImageUrl || ''),
+  resultIconSize: Number(databaseGameConfigForm.resultIconSize || 96),
+  resultIconTextSize: Number(databaseGameConfigForm.resultIconTextSize || 48),
+  resultBadgeTextSize: Number(databaseGameConfigForm.resultBadgeTextSize || 12),
+  resultTitleTextSize: Number(databaseGameConfigForm.resultTitleTextSize || 24),
+  resultTitleColor: String(databaseGameConfigForm.resultTitleColor || '#ffffff'),
+  resultDescriptionTextSize: Number(databaseGameConfigForm.resultDescriptionTextSize || 14),
+  resultDescriptionColor: String(databaseGameConfigForm.resultDescriptionColor || '#fef3c7'),
+  resultPrimaryButtonText: String(databaseGameConfigForm.resultPrimaryButtonText || '繼續查看'),
+  resultPrimaryButtonTextSize: Number(databaseGameConfigForm.resultPrimaryButtonTextSize || 14),
+  resultPrimaryButtonBgColor: String(databaseGameConfigForm.resultPrimaryButtonBgColor || '#fde047'),
+  resultPrimaryButtonTextColor: String(databaseGameConfigForm.resultPrimaryButtonTextColor || '#991b1b'),
+  resultCopyButtonText: String(databaseGameConfigForm.resultCopyButtonText || '複製結果'),
+  resultCopyButtonTextSize: Number(databaseGameConfigForm.resultCopyButtonTextSize || 14),
+  resultCopyButtonBgColor: String(databaseGameConfigForm.resultCopyButtonBgColor || '#ffffff'),
+  resultCopyButtonTextColor: String(databaseGameConfigForm.resultCopyButtonTextColor || '#ffffff'),
+  showResultCopyButton: databaseGameConfigForm.showResultCopyButton !== false,
+  showResultShareButton: databaseGameConfigForm.showResultShareButton !== false,
   shareTitle: String(databaseGameConfigForm.shareTitle || ''),
   shareDescription: String(databaseGameConfigForm.shareDescription || ''),
   shareUrl: String(databaseGameConfigForm.shareUrl || ''),
@@ -6454,6 +6667,31 @@ const databaseGameConfigDiffLabelMap = {
   eggCardBgTo: '底板下方色 eggCardBgTo',
   eggNumberBgColor: '編號背景色 eggNumberBgColor',
   eggNumberTextColor: '編號文字色 eggNumberTextColor',
+  resultModalBgFrom: '結果彈窗上方色',
+  resultModalBgTo: '結果彈窗下方色',
+  resultModalBorderColor: '結果彈窗邊框色',
+  resultIconBgColor: '結果圖片背景色',
+  resultIconTextColor: '結果 emoji 顏色',
+  resultImageUrl: '全域結果圖片 URL',
+  resultWinImageUrl: '中獎結果圖片 URL',
+  resultLoseImageUrl: '未中獎結果圖片 URL',
+  resultIconSize: '結果圖片大小',
+  resultIconTextSize: 'emoji 圖示文字大小',
+  resultBadgeTextSize: '狀態標籤文字大小',
+  resultTitleTextSize: '結果標題文字大小',
+  resultTitleColor: '結果標題顏色',
+  resultDescriptionTextSize: '結果說明文字大小',
+  resultDescriptionColor: '結果說明顏色',
+  resultPrimaryButtonText: '主要按鈕文字',
+  resultPrimaryButtonTextSize: '主要按鈕文字大小',
+  resultPrimaryButtonBgColor: '主要按鈕底色',
+  resultPrimaryButtonTextColor: '主要按鈕文字色',
+  resultCopyButtonText: '複製按鈕文字',
+  resultCopyButtonTextSize: '複製按鈕文字大小',
+  resultCopyButtonBgColor: '複製按鈕底色',
+  resultCopyButtonTextColor: '複製按鈕文字色',
+  showResultCopyButton: '顯示複製結果按鈕',
+  showResultShareButton: '顯示分享結果按鈕',
   shareTitle: '分享標題 shareTitle',
   shareDescription: '分享描述 shareDescription',
   shareUrl: '分享網址 shareUrl',
@@ -13644,7 +13882,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                       </div>
                       <label class="admin-field mt-3">
                         <span>中獎圖片 URL / 本機上傳資料</span>
-                        <input v-model="campaign.resultWinImageUrl" type="text" placeholder="https://example.com/win.png" />
+                        <input v-model="databaseGameConfigForm.resultWinImageUrl" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="text" placeholder="https://example.com/win.png" />
                       </label>
                       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
@@ -13664,7 +13902,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                       </div>
                       <label class="admin-field mt-3">
                         <span>未中獎圖片 URL / 本機上傳資料</span>
-                        <input v-model="campaign.resultLoseImageUrl" type="text" placeholder="https://example.com/lose.png" />
+                        <input v-model="databaseGameConfigForm.resultLoseImageUrl" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="text" placeholder="https://example.com/lose.png" />
                       </label>
                       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
@@ -13679,7 +13917,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
                     <label class="admin-field">
                       <span>全域備用結果圖片 URL</span>
-                      <input v-model="campaign.resultImageUrl" type="text" placeholder="https://example.com/result.png" />
+                      <input v-model="databaseGameConfigForm.resultImageUrl" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="text" placeholder="https://example.com/result.png" />
                     </label>
 
                     <div class="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-xs font-bold leading-5 text-slate-500">
@@ -13701,9 +13939,9 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
                   <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     <label class="admin-field">
-                      <span>手機彈窗圖片大小：{{ campaign.resultIconSize }}px</span>
+                      <span>手機彈窗圖片大小：{{ databaseGameConfigForm.resultIconSize }}px</span>
                       <input
-                        v-model.number="campaign.resultIconSize"
+                        v-model.number="databaseGameConfigForm.resultIconSize" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗大小已變更，正在同步正式資料庫。')"
                         type="range"
                         min="64"
                         max="260"
@@ -13711,9 +13949,9 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </label>
 
                     <label class="admin-field">
-                      <span>emoji 圖示文字大小：{{ campaign.resultIconTextSize }}px</span>
+                      <span>emoji 圖示文字大小：{{ databaseGameConfigForm.resultIconTextSize }}px</span>
                       <input
-                        v-model.number="campaign.resultIconTextSize"
+                        v-model.number="databaseGameConfigForm.resultIconTextSize" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗大小已變更，正在同步正式資料庫。')"
                         type="range"
                         min="28"
                         max="120"
@@ -13721,9 +13959,9 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </label>
 
                     <label class="admin-field">
-                      <span>狀態標籤文字大小：{{ campaign.resultBadgeTextSize }}px</span>
+                      <span>狀態標籤文字大小：{{ databaseGameConfigForm.resultBadgeTextSize }}px</span>
                       <input
-                        v-model.number="campaign.resultBadgeTextSize"
+                        v-model.number="databaseGameConfigForm.resultBadgeTextSize" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗大小已變更，正在同步正式資料庫。')"
                         type="range"
                         min="10"
                         max="36"
@@ -13731,9 +13969,9 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </label>
 
                     <label class="admin-field">
-                      <span>結果標題文字大小：{{ campaign.resultTitleTextSize }}px</span>
+                      <span>結果標題文字大小：{{ databaseGameConfigForm.resultTitleTextSize }}px</span>
                       <input
-                        v-model.number="campaign.resultTitleTextSize"
+                        v-model.number="databaseGameConfigForm.resultTitleTextSize" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗大小已變更，正在同步正式資料庫。')"
                         type="range"
                         min="16"
                         max="72"
@@ -13741,9 +13979,9 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </label>
 
                     <label class="admin-field">
-                      <span>結果說明文字大小：{{ campaign.resultDescriptionTextSize }}px</span>
+                      <span>結果說明文字大小：{{ databaseGameConfigForm.resultDescriptionTextSize }}px</span>
                       <input
-                        v-model.number="campaign.resultDescriptionTextSize"
+                        v-model.number="databaseGameConfigForm.resultDescriptionTextSize" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗大小已變更，正在同步正式資料庫。')"
                         type="range"
                         min="12"
                         max="40"
@@ -13751,9 +13989,9 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </label>
 
                     <label class="admin-field">
-                      <span>主要按鈕文字大小：{{ campaign.resultPrimaryButtonTextSize }}px</span>
+                      <span>主要按鈕文字大小：{{ databaseGameConfigForm.resultPrimaryButtonTextSize }}px</span>
                       <input
-                        v-model.number="campaign.resultPrimaryButtonTextSize"
+                        v-model.number="databaseGameConfigForm.resultPrimaryButtonTextSize" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗大小已變更，正在同步正式資料庫。')"
                         type="range"
                         min="12"
                         max="32"
@@ -13775,57 +14013,57 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                   <div class="mt-4 grid gap-3 sm:grid-cols-2">
                     <label class="admin-color-field">
                       <span>彈窗上方色</span>
-                      <input v-model="campaign.resultModalBgFrom" type="color" />
+                      <input v-model="databaseGameConfigForm.resultModalBgFrom" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>彈窗下方色</span>
-                      <input v-model="campaign.resultModalBgTo" type="color" />
+                      <input v-model="databaseGameConfigForm.resultModalBgTo" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>彈窗邊框色</span>
-                      <input v-model="campaign.resultModalBorderColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultModalBorderColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>獎品圖示背景</span>
-                      <input v-model="campaign.resultIconBgColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultIconBgColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>獎品圖示文字</span>
-                      <input v-model="campaign.resultIconTextColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultIconTextColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>結果標題顏色</span>
-                      <input v-model="campaign.resultTitleColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultTitleColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>結果說明顏色</span>
-                      <input v-model="campaign.resultDescriptionColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultDescriptionColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>主按鈕底色</span>
-                      <input v-model="campaign.resultPrimaryButtonBgColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultPrimaryButtonBgColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>主按鈕文字色</span>
-                      <input v-model="campaign.resultPrimaryButtonTextColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultPrimaryButtonTextColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>複製按鈕底色</span>
-                      <input v-model="campaign.resultCopyButtonBgColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultCopyButtonBgColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
 
                     <label class="admin-color-field">
                       <span>複製按鈕文字色</span>
-                      <input v-model="campaign.resultCopyButtonTextColor" type="color" />
+                      <input v-model="databaseGameConfigForm.resultCopyButtonTextColor" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="color" />
                     </label>
                   </div>
                 </div>
@@ -13848,23 +14086,23 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                   <div
                     class="mt-4 rounded-[1.8rem] border p-4 text-center shadow-inner"
                     :style="{
-                      background: `linear-gradient(145deg, ${campaign.resultModalBgFrom}, ${campaign.resultModalBgTo})`,
-                      borderColor: campaign.resultModalBorderColor
+                      background: `linear-gradient(145deg, ${databaseGameConfigForm.resultModalBgFrom}, ${databaseGameConfigForm.resultModalBgTo})`,
+                      borderColor: databaseGameConfigForm.resultModalBorderColor
                     }"
                   >
                     <div
                       class="mx-auto flex items-center justify-center overflow-hidden rounded-[1.35rem] shadow-lg"
                       :style="{
-                        width: `${campaign.resultIconSize}px`,
-                        height: `${campaign.resultIconSize}px`,
-                        backgroundColor: campaign.resultIconBgColor,
-                        color: campaign.resultIconTextColor,
-                        fontSize: `${campaign.resultIconTextSize}px`
+                        width: `${databaseGameConfigForm.resultIconSize}px`,
+                        height: `${databaseGameConfigForm.resultIconSize}px`,
+                        backgroundColor: databaseGameConfigForm.resultIconBgColor,
+                        color: databaseGameConfigForm.resultIconTextColor,
+                        fontSize: `${databaseGameConfigForm.resultIconTextSize}px`
                       }"
                     >
                       <img
-                        v-if="campaign.resultWinImageUrl || campaign.resultImageUrl"
-                        :src="campaign.resultWinImageUrl || campaign.resultImageUrl"
+                        v-if="databaseGameConfigForm.resultWinImageUrl || databaseGameConfigForm.resultImageUrl"
+                        :src="databaseGameConfigForm.resultWinImageUrl || databaseGameConfigForm.resultImageUrl"
                         alt="結果圖片"
                         class="h-full w-full object-cover"
                       />
@@ -13874,8 +14112,8 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     <p
                       class="mt-4 font-black"
                       :style="{
-                        color: campaign.resultTitleColor,
-                        fontSize: `${campaign.resultTitleTextSize}px`
+                        color: databaseGameConfigForm.resultTitleColor,
+                        fontSize: `${databaseGameConfigForm.resultTitleTextSize}px`
                       }"
                     >
                       恭喜中獎
@@ -13883,8 +14121,8 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     <p
                       class="mx-auto mt-2 max-w-xs font-bold leading-6"
                       :style="{
-                        color: campaign.resultDescriptionColor,
-                        fontSize: `${campaign.resultDescriptionTextSize}px`
+                        color: databaseGameConfigForm.resultDescriptionColor,
+                        fontSize: `${databaseGameConfigForm.resultDescriptionTextSize}px`
                       }"
                     >
                       這裡預覽目前獎項圖片與彈窗樣式；手機實際會依抽中的獎項顯示對應圖片。
@@ -13895,23 +14133,23 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         type="button"
                         class="rounded-2xl px-3 py-2 font-black shadow"
                         :style="{
-                          backgroundColor: campaign.resultPrimaryButtonBgColor,
-                          color: campaign.resultPrimaryButtonTextColor,
-                          fontSize: `${campaign.resultPrimaryButtonTextSize}px`
+                          backgroundColor: databaseGameConfigForm.resultPrimaryButtonBgColor,
+                          color: databaseGameConfigForm.resultPrimaryButtonTextColor,
+                          fontSize: `${databaseGameConfigForm.resultPrimaryButtonTextSize}px`
                         }"
                       >
-                        {{ campaign.resultPrimaryButtonText }}
+                        {{ databaseGameConfigForm.resultPrimaryButtonText }}
                       </button>
                       <button
                         type="button"
                         class="rounded-2xl border border-white/20 px-3 py-2 font-black shadow"
                         :style="{
-                          backgroundColor: campaign.resultCopyButtonBgColor,
-                          color: campaign.resultCopyButtonTextColor,
-                          fontSize: `${campaign.resultCopyButtonTextSize}px`
+                          backgroundColor: databaseGameConfigForm.resultCopyButtonBgColor,
+                          color: databaseGameConfigForm.resultCopyButtonTextColor,
+                          fontSize: `${databaseGameConfigForm.resultCopyButtonTextSize}px`
                         }"
                       >
-                        {{ campaign.resultCopyButtonText }}
+                        {{ databaseGameConfigForm.resultCopyButtonText }}
                       </button>
                     </div>
                   </div>
@@ -13928,18 +14166,18 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                   <div class="mt-4 space-y-4">
                     <label class="admin-field">
                       <span>主要按鈕文字</span>
-                      <input v-model="campaign.resultPrimaryButtonText" type="text" />
+                      <input v-model="databaseGameConfigForm.resultPrimaryButtonText" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="text" />
                     </label>
 
                     <label class="admin-field">
                       <span>複製按鈕文字</span>
-                      <input v-model="campaign.resultCopyButtonText" type="text" />
+                      <input v-model="databaseGameConfigForm.resultCopyButtonText" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" type="text" />
                     </label>
 
                     <label class="admin-field">
-                      <span>複製按鈕文字大小：{{ campaign.resultCopyButtonTextSize }}px</span>
+                      <span>複製按鈕文字大小：{{ databaseGameConfigForm.resultCopyButtonTextSize }}px</span>
                       <input
-                        v-model.number="campaign.resultCopyButtonTextSize"
+                        v-model.number="databaseGameConfigForm.resultCopyButtonTextSize" @input="scheduleDatabaseGameConfigAutoSave('結果彈窗大小已變更，正在同步正式資料庫。')"
                         type="range"
                         min="12"
                         max="32"
@@ -13947,12 +14185,12 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </label>
 
                     <label class="admin-toggle">
-                      <input v-model="campaign.showResultCopyButton" type="checkbox" />
+                      <input v-model="databaseGameConfigForm.showResultCopyButton" type="checkbox" @change="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" />
                       <span>顯示複製結果按鈕</span>
                     </label>
 
                     <label class="admin-toggle">
-                      <input v-model="campaign.showResultShareButton" type="checkbox" />
+                      <input v-model="databaseGameConfigForm.showResultShareButton" type="checkbox" @change="scheduleDatabaseGameConfigAutoSave('結果彈窗設定已變更，正在同步正式資料庫。')" />
                       <span>次數用完時顯示分享增加機會</span>
                     </label>
                   </div>
