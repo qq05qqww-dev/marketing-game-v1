@@ -2248,6 +2248,7 @@ const stableChecklist = computed(() => {
   ]
 })
 
+// 第 103201～103600 批：修正官方品牌按鈕同步語法，移除重複 return / const value，避免 Render build failed。
 const websiteButtonText = computed(() => {
   return String(campaign.officialLinkLabel || campaign.websiteText || '').trim() || '官方網站'
 })
