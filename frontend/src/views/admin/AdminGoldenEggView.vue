@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 109201～109600 批：金蛋獎項圖片點擊放大與彈窗樣式備用圖簡化版
+// 第 110001～110400 批：金蛋左上 LOGO 圖片與大小後台可調整版
 // 延續第 89601～90000 批：金蛋平台模板與商家活動預覽隔離修正版
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -26,6 +26,7 @@ import {
   getAdminGoldenEggPlayRecordExportUrl,
   getAdminGoldenEggDrawPool
 } from '../../api/goldenEggAdminApi.js'
+import { uploadCampaignImageApi } from '../../api/uploadApi.js'
 import { useRoute, useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -433,6 +434,8 @@ const databaseGameConfigForm = reactive({
   heroTagline: '',
   noticeText: '',
   logoText: '',
+  headerLogoImageUrl: '',
+  headerLogoImageSize: 36,
   websiteButtonText: '',
   websiteUrl: '',
   buttonText: '',
@@ -583,6 +586,8 @@ const campaign = reactive({
   activityTimeTextSize: 11,
   activityStatusBadgeTextSize: 10,
   logoText: '金蛋',
+  headerLogoImageUrl: '',
+  headerLogoImageSize: 36,
   websiteUrl: '',
   websiteButtonText: '官網',
   headerTitleTextSize: 16,
@@ -923,7 +928,7 @@ const sectionRestoreMap = {
       'brandName', 'pageTitle', 'mainTitle', 'subTitle', 'heroTagline', 'noticeText', 'logoText', 'websiteButtonText', 'websiteUrl', 'buttonText', 'brandSubtitle',
       'logoText', 'websiteUrl', 'websiteButtonText',
       'headerTitleTextSize', 'headerTitleColor', 'headerSubTitleColor',
-      'headerLogoTextSize', 'headerLogoBgColor', 'headerLogoTextColor',
+      'headerLogoTextSize', 'headerLogoBgColor', 'headerLogoTextColor', 'headerLogoImageUrl', 'headerLogoImageSize',
       'headerWebsiteTextSize', 'headerWebsiteBgColor', 'headerWebsiteTextColor',
       'headerSideBoxWidth', 'headerBoxHeight', 'headerBoxRadius', 'headerGap',
       'headerPaddingX', 'headerPaddingY'
@@ -1849,6 +1854,8 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
     heroTagline: String(databaseGameConfigForm.heroTagline ?? ''),
     noticeText: String(databaseGameConfigForm.noticeText ?? ''),
     logoText: String(databaseGameConfigForm.logoText ?? ''),
+    headerLogoImageUrl: String(databaseGameConfigForm.headerLogoImageUrl ?? ''),
+    headerLogoImageSize: Number(databaseGameConfigForm.headerLogoImageSize || 36),
     websiteButtonText: String(databaseGameConfigForm.websiteButtonText ?? ''),
     websiteUrl: String(databaseGameConfigForm.websiteUrl ?? ''),
     buttonText: String(databaseGameConfigForm.buttonText ?? ''),
@@ -1858,6 +1865,8 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
     headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || 12),
     headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor || '#fde047',
     headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor || '#991b1b',
+    headerLogoImageUrl: String(databaseGameConfigForm.headerLogoImageUrl || ''),
+    headerLogoImageSize: Number(databaseGameConfigForm.headerLogoImageSize || 36),
     headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || 12),
     headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor || '#7f1d1d',
     headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor || '#ffffff',
@@ -2015,6 +2024,8 @@ const syncDatabaseCampaignToLivePreview = (campaignData = databaseCampaign.value
     heroTagline: settings.heroTagline || campaignData.description || campaign.heroTagline,
     noticeText: settings.noticeText || campaignData.description || campaign.noticeText,
     logoText: settings.logoText || campaign.logoText,
+    headerLogoImageUrl: settings.headerLogoImageUrl || settings.logoImageUrl || campaign.headerLogoImageUrl || '',
+    headerLogoImageSize: Number(settings.headerLogoImageSize || settings.logoImageSize || campaign.headerLogoImageSize || 36),
     websiteButtonText: settings.websiteButtonText || settings.brandLinkText || campaign.websiteButtonText,
     websiteUrl: settings.websiteUrl || settings.brandLinkUrl || campaign.websiteUrl,
     buttonText: settings.buttonText || campaign.buttonText,
@@ -2904,6 +2915,46 @@ const clearPrizeImage = (prize) => {
 
   prize.imageUrl = ''
   saveState(`已清除「${prize.name || '獎項'}」圖片。`)
+}
+
+
+const handleHeaderLogoImageUpload = async (event) => {
+  const file = event.target?.files?.[0]
+
+  if (!file) return
+
+  try {
+    const uploaded = await uploadCampaignImageApi(file, {
+      campaignId: normalizedDatabaseCampaignId.value || databaseCampaign.value?.id || '',
+      gameType: 'GOLDEN_EGG',
+      usage: 'header-logo',
+      folder: 'header-logo'
+    })
+    const imageUrl = uploaded?.secureUrl || uploaded?.url || uploaded?.imageUrl || ''
+
+    if (!imageUrl) {
+      throw new Error('雲端上傳完成但沒有取得圖片網址')
+    }
+
+    databaseGameConfigForm.headerLogoImageUrl = imageUrl
+    campaign.headerLogoImageUrl = imageUrl
+    syncDatabaseGameConfigFormToLivePreview('左上 LOGO 圖片已同步到右側預覽，正在寫入正式資料庫。')
+    scheduleDatabaseGameConfigAutoSave('左上 LOGO 圖片已上傳雲端，正在同步到正式資料庫。')
+  } catch (error) {
+    console.error('上傳左上 LOGO 圖片失敗：', error)
+    showOperationError(error.message || '上傳 LOGO 圖片失敗，請確認後端雲端圖片設定。')
+  } finally {
+    if (event.target) {
+      event.target.value = ''
+    }
+  }
+}
+
+const clearHeaderLogoImage = () => {
+  databaseGameConfigForm.headerLogoImageUrl = ''
+  campaign.headerLogoImageUrl = ''
+  syncDatabaseGameConfigFormToLivePreview('已清除左上 LOGO 圖片，右側改回文字 LOGO。')
+  scheduleDatabaseGameConfigAutoSave('已清除左上 LOGO 圖片，正在同步到正式資料庫。')
 }
 
 
@@ -6174,6 +6225,8 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.heroTagline = settings.heroTagline || campaignData?.description || ''
   databaseGameConfigForm.noticeText = settings.noticeText || campaignData?.description || ''
   databaseGameConfigForm.logoText = settings.logoText || campaign.logoText || '金蛋'
+  databaseGameConfigForm.headerLogoImageUrl = settings.headerLogoImageUrl || settings.logoImageUrl || campaign.headerLogoImageUrl || ''
+  databaseGameConfigForm.headerLogoImageSize = Number(settings.headerLogoImageSize || settings.logoImageSize || campaign.headerLogoImageSize || 36)
   databaseGameConfigForm.websiteButtonText = settings.websiteButtonText || settings.brandLinkText || campaign.websiteButtonText || '官網'
   databaseGameConfigForm.websiteUrl = settings.websiteUrl || settings.brandLinkUrl || campaign.websiteUrl || ''
   databaseGameConfigForm.buttonText = settings.buttonText || campaign.buttonText || '分享活動'
@@ -6210,6 +6263,8 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
     heroTagline: databaseGameConfigForm.heroTagline,
     noticeText: databaseGameConfigForm.noticeText,
     logoText: databaseGameConfigForm.logoText,
+    headerLogoImageUrl: databaseGameConfigForm.headerLogoImageUrl,
+    headerLogoImageSize: Number(databaseGameConfigForm.headerLogoImageSize || 36),
     websiteButtonText: databaseGameConfigForm.websiteButtonText,
     websiteUrl: databaseGameConfigForm.websiteUrl,
     buttonText: databaseGameConfigForm.buttonText,
@@ -6343,6 +6398,10 @@ const buildDatabaseGameConfigPayload = () => {
     heroTagline: databaseGameConfigForm.heroTagline,
     noticeText: databaseGameConfigForm.noticeText,
     logoText: databaseGameConfigForm.logoText,
+    headerLogoImageUrl: databaseGameConfigForm.headerLogoImageUrl || '',
+    headerLogoImageSize: Number(databaseGameConfigForm.headerLogoImageSize || 36),
+    logoImageUrl: databaseGameConfigForm.headerLogoImageUrl || '',
+    logoImageSize: Number(databaseGameConfigForm.headerLogoImageSize || 36),
     websiteButtonText: databaseGameConfigForm.websiteButtonText,
     websiteUrl: databaseGameConfigForm.websiteUrl,
     buttonText: databaseGameConfigForm.buttonText,
@@ -6368,6 +6427,9 @@ const buildDatabaseGameConfigPayload = () => {
       heroTagline: databaseGameConfigForm.heroTagline,
       badgeText: databaseGameConfigForm.heroTagline,
       noticeText: databaseGameConfigForm.noticeText,
+      logoText: databaseGameConfigForm.logoText,
+      headerLogoImageUrl: databaseGameConfigForm.headerLogoImageUrl || '',
+      headerLogoImageSize: Number(databaseGameConfigForm.headerLogoImageSize || 36),
       playButtonText: databaseGameConfigForm.buttonText
     },
     serialRedeemTitle: databaseGameConfigForm.serialRedeemTitle,
@@ -6607,6 +6669,8 @@ const databaseGameConfigFormComparable = computed(() => ({
   heroTagline: String(databaseGameConfigForm.heroTagline || ''),
   noticeText: String(databaseGameConfigForm.noticeText || ''),
   logoText: String(databaseGameConfigForm.logoText || ''),
+  headerLogoImageUrl: String(databaseGameConfigForm.headerLogoImageUrl || ''),
+  headerLogoImageSize: Number(databaseGameConfigForm.headerLogoImageSize || 36),
   websiteButtonText: String(databaseGameConfigForm.websiteButtonText || ''),
   websiteUrl: String(databaseGameConfigForm.websiteUrl || ''),
   buttonText: String(databaseGameConfigForm.buttonText || ''),
@@ -6715,6 +6779,8 @@ const databaseGameConfigDiffLabelMap = {
   heroTagline: '標語 heroTagline',
   noticeText: '公告文字 noticeText',
   logoText: '左上 LOGO 文字',
+  headerLogoImageUrl: '左上 LOGO 圖片',
+  headerLogoImageSize: 'LOGO 圖片大小',
   websiteButtonText: '右上網站按鈕文字',
   websiteUrl: '右上網站連結網址',
   buttonText: '分享按鈕文字',
@@ -10895,6 +10961,77 @@ watch(
             <input v-model="databaseGameConfigForm.logoText" type="text" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
+          <div class="rounded-3xl border border-yellow-100 bg-yellow-50 p-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <h3 class="text-base font-black text-yellow-800">左上 LOGO 圖片</h3>
+                <p class="mt-1 text-xs font-bold leading-5 text-yellow-700/80">
+                  可貼圖片網址，也可上傳本機圖片到雲端；有圖片時優先顯示圖片，沒有圖片才顯示 LOGO 文字。
+                </p>
+              </div>
+              <button
+                type="button"
+                class="rounded-full bg-white px-3 py-1 text-xs font-black text-rose-600 ring-1 ring-rose-100"
+                @click="clearHeaderLogoImage"
+              >
+                清除圖片
+              </button>
+            </div>
+
+            <label class="admin-field mt-4">
+              <span>LOGO 圖片 URL / 上傳後雲端網址</span>
+              <input
+                v-model="databaseGameConfigForm.headerLogoImageUrl"
+                type="text"
+                placeholder="https://example.com/logo.png"
+                @input="syncDatabaseGameConfigFormToLivePreview('LOGO 圖片網址已同步到右側預覽，請按儲存同步到手機前台。')"
+              />
+            </label>
+
+            <div class="mt-3 grid grid-cols-2 gap-3">
+              <label class="admin-upload-button compact">
+                <input
+                  type="file"
+                  accept="image/*"
+                  class="hidden"
+                  @change="handleHeaderLogoImageUpload"
+                />
+                上傳 LOGO 圖片
+              </label>
+              <button
+                type="button"
+                class="rounded-2xl bg-white px-3 py-2 text-xs font-black text-slate-700 ring-1 ring-slate-200"
+                @click="syncDatabaseGameConfigFormToLivePreview('LOGO 圖片已同步到右側預覽，請按儲存同步到手機前台。')"
+              >
+                套用預覽
+              </button>
+            </div>
+
+            <label class="admin-field mt-4">
+              <span>LOGO 圖片大小：{{ databaseGameConfigForm.headerLogoImageSize }}px</span>
+              <input
+                v-model.number="databaseGameConfigForm.headerLogoImageSize"
+                type="range"
+                min="20"
+                max="72"
+                @input="syncDatabaseGameConfigFormToLivePreview('LOGO 圖片大小已同步到右側預覽，請按儲存同步到手機前台。')"
+              />
+            </label>
+
+            <button
+              v-if="databaseGameConfigForm.headerLogoImageUrl"
+              type="button"
+              class="mt-3 flex w-full items-center justify-center rounded-2xl border border-yellow-200 bg-white p-3"
+              @click="openImagePreview(databaseGameConfigForm.headerLogoImageUrl, '左上 LOGO 圖片', 'LOGO 圖片預覽｜點擊外側或右上角可關閉')"
+            >
+              <img
+                :src="databaseGameConfigForm.headerLogoImageUrl"
+                alt="左上 LOGO 圖片預覽"
+                class="max-h-28 rounded-xl object-contain"
+              />
+            </button>
+          </div>
+
           <label class="admin-field">
             <span>右上網站按鈕文字</span>
             <input v-model="databaseGameConfigForm.websiteButtonText" type="text" placeholder="例如：官網、LINE、預約" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
@@ -10946,7 +11083,7 @@ watch(
               左上 LOGO 按鈕樣式
             </h3>
             <p class="mt-1 text-xs font-bold leading-5 text-red-700/80">
-              控制前台左上黃色 LOGO 區塊的文字大小、背景色與文字色。
+              控制前台左上 LOGO 區塊的文字大小、背景色、文字色；若上方有 LOGO 圖片，會優先顯示圖片。
             </p>
 
             <label class="admin-field mt-4">

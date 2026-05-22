@@ -1,4 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
+// 第 110001～110400 批：金蛋左上 LOGO 圖片與大小同步顯示版
 // 第 90401～90800 批：金蛋正式玩家序號驗證後可敲擊防呆修正版
 //
 // 覆蓋位置：
@@ -400,6 +401,8 @@ const campaign = reactive({
   activityTimeTextSize: 11,
   activityStatusBadgeTextSize: 10,
   logoText: '金蛋',
+  headerLogoImageUrl: '',
+  headerLogoImageSize: 36,
   websiteUrl: '',
   websiteButtonText: '官網',
   headerTitleTextSize: 16,
@@ -890,6 +893,33 @@ const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}
     rawSettings.noticeText ||
     apiCampaign.description ||
     campaign.noticeText
+
+  campaign.logoText =
+    basicText.logoText ||
+    nestedCampaign.logoText ||
+    rawSettings.logoText ||
+    campaign.logoText
+
+  campaign.headerLogoImageUrl =
+    basicText.headerLogoImageUrl ||
+    basicText.logoImageUrl ||
+    nestedCampaign.headerLogoImageUrl ||
+    nestedCampaign.logoImageUrl ||
+    rawSettings.headerLogoImageUrl ||
+    rawSettings.logoImageUrl ||
+    campaign.headerLogoImageUrl ||
+    ''
+
+  campaign.headerLogoImageSize = Number(
+    basicText.headerLogoImageSize ||
+      basicText.logoImageSize ||
+      nestedCampaign.headerLogoImageSize ||
+      nestedCampaign.logoImageSize ||
+      rawSettings.headerLogoImageSize ||
+      rawSettings.logoImageSize ||
+      campaign.headerLogoImageSize ||
+      36
+  )
 
   campaign.serialRedeemTitle =
     basicText.serialRedeemTitle ||
@@ -1821,6 +1851,15 @@ const headerLogoStyle = computed(() => {
     fontSize: `${fontSize}px`,
     background: campaign.headerLogoBgColor || '#fde047',
     color: campaign.headerLogoTextColor || '#991b1b'
+  }
+})
+
+const headerLogoImageStyle = computed(() => {
+  const size = Math.min(72, Math.max(20, Number(campaign.headerLogoImageSize || 36)))
+
+  return {
+    width: `${size}px`,
+    height: `${size}px`
   }
 })
 
@@ -3222,7 +3261,14 @@ onUnmounted(() => {
           class="flex h-12 w-full items-center justify-center rounded-2xl px-2 font-black shadow-lg"
           :style="headerLogoStyle"
         >
-          {{ campaign.logoText }}
+          <img
+            v-if="campaign.headerLogoImageUrl"
+            :src="campaign.headerLogoImageUrl"
+            alt="活動 LOGO"
+            class="max-h-full max-w-full rounded-xl object-contain"
+            :style="headerLogoImageStyle"
+          />
+          <span v-else>{{ campaign.logoText }}</span>
         </div>
 
         <div class="min-w-0 text-center">
