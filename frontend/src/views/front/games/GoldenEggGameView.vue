@@ -988,13 +988,28 @@ const normalizeRemotePrizeSettings = (apiCampaign = {}, normalized = {}) => {
   return []
 }
 
-// 第 106801～107200 批：正式玩家彈窗圖片依「實際抽中的獎項」回查最新 GameConfig。
-// 目的：後台改 A 獎項圖片，玩家抽到 A 時才顯示 A；抽到 B 時顯示 B，避免看起來不同步。
+// 第 107201～107600 批：金蛋彈窗圖片比對強化版。
+// 問題：後端 Prize records 可能回「金蛋 100 元折價券」，後台 GameConfig 可能是「折價券 100 元」。
+// 舊版只用完整字串比對，導致找不到最新後台圖片，最後吃到舊 Prize record 圖片，看起來像前後台不同步。
 const normalizePrizeLookupValue = (value = '') => {
   return String(value || '')
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '')
+}
+
+const normalizePrizeSemanticValue = (value = '') => {
+  return normalizePrizeLookupValue(value)
+    .replace(/金蛋/g, '')
+    .replace(/砸蛋/g, '')
+    .replace(/抽獎/g, '')
+    .replace(/折價券/g, '')
+    .replace(/優惠券/g, '')
+    .replace(/禮券/g, '')
+    .replace(/元/g, '')
+    .replace(/獎項/g, '')
+    .replace(/獎/g, '')
+    .replace(/[，,。.!！?？:：;；\-_/|｜()（）\[\]【】]/g, '')
 }
 
 const getPrizeLookupCandidates = (prize = {}) => {
@@ -1011,23 +1026,76 @@ const getPrizeLookupCandidates = (prize = {}) => {
     .filter(Boolean)
 }
 
+const getPrizeSemanticCandidates = (prize = {}) => {
+  return [
+    prize.title,
+    prize.name,
+    prize.shortName,
+    prize.label,
+    prize.description
+  ]
+    .map(normalizePrizeSemanticValue)
+    .filter(Boolean)
+}
+
+const getPrizeNumberTokens = (prize = {}) => {
+  const text = [prize.title, prize.name, prize.shortName, prize.label, prize.description]
+    .filter(Boolean)
+    .join(' ')
+  return Array.from(new Set(String(text).match(/\d+/g) || []))
+}
+
+const isLosePrizeLike = (prize = {}) => {
+  const type = String(prize.type || prize.rewardType || '').toLowerCase()
+  const text = [prize.title, prize.name, prize.shortName, prize.label, prize.description]
+    .filter(Boolean)
+    .join(' ')
+  return type === 'lose' || type === 'thanks' || /未中|沒中|謝謝|銘謝|再接再厲/.test(text)
+}
+
+const isSamePrizeBySemantic = (sourcePrize = {}, targetPrize = {}) => {
+  const sourceKeys = new Set(getPrizeLookupCandidates(sourcePrize))
+  const targetKeys = getPrizeLookupCandidates(targetPrize)
+
+  if (targetKeys.some((key) => sourceKeys.has(key))) return true
+
+  const sourceSemanticKeys = new Set(getPrizeSemanticCandidates(sourcePrize))
+  const targetSemanticKeys = getPrizeSemanticCandidates(targetPrize)
+
+  if (targetSemanticKeys.some((key) => key && sourceSemanticKeys.has(key))) return true
+
+  const sourceNumbers = getPrizeNumberTokens(sourcePrize)
+  const targetNumbers = getPrizeNumberTokens(targetPrize)
+  const sameLoseType = isLosePrizeLike(sourcePrize) && isLosePrizeLike(targetPrize)
+
+  if (sameLoseType) return true
+
+  // 金蛋 100 元折價券 vs 折價券 100 元：以金額數字作為最後比對保護。
+  if (sourceNumbers.length === 1 && targetNumbers.length === 1 && sourceNumbers[0] === targetNumbers[0]) {
+    const sourceLose = isLosePrizeLike(sourcePrize)
+    const targetLose = isLosePrizeLike(targetPrize)
+    return sourceLose === targetLose
+  }
+
+  return false
+}
+
 const findLatestPrizeSettingForResult = (rawPrize = {}, fallbackPrize = {}) => {
-  const candidates = new Set([
-    ...getPrizeLookupCandidates(rawPrize),
-    ...getPrizeLookupCandidates(fallbackPrize)
-  ])
+  const sourcePrize = {
+    ...(fallbackPrize || {}),
+    ...(rawPrize || {})
+  }
 
-  if (!candidates.size) return null
-
-  return prizes.value.find((item) => {
-    return getPrizeLookupCandidates(item).some((key) => candidates.has(key))
-  }) || null
+  return prizes.value.find((item) => isSamePrizeBySemantic(sourcePrize, item)) || null
 }
 
 const mergeLatestPrizeImageForResult = (rawPrize = {}, fallbackPrize = {}) => {
   const latestPrize = findLatestPrizeSettingForResult(rawPrize, fallbackPrize)
 
   if (!latestPrize) return fallbackPrize
+
+  const latestImageUrl = String(latestPrize.imageUrl || latestPrize.image || latestPrize.prizeImageUrl || '').trim()
+  const fallbackImageUrl = String(fallbackPrize.imageUrl || fallbackPrize.image || fallbackPrize.prizeImageUrl || '').trim()
 
   return {
     ...fallbackPrize,
@@ -1037,9 +1105,9 @@ const mergeLatestPrizeImageForResult = (rawPrize = {}, fallbackPrize = {}) => {
     shortName: latestPrize.shortName || fallbackPrize.shortName,
     description: latestPrize.description || fallbackPrize.description,
     icon: latestPrize.icon || fallbackPrize.icon,
-    imageUrl: latestPrize.imageUrl || fallbackPrize.imageUrl || '',
-    type: String(latestPrize.type || fallbackPrize.type || '').toLowerCase() === 'lose' ? 'lose' : 'win',
-    __imageSource: latestPrize.imageUrl ? 'LATEST_GAME_CONFIG_PRIZE_IMAGE' : 'DRAW_ENGINE_RESULT_IMAGE'
+    imageUrl: latestImageUrl || fallbackImageUrl || '',
+    type: isLosePrizeLike(latestPrize) || isLosePrizeLike(fallbackPrize) ? 'lose' : 'win',
+    __imageSource: latestImageUrl ? 'LATEST_GAME_CONFIG_PRIZE_IMAGE_SEMANTIC_MATCH' : 'DRAW_ENGINE_RESULT_IMAGE'
   }
 }
 
@@ -2281,14 +2349,16 @@ const resultIconStyle = computed(() => {
 
 const resultImageUrl = computed(() => {
   const latestPrize = findLatestPrizeSettingForResult(resultPrize.value || {}, resultPrize.value || {})
-  const latestPrizeImageUrl = String(latestPrize?.imageUrl || '').trim()
-  const prizeImageUrl = String(resultPrize.value?.imageUrl || '').trim()
-  const isLoseResult = String(latestPrize?.type || resultPrize.value?.type || '').toLowerCase() === 'lose'
+  const latestPrizeImageUrl = String(latestPrize?.imageUrl || latestPrize?.image || latestPrize?.prizeImageUrl || '').trim()
+  const prizeImageUrl = String(resultPrize.value?.imageUrl || resultPrize.value?.image || resultPrize.value?.prizeImageUrl || '').trim()
+  const isLoseResult = isLosePrizeLike(latestPrize || resultPrize.value || {})
   const winImageUrl = String(campaign.resultWinImageUrl || '').trim()
   const loseImageUrl = String(campaign.resultLoseImageUrl || '').trim()
   const globalImageUrl = String(campaign.resultImageUrl || '').trim()
   const typedImageUrl = isLoseResult ? loseImageUrl : winImageUrl
 
+  // 第 107201～107600 批：正式結果圖以最新 GameConfig 對應獎項為最高優先。
+  // 如果後台把「折價券 100 元」換圖，玩家抽到「金蛋 100 元折價券」也會吃同一張。
   return latestPrizeImageUrl || prizeImageUrl || typedImageUrl || globalImageUrl
 })
 
