@@ -83,6 +83,7 @@ import { useRoute, useRouter } from 'vue-router'
 import CommonGamePlayBoard from '../../../components/common-game/CommonGamePlayBoard.vue'
 import {
   getCampaignDetailApi,
+  getCampaignGameConfigApi,
   getTenantGoldenEggCampaignApi,
   playDrawEngineCampaignApi,
   verifyDrawEngineSerialApi
@@ -819,6 +820,45 @@ const normalizeRemoteGoldenEggSettings = (apiCampaign = {}) => {
   }
 }
 
+
+// 第 104001～104400 批：玩家頁不再只相信 /campaigns/:id 的附帶 gameConfig。
+// 正式前台每次載入活動時會再讀 /campaigns/:id/game-config，確保後台剛儲存的彈窗圖片立即成為唯一來源。
+const mergeGoldenEggGameConfigIntoCampaign = (apiCampaign = {}, gameConfigPayload = null) => {
+  const gameConfig = gameConfigPayload?.settings
+    ? gameConfigPayload
+    : gameConfigPayload?.gameConfig?.settings
+      ? gameConfigPayload.gameConfig
+      : null
+
+  if (!gameConfig?.settings || typeof gameConfig.settings !== 'object') {
+    return apiCampaign
+  }
+
+  return {
+    ...apiCampaign,
+    gameConfig: {
+      ...(apiCampaign.gameConfig || {}),
+      ...gameConfig,
+      settings: {
+        ...(apiCampaign.gameConfig?.settings || {}),
+        ...(gameConfig.settings || {})
+      }
+    }
+  }
+}
+
+const appendImageCacheVersion = (url = '') => {
+  const value = String(url || '').trim()
+
+  if (!value || value.startsWith('data:') || value.startsWith('blob:')) return value
+
+  const syncAt = String(campaign.syncMeta?.lastGoldenEggFrontendSyncAt || campaign.resultModal?.updatedAt || '').trim()
+  const version = syncAt || String(onlineCampaignId.value || getRouteCampaignId() || Date.now())
+  const separator = value.includes('?') ? '&' : '?'
+
+  return `${value}${separator}v=${encodeURIComponent(version)}`
+}
+
 const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}) => {
   const {
     rawSettings = {},
@@ -842,37 +882,6 @@ const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}
   if (Object.keys(nestedCampaign).length) {
     Object.assign(campaign, nestedCampaign)
   }
-
-  // 第 103601～104000 批：正式金蛋玩家頁補吃後台結果彈窗圖片相容欄位。
-  // 後台會寫 root resultWinImageUrl / resultLoseImageUrl，也會保留 resultModal 相容物件。
-  // 正式頁載入時統一攤平成 campaign 欄位，避免手機仍顯示舊預設 emoji。
-  const resultModalSettings = rawSettings.resultModal && typeof rawSettings.resultModal === 'object'
-    ? rawSettings.resultModal
-    : {}
-
-  campaign.resultImageUrl = rawSettings.resultImageUrl || resultModalSettings.imageUrl || campaign.resultImageUrl || ''
-  campaign.resultWinImageUrl = rawSettings.resultWinImageUrl || resultModalSettings.winImageUrl || rawSettings.winModalImageUrl || campaign.resultWinImageUrl || ''
-  campaign.resultLoseImageUrl = rawSettings.resultLoseImageUrl || resultModalSettings.loseImageUrl || rawSettings.loseModalImageUrl || campaign.resultLoseImageUrl || ''
-  campaign.resultModalBgFrom = rawSettings.resultModalBgFrom || resultModalSettings.bgFrom || campaign.resultModalBgFrom
-  campaign.resultModalBgTo = rawSettings.resultModalBgTo || resultModalSettings.bgTo || campaign.resultModalBgTo
-  campaign.resultModalBorderColor = rawSettings.resultModalBorderColor || resultModalSettings.borderColor || campaign.resultModalBorderColor
-  campaign.resultIconBgColor = rawSettings.resultIconBgColor || resultModalSettings.iconBgColor || campaign.resultIconBgColor
-  campaign.resultIconTextColor = rawSettings.resultIconTextColor || resultModalSettings.iconTextColor || campaign.resultIconTextColor
-  campaign.resultIconSize = Number(rawSettings.resultIconSize || resultModalSettings.iconSize || campaign.resultIconSize || 96)
-  campaign.resultIconTextSize = Number(rawSettings.resultIconTextSize || resultModalSettings.iconTextSize || campaign.resultIconTextSize || 48)
-  campaign.resultBadgeTextSize = Number(rawSettings.resultBadgeTextSize || resultModalSettings.badgeTextSize || campaign.resultBadgeTextSize || 12)
-  campaign.resultTitleTextSize = Number(rawSettings.resultTitleTextSize || resultModalSettings.titleTextSize || campaign.resultTitleTextSize || 24)
-  campaign.resultTitleColor = rawSettings.resultTitleColor || resultModalSettings.titleColor || campaign.resultTitleColor
-  campaign.resultDescriptionTextSize = Number(rawSettings.resultDescriptionTextSize || resultModalSettings.descriptionTextSize || campaign.resultDescriptionTextSize || 14)
-  campaign.resultDescriptionColor = rawSettings.resultDescriptionColor || resultModalSettings.descriptionColor || campaign.resultDescriptionColor
-  campaign.resultPrimaryButtonText = rawSettings.resultPrimaryButtonText || resultModalSettings.primaryButtonText || campaign.resultPrimaryButtonText
-  campaign.resultPrimaryButtonTextSize = Number(rawSettings.resultPrimaryButtonTextSize || resultModalSettings.primaryButtonTextSize || campaign.resultPrimaryButtonTextSize || 14)
-  campaign.resultPrimaryButtonBgColor = rawSettings.resultPrimaryButtonBgColor || resultModalSettings.primaryButtonBgColor || campaign.resultPrimaryButtonBgColor
-  campaign.resultPrimaryButtonTextColor = rawSettings.resultPrimaryButtonTextColor || resultModalSettings.primaryButtonTextColor || campaign.resultPrimaryButtonTextColor
-  campaign.resultCopyButtonText = rawSettings.resultCopyButtonText || resultModalSettings.copyButtonText || campaign.resultCopyButtonText
-  campaign.resultCopyButtonTextSize = Number(rawSettings.resultCopyButtonTextSize || resultModalSettings.copyButtonTextSize || campaign.resultCopyButtonTextSize || 14)
-  campaign.resultCopyButtonBgColor = rawSettings.resultCopyButtonBgColor || resultModalSettings.copyButtonBgColor || campaign.resultCopyButtonBgColor
-  campaign.resultCopyButtonTextColor = rawSettings.resultCopyButtonTextColor || resultModalSettings.copyButtonTextColor || campaign.resultCopyButtonTextColor
 
   campaign.pageTitle =
     basicText.pageTitle ||
@@ -983,6 +992,20 @@ const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}
   campaign.primaryColor = theme.primaryColor || rawSettings.primaryColor || campaign.primaryColor
   campaign.accentColor = theme.accentColor || rawSettings.accentColor || campaign.accentColor
   campaign.textColor = theme.textColor || rawSettings.textColor || campaign.textColor
+
+  // 第 104001～104400 批：正式手機頁結果彈窗只以後台 GameConfig.settings 為主。
+  // 支援 root 欄位與 resultModal 巢狀欄位，避免後台已存圖但玩家頁仍吃舊 fallback。
+  const resultModal = rawSettings.resultModal && typeof rawSettings.resultModal === 'object' ? rawSettings.resultModal : {}
+  campaign.resultModal = resultModal
+  campaign.syncMeta = rawSettings.syncMeta && typeof rawSettings.syncMeta === 'object' ? rawSettings.syncMeta : {}
+  campaign.resultModalBgFrom = rawSettings.resultModalBgFrom || resultModal.bgFrom || campaign.resultModalBgFrom
+  campaign.resultModalBgTo = rawSettings.resultModalBgTo || resultModal.bgTo || campaign.resultModalBgTo
+  campaign.resultModalBorderColor = rawSettings.resultModalBorderColor || resultModal.borderColor || campaign.resultModalBorderColor
+  campaign.resultIconBgColor = rawSettings.resultIconBgColor || resultModal.iconBgColor || campaign.resultIconBgColor
+  campaign.resultIconTextColor = rawSettings.resultIconTextColor || resultModal.iconTextColor || campaign.resultIconTextColor
+  campaign.resultImageUrl = rawSettings.resultImageUrl || resultModal.imageUrl || campaign.resultImageUrl || ''
+  campaign.resultWinImageUrl = rawSettings.resultWinImageUrl || resultModal.winImageUrl || campaign.resultWinImageUrl || ''
+  campaign.resultLoseImageUrl = rawSettings.resultLoseImageUrl || resultModal.loseImageUrl || campaign.resultLoseImageUrl || ''
 }
 
 const normalizeRemotePrizeSettings = (apiCampaign = {}, normalized = {}) => {
@@ -1278,6 +1301,14 @@ const loadGoldenEggRemoteState = async () => {
 
     if (!apiCampaign) {
       apiCampaign = unwrapApiPayload(await getCampaignDetailApi(campaignId))
+    }
+
+    // 第 104001～104400 批：正式玩家頁再讀一次 game-config，避免 /campaigns/:id 快取或附帶資料不是最新。
+    try {
+      const gameConfigPayload = unwrapApiPayload(await getCampaignGameConfigApi(campaignId))
+      apiCampaign = mergeGoldenEggGameConfigIntoCampaign(apiCampaign, gameConfigPayload)
+    } catch (gameConfigError) {
+      console.warn('讀取金蛋 game-config 失敗，改用 campaign detail 內附設定：', gameConfigError)
     }
 
     onlineCampaignId.value = campaignId
@@ -2227,28 +2258,17 @@ const resultIconStyle = computed(() => {
   }
 })
 
-const appendResultImageCacheKey = (url = '') => {
-  const value = String(url || '').trim()
-
-  if (!value || value.startsWith('data:') || value.startsWith('blob:')) return value
-
-  const version = String(campaign.updatedAt || campaign.gameConfigUpdatedAt || campaign.resultImageUpdatedAt || '').trim()
-  if (!version) return value
-
-  return `${value}${value.includes('?') ? '&' : '?'}v=${encodeURIComponent(version)}`
-}
-
 const resultImageUrl = computed(() => {
   const prizeImageUrl = String(resultPrize.value?.imageUrl || '').trim()
   const isLoseResult = resultPrize.value?.type === 'lose'
-  const winImageUrl = String(campaign.resultWinImageUrl || '').trim()
-  const loseImageUrl = String(campaign.resultLoseImageUrl || '').trim()
-  const globalImageUrl = String(campaign.resultImageUrl || '').trim()
+  const winImageUrl = String(campaign.resultWinImageUrl || campaign.resultModal?.winImageUrl || '').trim()
+  const loseImageUrl = String(campaign.resultLoseImageUrl || campaign.resultModal?.loseImageUrl || '').trim()
+  const globalImageUrl = String(campaign.resultImageUrl || campaign.resultModal?.imageUrl || '').trim()
   const typedImageUrl = isLoseResult ? loseImageUrl : winImageUrl
 
-  // 第 103601～104000 批：後台「結果彈窗圖片」優先於獎項圖片。
-  // 商家設定中獎/未中獎彈窗圖後，正式手機頁不可再被舊獎項圖或預設 emoji 蓋過。
-  return appendResultImageCacheKey(typedImageUrl || globalImageUrl || prizeImageUrl)
+  // 第 104001～104400 批：結果彈窗圖片以後台 GameConfig 設定優先，獎項圖只當 fallback。
+  // 這樣商家改「中獎 / 未中獎彈窗圖片」後，手機正式頁不會再被舊獎項圖或預設笑臉覆蓋。
+  return appendImageCacheVersion(typedImageUrl || globalImageUrl || prizeImageUrl)
 })
 
 const resultBadgeStyle = computed(() => {
