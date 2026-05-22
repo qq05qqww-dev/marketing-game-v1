@@ -1132,6 +1132,33 @@ const normalizePrizeProbability = (value) => {
 }
 
 let saveTimer = null
+let databaseGameConfigAutoSaveTimer = null
+
+// 第 108401～108800 批：右側 iframe 預覽只讀正式資料庫。
+// 左側輸入變更時，不再先重載 iframe 讀舊 DB；改成 debounce 自動寫入 GameConfig 後再刷新預覽，避免 1～2 秒跳回舊畫面。
+const scheduleDatabaseGameConfigAutoSave = (reason = '前台設定已變更，正在自動同步資料庫。') => {
+  if (typeof window === 'undefined') return
+  if (!normalizedDatabaseCampaignId.value) return
+
+  if (databaseGameConfigAutoSaveTimer) {
+    window.clearTimeout(databaseGameConfigAutoSaveTimer)
+  }
+
+  setDatabasePreviewSyncMessage(`${reason}｜正在等待輸入完成後自動儲存...`)
+
+  databaseGameConfigAutoSaveTimer = window.setTimeout(async () => {
+    databaseGameConfigAutoSaveTimer = null
+
+    if (!normalizedDatabaseCampaignId.value || isSavingDatabaseGameConfig.value) return
+    if (databaseCampaign.value && !databaseGameConfigFormHasUnsavedChanges.value) return
+
+    await saveDatabaseGameConfig({
+      skipConfirm: true,
+      autoSave: true,
+      message: '已自動同步到正式資料庫，右側預覽已讀取最新設定。'
+    })
+  }, 900)
+}
 
 const adminSections = [
   {
@@ -1764,28 +1791,28 @@ const applyImportedDatabaseGameConfigSettingsToForm = (settings = {}) => {
 }
 
 
-const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig 表單到右側預覽。') => {
+const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig 表單到右側預覽。', options = {}) => {
   Object.assign(campaign, {
-    brandName: databaseGameConfigForm.brandName || campaign.brandName,
-    brandSubtitle: databaseGameConfigForm.brandSubtitle || campaign.brandSubtitle,
-    pageTitle: databaseGameConfigForm.pageTitle || campaign.pageTitle,
-    mainTitle: databaseGameConfigForm.mainTitle || campaign.mainTitle,
-    subTitle: databaseGameConfigForm.subTitle || campaign.subTitle,
-    heroTagline: databaseGameConfigForm.heroTagline || campaign.heroTagline,
-    noticeText: databaseGameConfigForm.noticeText || campaign.noticeText,
-    logoText: databaseGameConfigForm.logoText || campaign.logoText,
-    websiteButtonText: databaseGameConfigForm.websiteButtonText || campaign.websiteButtonText,
-    websiteUrl: databaseGameConfigForm.websiteUrl || campaign.websiteUrl,
-    buttonText: databaseGameConfigForm.buttonText || campaign.buttonText,
-    headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || campaign.headerTitleTextSize || 16),
-    headerTitleColor: databaseGameConfigForm.headerTitleColor || campaign.headerTitleColor,
-    headerSubTitleColor: databaseGameConfigForm.headerSubTitleColor || campaign.headerSubTitleColor,
-    headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || campaign.headerLogoTextSize || 12),
-    headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor || campaign.headerLogoBgColor,
-    headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor || campaign.headerLogoTextColor,
-    headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || campaign.headerWebsiteTextSize || 12),
-    headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor || campaign.headerWebsiteBgColor,
-    headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor || campaign.headerWebsiteTextColor,
+    brandName: String(databaseGameConfigForm.brandName ?? ''),
+    brandSubtitle: String(databaseGameConfigForm.brandSubtitle ?? ''),
+    pageTitle: String(databaseGameConfigForm.pageTitle ?? ''),
+    mainTitle: String(databaseGameConfigForm.mainTitle ?? ''),
+    subTitle: String(databaseGameConfigForm.subTitle ?? ''),
+    heroTagline: String(databaseGameConfigForm.heroTagline ?? ''),
+    noticeText: String(databaseGameConfigForm.noticeText ?? ''),
+    logoText: String(databaseGameConfigForm.logoText ?? ''),
+    websiteButtonText: String(databaseGameConfigForm.websiteButtonText ?? ''),
+    websiteUrl: String(databaseGameConfigForm.websiteUrl ?? ''),
+    buttonText: String(databaseGameConfigForm.buttonText ?? ''),
+    headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || 16),
+    headerTitleColor: databaseGameConfigForm.headerTitleColor || '#ffffff',
+    headerSubTitleColor: databaseGameConfigForm.headerSubTitleColor || '#fef3c7',
+    headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || 12),
+    headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor || '#fde047',
+    headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor || '#991b1b',
+    headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || 12),
+    headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor || '#7f1d1d',
+    headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor || '#ffffff',
     serialRedeemTitle: databaseGameConfigForm.serialRedeemTitle || campaign.serialRedeemTitle,
     serialRedeemDescription: databaseGameConfigForm.serialRedeemDescription || campaign.serialRedeemDescription,
     serialRedeemButtonText: databaseGameConfigForm.serialRedeemButtonText || campaign.serialRedeemButtonText,
@@ -1836,7 +1863,10 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
 
   setDatabasePreviewSyncMessage(message)
   saveState(message)
-  previewRefreshKey.value = Date.now()
+
+  if (options.autoSave !== false) {
+    scheduleDatabaseGameConfigAutoSave(message)
+  }
 }
 
 
@@ -1844,32 +1874,31 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
 // 任何基本文字變更都立即回填右側預覽，但只有按「儲存前台設定」才寫入 PostgreSQL。
 const syncDatabaseBasicTextToCampaign = () => {
   Object.assign(campaign, {
-    brandName: databaseGameConfigForm.brandName || campaign.brandName,
-    brandSubtitle: databaseGameConfigForm.brandSubtitle || campaign.brandSubtitle,
-    pageTitle: databaseGameConfigForm.pageTitle || campaign.pageTitle,
-    mainTitle: databaseGameConfigForm.mainTitle || campaign.mainTitle,
-    subTitle: databaseGameConfigForm.subTitle || campaign.subTitle,
-    heroTagline: databaseGameConfigForm.heroTagline || campaign.heroTagline,
-    noticeText: databaseGameConfigForm.noticeText || campaign.noticeText,
-    logoText: databaseGameConfigForm.logoText || campaign.logoText,
-    websiteButtonText: databaseGameConfigForm.websiteButtonText || campaign.websiteButtonText,
-    websiteUrl: databaseGameConfigForm.websiteUrl || campaign.websiteUrl,
-    buttonText: databaseGameConfigForm.buttonText || campaign.buttonText,
-    headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || campaign.headerTitleTextSize || 16),
-    headerTitleColor: databaseGameConfigForm.headerTitleColor || campaign.headerTitleColor,
-    headerSubTitleColor: databaseGameConfigForm.headerSubTitleColor || campaign.headerSubTitleColor,
-    headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || campaign.headerLogoTextSize || 12),
-    headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor || campaign.headerLogoBgColor,
-    headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor || campaign.headerLogoTextColor,
-    headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || campaign.headerWebsiteTextSize || 12),
-    headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor || campaign.headerWebsiteBgColor,
-    headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor || campaign.headerWebsiteTextColor
+    brandName: String(databaseGameConfigForm.brandName ?? ''),
+    brandSubtitle: String(databaseGameConfigForm.brandSubtitle ?? ''),
+    pageTitle: String(databaseGameConfigForm.pageTitle ?? ''),
+    mainTitle: String(databaseGameConfigForm.mainTitle ?? ''),
+    subTitle: String(databaseGameConfigForm.subTitle ?? ''),
+    heroTagline: String(databaseGameConfigForm.heroTagline ?? ''),
+    noticeText: String(databaseGameConfigForm.noticeText ?? ''),
+    logoText: String(databaseGameConfigForm.logoText ?? ''),
+    websiteButtonText: String(databaseGameConfigForm.websiteButtonText ?? ''),
+    websiteUrl: String(databaseGameConfigForm.websiteUrl ?? ''),
+    buttonText: String(databaseGameConfigForm.buttonText ?? ''),
+    headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || 16),
+    headerTitleColor: databaseGameConfigForm.headerTitleColor || '#ffffff',
+    headerSubTitleColor: databaseGameConfigForm.headerSubTitleColor || '#fef3c7',
+    headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || 12),
+    headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor || '#fde047',
+    headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor || '#991b1b',
+    headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || 12),
+    headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor || '#7f1d1d',
+    headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor || '#ffffff'
   })
 
-  if (isAutoPreviewEnabled.value) {
-    previewRefreshKey.value = Date.now()
-  }
+  scheduleDatabaseGameConfigAutoSave('基本文字已變更，正在自動同步到正式資料庫。')
 }
+
 
 watch(
   () => [
@@ -2327,9 +2356,9 @@ const saveState = (message = '') => {
   // 右側預覽改由目前記憶體狀態與重新讀取正式資料庫控制，不再把整包 campaign / prizes 寫進瀏覽器。
   clearGoldenEggOversizedLocalStorage()
 
-  if (isAutoPreviewEnabled.value) {
-    previewRefreshKey.value = Date.now()
-  }
+  // 第 108401～108800 批：saveState 不再直接重載 iframe。
+  // iframe 是正式前台，會重新讀 PostgreSQL；若在尚未儲存時重載，會看到舊資料並造成畫面跳回。
+  // 只有資料庫儲存完成或手動按「重新整理預覽」時才刷新 iframe。
 
   if (message) {
     showSavedMessage(message)
@@ -4953,6 +4982,7 @@ const toggleDatabasePrizeStatus = async (item) => {
     showOperationSuccess(`已${nextLabel}資料庫獎項。`)
     setDatabasePreviewSyncMessage()
     await loadDatabaseGoldenEggCampaign()
+    previewRefreshKey.value = Date.now()
   } catch (error) {
     console.error('切換資料庫獎項狀態失敗：', error)
     showOperationError(error.message || '切換資料庫獎項狀態失敗。')
@@ -6526,13 +6556,16 @@ const visualSettingSummaryItems = computed(() => [
   }
 ])
 
-const saveDatabaseGameConfig = async () => {
+const saveDatabaseGameConfig = async (options = {}) => {
   if (!normalizedDatabaseCampaignId.value) {
     showOperationError('請先輸入並讀取正式活動 campaignId。')
     return
   }
 
-  if (!confirmDatabaseGameConfigSave()) {
+  const isAutoSave = options?.autoSave === true
+  const skipConfirm = options?.skipConfirm === true
+
+  if (!skipConfirm && !confirmDatabaseGameConfigSave()) {
     showOperationInfo('已取消儲存前台設定，資料庫未變更。')
     return
   }
@@ -6542,9 +6575,11 @@ const saveDatabaseGameConfig = async () => {
 
   isSavingDatabaseGameConfig.value = true
   showOperationInfo(
-    databaseGameConfigChangedCount.value
-      ? `正在同步 ${databaseGameConfigChangedCount.value} 個前台設定到資料庫，請稍候...`
-      : '目前沒有偵測到差異，正在重新確認資料庫前台設定...',
+    isAutoSave
+      ? '正在自動同步目前設定到正式資料庫...'
+      : databaseGameConfigChangedCount.value
+        ? `正在同步 ${databaseGameConfigChangedCount.value} 個前台設定到資料庫，請稍候...`
+        : '目前沒有偵測到差異，正在重新確認資料庫前台設定...',
     false
   )
 
@@ -6557,9 +6592,11 @@ const saveDatabaseGameConfig = async () => {
     )
 
     showOperationSuccess(
-      databaseGameConfigChangedCount.value
-        ? `已同步 ${databaseGameConfigChangedCount.value} 個前台設定到 PostgreSQL gameConfig.settings；基本文字、LOGO、官網按鈕也已寫入正式前台資料。`
-        : '已確認資料庫前台設定，沒有偵測到新的差異。'
+      options?.message || (
+        databaseGameConfigChangedCount.value
+          ? `已同步 ${databaseGameConfigChangedCount.value} 個前台設定到 PostgreSQL gameConfig.settings；基本文字、LOGO、官網按鈕也已寫入正式前台資料。`
+          : '已確認資料庫前台設定，沒有偵測到新的差異。'
+      )
     )
     setDatabasePreviewSyncMessage(`資料庫前台設定已更新：背景 ${databaseGameConfigForm.themeBgFrom} / ${databaseGameConfigForm.themeBgMiddle} / ${databaseGameConfigForm.themeBgTo}，金蛋 ${databaseGameConfigForm.eggColorTop} / ${databaseGameConfigForm.eggColorMiddle} / ${databaseGameConfigForm.eggColorBottom}`)
     addGameConfigOperationLog({
@@ -14208,7 +14245,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
 
         <div class="mt-4 rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
           <p class="text-center text-xs font-bold leading-5 text-slate-400">
-            修改左側設定後會自動儲存並同步；若右側沒有變化，請按「重新整理預覽」。桌機 / 平板模式較寬時，可在預覽框下方左右滑動查看。
+            修改左側設定後會先自動寫入 PostgreSQL，再重新整理右側正式 iframe 預覽；不再讀取舊本機暫存。桌機 / 平板模式較寬時，可在預覽框下方左右滑動查看。
           </p>
         </div>
       </section>
