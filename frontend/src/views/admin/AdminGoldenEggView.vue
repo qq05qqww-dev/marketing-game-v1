@@ -1,6 +1,6 @@
 <script setup>
 // Multi Game Platform V2.3
-// 第 106401～106800 批：金蛋後台移除大型 localStorage 設定來源，正式資料庫單一來源修正版
+// 第 108001～108400 批：金蛋基本文字與頂部樣式正式資料庫單一來源修正版
 // 延續第 89601～90000 批：金蛋平台模板與商家活動預覽隔離修正版
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import {
@@ -406,11 +406,28 @@ const appliedGameConfigTemplateStatus = reactive({
   changedCount: 0
 })
 const databaseGameConfigForm = reactive({
+  // 第 108001～108400 批：基本文字也納入正式 GameConfig 表單單一來源。
+  // 左側表單、右側預覽、儲存後重新讀取都使用這一份資料，避免 campaign 暫存與 PostgreSQL 不同步。
+  brandName: '',
   pageTitle: '',
   mainTitle: '',
   subTitle: '',
   heroTagline: '',
   noticeText: '',
+  logoText: '',
+  websiteButtonText: '',
+  websiteUrl: '',
+  buttonText: '',
+  brandSubtitle: '',
+  headerTitleTextSize: 16,
+  headerTitleColor: '#ffffff',
+  headerSubTitleColor: '#fef3c7',
+  headerLogoTextSize: 12,
+  headerLogoBgColor: '#fde047',
+  headerLogoTextColor: '#991b1b',
+  headerWebsiteTextSize: 12,
+  headerWebsiteBgColor: '#7f1d1d',
+  headerWebsiteTextColor: '#ffffff',
   serialRedeemTitle: '',
   serialRedeemDescription: '',
   serialRedeemButtonText: '',
@@ -859,7 +876,7 @@ const sectionRestoreMap = {
   basic: {
     label: '基本文字',
     campaignFields: [
-      'brandName', 'pageTitle', 'mainTitle', 'subTitle', 'heroTagline', 'noticeText',
+      'brandName', 'pageTitle', 'mainTitle', 'subTitle', 'heroTagline', 'noticeText', 'logoText', 'websiteButtonText', 'websiteUrl', 'buttonText', 'brandSubtitle',
       'logoText', 'websiteUrl', 'websiteButtonText',
       'headerTitleTextSize', 'headerTitleColor', 'headerSubTitleColor',
       'headerLogoTextSize', 'headerLogoBgColor', 'headerLogoTextColor',
@@ -867,7 +884,7 @@ const sectionRestoreMap = {
       'headerSideBoxWidth', 'headerBoxHeight', 'headerBoxRadius', 'headerGap',
       'headerPaddingX', 'headerPaddingY'
     ],
-    databaseFields: ['pageTitle', 'mainTitle', 'subTitle', 'heroTagline', 'noticeText']
+    databaseFields: ['brandName', 'pageTitle', 'mainTitle', 'subTitle', 'heroTagline', 'noticeText', 'logoText', 'websiteButtonText', 'websiteUrl', 'buttonText', 'brandSubtitle']
   },
   theme: {
     label: '主題色彩',
@@ -1749,11 +1766,26 @@ const applyImportedDatabaseGameConfigSettingsToForm = (settings = {}) => {
 
 const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig 表單到右側預覽。') => {
   Object.assign(campaign, {
+    brandName: databaseGameConfigForm.brandName || campaign.brandName,
+    brandSubtitle: databaseGameConfigForm.brandSubtitle || campaign.brandSubtitle,
     pageTitle: databaseGameConfigForm.pageTitle || campaign.pageTitle,
     mainTitle: databaseGameConfigForm.mainTitle || campaign.mainTitle,
     subTitle: databaseGameConfigForm.subTitle || campaign.subTitle,
     heroTagline: databaseGameConfigForm.heroTagline || campaign.heroTagline,
     noticeText: databaseGameConfigForm.noticeText || campaign.noticeText,
+    logoText: databaseGameConfigForm.logoText || campaign.logoText,
+    websiteButtonText: databaseGameConfigForm.websiteButtonText || campaign.websiteButtonText,
+    websiteUrl: databaseGameConfigForm.websiteUrl || campaign.websiteUrl,
+    buttonText: databaseGameConfigForm.buttonText || campaign.buttonText,
+    headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || campaign.headerTitleTextSize || 16),
+    headerTitleColor: databaseGameConfigForm.headerTitleColor || campaign.headerTitleColor,
+    headerSubTitleColor: databaseGameConfigForm.headerSubTitleColor || campaign.headerSubTitleColor,
+    headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || campaign.headerLogoTextSize || 12),
+    headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor || campaign.headerLogoBgColor,
+    headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor || campaign.headerLogoTextColor,
+    headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || campaign.headerWebsiteTextSize || 12),
+    headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor || campaign.headerWebsiteBgColor,
+    headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor || campaign.headerWebsiteTextColor,
     serialRedeemTitle: databaseGameConfigForm.serialRedeemTitle || campaign.serialRedeemTitle,
     serialRedeemDescription: databaseGameConfigForm.serialRedeemDescription || campaign.serialRedeemDescription,
     serialRedeemButtonText: databaseGameConfigForm.serialRedeemButtonText || campaign.serialRedeemButtonText,
@@ -1807,6 +1839,64 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
   previewRefreshKey.value = Date.now()
 }
 
+
+// 第 108001～108400 批：基本文字表單改為正式 GameConfig 單一來源。
+// 任何基本文字變更都立即回填右側預覽，但只有按「儲存前台設定」才寫入 PostgreSQL。
+const syncDatabaseBasicTextToCampaign = () => {
+  Object.assign(campaign, {
+    brandName: databaseGameConfigForm.brandName || campaign.brandName,
+    brandSubtitle: databaseGameConfigForm.brandSubtitle || campaign.brandSubtitle,
+    pageTitle: databaseGameConfigForm.pageTitle || campaign.pageTitle,
+    mainTitle: databaseGameConfigForm.mainTitle || campaign.mainTitle,
+    subTitle: databaseGameConfigForm.subTitle || campaign.subTitle,
+    heroTagline: databaseGameConfigForm.heroTagline || campaign.heroTagline,
+    noticeText: databaseGameConfigForm.noticeText || campaign.noticeText,
+    logoText: databaseGameConfigForm.logoText || campaign.logoText,
+    websiteButtonText: databaseGameConfigForm.websiteButtonText || campaign.websiteButtonText,
+    websiteUrl: databaseGameConfigForm.websiteUrl || campaign.websiteUrl,
+    buttonText: databaseGameConfigForm.buttonText || campaign.buttonText,
+    headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || campaign.headerTitleTextSize || 16),
+    headerTitleColor: databaseGameConfigForm.headerTitleColor || campaign.headerTitleColor,
+    headerSubTitleColor: databaseGameConfigForm.headerSubTitleColor || campaign.headerSubTitleColor,
+    headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || campaign.headerLogoTextSize || 12),
+    headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor || campaign.headerLogoBgColor,
+    headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor || campaign.headerLogoTextColor,
+    headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || campaign.headerWebsiteTextSize || 12),
+    headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor || campaign.headerWebsiteBgColor,
+    headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor || campaign.headerWebsiteTextColor
+  })
+
+  if (isAutoPreviewEnabled.value) {
+    previewRefreshKey.value = Date.now()
+  }
+}
+
+watch(
+  () => [
+    databaseGameConfigForm.brandName,
+    databaseGameConfigForm.brandSubtitle,
+    databaseGameConfigForm.pageTitle,
+    databaseGameConfigForm.mainTitle,
+    databaseGameConfigForm.subTitle,
+    databaseGameConfigForm.heroTagline,
+    databaseGameConfigForm.noticeText,
+    databaseGameConfigForm.logoText,
+    databaseGameConfigForm.websiteButtonText,
+    databaseGameConfigForm.websiteUrl,
+    databaseGameConfigForm.buttonText,
+    databaseGameConfigForm.headerTitleTextSize,
+    databaseGameConfigForm.headerTitleColor,
+    databaseGameConfigForm.headerSubTitleColor,
+    databaseGameConfigForm.headerLogoTextSize,
+    databaseGameConfigForm.headerLogoBgColor,
+    databaseGameConfigForm.headerLogoTextColor,
+    databaseGameConfigForm.headerWebsiteTextSize,
+    databaseGameConfigForm.headerWebsiteBgColor,
+    databaseGameConfigForm.headerWebsiteTextColor
+  ],
+  syncDatabaseBasicTextToCampaign
+)
+
 const syncDatabaseCampaignToLivePreview = (campaignData = databaseCampaign.value, message = '已同步資料庫活動時間到右側預覽。') => {
   if (!campaignData) return
 
@@ -1815,10 +1905,26 @@ const syncDatabaseCampaignToLivePreview = (campaignData = databaseCampaign.value
     : {}
 
   Object.assign(campaign, {
+    brandName: settings.brandName || settings.basicText?.brandName || campaign.brandName,
+    brandSubtitle: settings.brandSubtitle || settings.basicText?.brandSubtitle || campaign.brandSubtitle,
     pageTitle: settings.pageTitle || campaignData.title || campaign.pageTitle,
     mainTitle: settings.mainTitle || campaignData.title || campaign.mainTitle,
+    subTitle: settings.subTitle || campaign.subTitle,
     heroTagline: settings.heroTagline || campaignData.description || campaign.heroTagline,
     noticeText: settings.noticeText || campaignData.description || campaign.noticeText,
+    logoText: settings.logoText || campaign.logoText,
+    websiteButtonText: settings.websiteButtonText || settings.brandLinkText || campaign.websiteButtonText,
+    websiteUrl: settings.websiteUrl || settings.brandLinkUrl || campaign.websiteUrl,
+    buttonText: settings.buttonText || campaign.buttonText,
+    headerTitleTextSize: Number(settings.headerTitleTextSize || campaign.headerTitleTextSize || 16),
+    headerTitleColor: settings.headerTitleColor || campaign.headerTitleColor,
+    headerSubTitleColor: settings.headerSubTitleColor || campaign.headerSubTitleColor,
+    headerLogoTextSize: Number(settings.headerLogoTextSize || campaign.headerLogoTextSize || 12),
+    headerLogoBgColor: settings.headerLogoBgColor || campaign.headerLogoBgColor,
+    headerLogoTextColor: settings.headerLogoTextColor || campaign.headerLogoTextColor,
+    headerWebsiteTextSize: Number(settings.headerWebsiteTextSize || campaign.headerWebsiteTextSize || 12),
+    headerWebsiteBgColor: settings.headerWebsiteBgColor || campaign.headerWebsiteBgColor,
+    headerWebsiteTextColor: settings.headerWebsiteTextColor || campaign.headerWebsiteTextColor,
     status: campaignData.status || campaign.status,
     startAt: campaignData.startAt || '',
     endAt: campaignData.endAt || '',
@@ -5881,11 +5987,26 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   const settings = campaignData?.gameConfig?.settings || {}
   applySystemShareButtonSettingsToForm(settings)
 
+  databaseGameConfigForm.brandName = settings.brandName || settings.basicText?.brandName || campaign.brandName || 'Multi Game Platform'
+  databaseGameConfigForm.brandSubtitle = settings.brandSubtitle || settings.basicText?.brandSubtitle || campaign.brandSubtitle || ''
   databaseGameConfigForm.pageTitle = settings.pageTitle || campaignData?.title || ''
   databaseGameConfigForm.mainTitle = settings.mainTitle || campaignData?.title || ''
   databaseGameConfigForm.subTitle = settings.subTitle || ''
   databaseGameConfigForm.heroTagline = settings.heroTagline || campaignData?.description || ''
   databaseGameConfigForm.noticeText = settings.noticeText || campaignData?.description || ''
+  databaseGameConfigForm.logoText = settings.logoText || campaign.logoText || '金蛋'
+  databaseGameConfigForm.websiteButtonText = settings.websiteButtonText || settings.brandLinkText || campaign.websiteButtonText || '官網'
+  databaseGameConfigForm.websiteUrl = settings.websiteUrl || settings.brandLinkUrl || campaign.websiteUrl || ''
+  databaseGameConfigForm.buttonText = settings.buttonText || campaign.buttonText || '分享活動'
+  databaseGameConfigForm.headerTitleTextSize = Number(settings.headerTitleTextSize || campaign.headerTitleTextSize || 16)
+  databaseGameConfigForm.headerTitleColor = settings.headerTitleColor || campaign.headerTitleColor || '#ffffff'
+  databaseGameConfigForm.headerSubTitleColor = settings.headerSubTitleColor || campaign.headerSubTitleColor || '#fef3c7'
+  databaseGameConfigForm.headerLogoTextSize = Number(settings.headerLogoTextSize || campaign.headerLogoTextSize || 12)
+  databaseGameConfigForm.headerLogoBgColor = settings.headerLogoBgColor || campaign.headerLogoBgColor || '#fde047'
+  databaseGameConfigForm.headerLogoTextColor = settings.headerLogoTextColor || campaign.headerLogoTextColor || '#991b1b'
+  databaseGameConfigForm.headerWebsiteTextSize = Number(settings.headerWebsiteTextSize || campaign.headerWebsiteTextSize || 12)
+  databaseGameConfigForm.headerWebsiteBgColor = settings.headerWebsiteBgColor || campaign.headerWebsiteBgColor || '#7f1d1d'
+  databaseGameConfigForm.headerWebsiteTextColor = settings.headerWebsiteTextColor || campaign.headerWebsiteTextColor || '#ffffff'
   databaseGameConfigForm.serialRedeemTitle = settings.serialRedeemTitle || '輸入抽獎序號'
   databaseGameConfigForm.serialRedeemDescription = settings.serialRedeemDescription || '請輸入主辦單位提供的序號，驗證成功後即可砸蛋。'
   databaseGameConfigForm.serialRedeemButtonText = settings.serialRedeemButtonText || '驗證序號'
@@ -5900,6 +6021,29 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.ruleContent = settings.ruleContent || settings.rulesText || normalizedContentSettings.ruleContent || normalizedContentSettings.rulesText || campaign.ruleContent || ''
   databaseGameConfigForm.prizeInfoTitle = settings.prizeInfoTitle || normalizedContentSettings.prizeInfoTitle || campaign.prizeInfoTitle || '獎品說明'
   databaseGameConfigForm.prizeInfoContent = settings.prizeInfoContent || settings.prizeInfoText || normalizedContentSettings.prizeInfoContent || normalizedContentSettings.prizeInfoText || campaign.prizeInfoContent || ''
+
+  Object.assign(campaign, {
+    brandName: databaseGameConfigForm.brandName,
+    brandSubtitle: databaseGameConfigForm.brandSubtitle,
+    pageTitle: databaseGameConfigForm.pageTitle,
+    mainTitle: databaseGameConfigForm.mainTitle,
+    subTitle: databaseGameConfigForm.subTitle,
+    heroTagline: databaseGameConfigForm.heroTagline,
+    noticeText: databaseGameConfigForm.noticeText,
+    logoText: databaseGameConfigForm.logoText,
+    websiteButtonText: databaseGameConfigForm.websiteButtonText,
+    websiteUrl: databaseGameConfigForm.websiteUrl,
+    buttonText: databaseGameConfigForm.buttonText,
+    headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || 16),
+    headerTitleColor: databaseGameConfigForm.headerTitleColor,
+    headerSubTitleColor: databaseGameConfigForm.headerSubTitleColor,
+    headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || 12),
+    headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor,
+    headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor,
+    headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || 12),
+    headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor,
+    headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor
+  })
 
   campaign.ruleTitle = databaseGameConfigForm.ruleTitle
   campaign.ruleContent = databaseGameConfigForm.ruleContent
@@ -5957,11 +6101,41 @@ const buildDatabaseGameConfigPayload = () => {
 
   return {
     ...originalSettings,
+    brandName: databaseGameConfigForm.brandName,
+    brandSubtitle: databaseGameConfigForm.brandSubtitle,
     pageTitle: databaseGameConfigForm.pageTitle,
     mainTitle: databaseGameConfigForm.mainTitle,
     subTitle: databaseGameConfigForm.subTitle,
     heroTagline: databaseGameConfigForm.heroTagline,
     noticeText: databaseGameConfigForm.noticeText,
+    logoText: databaseGameConfigForm.logoText,
+    websiteButtonText: databaseGameConfigForm.websiteButtonText,
+    websiteUrl: databaseGameConfigForm.websiteUrl,
+    buttonText: databaseGameConfigForm.buttonText,
+    brandLinkText: databaseGameConfigForm.websiteButtonText,
+    brandLinkUrl: databaseGameConfigForm.websiteUrl,
+    headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || 16),
+    headerTitleColor: databaseGameConfigForm.headerTitleColor,
+    headerSubTitleColor: databaseGameConfigForm.headerSubTitleColor,
+    headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || 12),
+    headerLogoBgColor: databaseGameConfigForm.headerLogoBgColor,
+    headerLogoTextColor: databaseGameConfigForm.headerLogoTextColor,
+    headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || 12),
+    headerWebsiteBgColor: databaseGameConfigForm.headerWebsiteBgColor,
+    headerWebsiteTextColor: databaseGameConfigForm.headerWebsiteTextColor,
+    basicText: {
+      ...(originalSettings.basicText && typeof originalSettings.basicText === 'object' ? originalSettings.basicText : {}),
+      brandName: databaseGameConfigForm.brandName,
+      brandSubtitle: databaseGameConfigForm.brandSubtitle,
+      pageTitle: databaseGameConfigForm.pageTitle,
+      mainTitle: databaseGameConfigForm.mainTitle,
+      headline: databaseGameConfigForm.mainTitle,
+      subtitle: databaseGameConfigForm.subTitle,
+      heroTagline: databaseGameConfigForm.heroTagline,
+      badgeText: databaseGameConfigForm.heroTagline,
+      noticeText: databaseGameConfigForm.noticeText,
+      playButtonText: databaseGameConfigForm.buttonText
+    },
     serialRedeemTitle: databaseGameConfigForm.serialRedeemTitle,
     serialRedeemDescription: databaseGameConfigForm.serialRedeemDescription,
     serialRedeemButtonText: databaseGameConfigForm.serialRedeemButtonText,
@@ -6044,11 +6218,26 @@ const buildDatabaseGameConfigPayload = () => {
 
 const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => {
   return {
+    brandName: String(settings.brandName || settings.basicText?.brandName || campaign.brandName || ''),
+    brandSubtitle: String(settings.brandSubtitle || settings.basicText?.brandSubtitle || campaign.brandSubtitle || ''),
     pageTitle: String(settings.pageTitle || campaignData?.title || ''),
     mainTitle: String(settings.mainTitle || campaignData?.title || ''),
     subTitle: String(settings.subTitle || ''),
     heroTagline: String(settings.heroTagline || campaignData?.description || ''),
     noticeText: String(settings.noticeText || campaignData?.description || ''),
+    logoText: String(settings.logoText || campaign.logoText || ''),
+    websiteButtonText: String(settings.websiteButtonText || settings.brandLinkText || campaign.websiteButtonText || ''),
+    websiteUrl: String(settings.websiteUrl || settings.brandLinkUrl || campaign.websiteUrl || ''),
+    buttonText: String(settings.buttonText || campaign.buttonText || ''),
+    headerTitleTextSize: Number(settings.headerTitleTextSize || campaign.headerTitleTextSize || 16),
+    headerTitleColor: String(settings.headerTitleColor || campaign.headerTitleColor || ''),
+    headerSubTitleColor: String(settings.headerSubTitleColor || campaign.headerSubTitleColor || ''),
+    headerLogoTextSize: Number(settings.headerLogoTextSize || campaign.headerLogoTextSize || 12),
+    headerLogoBgColor: String(settings.headerLogoBgColor || campaign.headerLogoBgColor || ''),
+    headerLogoTextColor: String(settings.headerLogoTextColor || campaign.headerLogoTextColor || ''),
+    headerWebsiteTextSize: Number(settings.headerWebsiteTextSize || campaign.headerWebsiteTextSize || 12),
+    headerWebsiteBgColor: String(settings.headerWebsiteBgColor || campaign.headerWebsiteBgColor || ''),
+    headerWebsiteTextColor: String(settings.headerWebsiteTextColor || campaign.headerWebsiteTextColor || ''),
     serialRedeemTitle: String(settings.serialRedeemTitle || '輸入抽獎序號'),
     serialRedeemDescription: String(settings.serialRedeemDescription || '請輸入主辦單位提供的序號，驗證成功後即可砸蛋。'),
     serialRedeemButtonText: String(settings.serialRedeemButtonText || '驗證序號'),
@@ -6099,11 +6288,26 @@ const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => 
 }
 
 const databaseGameConfigFormComparable = computed(() => ({
+  brandName: String(databaseGameConfigForm.brandName || ''),
+  brandSubtitle: String(databaseGameConfigForm.brandSubtitle || ''),
   pageTitle: String(databaseGameConfigForm.pageTitle || ''),
   mainTitle: String(databaseGameConfigForm.mainTitle || ''),
   subTitle: String(databaseGameConfigForm.subTitle || ''),
   heroTagline: String(databaseGameConfigForm.heroTagline || ''),
   noticeText: String(databaseGameConfigForm.noticeText || ''),
+  logoText: String(databaseGameConfigForm.logoText || ''),
+  websiteButtonText: String(databaseGameConfigForm.websiteButtonText || ''),
+  websiteUrl: String(databaseGameConfigForm.websiteUrl || ''),
+  buttonText: String(databaseGameConfigForm.buttonText || ''),
+  headerTitleTextSize: Number(databaseGameConfigForm.headerTitleTextSize || 16),
+  headerTitleColor: String(databaseGameConfigForm.headerTitleColor || ''),
+  headerSubTitleColor: String(databaseGameConfigForm.headerSubTitleColor || ''),
+  headerLogoTextSize: Number(databaseGameConfigForm.headerLogoTextSize || 12),
+  headerLogoBgColor: String(databaseGameConfigForm.headerLogoBgColor || ''),
+  headerLogoTextColor: String(databaseGameConfigForm.headerLogoTextColor || ''),
+  headerWebsiteTextSize: Number(databaseGameConfigForm.headerWebsiteTextSize || 12),
+  headerWebsiteBgColor: String(databaseGameConfigForm.headerWebsiteBgColor || ''),
+  headerWebsiteTextColor: String(databaseGameConfigForm.headerWebsiteTextColor || ''),
   serialRedeemTitle: String(databaseGameConfigForm.serialRedeemTitle || ''),
   serialRedeemDescription: String(databaseGameConfigForm.serialRedeemDescription || ''),
   serialRedeemButtonText: String(databaseGameConfigForm.serialRedeemButtonText || ''),
@@ -6167,11 +6371,26 @@ const databaseGameConfigFormHasUnsavedChanges = computed(() => {
 
 
 const databaseGameConfigDiffLabelMap = {
+  brandName: '品牌名稱 brandName',
+  brandSubtitle: '品牌副標 brandSubtitle',
   pageTitle: '頁面名稱 pageTitle',
   mainTitle: '主標題 mainTitle',
   subTitle: '副標題 subTitle',
   heroTagline: '標語 heroTagline',
   noticeText: '公告文字 noticeText',
+  logoText: '左上 LOGO 文字',
+  websiteButtonText: '右上網站按鈕文字',
+  websiteUrl: '右上網站連結網址',
+  buttonText: '分享按鈕文字',
+  headerTitleTextSize: '頁面名稱文字大小',
+  headerTitleColor: '頁面名稱顏色',
+  headerSubTitleColor: '品牌名稱顏色',
+  headerLogoTextSize: 'LOGO 文字大小',
+  headerLogoBgColor: 'LOGO 背景色',
+  headerLogoTextColor: 'LOGO 文字色',
+  headerWebsiteTextSize: '網站按鈕文字大小',
+  headerWebsiteBgColor: '網站按鈕背景色',
+  headerWebsiteTextColor: '網站按鈕文字色',
   serialRedeemTitle: '序號區塊標題',
   serialRedeemDescription: '序號說明文字',
   serialRedeemButtonText: '序號按鈕文字',
@@ -6339,7 +6558,7 @@ const saveDatabaseGameConfig = async () => {
 
     showOperationSuccess(
       databaseGameConfigChangedCount.value
-        ? `已同步 ${databaseGameConfigChangedCount.value} 個前台設定到 PostgreSQL gameConfig.settings。`
+        ? `已同步 ${databaseGameConfigChangedCount.value} 個前台設定到 PostgreSQL gameConfig.settings；基本文字、LOGO、官網按鈕也已寫入正式前台資料。`
         : '已確認資料庫前台設定，沒有偵測到新的差異。'
     )
     setDatabasePreviewSyncMessage(`資料庫前台設定已更新：背景 ${databaseGameConfigForm.themeBgFrom} / ${databaseGameConfigForm.themeBgMiddle} / ${databaseGameConfigForm.themeBgTo}，金蛋 ${databaseGameConfigForm.eggColorTop} / ${databaseGameConfigForm.eggColorMiddle} / ${databaseGameConfigForm.eggColorBottom}`)
@@ -10280,47 +10499,47 @@ watch(
 
           <label class="admin-field">
             <span>品牌名稱</span>
-            <input v-model="campaign.brandName" type="text" />
+            <input v-model="databaseGameConfigForm.brandName" type="text" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <label class="admin-field">
             <span>頁面名稱</span>
-            <input v-model="campaign.pageTitle" type="text" />
+            <input v-model="databaseGameConfigForm.pageTitle" type="text" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <label class="admin-field">
             <span>主標題</span>
-            <input v-model="campaign.mainTitle" type="text" />
+            <input v-model="databaseGameConfigForm.mainTitle" type="text" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <label class="admin-field">
             <span>副標題</span>
-            <input v-model="campaign.subTitle" type="text" />
+            <input v-model="databaseGameConfigForm.subTitle" type="text" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <label class="admin-field">
             <span>標語文字</span>
-            <input v-model="campaign.heroTagline" type="text" />
+            <input v-model="databaseGameConfigForm.heroTagline" type="text" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <label class="admin-field">
             <span>左上 LOGO 文字</span>
-            <input v-model="campaign.logoText" type="text" />
+            <input v-model="databaseGameConfigForm.logoText" type="text" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <label class="admin-field">
             <span>右上網站按鈕文字</span>
-            <input v-model="campaign.websiteButtonText" type="text" placeholder="例如：官網、LINE、預約" />
+            <input v-model="databaseGameConfigForm.websiteButtonText" type="text" placeholder="例如：官網、LINE、預約" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <label class="admin-field">
             <span>右上網站連結網址</span>
-            <input v-model="campaign.websiteUrl" type="text" placeholder="例如：https://example.com" />
+            <input v-model="databaseGameConfigForm.websiteUrl" type="text" placeholder="例如：https://example.com" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <label class="admin-field">
             <span>分享按鈕文字</span>
-            <input v-model="campaign.buttonText" type="text" />
+            <input v-model="databaseGameConfigForm.buttonText" type="text" @input="syncDatabaseGameConfigFormToLivePreview('基本文字已同步到右側預覽，請按儲存同步到手機前台。')" />
           </label>
 
           <div class="rounded-3xl border border-yellow-100 bg-yellow-50 p-4">
@@ -10332,9 +10551,9 @@ watch(
             </p>
 
             <label class="admin-field mt-4">
-              <span>頁面名稱文字大小：{{ campaign.headerTitleTextSize }}px</span>
+              <span>頁面名稱文字大小：{{ databaseGameConfigForm.headerTitleTextSize }}px</span>
               <input
-                v-model.number="campaign.headerTitleTextSize"
+                v-model.number="databaseGameConfigForm.headerTitleTextSize" @input="syncDatabaseGameConfigFormToLivePreview('頂部文字樣式已同步到右側預覽，請按儲存同步到手機前台。')"
                 type="range"
                 min="12"
                 max="26"
@@ -10344,12 +10563,12 @@ watch(
             <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>頁面名稱顏色</span>
-                <input v-model="campaign.headerTitleColor" type="color" />
+                <input v-model="databaseGameConfigForm.headerTitleColor" @input="syncDatabaseGameConfigFormToLivePreview('頂部文字樣式已同步到右側預覽，請按儲存同步到手機前台。')" type="color" />
               </label>
 
               <label class="admin-color-field">
                 <span>品牌名稱顏色</span>
-                <input v-model="campaign.headerSubTitleColor" type="color" />
+                <input v-model="databaseGameConfigForm.headerSubTitleColor" @input="syncDatabaseGameConfigFormToLivePreview('頂部文字樣式已同步到右側預覽，請按儲存同步到手機前台。')" type="color" />
               </label>
             </div>
           </div>
@@ -10363,9 +10582,9 @@ watch(
             </p>
 
             <label class="admin-field mt-4">
-              <span>LOGO 文字大小：{{ campaign.headerLogoTextSize }}px</span>
+              <span>LOGO 文字大小：{{ databaseGameConfigForm.headerLogoTextSize }}px</span>
               <input
-                v-model.number="campaign.headerLogoTextSize"
+                v-model.number="databaseGameConfigForm.headerLogoTextSize" @input="syncDatabaseGameConfigFormToLivePreview('LOGO 樣式已同步到右側預覽，請按儲存同步到手機前台。')"
                 type="range"
                 min="10"
                 max="32"
@@ -10375,12 +10594,12 @@ watch(
             <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>LOGO 背景色</span>
-                <input v-model="campaign.headerLogoBgColor" type="color" />
+                <input v-model="databaseGameConfigForm.headerLogoBgColor" @input="syncDatabaseGameConfigFormToLivePreview('LOGO 樣式已同步到右側預覽，請按儲存同步到手機前台。')" type="color" />
               </label>
 
               <label class="admin-color-field">
                 <span>LOGO 文字色</span>
-                <input v-model="campaign.headerLogoTextColor" type="color" />
+                <input v-model="databaseGameConfigForm.headerLogoTextColor" @input="syncDatabaseGameConfigFormToLivePreview('LOGO 樣式已同步到右側預覽，請按儲存同步到手機前台。')" type="color" />
               </label>
             </div>
           </div>
@@ -10394,9 +10613,9 @@ watch(
             </p>
 
             <label class="admin-field mt-4">
-              <span>網站按鈕文字大小：{{ campaign.headerWebsiteTextSize }}px</span>
+              <span>網站按鈕文字大小：{{ databaseGameConfigForm.headerWebsiteTextSize }}px</span>
               <input
-                v-model.number="campaign.headerWebsiteTextSize"
+                v-model.number="databaseGameConfigForm.headerWebsiteTextSize" @input="syncDatabaseGameConfigFormToLivePreview('網站按鈕樣式已同步到右側預覽，請按儲存同步到手機前台。')"
                 type="range"
                 min="10"
                 max="32"
@@ -10406,12 +10625,12 @@ watch(
             <div class="mt-4 grid gap-3 sm:grid-cols-2">
               <label class="admin-color-field">
                 <span>網站按鈕背景色</span>
-                <input v-model="campaign.headerWebsiteBgColor" type="color" />
+                <input v-model="databaseGameConfigForm.headerWebsiteBgColor" @input="syncDatabaseGameConfigFormToLivePreview('網站按鈕樣式已同步到右側預覽，請按儲存同步到手機前台。')" type="color" />
               </label>
 
               <label class="admin-color-field">
                 <span>網站按鈕文字色</span>
-                <input v-model="campaign.headerWebsiteTextColor" type="color" />
+                <input v-model="databaseGameConfigForm.headerWebsiteTextColor" @input="syncDatabaseGameConfigFormToLivePreview('網站按鈕樣式已同步到右側預覽，請按儲存同步到手機前台。')" type="color" />
               </label>
             </div>
           </div>
