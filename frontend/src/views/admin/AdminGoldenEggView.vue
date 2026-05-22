@@ -989,7 +989,10 @@ const getCurrentAdminSectionLabel = () => {
   return sectionRestoreMap[activeSection.value]?.label || '目前功能'
 }
 
-const lastSaveBackup = ref(safeJsonParse(localStorage.getItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY), null))
+// 第 106001～106400 批：正式停用金蛋 GameConfig 儲存前 localStorage 大型備份。
+// 原因：舊備份 key 若塞入 base64 圖片會造成 QuotaExceededError，導致正式資料庫儲存被中斷。
+// 此處不再從 localStorage 還原備份，只保留本頁記憶體狀態。
+const lastSaveBackup = ref(null)
 
 const hasLastSaveBackup = computed(() => {
   return Boolean(lastSaveBackup.value?.settings && Number(lastSaveBackup.value?.campaignId) === Number(normalizedDatabaseCampaignId.value))
@@ -1026,22 +1029,35 @@ const stripInlineImageDataUrlsForLocalBackup = (value, seen = new WeakSet()) => 
 const safeSetLocalStorageJson = (key, value, fallbackValue = null) => {
   if (typeof window === 'undefined') return true
 
+  // 第 106001～106400 批：這個大型備份 key 完全禁止寫入。
+  // 舊版 bundle 曾在此 key 寫入整包 GameConfig + base64 圖片，造成 QuotaExceededError。
+  if (key === GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY) {
+    try {
+      localStorage.removeItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY)
+    } catch (error) {
+      console.warn('金蛋後台大型備份 key 清除失敗，已略過：', error)
+    }
+    return false
+  }
+
+  // 任何要寫入 localStorage 的內容，都先移除 data:image/base64。
+  // 不再先嘗試寫完整 payload，避免瀏覽器直接丟出 quota error。
+  const primaryValue = stripInlineImageDataUrlsForLocalBackup(value)
+  const fallback = fallbackValue !== null
+    ? stripInlineImageDataUrlsForLocalBackup(fallbackValue)
+    : primaryValue
+
   try {
-    localStorage.setItem(key, JSON.stringify(value))
+    localStorage.setItem(key, JSON.stringify(primaryValue))
     return true
   } catch (error) {
-    if (fallbackValue !== null) {
-      try {
-        localStorage.setItem(key, JSON.stringify(fallbackValue))
-        return true
-      } catch (fallbackError) {
-        console.warn('金蛋後台本機暫存寫入失敗，已略過：', fallbackError)
-        return false
-      }
+    try {
+      localStorage.setItem(key, JSON.stringify(fallback))
+      return true
+    } catch (fallbackError) {
+      console.warn('金蛋後台本機暫存寫入失敗，已略過，不影響正式資料庫儲存：', fallbackError)
+      return false
     }
-
-    console.warn('金蛋後台本機暫存寫入失敗，已略過：', error)
-    return false
   }
 }
 
@@ -1061,19 +1077,42 @@ const persistLastSaveBackup = (backup = null) => {
   }
 }
 
-const createBeforeSaveGameConfigBackup = () => {
-  const settings = cloneByJson(databaseCampaign.value?.gameConfig?.settings || buildDatabaseGameConfigPayload())
+const cleanupGoldenEggOversizedLocalStorage = () => {
+  if (typeof window === 'undefined') return
 
+  const removableKeys = [
+    GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY,
+    currentGoldenEggAdminStateKey.value,
+    currentGoldenEggAdminSyncKey.value
+  ].filter(Boolean)
+
+  Object.keys(localStorage)
+    .filter((key) => key.includes('golden_egg') || key.includes('goldenEgg'))
+    .forEach((key) => {
+      if (!removableKeys.includes(key) && !key.includes('game_config_save_backup')) return
+      try {
+        localStorage.removeItem(key)
+      } catch (error) {
+        console.warn('金蛋後台舊暫存清除失敗，已略過：', key, error)
+      }
+    })
+}
+
+
+const createBeforeSaveGameConfigBackup = () => {
+  // 第 106001～106400 批：儲存前備份改為輕量摘要，不再複製 campaign / prizes / databaseForm 全量資料。
+  // 這些資料可能包含多張 data:image/base64，本機暫存會爆容量；正式資料以 PostgreSQL GameConfig 為準。
   const backup = {
-    type: 'before-save-game-config-backup',
-    version: 'v2.3-batch24301-24700',
+    type: 'before-save-game-config-light-backup',
+    version: 'v2.3-batch106001-106400',
     campaignId: normalizedDatabaseCampaignId.value,
     campaignTitle: databaseCampaign.value?.title || '',
     createdAt: new Date().toISOString(),
-    settings,
-    campaignSnapshot: cloneByJson(campaign),
-    prizesSnapshot: cloneByJson(prizes.value),
-    databaseFormSnapshot: cloneByJson(databaseGameConfigForm || {})
+    resultImageUrlExists: Boolean(databaseGameConfigForm.resultImageUrl || campaign.resultImageUrl),
+    resultWinImageUrlExists: Boolean(databaseGameConfigForm.resultWinImageUrl || campaign.resultWinImageUrl),
+    resultLoseImageUrlExists: Boolean(databaseGameConfigForm.resultLoseImageUrl || campaign.resultLoseImageUrl),
+    prizeCount: Array.isArray(prizes.value) ? prizes.value.length : 0,
+    note: '大型圖片與完整設定不再寫入 localStorage；請以資料庫 GameConfig.settings 為正式來源。'
   }
 
   persistLastSaveBackup(backup)
@@ -2253,24 +2292,20 @@ const operationMessageClass = computed(() => {
 })
 
 const saveState = (message = '') => {
-  const statePayload = payload.value
+  // 第 106001～106400 批：右側預覽不再依賴寫入整包 localStorage。
+  // 只寫入一個很小的同步標記，避免圖片 URL / 舊 base64 讓瀏覽器暫存爆容量。
   const stateSaved = safeSetLocalStorageJson(
-    currentGoldenEggAdminStateKey.value,
-    statePayload,
-    stripInlineImageDataUrlsForLocalBackup(statePayload)
-  )
-
-  safeSetLocalStorageJson(
     currentGoldenEggAdminSyncKey.value,
     {
       updatedAt: new Date().toISOString(),
       source: 'golden-egg-admin',
-      localStateSaved: stateSaved
+      localStateSaved: false,
+      note: '正式同步來源為 PostgreSQL GameConfig；本機大型預覽暫存已停用。'
     }
   )
 
   if (!stateSaved) {
-    showOperationInfo('本機預覽暫存空間不足，已略過大型圖片暫存；請按「儲存前台設定」寫入資料庫。')
+    showOperationInfo('本機預覽暫存空間不足，已略過；不影響「儲存前台設定」寫入資料庫。')
   }
 
   if (isAutoPreviewEnabled.value) {
@@ -6599,7 +6634,7 @@ const saveDatabaseGameConfig = async () => {
     addGameConfigOperationLog({
       title: '儲存前台設定',
       description: changedCountBeforeSave
-        ? `已同步 ${changedCountBeforeSave} 個欄位到 PostgreSQL GameConfig.settings，且已保留儲存前備份。結果圖驗證：${savedResultImageSummary}。${changedLabelsBeforeSave ? `主要欄位：${changedLabelsBeforeSave}` : ''}`
+        ? `已同步 ${changedCountBeforeSave} 個欄位到 PostgreSQL GameConfig.settings；大型本機備份已停用。結果圖驗證：${savedResultImageSummary}。${changedLabelsBeforeSave ? `主要欄位：${changedLabelsBeforeSave}` : ''}`
         : '已重新確認資料庫前台設定，沒有偵測到新的差異。',
       type: 'success',
       changedCount: changedCountBeforeSave
@@ -7001,6 +7036,9 @@ onMounted(async () => {
   redirectGoldenEggLegacyAdminEntry()
 
   if (shouldRedirectGoldenEggLegacyAdminEntry.value) return
+
+  // 第 106001～106400 批：進入後台先清掉舊版 base64 暫存，避免一按儲存就被舊 localStorage 卡住。
+  cleanupGoldenEggOversizedLocalStorage()
 
   loadState()
   loadSerialCodes()
