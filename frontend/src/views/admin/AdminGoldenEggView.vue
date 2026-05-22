@@ -1045,23 +1045,19 @@ const safeSetLocalStorageJson = (key, value, fallbackValue = null) => {
 }
 
 const persistLastSaveBackup = (backup = null) => {
+  // 第 105201～105600 批：完全停止把 GameConfig 儲存前備份寫入 localStorage。
+  // 原因：商家上傳本機圖片後會形成大型 data:image/base64，
+  // 即使壓縮或省略，瀏覽器仍可能因舊備份/其他暫存佔滿而在 setItem 階段丟出 QuotaExceededError，
+  // 進而中斷正式資料庫儲存流程。此備份改為僅保留在本頁記憶體，正式資料以 PostgreSQL GameConfig 為準。
   lastSaveBackup.value = backup
 
-  if (!backup) {
+  if (typeof window === 'undefined') return
+
+  try {
     localStorage.removeItem(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY)
-    return
+  } catch (error) {
+    console.warn('金蛋後台本機備份清除失敗，已略過：', error)
   }
-
-  const localBackup = {
-    ...backup,
-    localStorageNote: '第 104801～105200 批：本機上傳圖片 Data URL 不寫入瀏覽器備份，避免超出 localStorage 容量。',
-    settings: stripInlineImageDataUrlsForLocalBackup(backup.settings),
-    campaignSnapshot: stripInlineImageDataUrlsForLocalBackup(backup.campaignSnapshot),
-    prizesSnapshot: stripInlineImageDataUrlsForLocalBackup(backup.prizesSnapshot),
-    databaseFormSnapshot: stripInlineImageDataUrlsForLocalBackup(backup.databaseFormSnapshot)
-  }
-
-  safeSetLocalStorageJson(GOLDEN_EGG_GAME_CONFIG_SAVE_BACKUP_KEY, localBackup)
 }
 
 const createBeforeSaveGameConfigBackup = () => {
