@@ -843,6 +843,37 @@ const applyRemoteCampaignSettingsToCampaign = (apiCampaign = {}, normalized = {}
     Object.assign(campaign, nestedCampaign)
   }
 
+  // 第 103601～104000 批：正式金蛋玩家頁補吃後台結果彈窗圖片相容欄位。
+  // 後台會寫 root resultWinImageUrl / resultLoseImageUrl，也會保留 resultModal 相容物件。
+  // 正式頁載入時統一攤平成 campaign 欄位，避免手機仍顯示舊預設 emoji。
+  const resultModalSettings = rawSettings.resultModal && typeof rawSettings.resultModal === 'object'
+    ? rawSettings.resultModal
+    : {}
+
+  campaign.resultImageUrl = rawSettings.resultImageUrl || resultModalSettings.imageUrl || campaign.resultImageUrl || ''
+  campaign.resultWinImageUrl = rawSettings.resultWinImageUrl || resultModalSettings.winImageUrl || rawSettings.winModalImageUrl || campaign.resultWinImageUrl || ''
+  campaign.resultLoseImageUrl = rawSettings.resultLoseImageUrl || resultModalSettings.loseImageUrl || rawSettings.loseModalImageUrl || campaign.resultLoseImageUrl || ''
+  campaign.resultModalBgFrom = rawSettings.resultModalBgFrom || resultModalSettings.bgFrom || campaign.resultModalBgFrom
+  campaign.resultModalBgTo = rawSettings.resultModalBgTo || resultModalSettings.bgTo || campaign.resultModalBgTo
+  campaign.resultModalBorderColor = rawSettings.resultModalBorderColor || resultModalSettings.borderColor || campaign.resultModalBorderColor
+  campaign.resultIconBgColor = rawSettings.resultIconBgColor || resultModalSettings.iconBgColor || campaign.resultIconBgColor
+  campaign.resultIconTextColor = rawSettings.resultIconTextColor || resultModalSettings.iconTextColor || campaign.resultIconTextColor
+  campaign.resultIconSize = Number(rawSettings.resultIconSize || resultModalSettings.iconSize || campaign.resultIconSize || 96)
+  campaign.resultIconTextSize = Number(rawSettings.resultIconTextSize || resultModalSettings.iconTextSize || campaign.resultIconTextSize || 48)
+  campaign.resultBadgeTextSize = Number(rawSettings.resultBadgeTextSize || resultModalSettings.badgeTextSize || campaign.resultBadgeTextSize || 12)
+  campaign.resultTitleTextSize = Number(rawSettings.resultTitleTextSize || resultModalSettings.titleTextSize || campaign.resultTitleTextSize || 24)
+  campaign.resultTitleColor = rawSettings.resultTitleColor || resultModalSettings.titleColor || campaign.resultTitleColor
+  campaign.resultDescriptionTextSize = Number(rawSettings.resultDescriptionTextSize || resultModalSettings.descriptionTextSize || campaign.resultDescriptionTextSize || 14)
+  campaign.resultDescriptionColor = rawSettings.resultDescriptionColor || resultModalSettings.descriptionColor || campaign.resultDescriptionColor
+  campaign.resultPrimaryButtonText = rawSettings.resultPrimaryButtonText || resultModalSettings.primaryButtonText || campaign.resultPrimaryButtonText
+  campaign.resultPrimaryButtonTextSize = Number(rawSettings.resultPrimaryButtonTextSize || resultModalSettings.primaryButtonTextSize || campaign.resultPrimaryButtonTextSize || 14)
+  campaign.resultPrimaryButtonBgColor = rawSettings.resultPrimaryButtonBgColor || resultModalSettings.primaryButtonBgColor || campaign.resultPrimaryButtonBgColor
+  campaign.resultPrimaryButtonTextColor = rawSettings.resultPrimaryButtonTextColor || resultModalSettings.primaryButtonTextColor || campaign.resultPrimaryButtonTextColor
+  campaign.resultCopyButtonText = rawSettings.resultCopyButtonText || resultModalSettings.copyButtonText || campaign.resultCopyButtonText
+  campaign.resultCopyButtonTextSize = Number(rawSettings.resultCopyButtonTextSize || resultModalSettings.copyButtonTextSize || campaign.resultCopyButtonTextSize || 14)
+  campaign.resultCopyButtonBgColor = rawSettings.resultCopyButtonBgColor || resultModalSettings.copyButtonBgColor || campaign.resultCopyButtonBgColor
+  campaign.resultCopyButtonTextColor = rawSettings.resultCopyButtonTextColor || resultModalSettings.copyButtonTextColor || campaign.resultCopyButtonTextColor
+
   campaign.pageTitle =
     basicText.pageTitle ||
     nestedCampaign.pageTitle ||
@@ -2196,6 +2227,17 @@ const resultIconStyle = computed(() => {
   }
 })
 
+const appendResultImageCacheKey = (url = '') => {
+  const value = String(url || '').trim()
+
+  if (!value || value.startsWith('data:') || value.startsWith('blob:')) return value
+
+  const version = String(campaign.updatedAt || campaign.gameConfigUpdatedAt || campaign.resultImageUpdatedAt || '').trim()
+  if (!version) return value
+
+  return `${value}${value.includes('?') ? '&' : '?'}v=${encodeURIComponent(version)}`
+}
+
 const resultImageUrl = computed(() => {
   const prizeImageUrl = String(resultPrize.value?.imageUrl || '').trim()
   const isLoseResult = resultPrize.value?.type === 'lose'
@@ -2204,7 +2246,9 @@ const resultImageUrl = computed(() => {
   const globalImageUrl = String(campaign.resultImageUrl || '').trim()
   const typedImageUrl = isLoseResult ? loseImageUrl : winImageUrl
 
-  return prizeImageUrl || typedImageUrl || globalImageUrl
+  // 第 103601～104000 批：後台「結果彈窗圖片」優先於獎項圖片。
+  // 商家設定中獎/未中獎彈窗圖後，正式手機頁不可再被舊獎項圖或預設 emoji 蓋過。
+  return appendResultImageCacheKey(typedImageUrl || globalImageUrl || prizeImageUrl)
 })
 
 const resultBadgeStyle = computed(() => {

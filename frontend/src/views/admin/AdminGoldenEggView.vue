@@ -1770,6 +1770,29 @@ const syncDatabaseGameConfigFormToLivePreview = (message = '已同步 GameConfig
     shareDescription: databaseGameConfigForm.shareDescription || campaign.shareDescription,
     shareUrl: databaseGameConfigForm.shareUrl || campaign.shareUrl,
     shareImageUrl: databaseGameConfigForm.shareImageUrl || campaign.shareImageUrl || '',
+    resultModalBgFrom: databaseGameConfigForm.resultModalBgFrom || campaign.resultModalBgFrom,
+    resultModalBgTo: databaseGameConfigForm.resultModalBgTo || campaign.resultModalBgTo,
+    resultModalBorderColor: databaseGameConfigForm.resultModalBorderColor || campaign.resultModalBorderColor,
+    resultIconBgColor: databaseGameConfigForm.resultIconBgColor || campaign.resultIconBgColor,
+    resultIconTextColor: databaseGameConfigForm.resultIconTextColor || campaign.resultIconTextColor,
+    resultImageUrl: databaseGameConfigForm.resultImageUrl || campaign.resultImageUrl || '',
+    resultWinImageUrl: databaseGameConfigForm.resultWinImageUrl || campaign.resultWinImageUrl || '',
+    resultLoseImageUrl: databaseGameConfigForm.resultLoseImageUrl || campaign.resultLoseImageUrl || '',
+    resultIconSize: Number(databaseGameConfigForm.resultIconSize || campaign.resultIconSize || 96),
+    resultIconTextSize: Number(databaseGameConfigForm.resultIconTextSize || campaign.resultIconTextSize || 48),
+    resultBadgeTextSize: Number(databaseGameConfigForm.resultBadgeTextSize || campaign.resultBadgeTextSize || 12),
+    resultTitleTextSize: Number(databaseGameConfigForm.resultTitleTextSize || campaign.resultTitleTextSize || 24),
+    resultTitleColor: databaseGameConfigForm.resultTitleColor || campaign.resultTitleColor,
+    resultDescriptionTextSize: Number(databaseGameConfigForm.resultDescriptionTextSize || campaign.resultDescriptionTextSize || 14),
+    resultDescriptionColor: databaseGameConfigForm.resultDescriptionColor || campaign.resultDescriptionColor,
+    resultPrimaryButtonText: databaseGameConfigForm.resultPrimaryButtonText || campaign.resultPrimaryButtonText,
+    resultPrimaryButtonTextSize: Number(databaseGameConfigForm.resultPrimaryButtonTextSize || campaign.resultPrimaryButtonTextSize || 14),
+    resultPrimaryButtonBgColor: databaseGameConfigForm.resultPrimaryButtonBgColor || campaign.resultPrimaryButtonBgColor,
+    resultPrimaryButtonTextColor: databaseGameConfigForm.resultPrimaryButtonTextColor || campaign.resultPrimaryButtonTextColor,
+    resultCopyButtonText: databaseGameConfigForm.resultCopyButtonText || campaign.resultCopyButtonText,
+    resultCopyButtonTextSize: Number(databaseGameConfigForm.resultCopyButtonTextSize || campaign.resultCopyButtonTextSize || 14),
+    resultCopyButtonBgColor: databaseGameConfigForm.resultCopyButtonBgColor || campaign.resultCopyButtonBgColor,
+    resultCopyButtonTextColor: databaseGameConfigForm.resultCopyButtonTextColor || campaign.resultCopyButtonTextColor,
     systemShareButtonText: databaseGameConfigForm.systemShareButtonText || campaign.systemShareButtonText || '系統分享',
     systemShareButtonTextSize: Number(databaseGameConfigForm.systemShareButtonTextSize || campaign.systemShareButtonTextSize || 14),
     systemShareButtonBgColor: databaseGameConfigForm.systemShareButtonBgColor || campaign.systemShareButtonBgColor || databaseGameConfigForm.themeButtonColor || campaign.themeButtonColor || '#7f1d1d',
@@ -2298,6 +2321,29 @@ const syncPreviewVisualSettingsToDatabaseForm = () => {
   databaseGameConfigForm.shareDescription = campaign.shareDescription || databaseGameConfigForm.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.shareUrl = campaign.shareUrl || databaseGameConfigForm.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`
   databaseGameConfigForm.shareImageUrl = campaign.shareImageUrl || databaseGameConfigForm.shareImageUrl || ''
+  databaseGameConfigForm.resultModalBgFrom = campaign.resultModalBgFrom || databaseGameConfigForm.resultModalBgFrom || '#dc2626'
+  databaseGameConfigForm.resultModalBgTo = campaign.resultModalBgTo || databaseGameConfigForm.resultModalBgTo || '#450a0a'
+  databaseGameConfigForm.resultModalBorderColor = campaign.resultModalBorderColor || databaseGameConfigForm.resultModalBorderColor || '#fde68a'
+  databaseGameConfigForm.resultIconBgColor = campaign.resultIconBgColor || databaseGameConfigForm.resultIconBgColor || '#fde047'
+  databaseGameConfigForm.resultIconTextColor = campaign.resultIconTextColor || databaseGameConfigForm.resultIconTextColor || '#991b1b'
+  databaseGameConfigForm.resultImageUrl = campaign.resultImageUrl || databaseGameConfigForm.resultImageUrl || ''
+  databaseGameConfigForm.resultWinImageUrl = campaign.resultWinImageUrl || databaseGameConfigForm.resultWinImageUrl || ''
+  databaseGameConfigForm.resultLoseImageUrl = campaign.resultLoseImageUrl || databaseGameConfigForm.resultLoseImageUrl || ''
+  databaseGameConfigForm.resultIconSize = Number(campaign.resultIconSize || databaseGameConfigForm.resultIconSize || 96)
+  databaseGameConfigForm.resultIconTextSize = Number(campaign.resultIconTextSize || databaseGameConfigForm.resultIconTextSize || 48)
+  databaseGameConfigForm.resultBadgeTextSize = Number(campaign.resultBadgeTextSize || databaseGameConfigForm.resultBadgeTextSize || 12)
+  databaseGameConfigForm.resultTitleTextSize = Number(campaign.resultTitleTextSize || databaseGameConfigForm.resultTitleTextSize || 24)
+  databaseGameConfigForm.resultTitleColor = campaign.resultTitleColor || databaseGameConfigForm.resultTitleColor || '#ffffff'
+  databaseGameConfigForm.resultDescriptionTextSize = Number(campaign.resultDescriptionTextSize || databaseGameConfigForm.resultDescriptionTextSize || 14)
+  databaseGameConfigForm.resultDescriptionColor = campaign.resultDescriptionColor || databaseGameConfigForm.resultDescriptionColor || '#fef3c7'
+  databaseGameConfigForm.resultPrimaryButtonText = campaign.resultPrimaryButtonText || databaseGameConfigForm.resultPrimaryButtonText || '繼續查看'
+  databaseGameConfigForm.resultPrimaryButtonTextSize = Number(campaign.resultPrimaryButtonTextSize || databaseGameConfigForm.resultPrimaryButtonTextSize || 14)
+  databaseGameConfigForm.resultPrimaryButtonBgColor = campaign.resultPrimaryButtonBgColor || databaseGameConfigForm.resultPrimaryButtonBgColor || '#fde047'
+  databaseGameConfigForm.resultPrimaryButtonTextColor = campaign.resultPrimaryButtonTextColor || databaseGameConfigForm.resultPrimaryButtonTextColor || '#991b1b'
+  databaseGameConfigForm.resultCopyButtonText = campaign.resultCopyButtonText || databaseGameConfigForm.resultCopyButtonText || '複製結果'
+  databaseGameConfigForm.resultCopyButtonTextSize = Number(campaign.resultCopyButtonTextSize || databaseGameConfigForm.resultCopyButtonTextSize || 14)
+  databaseGameConfigForm.resultCopyButtonBgColor = campaign.resultCopyButtonBgColor || databaseGameConfigForm.resultCopyButtonBgColor || 'rgba(255,255,255,0.12)'
+  databaseGameConfigForm.resultCopyButtonTextColor = campaign.resultCopyButtonTextColor || databaseGameConfigForm.resultCopyButtonTextColor || '#ffffff'
   databaseGameConfigForm.systemShareText = campaign.systemShareText || databaseGameConfigForm.systemShareText || '🎉 九宮格砸金蛋抽獎活動\n輸入活動序號，立即砸金蛋抽好禮！'
   databaseGameConfigForm.lineShareText = campaign.lineShareText || databaseGameConfigForm.lineShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
   databaseGameConfigForm.telegramShareText = campaign.telegramShareText || databaseGameConfigForm.telegramShareText || '🎉 九宮格砸金蛋抽獎活動｜輸入序號就有機會中大獎！'
@@ -2563,13 +2609,23 @@ const readImageFileAsDataUrl = (file) => {
   })
 }
 
+const syncResultImageFieldToDatabaseForm = (field, value = '') => {
+  if (!field) return
+
+  if (Object.prototype.hasOwnProperty.call(databaseGameConfigForm, field)) {
+    databaseGameConfigForm[field] = value || ''
+  }
+}
+
 const handleResultImageUploadByField = async (event, field = 'resultImageUrl', label = '全域結果圖片') => {
   const file = event.target?.files?.[0]
 
   if (!file) return
 
   try {
-    campaign[field] = await readImageFileAsDataUrl(file)
+    const imageDataUrl = await readImageFileAsDataUrl(file)
+    campaign[field] = imageDataUrl
+    syncResultImageFieldToDatabaseForm(field, imageDataUrl)
     saveState(`已上傳${label}。`)
   } catch (error) {
     console.error(`上傳${label}失敗：`, error)
@@ -2595,16 +2651,19 @@ const handleResultLoseImageUpload = (event) => {
 
 const clearResultImage = () => {
   campaign.resultImageUrl = ''
+  syncResultImageFieldToDatabaseForm('resultImageUrl', '')
   saveState('已清除全域結果圖片。')
 }
 
 const clearResultWinImage = () => {
   campaign.resultWinImageUrl = ''
+  syncResultImageFieldToDatabaseForm('resultWinImageUrl', '')
   saveState('已清除中獎結果圖片。')
 }
 
 const clearResultLoseImage = () => {
   campaign.resultLoseImageUrl = ''
+  syncResultImageFieldToDatabaseForm('resultLoseImageUrl', '')
   saveState('已清除未中獎結果圖片。')
 }
 
@@ -5953,6 +6012,31 @@ const loadDatabaseGameConfigFormFromCampaign = (campaignData = null) => {
   databaseGameConfigForm.eggCardBgTo = settings.eggCardBgTo || '#7f1d1d'
   databaseGameConfigForm.eggNumberBgColor = settings.eggNumberBgColor || '#7f1d1d'
   databaseGameConfigForm.eggNumberTextColor = settings.eggNumberTextColor || '#fef3c7'
+
+  // 第 103601～104000 批：金蛋結果彈窗圖片與樣式必須從正式資料庫表單載入。
+  databaseGameConfigForm.resultModalBgFrom = settings.resultModalBgFrom || campaign.resultModalBgFrom || '#dc2626'
+  databaseGameConfigForm.resultModalBgTo = settings.resultModalBgTo || campaign.resultModalBgTo || '#450a0a'
+  databaseGameConfigForm.resultModalBorderColor = settings.resultModalBorderColor || campaign.resultModalBorderColor || '#fde68a'
+  databaseGameConfigForm.resultIconBgColor = settings.resultIconBgColor || campaign.resultIconBgColor || '#fde047'
+  databaseGameConfigForm.resultIconTextColor = settings.resultIconTextColor || campaign.resultIconTextColor || '#991b1b'
+  databaseGameConfigForm.resultImageUrl = settings.resultImageUrl || settings.resultModal?.imageUrl || campaign.resultImageUrl || ''
+  databaseGameConfigForm.resultWinImageUrl = settings.resultWinImageUrl || settings.resultModal?.winImageUrl || settings.winModalImageUrl || campaign.resultWinImageUrl || ''
+  databaseGameConfigForm.resultLoseImageUrl = settings.resultLoseImageUrl || settings.resultModal?.loseImageUrl || settings.loseModalImageUrl || campaign.resultLoseImageUrl || ''
+  databaseGameConfigForm.resultIconSize = Number(settings.resultIconSize || campaign.resultIconSize || 96)
+  databaseGameConfigForm.resultIconTextSize = Number(settings.resultIconTextSize || campaign.resultIconTextSize || 48)
+  databaseGameConfigForm.resultBadgeTextSize = Number(settings.resultBadgeTextSize || campaign.resultBadgeTextSize || 12)
+  databaseGameConfigForm.resultTitleTextSize = Number(settings.resultTitleTextSize || campaign.resultTitleTextSize || 24)
+  databaseGameConfigForm.resultTitleColor = settings.resultTitleColor || campaign.resultTitleColor || '#ffffff'
+  databaseGameConfigForm.resultDescriptionTextSize = Number(settings.resultDescriptionTextSize || campaign.resultDescriptionTextSize || 14)
+  databaseGameConfigForm.resultDescriptionColor = settings.resultDescriptionColor || campaign.resultDescriptionColor || '#fef3c7'
+  databaseGameConfigForm.resultPrimaryButtonText = settings.resultPrimaryButtonText || campaign.resultPrimaryButtonText || '繼續查看'
+  databaseGameConfigForm.resultPrimaryButtonTextSize = Number(settings.resultPrimaryButtonTextSize || campaign.resultPrimaryButtonTextSize || 14)
+  databaseGameConfigForm.resultPrimaryButtonBgColor = settings.resultPrimaryButtonBgColor || campaign.resultPrimaryButtonBgColor || '#fde047'
+  databaseGameConfigForm.resultPrimaryButtonTextColor = settings.resultPrimaryButtonTextColor || campaign.resultPrimaryButtonTextColor || '#991b1b'
+  databaseGameConfigForm.resultCopyButtonText = settings.resultCopyButtonText || campaign.resultCopyButtonText || '複製結果'
+  databaseGameConfigForm.resultCopyButtonTextSize = Number(settings.resultCopyButtonTextSize || campaign.resultCopyButtonTextSize || 14)
+  databaseGameConfigForm.resultCopyButtonBgColor = settings.resultCopyButtonBgColor || campaign.resultCopyButtonBgColor || '#ffffff'
+  databaseGameConfigForm.resultCopyButtonTextColor = settings.resultCopyButtonTextColor || campaign.resultCopyButtonTextColor || '#ffffff'
 }
 
 const buildDatabaseGameConfigPayload = () => {
@@ -6016,6 +6100,37 @@ const buildDatabaseGameConfigPayload = () => {
     eggCardBgTo: databaseGameConfigForm.eggCardBgTo || '#7f1d1d',
     eggNumberBgColor: databaseGameConfigForm.eggNumberBgColor || '#7f1d1d',
     eggNumberTextColor: databaseGameConfigForm.eggNumberTextColor || '#fef3c7',
+
+    // 第 103601～104000 批：金蛋結果彈窗圖片與按鈕樣式必須寫進 PostgreSQL GameConfig.settings。
+    resultModalBgFrom: databaseGameConfigForm.resultModalBgFrom || campaign.resultModalBgFrom || '#dc2626',
+    resultModalBgTo: databaseGameConfigForm.resultModalBgTo || campaign.resultModalBgTo || '#450a0a',
+    resultModalBorderColor: databaseGameConfigForm.resultModalBorderColor || campaign.resultModalBorderColor || '#fde68a',
+    resultIconBgColor: databaseGameConfigForm.resultIconBgColor || campaign.resultIconBgColor || '#fde047',
+    resultIconTextColor: databaseGameConfigForm.resultIconTextColor || campaign.resultIconTextColor || '#991b1b',
+    resultImageUrl: databaseGameConfigForm.resultImageUrl || campaign.resultImageUrl || '',
+    resultWinImageUrl: databaseGameConfigForm.resultWinImageUrl || campaign.resultWinImageUrl || '',
+    resultLoseImageUrl: databaseGameConfigForm.resultLoseImageUrl || campaign.resultLoseImageUrl || '',
+    resultIconSize: Number(databaseGameConfigForm.resultIconSize || campaign.resultIconSize || 96),
+    resultIconTextSize: Number(databaseGameConfigForm.resultIconTextSize || campaign.resultIconTextSize || 48),
+    resultBadgeTextSize: Number(databaseGameConfigForm.resultBadgeTextSize || campaign.resultBadgeTextSize || 12),
+    resultTitleTextSize: Number(databaseGameConfigForm.resultTitleTextSize || campaign.resultTitleTextSize || 24),
+    resultTitleColor: databaseGameConfigForm.resultTitleColor || campaign.resultTitleColor || '#ffffff',
+    resultDescriptionTextSize: Number(databaseGameConfigForm.resultDescriptionTextSize || campaign.resultDescriptionTextSize || 14),
+    resultDescriptionColor: databaseGameConfigForm.resultDescriptionColor || campaign.resultDescriptionColor || '#fef3c7',
+    resultPrimaryButtonText: databaseGameConfigForm.resultPrimaryButtonText || campaign.resultPrimaryButtonText || '繼續查看',
+    resultPrimaryButtonTextSize: Number(databaseGameConfigForm.resultPrimaryButtonTextSize || campaign.resultPrimaryButtonTextSize || 14),
+    resultPrimaryButtonBgColor: databaseGameConfigForm.resultPrimaryButtonBgColor || campaign.resultPrimaryButtonBgColor || '#fde047',
+    resultPrimaryButtonTextColor: databaseGameConfigForm.resultPrimaryButtonTextColor || campaign.resultPrimaryButtonTextColor || '#991b1b',
+    resultCopyButtonText: databaseGameConfigForm.resultCopyButtonText || campaign.resultCopyButtonText || '複製結果',
+    resultCopyButtonTextSize: Number(databaseGameConfigForm.resultCopyButtonTextSize || campaign.resultCopyButtonTextSize || 14),
+    resultCopyButtonBgColor: databaseGameConfigForm.resultCopyButtonBgColor || campaign.resultCopyButtonBgColor || 'rgba(255,255,255,0.12)',
+    resultCopyButtonTextColor: databaseGameConfigForm.resultCopyButtonTextColor || campaign.resultCopyButtonTextColor || '#ffffff',
+    resultModal: {
+      ...(originalSettings.resultModal && typeof originalSettings.resultModal === 'object' ? originalSettings.resultModal : {}),
+      imageUrl: databaseGameConfigForm.resultImageUrl || campaign.resultImageUrl || '',
+      winImageUrl: databaseGameConfigForm.resultWinImageUrl || campaign.resultWinImageUrl || '',
+      loseImageUrl: databaseGameConfigForm.resultLoseImageUrl || campaign.resultLoseImageUrl || ''
+    },
     // 第 84801～85200 批：金蛋正式抽獎機率由後台百分比設定寫入 GameConfig。
     // 後端 Draw Engine 會優先讀取 eggItems / prizes 的 probabilityPercent / weight / probability。
     eggItems: buildGoldenEggPrizeSettingsPayload(),
@@ -6085,6 +6200,29 @@ const getDatabaseGameConfigComparable = (settings = {}, campaignData = null) => 
     eggCardBgTo: String(settings.eggCardBgTo || '#7f1d1d'),
     eggNumberBgColor: String(settings.eggNumberBgColor || '#7f1d1d'),
     eggNumberTextColor: String(settings.eggNumberTextColor || '#fef3c7'),
+    resultModalBgFrom: String(settings.resultModalBgFrom || campaign.resultModalBgFrom || '#dc2626'),
+    resultModalBgTo: String(settings.resultModalBgTo || campaign.resultModalBgTo || '#450a0a'),
+    resultModalBorderColor: String(settings.resultModalBorderColor || campaign.resultModalBorderColor || '#fde68a'),
+    resultIconBgColor: String(settings.resultIconBgColor || campaign.resultIconBgColor || '#fde047'),
+    resultIconTextColor: String(settings.resultIconTextColor || campaign.resultIconTextColor || '#991b1b'),
+    resultImageUrl: String(settings.resultImageUrl || settings.resultModal?.imageUrl || campaign.resultImageUrl || ''),
+    resultWinImageUrl: String(settings.resultWinImageUrl || settings.resultModal?.winImageUrl || campaign.resultWinImageUrl || ''),
+    resultLoseImageUrl: String(settings.resultLoseImageUrl || settings.resultModal?.loseImageUrl || campaign.resultLoseImageUrl || ''),
+    resultIconSize: Number(settings.resultIconSize || campaign.resultIconSize || 96),
+    resultIconTextSize: Number(settings.resultIconTextSize || campaign.resultIconTextSize || 48),
+    resultBadgeTextSize: Number(settings.resultBadgeTextSize || campaign.resultBadgeTextSize || 12),
+    resultTitleTextSize: Number(settings.resultTitleTextSize || campaign.resultTitleTextSize || 24),
+    resultTitleColor: String(settings.resultTitleColor || campaign.resultTitleColor || '#ffffff'),
+    resultDescriptionTextSize: Number(settings.resultDescriptionTextSize || campaign.resultDescriptionTextSize || 14),
+    resultDescriptionColor: String(settings.resultDescriptionColor || campaign.resultDescriptionColor || '#fef3c7'),
+    resultPrimaryButtonText: String(settings.resultPrimaryButtonText || campaign.resultPrimaryButtonText || '繼續查看'),
+    resultPrimaryButtonTextSize: Number(settings.resultPrimaryButtonTextSize || campaign.resultPrimaryButtonTextSize || 14),
+    resultPrimaryButtonBgColor: String(settings.resultPrimaryButtonBgColor || campaign.resultPrimaryButtonBgColor || '#fde047'),
+    resultPrimaryButtonTextColor: String(settings.resultPrimaryButtonTextColor || campaign.resultPrimaryButtonTextColor || '#991b1b'),
+    resultCopyButtonText: String(settings.resultCopyButtonText || campaign.resultCopyButtonText || '複製結果'),
+    resultCopyButtonTextSize: Number(settings.resultCopyButtonTextSize || campaign.resultCopyButtonTextSize || 14),
+    resultCopyButtonBgColor: String(settings.resultCopyButtonBgColor || campaign.resultCopyButtonBgColor || 'rgba(255,255,255,0.12)'),
+    resultCopyButtonTextColor: String(settings.resultCopyButtonTextColor || campaign.resultCopyButtonTextColor || '#ffffff'),
     shareTitle: String(settings.shareTitle || campaign.shareTitle || '九宮格砸金蛋抽獎活動'),
     shareDescription: String(settings.shareDescription || campaign.shareDescription || '輸入活動序號，立即砸金蛋抽好禮！'),
     shareUrl: String(settings.shareUrl || campaign.shareUrl || `https://marketing-game-v1-em29.vercel.app/games/golden-egg?campaignId=${normalizedDatabaseCampaignId.value || 1}`),
@@ -6140,6 +6278,29 @@ const databaseGameConfigFormComparable = computed(() => ({
   eggCardBgTo: String(databaseGameConfigForm.eggCardBgTo || '#7f1d1d'),
   eggNumberBgColor: String(databaseGameConfigForm.eggNumberBgColor || '#7f1d1d'),
   eggNumberTextColor: String(databaseGameConfigForm.eggNumberTextColor || '#fef3c7'),
+  resultModalBgFrom: String(databaseGameConfigForm.resultModalBgFrom || '#dc2626'),
+  resultModalBgTo: String(databaseGameConfigForm.resultModalBgTo || '#450a0a'),
+  resultModalBorderColor: String(databaseGameConfigForm.resultModalBorderColor || '#fde68a'),
+  resultIconBgColor: String(databaseGameConfigForm.resultIconBgColor || '#fde047'),
+  resultIconTextColor: String(databaseGameConfigForm.resultIconTextColor || '#991b1b'),
+  resultImageUrl: String(databaseGameConfigForm.resultImageUrl || ''),
+  resultWinImageUrl: String(databaseGameConfigForm.resultWinImageUrl || ''),
+  resultLoseImageUrl: String(databaseGameConfigForm.resultLoseImageUrl || ''),
+  resultIconSize: Number(databaseGameConfigForm.resultIconSize || 96),
+  resultIconTextSize: Number(databaseGameConfigForm.resultIconTextSize || 48),
+  resultBadgeTextSize: Number(databaseGameConfigForm.resultBadgeTextSize || 12),
+  resultTitleTextSize: Number(databaseGameConfigForm.resultTitleTextSize || 24),
+  resultTitleColor: String(databaseGameConfigForm.resultTitleColor || '#ffffff'),
+  resultDescriptionTextSize: Number(databaseGameConfigForm.resultDescriptionTextSize || 14),
+  resultDescriptionColor: String(databaseGameConfigForm.resultDescriptionColor || '#fef3c7'),
+  resultPrimaryButtonText: String(databaseGameConfigForm.resultPrimaryButtonText || '繼續查看'),
+  resultPrimaryButtonTextSize: Number(databaseGameConfigForm.resultPrimaryButtonTextSize || 14),
+  resultPrimaryButtonBgColor: String(databaseGameConfigForm.resultPrimaryButtonBgColor || '#fde047'),
+  resultPrimaryButtonTextColor: String(databaseGameConfigForm.resultPrimaryButtonTextColor || '#991b1b'),
+  resultCopyButtonText: String(databaseGameConfigForm.resultCopyButtonText || '複製結果'),
+  resultCopyButtonTextSize: Number(databaseGameConfigForm.resultCopyButtonTextSize || 14),
+  resultCopyButtonBgColor: String(databaseGameConfigForm.resultCopyButtonBgColor || 'rgba(255,255,255,0.12)'),
+  resultCopyButtonTextColor: String(databaseGameConfigForm.resultCopyButtonTextColor || '#ffffff'),
   shareTitle: String(databaseGameConfigForm.shareTitle || ''),
   shareDescription: String(databaseGameConfigForm.shareDescription || ''),
   shareUrl: String(databaseGameConfigForm.shareUrl || ''),
