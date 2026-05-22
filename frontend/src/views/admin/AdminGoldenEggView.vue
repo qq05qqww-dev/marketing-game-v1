@@ -27,6 +27,7 @@ import {
   getAdminGoldenEggDrawPool
 } from '../../api/goldenEggAdminApi.js'
 import { useRoute, useRouter } from 'vue-router'
+import { uploadCampaignImageApi } from '../../api/uploadApi.js'
 
 const router = useRouter()
 const route = useRoute()
@@ -2679,6 +2680,41 @@ const readImageFileAsDataUrl = (file) => {
   })
 }
 
+
+// 第 105601～106000 批：金蛋圖片改走雲端上傳。
+// 原因：本機圖片轉成 data:image/base64 會塞爆 localStorage / GameConfig JSON。
+// 新規則：後台選擇本機圖片後，先 POST 到後端雲端上傳 API，回傳 https 圖片 URL 後才寫入設定。
+const uploadGoldenEggImageToCloud = async (file, usage = 'golden-egg-image') => {
+  if (!file) return ''
+
+  if (!String(file.type || '').startsWith('image/')) {
+    throw new Error('請選擇圖片檔案')
+  }
+
+  const campaignId = Number(normalizedDatabaseCampaignId.value || databaseCampaign.value?.id || queryCampaignId.value || 0)
+  const response = await uploadCampaignImageApi(file, {
+    campaignId,
+    gameType: 'GOLDEN_EGG',
+    usage,
+    folder: 'golden-egg'
+  })
+
+  const url = String(
+    response?.url ||
+      response?.secureUrl ||
+      response?.imageUrl ||
+      response?.data?.url ||
+      response?.data?.secureUrl ||
+      ''
+  ).trim()
+
+  if (!url) {
+    throw new Error('雲端上傳成功但沒有取得圖片網址')
+  }
+
+  return url
+}
+
 // 第 104401～104800 批：金蛋結果彈窗圖片欄位強制雙向同步。
 // 問題根因：手動貼 URL 時只改到 campaign 預覽狀態，沒有同步到 databaseGameConfigForm，
 // 造成右側預覽已變，但 PUT /campaigns/:id/game-config 沒有寫入 resultModal / resultWinImageUrl / resultLoseImageUrl。
@@ -2694,14 +2730,15 @@ const handleResultImageUploadByField = async (event, field = 'resultImageUrl', l
   if (!file) return
 
   try {
-    campaign[field] = await readImageFileAsDataUrl(file)
+    const cloudUrl = await uploadGoldenEggImageToCloud(file, field)
+    campaign[field] = cloudUrl
 
-    showOperationInfo(`${label}已壓縮並暫存，請按「儲存前台設定」寫入正式資料庫。`)
+    showOperationInfo(`${label}已上傳到雲端並取得圖片 URL，請按「儲存前台設定」寫入正式資料庫。`)
 
     // 第 104401～104800 批：本機上傳後也走同一個雙向同步入口。
     syncResultModalImageFieldsToDatabaseForm()
 
-    saveState(`已上傳${label}。`)
+    saveState(`已上傳${label}到雲端。`)
   } catch (error) {
     console.error(`上傳${label}失敗：`, error)
     showOperationError(error.message || '上傳圖片失敗')
@@ -2751,8 +2788,8 @@ const handlePrizeImageUpload = async (event, prize) => {
   if (!file || !prize) return
 
   try {
-    prize.imageUrl = await readImageFileAsDataUrl(file)
-    saveState(`已上傳「${prize.name || '獎項'}」圖片。`)
+    prize.imageUrl = await uploadGoldenEggImageToCloud(file, `prize-${prize.id || prize.position || 'image'}`)
+    saveState(`已上傳「${prize.name || '獎項'}」圖片到雲端。`)
   } catch (error) {
     console.error('上傳獎項圖片失敗：', error)
     showOperationError(error.message || '上傳圖片失敗')
@@ -13603,13 +13640,13 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         <button type="button" class="text-xs font-black text-rose-600" @click="clearResultWinImage">清除</button>
                       </div>
                       <label class="admin-field mt-3">
-                        <span>中獎圖片 URL / 本機上傳資料</span>
+                        <span>中獎圖片 URL / 上傳到雲端</span>
                         <input v-model="campaign.resultWinImageUrl" type="text" placeholder="https://example.com/win.png" @input="syncResultModalImageFieldsToDatabaseForm" />
                       </label>
                       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
                           <input type="file" accept="image/*" class="hidden" @change="handleResultWinImageUpload" />
-                          上傳中獎圖
+                          上傳中獎圖到雲端
                         </label>
                         <div class="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-bold leading-5 text-amber-800">
                           玩家中獎時優先使用：中獎圖片 → 全域結果圖片 → 獎項圖片 → emoji。
@@ -13623,13 +13660,13 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         <button type="button" class="text-xs font-black text-rose-600" @click="clearResultLoseImage">清除</button>
                       </div>
                       <label class="admin-field mt-3">
-                        <span>未中獎圖片 URL / 本機上傳資料</span>
+                        <span>未中獎圖片 URL / 上傳到雲端</span>
                         <input v-model="campaign.resultLoseImageUrl" type="text" placeholder="https://example.com/lose.png" @input="syncResultModalImageFieldsToDatabaseForm" />
                       </label>
                       <div class="mt-3 grid gap-3 sm:grid-cols-[minmax(120px,160px)_minmax(0,1fr)]">
                         <label class="admin-upload-button min-h-[54px] justify-center">
                           <input type="file" accept="image/*" class="hidden" @change="handleResultLoseImageUpload" />
-                          上傳未中獎圖
+                          上傳未中獎圖到雲端
                         </label>
                         <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs font-bold leading-5 text-slate-600">
                           玩家未中獎時優先使用：未中獎圖片 → 全域結果圖片 → 獎項圖片 → emoji。
@@ -13643,7 +13680,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     </label>
 
                     <div class="rounded-2xl border border-amber-100 bg-white px-4 py-3 text-xs font-bold leading-5 text-slate-500">
-                      建議圖片小於 1.5MB；正式上線建議使用 https 圖片網址，載入更穩定。
+                      本批已改為本機圖片先上傳雲端，資料庫只保存 https 圖片 URL，不再保存 data:image/base64。
                     </div>
                   </div>
                 </div>

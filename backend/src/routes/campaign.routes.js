@@ -1,5 +1,6 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 77601～78000 批：商家停用自動封鎖名下活動玩家入口版
+// 第 105601～106000 批：活動圖片雲端上傳入口版
+// 延續第 77601～78000 批：商家停用自動封鎖名下活動玩家入口版
 //
 // 覆蓋位置：
 // backend/src/routes/campaign.routes.js
@@ -12,6 +13,7 @@
 // 5. 寫入 API 維持原本 requireAuth / role guard。
 
 import express from 'express'
+import multer from 'multer'
 import { verifyToken } from '../utils/jwt.js'
 import {
   listCampaigns,
@@ -20,7 +22,8 @@ import {
   updateCampaignHandler,
   deleteCampaignHandler,
   getGameConfigHandler,
-  upsertGameConfigHandler
+  upsertGameConfigHandler,
+  uploadCampaignImageHandler
 } from '../controllers/campaign.controller.js'
 import {
   requireAuth,
@@ -32,6 +35,22 @@ import {
 } from '../middleware/tenantActivityGuard.middleware.js'
 
 const router = express.Router()
+
+const campaignImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024
+  },
+  fileFilter(req, file, callback) {
+    if (!String(file.mimetype || '').startsWith('image/')) {
+      callback(new Error('只允許上傳圖片檔案'))
+      return
+    }
+
+    callback(null, true)
+  }
+})
+
 
 const WRITE_ROLES = new Set(['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN'])
 const SENSITIVE_ROLES = new Set(['ADMIN', 'SUPER_ADMIN', 'MERCHANT_ADMIN'])
@@ -120,6 +139,12 @@ router.get('/:id/game-config', optionalTenantAuth, blockInactiveTenantForPublicC
 // ==============================
 // Tenant admin write APIs
 // ==============================
+
+
+// 上傳活動圖片到雲端
+// POST /api/campaigns/upload-image
+// 第 105601～106000 批：後台本機圖片不再轉 base64 存入 GameConfig，改由後端上傳雲端後回傳 https URL。
+router.post('/upload-image', tenantWriteOnly, campaignImageUpload.single('file'), uploadCampaignImageHandler)
 
 // 建立活動
 // POST /api/campaigns

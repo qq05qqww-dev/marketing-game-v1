@@ -1,8 +1,11 @@
 // Multi Game Platform V2.3 Tenant Edition
+// 第 105601～106000 批：活動圖片雲端上傳入口版
 // 第 21101～21500 批：Campaign Controller 九宮格設定儲存結果回傳版
 //
 // 覆蓋位置：
 // backend/src/controllers/campaign.controller.js
+
+import crypto from 'crypto'
 
 import {
   getCampaigns,
@@ -20,6 +23,90 @@ import {
   notFoundResponse,
   validationErrorResponse
 } from '../utils/apiResponse.js'
+
+
+const normalizeUploadText = (value = '', fallback = '') => {
+  const normalized = String(value || '').trim()
+  return normalized || fallback
+}
+
+const sanitizeCloudinaryFolderPart = (value = '', fallback = 'campaign-assets') => {
+  const normalized = String(value || fallback)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return normalized || fallback
+}
+
+const buildCloudinarySignature = (params = {}, apiSecret = '') => {
+  const payload = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join('&')
+
+  return crypto.createHash('sha1').update(`${payload}${apiSecret}`).digest('hex')
+}
+
+const assertCloudinaryConfig = () => {
+  const cloudName = normalizeUploadText(process.env.CLOUDINARY_CLOUD_NAME)
+  const apiKey = normalizeUploadText(process.env.CLOUDINARY_API_KEY)
+  const apiSecret = normalizeUploadText(process.env.CLOUDINARY_API_SECRET)
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    const error = new Error('尚未設定雲端圖片上傳環境變數：CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET')
+    error.status = 500
+    throw error
+  }
+
+  return { cloudName, apiKey, apiSecret }
+}
+
+const uploadImageBufferToCloudinary = async ({ file, campaignId = '', gameType = '', usage = '', folder = '' } = {}) => {
+  const { cloudName, apiKey, apiSecret } = assertCloudinaryConfig()
+
+  const timestamp = Math.floor(Date.now() / 1000)
+  const safeFolder = [
+    sanitizeCloudinaryFolderPart(process.env.CLOUDINARY_FOLDER || 'marketing-game'),
+    sanitizeCloudinaryFolderPart(gameType || 'campaign'),
+    campaignId ? `campaign-${sanitizeCloudinaryFolderPart(campaignId, 'unknown')}` : 'general',
+    sanitizeCloudinaryFolderPart(folder || usage || 'images')
+  ].join('/')
+
+  const uploadParams = {
+    folder: safeFolder,
+    overwrite: 'false',
+    timestamp
+  }
+
+  const signature = buildCloudinarySignature(uploadParams, apiSecret)
+  const dataUri = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`
+  const body = new URLSearchParams()
+  body.set('file', dataUri)
+  body.set('api_key', apiKey)
+  body.set('timestamp', String(timestamp))
+  body.set('folder', uploadParams.folder)
+  body.set('overwrite', uploadParams.overwrite)
+  body.set('signature', signature)
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+    method: 'POST',
+    body
+  })
+
+  const result = await response.json().catch(() => ({}))
+
+  if (!response.ok) {
+    const message = result?.error?.message || result?.message || '雲端圖片上傳失敗'
+    const error = new Error(message)
+    error.status = response.status || 500
+    throw error
+  }
+
+  return result
+}
 
 const getRequestUser = (req) => req.user || null
 
@@ -136,5 +223,55 @@ export const upsertGameConfigHandler = async (req, res) => {
   } catch (error) {
     console.error('儲存遊戲設定失敗:', error)
     return handleTenantAwareError(res, error, '儲存遊戲設定失敗')
+  }
+}
+
+
+export const uploadCampaignImageHandler = async (req, res) => {
+  try {
+    const file = req.file
+
+    if (!file) {
+      return validationErrorResponse(res, '請先選擇圖片檔案')
+    }
+
+    if (!String(file.mimetype || '').startsWith('image/')) {
+      return validationErrorResponse(res, '只允許上傳圖片檔案')
+    }
+
+    const campaignId = normalizeUploadText(req.body?.campaignId)
+    const gameType = normalizeUploadText(req.body?.gameType, 'CAMPAIGN')
+    const usage = normalizeUploadText(req.body?.usage, 'campaign-image')
+    const folder = normalizeUploadText(req.body?.folder, 'images')
+
+    const uploaded = await uploadImageBufferToCloudinary({
+      file,
+      campaignId,
+      gameType,
+      usage,
+      folder
+    })
+
+    return successResponse(
+      res,
+      {
+        url: uploaded.secure_url || uploaded.url,
+        secureUrl: uploaded.secure_url || uploaded.url,
+        publicId: uploaded.public_id,
+        width: uploaded.width,
+        height: uploaded.height,
+        bytes: uploaded.bytes,
+        format: uploaded.format,
+        resourceType: uploaded.resource_type,
+        provider: 'cloudinary',
+        campaignId: campaignId || null,
+        gameType,
+        usage
+      },
+      '圖片已上傳到雲端'
+    )
+  } catch (error) {
+    console.error('圖片雲端上傳失敗:', error)
+    return handleTenantAwareError(res, error, '圖片雲端上傳失敗')
   }
 }
