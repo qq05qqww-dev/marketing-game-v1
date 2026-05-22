@@ -2334,9 +2334,10 @@ const resultModalStyle = computed(() => {
   }
 })
 
+// 第 107601～108000 批：金蛋結果彈窗圖片與文字大小調整範圍擴充，正式玩家頁同步後台滑桿設定。
 const resultIconStyle = computed(() => {
-  const iconSize = Math.min(150, Math.max(64, Number(campaign.resultIconSize || 96)))
-  const iconTextSize = Math.min(82, Math.max(28, Number(campaign.resultIconTextSize || 48)))
+  const iconSize = Math.min(260, Math.max(64, Number(campaign.resultIconSize || 96)))
+  const iconTextSize = Math.min(120, Math.max(28, Number(campaign.resultIconTextSize || 48)))
 
   return {
     width: `${iconSize}px`,
@@ -2363,7 +2364,7 @@ const resultImageUrl = computed(() => {
 })
 
 const resultBadgeStyle = computed(() => {
-  const fontSize = Math.min(20, Math.max(10, Number(campaign.resultBadgeTextSize || 12)))
+  const fontSize = Math.min(36, Math.max(10, Number(campaign.resultBadgeTextSize || 12)))
 
   return {
     fontSize: `${fontSize}px`
@@ -2371,7 +2372,7 @@ const resultBadgeStyle = computed(() => {
 })
 
 const resultTitleStyle = computed(() => {
-  const fontSize = Math.min(40, Math.max(16, Number(campaign.resultTitleTextSize || 24)))
+  const fontSize = Math.min(72, Math.max(16, Number(campaign.resultTitleTextSize || 24)))
 
   return {
     fontSize: `${fontSize}px`,
@@ -2380,7 +2381,7 @@ const resultTitleStyle = computed(() => {
 })
 
 const resultDescriptionStyle = computed(() => {
-  const fontSize = Math.min(24, Math.max(12, Number(campaign.resultDescriptionTextSize || 14)))
+  const fontSize = Math.min(40, Math.max(12, Number(campaign.resultDescriptionTextSize || 14)))
 
   return {
     fontSize: `${fontSize}px`,
@@ -2389,7 +2390,7 @@ const resultDescriptionStyle = computed(() => {
 })
 
 const resultPrimaryButtonStyle = computed(() => {
-  const fontSize = Math.min(22, Math.max(12, Number(campaign.resultPrimaryButtonTextSize || 14)))
+  const fontSize = Math.min(32, Math.max(12, Number(campaign.resultPrimaryButtonTextSize || 14)))
 
   return {
     fontSize: `${fontSize}px`,
@@ -2399,7 +2400,7 @@ const resultPrimaryButtonStyle = computed(() => {
 })
 
 const resultCopyButtonStyle = computed(() => {
-  const fontSize = Math.min(22, Math.max(12, Number(campaign.resultCopyButtonTextSize || 14)))
+  const fontSize = Math.min(32, Math.max(12, Number(campaign.resultCopyButtonTextSize || 14)))
 
   return {
     fontSize: `${fontSize}px`,
@@ -4010,7 +4011,7 @@ onUnmounted(() => {
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
       >
         <div
-          class="relative w-full max-w-sm overflow-hidden rounded-[2rem] border p-6 text-center shadow-2xl"
+          class="relative w-full max-w-md overflow-hidden rounded-[2rem] border p-6 text-center shadow-2xl"
           :style="resultModalStyle"
         >
           <button

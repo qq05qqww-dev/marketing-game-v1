@@ -8430,7 +8430,7 @@ watch(
                       v-model.number="databaseGameConfigForm.eggGridGap"
                       type="range"
                       min="6"
-                      max="24"
+                      max="40"
                     />
                     <span class="text-xs font-black text-blue-700">{{ databaseGameConfigForm.eggGridGap }}px</span>
                   </label>
@@ -8607,7 +8607,7 @@ watch(
                       class="mt-3 w-full accent-slate-950"
                       type="range"
                       min="0"
-                      max="40"
+                      max="72"
                       step="1"
                     />
                   </div>
@@ -10368,7 +10368,7 @@ watch(
                 v-model.number="campaign.headerLogoTextSize"
                 type="range"
                 min="10"
-                max="22"
+                max="32"
               />
             </label>
 
@@ -10399,7 +10399,7 @@ watch(
                 v-model.number="campaign.headerWebsiteTextSize"
                 type="range"
                 min="10"
-                max="22"
+                max="32"
               />
             </label>
 
@@ -10461,7 +10461,7 @@ watch(
                   v-model.number="campaign.headerGap"
                   type="range"
                   min="6"
-                  max="24"
+                  max="40"
                 />
               </label>
 
@@ -10482,7 +10482,7 @@ watch(
                     v-model.number="campaign.headerPaddingY"
                     type="range"
                     min="6"
-                    max="22"
+                    max="32"
                   />
                 </label>
               </div>
@@ -10700,7 +10700,7 @@ watch(
                   v-model.number="campaign.activityTimePadding"
                   type="range"
                   min="8"
-                  max="24"
+                  max="40"
                 />
               </label>
 
@@ -10710,7 +10710,7 @@ watch(
                   v-model.number="campaign.activityTimeTitleTextSize"
                   type="range"
                   min="10"
-                  max="20"
+                  max="36"
                 />
               </label>
 
@@ -10784,7 +10784,7 @@ watch(
                     v-model.number="campaign.activityCountdownTitleTextSize"
                     type="range"
                     min="10"
-                    max="20"
+                    max="36"
                   />
                 </label>
 
@@ -10994,7 +10994,7 @@ watch(
                   v-model.number="campaign.eggGridGap"
                   type="range"
                   min="6"
-                  max="24"
+                  max="40"
                 />
               </label>
 
@@ -11687,7 +11687,7 @@ watch(
                   v-model.number="campaign.serialRedeemPadding"
                   type="range"
                   min="8"
-                  max="24"
+                  max="40"
                 />
               </label>
 
@@ -11697,7 +11697,7 @@ watch(
                   v-model.number="campaign.serialRedeemTitleTextSize"
                   type="range"
                   min="12"
-                  max="24"
+                  max="40"
                 />
               </label>
 
@@ -11717,7 +11717,7 @@ watch(
                   v-model.number="campaign.serialRedeemInputTextSize"
                   type="range"
                   min="12"
-                  max="20"
+                  max="36"
                 />
               </label>
 
@@ -11727,7 +11727,7 @@ watch(
                   v-model.number="campaign.serialRedeemButtonTextSize"
                   type="range"
                   min="12"
-                  max="20"
+                  max="36"
                 />
               </label>
             </div>
@@ -11830,7 +11830,7 @@ watch(
                     v-model.number="campaign.shareButtonTextSize"
                     type="range"
                     min="10"
-                    max="20"
+                    max="36"
                   />
                 </label>
 
@@ -11850,7 +11850,7 @@ watch(
                     v-model.number="campaign.shareButtonPaddingY"
                     type="range"
                     min="8"
-                    max="20"
+                    max="36"
                   />
                 </label>
               </div>
@@ -12870,7 +12870,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                   v-model.number="campaign.bottomNavButtonHeight"
                   type="range"
                   min="42"
-                  max="82"
+                  max="120"
                 />
               </label>
 
@@ -13437,17 +13437,20 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                     Size Controls
                   </p>
                   <h3 class="mt-1 text-base font-black text-slate-950">
-                    圖片與文字大小
+                    手機彈窗圖片與文字大小
                   </h3>
+                  <p class="mt-1 text-xs font-bold leading-5 text-violet-700/70">
+                    第 107601～108000 批：這些滑桿會同步到正式玩家結果彈窗，圖片最大可調到 260px，標題最大可調到 72px。
+                  </p>
 
                   <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     <label class="admin-field">
-                      <span>圖片 / 圖示大小：{{ campaign.resultIconSize }}px</span>
+                      <span>手機彈窗圖片大小：{{ campaign.resultIconSize }}px</span>
                       <input
                         v-model.number="campaign.resultIconSize"
                         type="range"
                         min="64"
-                        max="150"
+                        max="260"
                       />
                     </label>
 
@@ -13457,7 +13460,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         v-model.number="campaign.resultIconTextSize"
                         type="range"
                         min="28"
-                        max="82"
+                        max="120"
                       />
                     </label>
 
@@ -13467,7 +13470,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         v-model.number="campaign.resultBadgeTextSize"
                         type="range"
                         min="10"
-                        max="20"
+                        max="36"
                       />
                     </label>
 
@@ -13477,7 +13480,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         v-model.number="campaign.resultTitleTextSize"
                         type="range"
                         min="16"
-                        max="40"
+                        max="72"
                       />
                     </label>
 
@@ -13487,7 +13490,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         v-model.number="campaign.resultDescriptionTextSize"
                         type="range"
                         min="12"
-                        max="24"
+                        max="40"
                       />
                     </label>
 
@@ -13497,7 +13500,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         v-model.number="campaign.resultPrimaryButtonTextSize"
                         type="range"
                         min="12"
-                        max="22"
+                        max="32"
                       />
                     </label>
                   </div>
@@ -13683,7 +13686,7 @@ VIP002,2,VIP,2026-12-31T23:59:00.000Z,指定有效期限</pre>
                         v-model.number="campaign.resultCopyButtonTextSize"
                         type="range"
                         min="12"
-                        max="22"
+                        max="32"
                       />
                     </label>
 
