@@ -569,7 +569,7 @@ const drawLogs = [
 ]
 
 
-// 第 110401～110800 批：九宮格小批量抽獎券發獎上限與防超發控管版
+// 第 110801～111200 批：九宮格獎項百分比卡片欄位寬版整理版
 // 第 98801～99200 批：九宮格舊 BUTTON 標記清除與機率總和修正
 // 問題來源：部分格子曾經是「中間開始按鈕」，即使後來改成獎項，資料仍殘留 isButton / BUTTON，
 // 導致上方總和、試算器、正式 gridItems 儲存都漏算該格。
@@ -2106,8 +2106,8 @@ onMounted(() => {
                 </button>
               </div>
 
-              <div class="grid gap-4 md:grid-cols-3">
-                <div v-for="item in settings.prizes" :key="item.position" class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <div class="grid gap-5 lg:grid-cols-2 2xl:grid-cols-3">
+                <div v-for="item in settings.prizes" :key="item.position" class="rounded-3xl border border-slate-200 bg-slate-50 p-5">
                   <div class="mb-3 flex items-center justify-between">
                     <span class="rounded-full bg-white px-3 py-1 text-xs font-black text-slate-700">第 {{ item.position }} 格</span>
                     <label class="flex items-center gap-2 text-xs font-bold text-slate-600"><input v-model="item.enabled" type="checkbox" />啟用</label>
@@ -2128,15 +2128,21 @@ onMounted(() => {
                     <label class="space-y-1"><span class="text-xs font-black text-slate-500">emoji icon</span><input v-model="item.icon" :class="getInputClass()" /></label>
                     <label class="space-y-1"><span class="text-xs font-black text-slate-500">獎品圖片網址 imageUrl</span><input v-model="item.imageUrl" :class="getInputClass()" placeholder="https://..." /></label>
                     <label class="space-y-1"><span class="text-xs font-black text-slate-500">獎品名稱 title</span><input v-model="item.title" :class="getInputClass()" /></label>
-                    <div class="grid grid-cols-2 gap-2 xl:grid-cols-3">
-                      <label class="space-y-1"><span class="text-xs font-black text-slate-500">庫存</span><input v-model.number="item.quantity" type="number" min="0" :class="getInputClass()" @input="syncPrizeAwardLimit(item)" /></label>
-                      <label class="space-y-1"><span class="text-xs font-black text-slate-500">最多發出數量</span><input v-model.number="item.awardLimit" type="number" min="0" step="1" :class="getInputClass()" @input="syncPrizeAwardLimit(item)" /></label>
+                    <div class="grid gap-3 rounded-[22px] border border-slate-200 bg-white p-3 sm:grid-cols-3">
                       <label class="space-y-1">
-                        <span class="text-xs font-black text-slate-500">機率 %</span>
-                        <input v-model.number="item.probabilityPercent" type="number" min="0" max="100" step="0.1" :class="getInputClass()" @input="syncPrizeWeightFromPercent(item)" />
+                        <span class="block text-center text-xs font-black text-slate-500 sm:text-left">庫存</span>
+                        <input v-model.number="item.quantity" type="number" min="0" class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-sm font-black text-slate-800 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-100" @input="syncPrizeAwardLimit(item)" />
+                      </label>
+                      <label class="space-y-1">
+                        <span class="block text-center text-xs font-black text-slate-500 sm:text-left">最多發出</span>
+                        <input v-model.number="item.awardLimit" type="number" min="0" step="1" class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-sm font-black text-amber-700 outline-none transition focus:border-amber-300 focus:bg-white focus:ring-4 focus:ring-amber-100" @input="syncPrizeAwardLimit(item)" />
+                      </label>
+                      <label class="space-y-1">
+                        <span class="block text-center text-xs font-black text-slate-500 sm:text-left">機率 %</span>
+                        <input v-model.number="item.probabilityPercent" type="number" min="0" max="100" step="0.1" class="h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 text-center text-sm font-black text-indigo-700 outline-none transition focus:border-indigo-300 focus:bg-white focus:ring-4 focus:ring-indigo-100" @input="syncPrizeWeightFromPercent(item)" />
                       </label>
                     </div>
-                    <p class="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">最多發出數量是後端防超發硬上限；達到上限後，此獎項會自動排除，改由其他可用獎項 / 未中獎項承接。</p>
+                    <p class="rounded-2xl bg-amber-50 px-4 py-3 text-xs font-bold leading-6 text-amber-700">最多發出＝後端防超發硬上限；達到上限後，此獎項會自動排除，改由其他可用獎項 / 未中獎項承接。</p>
                   </div>
                 </div>
               </div>
