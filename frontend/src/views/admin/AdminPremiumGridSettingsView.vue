@@ -108,15 +108,15 @@ const makeDefaultThemeSettings = () => ({
 })
 
 const makeDefaultPrizeSettings = () => [
-  { id: 'grid_1', position: 1, icon: '🎁', imageUrl: '', title: '折價券', name: '折價券', shortName: '折價券', quantity: 50, weight: 20, probabilityPercent: 20, enabled: true },
-  { id: 'grid_2', position: 2, icon: '🪙', imageUrl: '', title: '點數', name: '點數', shortName: '點數', quantity: 100, weight: 20, probabilityPercent: 20, enabled: true },
-  { id: 'grid_3', position: 3, icon: '🥤', imageUrl: '', title: '飲品券', name: '飲品券', shortName: '飲品券', quantity: 30, weight: 12, probabilityPercent: 12, enabled: true },
-  { id: 'grid_4', position: 4, icon: '🎀', imageUrl: '', title: '小禮物', name: '小禮物', shortName: '小禮物', quantity: 20, weight: 10, probabilityPercent: 10, enabled: true },
-  { id: 'grid_5', position: 5, icon: '✨', imageUrl: '', title: '點擊抽獎', name: '點擊抽獎', shortName: '點擊抽獎', quantity: 0, weight: 0, probabilityPercent: 0, enabled: true, isButton: true },
-  { id: 'grid_6', position: 6, icon: '🎫', imageUrl: '', title: '優惠券', name: '優惠券', shortName: '優惠券', quantity: 80, weight: 25, probabilityPercent: 25, enabled: true },
-  { id: 'grid_7', position: 7, icon: '🎟️', imageUrl: '', title: '抽獎券', name: '抽獎券', shortName: '抽獎券', quantity: 20, weight: 8, probabilityPercent: 8, enabled: true },
-  { id: 'grid_8', position: 8, icon: '📦', imageUrl: '', title: '神秘禮', name: '神秘禮', shortName: '神秘禮', quantity: 10, weight: 4, probabilityPercent: 4, enabled: true },
-  { id: 'grid_9', position: 9, icon: '👑', imageUrl: '', title: '大獎', name: '大獎', shortName: '大獎', quantity: 3, weight: 1, probabilityPercent: 1, enabled: true }
+  { id: 'grid_1', position: 1, icon: '🎁', imageUrl: '', title: '折價券', name: '折價券', shortName: '折價券', quantity: 50, awardLimit: 50, maxAwardCount: 50, weight: 20, probabilityPercent: 20, enabled: true },
+  { id: 'grid_2', position: 2, icon: '🪙', imageUrl: '', title: '點數', name: '點數', shortName: '點數', quantity: 100, awardLimit: 100, maxAwardCount: 100, weight: 20, probabilityPercent: 20, enabled: true },
+  { id: 'grid_3', position: 3, icon: '🥤', imageUrl: '', title: '飲品券', name: '飲品券', shortName: '飲品券', quantity: 30, awardLimit: 30, maxAwardCount: 30, weight: 12, probabilityPercent: 12, enabled: true },
+  { id: 'grid_4', position: 4, icon: '🎀', imageUrl: '', title: '小禮物', name: '小禮物', shortName: '小禮物', quantity: 20, awardLimit: 20, maxAwardCount: 20, weight: 10, probabilityPercent: 10, enabled: true },
+  { id: 'grid_5', position: 5, icon: '✨', imageUrl: '', title: '點擊抽獎', name: '點擊抽獎', shortName: '點擊抽獎', quantity: 0, awardLimit: 0, maxAwardCount: 0, weight: 0, probabilityPercent: 0, enabled: true, isButton: true },
+  { id: 'grid_6', position: 6, icon: '🎫', imageUrl: '', title: '優惠券', name: '優惠券', shortName: '優惠券', quantity: 80, awardLimit: 80, maxAwardCount: 80, weight: 25, probabilityPercent: 25, enabled: true },
+  { id: 'grid_7', position: 7, icon: '🎟️', imageUrl: '', title: '抽獎券', name: '抽獎券', shortName: '抽獎券', quantity: 20, awardLimit: 20, maxAwardCount: 20, weight: 8, probabilityPercent: 8, enabled: true },
+  { id: 'grid_8', position: 8, icon: '📦', imageUrl: '', title: '神秘禮', name: '神秘禮', shortName: '神秘禮', quantity: 10, awardLimit: 10, maxAwardCount: 10, weight: 4, probabilityPercent: 4, enabled: true },
+  { id: 'grid_9', position: 9, icon: '👑', imageUrl: '', title: '大獎', name: '大獎', shortName: '大獎', quantity: 3, awardLimit: 3, maxAwardCount: 3, weight: 1, probabilityPercent: 1, enabled: true }
 ]
 
 const livePreviewEnabled = ref(true)
@@ -569,11 +569,31 @@ const drawLogs = [
 ]
 
 
+// 第 110401～110800 批：九宮格小批量抽獎券發獎上限與防超發控管版
 // 第 98801～99200 批：九宮格舊 BUTTON 標記清除與機率總和修正
 // 問題來源：部分格子曾經是「中間開始按鈕」，即使後來改成獎項，資料仍殘留 isButton / BUTTON，
 // 導致上方總和、試算器、正式 gridItems 儲存都漏算該格。
 const getGridPrizePercent = (item = {}) => {
   return Math.max(0, Number(item.probabilityPercent ?? item.weight ?? item.probability ?? item.percent ?? 0))
+}
+
+const getGridPrizeAwardLimit = (item = {}) => {
+  const explicit = item.awardLimit ?? item.maxAwardCount ?? item.maxAwards
+
+  if (explicit !== undefined && explicit !== null && explicit !== '') {
+    const limit = Number(explicit)
+    return Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0
+  }
+
+  const fallback = Number(item.quantity ?? item.stock ?? item.inventory ?? item.stockTotal ?? item.total ?? 0)
+  return Number.isFinite(fallback) ? Math.max(0, Math.floor(fallback)) : 0
+}
+
+const syncPrizeAwardLimit = (item = {}) => {
+  const limit = getGridPrizeAwardLimit(item)
+  item.awardLimit = limit
+  item.maxAwardCount = limit
+  item.maxAwards = limit
 }
 
 const normalizeGridPrizeTitleKey = (value = '') => {
@@ -616,6 +636,7 @@ const inferGridPrizeType = (item = {}) => {
 
 const sanitizeGridPrizeItemForSave = (item = {}, index = 0) => {
   const percent = getGridPrizePercent(item)
+  const awardLimit = getGridPrizeAwardLimit(item)
   const title = item.title || item.name || item.shortName || item.label || `第 ${index + 1} 格`
   const isActualButton = isActualGridStartButtonItem(item)
   const normalizedType = isActualButton ? 'BUTTON' : inferGridPrizeType({ ...item, title })
@@ -630,6 +651,9 @@ const sanitizeGridPrizeItemForSave = (item = {}, index = 0) => {
     label: item.label || item.shortName || title,
     enabled: item.enabled !== false,
     isEnabled: item.enabled !== false,
+    awardLimit: isActualButton ? 0 : awardLimit,
+    maxAwardCount: isActualButton ? 0 : awardLimit,
+    maxAwards: isActualButton ? 0 : awardLimit,
     probabilityPercent: isActualButton ? 0 : percent,
     weight: isActualButton ? 0 : percent,
     probability: isActualButton ? 0 : percent,
@@ -707,7 +731,8 @@ const probabilitySimulationItems = computed(() => {
         id: item.id || `grid-prize-${index + 1}`,
         title: item.title || item.name || `第 ${index + 1} 格`,
         icon: item.icon || '🎁',
-        percent: Math.max(0, percent)
+        percent: Math.max(0, percent),
+        awardLimit: getGridPrizeAwardLimit(item)
       }
     })
     .filter((item) => item.percent > 0)
@@ -756,6 +781,7 @@ const runProbabilitySimulation = () => {
     return {
       ...item,
       theoreticalPercent: total > 0 ? Number(((item.percent / total) * 100).toFixed(2)) : 0,
+      awardLimit: item.awardLimit,
       hits,
       simulatedPercent: Number(((hits / count) * 100).toFixed(2))
     }
@@ -836,7 +862,8 @@ const buildSettingsSavePayload = () => {
       campaignId: normalizedCampaignId.value,
       tenantSlug: previewTenantSlug.value,
       gridItemsSynced: true,
-      batch: '98801-99200'
+      awardLimitGuard: true,
+      batch: '110401-110800'
     }
   }
 }
@@ -1296,6 +1323,7 @@ const syncPrizeWeightFromPercent = (item) => {
     item.rewardType = item.type
   }
 
+  syncPrizeAwardLimit(item)
   probabilitySimulationResults.value = []
 }
 
@@ -2039,6 +2067,7 @@ onMounted(() => {
                           <th class="px-4 py-3">設定%</th>
                           <th class="px-4 py-3">理論命中</th>
                           <th class="px-4 py-3">模擬命中</th>
+                          <th class="px-4 py-3">最多發出</th>
                           <th class="px-4 py-3">次數</th>
                         </tr>
                       </thead>
@@ -2048,6 +2077,7 @@ onMounted(() => {
                           <td class="px-4 py-3 font-black text-slate-600">{{ item.percent }}%</td>
                           <td class="px-4 py-3 font-black text-indigo-700">{{ item.theoreticalPercent }}%</td>
                           <td class="px-4 py-3 font-black text-emerald-700">{{ item.simulatedPercent }}%</td>
+                          <td class="px-4 py-3 font-black text-amber-700">{{ item.awardLimit > 0 ? item.awardLimit + ' 張' : '不限制' }}</td>
                           <td class="px-4 py-3 font-black text-slate-500">{{ item.hits }}</td>
                         </tr>
                       </tbody>
@@ -2058,6 +2088,13 @@ onMounted(() => {
                     尚未試算。輸入模擬次數後按「開始試算」，結果會顯示在這裡。
                   </div>
                 </div>
+              </div>
+
+              <div class="rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-sm font-bold leading-6 text-amber-800">
+                <p class="text-xs font-black uppercase tracking-[0.18em] text-amber-600">Award Limit｜第 110401～110800 批</p>
+                <h3 class="mt-2 text-lg font-black text-slate-950">小批量抽獎券防超發控管</h3>
+                <p class="mt-2">機率只能控制長期平均，11 張、20 張這種小批量很容易短期偏高。請在每個中獎獎項設定「最多發出數量」，後端 Draw Engine 會在達到上限後自動排除該獎項，避免商家超發虧損。</p>
+                <p class="mt-1 text-xs font-black text-amber-700">範例：今天發 11 張券，折價券 100 最多發 1 張、折價券 200 最多發 0～1 張，其餘會落到銘謝惠顧 / 再接再厲。</p>
               </div>
 
               <div class="flex flex-wrap gap-2">
@@ -2091,13 +2128,15 @@ onMounted(() => {
                     <label class="space-y-1"><span class="text-xs font-black text-slate-500">emoji icon</span><input v-model="item.icon" :class="getInputClass()" /></label>
                     <label class="space-y-1"><span class="text-xs font-black text-slate-500">獎品圖片網址 imageUrl</span><input v-model="item.imageUrl" :class="getInputClass()" placeholder="https://..." /></label>
                     <label class="space-y-1"><span class="text-xs font-black text-slate-500">獎品名稱 title</span><input v-model="item.title" :class="getInputClass()" /></label>
-                    <div class="grid grid-cols-2 gap-2">
-                      <label class="space-y-1"><span class="text-xs font-black text-slate-500">庫存</span><input v-model.number="item.quantity" type="number" min="0" :class="getInputClass()" /></label>
+                    <div class="grid grid-cols-2 gap-2 xl:grid-cols-3">
+                      <label class="space-y-1"><span class="text-xs font-black text-slate-500">庫存</span><input v-model.number="item.quantity" type="number" min="0" :class="getInputClass()" @input="syncPrizeAwardLimit(item)" /></label>
+                      <label class="space-y-1"><span class="text-xs font-black text-slate-500">最多發出數量</span><input v-model.number="item.awardLimit" type="number" min="0" step="1" :class="getInputClass()" @input="syncPrizeAwardLimit(item)" /></label>
                       <label class="space-y-1">
                         <span class="text-xs font-black text-slate-500">機率 %</span>
                         <input v-model.number="item.probabilityPercent" type="number" min="0" max="100" step="0.1" :class="getInputClass()" @input="syncPrizeWeightFromPercent(item)" />
                       </label>
                     </div>
+                    <p class="rounded-2xl bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">最多發出數量是後端防超發硬上限；達到上限後，此獎項會自動排除，改由其他可用獎項 / 未中獎項承接。</p>
                   </div>
                 </div>
               </div>
@@ -2309,7 +2348,7 @@ onMounted(() => {
                 </div>
               </div>
 
-              <label class="space-y-2"><span class="text-sm font-black text-slate-700">圖片大小</span><input v-model.number="settings.resultModal.imageSize" type="range" min="56" max="320" step="4" class="w-full" /><p class="text-sm font-black text-slate-500">{{ settings.resultModal.imageSize }} px</p></label>
+              <label class="space-y-2"><span class="text-sm font-black text-slate-700">圖片大小</span><input v-model.number="settings.resultModal.imageSize" type="range" min="56" max="180" step="2" class="w-full" /><p class="text-sm font-black text-slate-500">{{ settings.resultModal.imageSize }} px</p></label>
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">彈窗背景色</span><input v-model="settings.resultModal.modalBackgroundColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">上方漸層起始色</span><input v-model="settings.resultModal.headerFromColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>
               <label class="space-y-2"><span class="text-sm font-black text-slate-700">上方漸層結束色</span><input v-model="settings.resultModal.headerToColor" type="color" class="h-12 w-20 rounded-2xl border border-slate-200 bg-white p-1" /></label>

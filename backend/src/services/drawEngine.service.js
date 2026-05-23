@@ -1,16 +1,16 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 99601～100000 批：九宮格正式抽獎統一走 Draw Engine 修正版
+// 第 110401～110800 批：九宮格小批量抽獎券發獎上限與防超發控管版
 // 延續第 92001～92400 批：正式抽獎中獎後同步扣除獎項庫存修正版
 //
 // 覆蓋位置：
 // backend/src/services/drawEngine.service.js
 //
 // 本批重點：
-// 1. GRID / PREMIUM_GRID 正式後端抽獎固定以 GameConfig.settings.gridItems 為第一來源。
-// 2. 舊資料若把「銘謝惠顧 / 再接再厲」殘留 isButton / BUTTON 標記，但仍有機率值，後端會納入抽獎池。
-// 3. 實際中心開始按鈕若機率為 0，仍不會進入抽獎池。
-// 4. PlayRecord 補齊 selectedPrizeTitle / selectedPrizeProbability / selectedPrizeSource / probabilityMode / selectedPrizeType。
-// 5. 未中獎項會寫入 PlayRecord 統計，但不建立 RewardRecord。
+// 1. 修正 GRID / PREMIUM_GRID 正式後端抽獎池來源順序。
+// 2. 九宮格後台目前設定的是 GameConfig.settings.gridItems，正式抽獎必須優先吃 gridItems。
+// 3. settings.prizes 只保留給舊活動 fallback，避免舊資料蓋過九宮格目前設定。
+// 4. 修正咖啡卷 5% 卻異常高、銘謝惠顧 41% 卻幾乎不中的來源錯誤。
+// 5. 不改 DB schema / router / 前台玩家頁 / 報表中心。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -49,34 +49,10 @@ const normalizeGameType = (value) => {
   return 'GOLDEN_EGG'
 }
 
-const normalizeLoseLikeTitle = (value = '') => {
-  const text = String(value || '').trim().toLowerCase().replace(/\s+/g, '')
-
-  return text.includes('銘謝惠顧') ||
-    text.includes('再接再厲') ||
-    text.includes('謝謝參加') ||
-    text.includes('未中獎') ||
-    text.includes('no_prize') ||
-    text.includes('noprize') ||
-    text.includes('thanks') ||
-    text.includes('lose')
-}
-
-const normalizeGameConfigPrizeType = (value, item = {}) => {
+const normalizeGameConfigPrizeType = (value) => {
   const rawType = String(value || '').toUpperCase()
-  const title = normalizeGameConfigPrizeTitle(item)
 
-  if (['LOSE', 'THANKS', 'NO_PRIZE', 'NONE'].includes(rawType)) {
-    return 'LOSE'
-  }
-
-  // 舊九宮格資料可能把「銘謝惠顧 / 再接再厲」誤殘留為 BUTTON / isButton。
-  // 只要標題明確是未中獎語意，就視為 LOSE，避免後台 40% 未中獎不進抽獎池。
-  if ((rawType === 'BUTTON' || item?.isButton === true) && normalizeLoseLikeTitle(title)) {
-    return 'LOSE'
-  }
-
-  if (normalizeLoseLikeTitle(title)) {
+  if (['LOSE', 'THANKS', 'NO_PRIZE', 'NONE', 'BUTTON'].includes(rawType)) {
     return 'LOSE'
   }
 
@@ -104,7 +80,7 @@ const hasExplicitGameConfigStock = (item = {}) => {
 }
 
 const normalizeGameConfigPrizeStock = (item = {}, gameType = '') => {
-  if (normalizeGameConfigPrizeType(item.type || item.rewardType, item) === 'LOSE') {
+  if (normalizeGameConfigPrizeType(item.type || item.rewardType) === 'LOSE') {
     return 999999999
   }
 
@@ -137,6 +113,36 @@ const normalizeGameConfigPrizeProbability = (item = {}) => {
   )
 
   return Math.max(0, probability)
+}
+
+// 第 110401～110800 批：小批量抽獎不能只靠機率，必須支援每個獎項的發獎硬上限。
+// awardLimit / maxAwardCount / maxAwards 優先；舊資料沒有這些欄位時，九宮格會 fallback 到 quantity / stock。
+// 0 或空值代表不額外限制；LOSE 類獎項不做發獎上限。
+const normalizeGameConfigPrizeAwardLimit = (item = {}, gameType = '') => {
+  const type = normalizeGameConfigPrizeType(item.type || item.rewardType)
+
+  if (type === 'LOSE') return 0
+
+  const explicitLimit = item.awardLimit ?? item.maxAwardCount ?? item.maxAwards ?? item.issueLimit
+
+  if (explicitLimit !== undefined && explicitLimit !== null && explicitLimit !== '') {
+    const limit = Number(explicitLimit)
+    return Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0
+  }
+
+  if (normalizeGameType(gameType) !== 'GRID') return 0
+
+  const fallbackLimit = Number(
+    item.quantity ??
+      item.stock ??
+      item.inventory ??
+      item.stockTotal ??
+      item.total ??
+      item.remainStock ??
+      0
+  )
+
+  return Number.isFinite(fallbackLimit) ? Math.max(0, Math.floor(fallbackLimit)) : 0
 }
 
 const normalizeComparableText = (value = '') => {
@@ -221,16 +227,9 @@ const isGameConfigItemEnabled = (item = {}) => {
   if (item.enabled === false) return false
   if (item.isEnabled === false) return false
   if (String(item.status || '').toUpperCase() === 'DISABLED') return false
-
-  const rawType = String(item.type || item.rewardType || '').toUpperCase()
-  const probability = normalizeGameConfigPrizeProbability(item)
-  const title = normalizeGameConfigPrizeTitle(item)
-
-  // 第 99601～100000 批：舊資料如果殘留 BUTTON / isButton，不能一律排除。
-  // 有機率且標題是「銘謝惠顧 / 再接再厲 / 未中獎」時，必須進正式抽獎池。
-  if (rawType === 'BUTTON' || item.isButton === true) {
-    return probability > 0 && normalizeLoseLikeTitle(title)
-  }
+  if (String(item.rewardType || '').toUpperCase() === 'BUTTON') return false
+  if (String(item.type || '').toUpperCase() === 'BUTTON') return false
+  if (item.isButton === true) return false
 
   return true
 }
@@ -288,9 +287,10 @@ const extractGameConfigPrizeItems = (settings = {}, gameType = '') => {
 const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
   const gameType = normalizeGameType(campaign.gameType)
   const title = normalizeGameConfigPrizeTitle(item, index)
-  const prizeType = normalizeGameConfigPrizeType(item.type || item.rewardType, item)
+  const prizeType = normalizeGameConfigPrizeType(item.type || item.rewardType)
   const remainStock = normalizeGameConfigPrizeStock(item, gameType)
   const probability = normalizeGameConfigPrizeProbability(item)
+  const awardLimit = normalizeGameConfigPrizeAwardLimit(item, gameType)
 
   return {
     id: `game-config-${campaign.id || 'campaign'}-${item.position || index + 1}`,
@@ -305,6 +305,8 @@ const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
     type: prizeType,
     status: 'ACTIVE',
     probability,
+    awardLimit,
+    maxAwardCount: awardLimit,
     remainStock,
     stockTotal: remainStock,
     stockUsed: 0,
@@ -328,7 +330,7 @@ const buildGameConfigPrizePool = (campaign = {}) => {
     .map((item, index) => normalizeGameConfigPrize(item, index, campaign))
     .map((prize) => attachPrizeTableLinkToVirtualPrize(prize, campaignPrizes))
     .filter((prize) => {
-      if (prize.type === 'LOSE') return Number(prize.probability || 0) > 0
+      if (prize.type === 'LOSE') return true
       return Number(prize.remainStock || 0) > 0 && Number(prize.probability || 0) > 0
     })
 }
@@ -362,6 +364,10 @@ const toResponsePrize = (prize = null) => {
     status: prize.status,
     probability: prize.probability,
     probabilityPercent: prize.probability,
+    awardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
+    maxAwardCount: Number(prize.maxAwardCount || prize.awardLimit || 0),
+    awardUsed: Number(prize.awardUsed || 0),
+    remainingAwardLimit: prize.remainingAwardLimit === undefined ? null : Number(prize.remainingAwardLimit || 0),
     remainStock: prize.remainStock,
     stockTotal: prize.stockTotal,
     stockUsed: prize.stockUsed,
@@ -419,103 +425,6 @@ const createHttpError = (message, status = 500) => {
   return error
 }
 
-
-// 第 102001～102400 批：九宮格活動時間統一後台設定為主修正。
-// 問題根因：
-// 1. 玩家頁上方狀態已改看 GameConfig.settings.activityTime，所以會顯示活動進行中。
-// 2. verify-serial / play 後端仍可能只拿 campaign.startAt / endAt，而且 Prisma 取出的 Date 物件
-//    會保留 2026-05-21T13:00:00.000Z 的 UTC timestamp，導致後端誤判台灣時間 21:00 才開始。
-// 3. 因此本批讓 GRID / PREMIUM_GRID 的後端守門完全以後台 GameConfig.settings.activityTime 為第一來源，
-//    再 fallback Campaign.startAt / endAt；字串與 Date 物件都用「台灣本地牆上時間」判斷。
-const PREMIUM_GRID_LOCAL_TIMEZONE_OFFSET_MINUTES = 8 * 60
-
-const isPremiumGridCampaign = (campaign = {}) => {
-  const gameType = String(campaign?.gameType || campaign?.type || '').trim().toUpperCase()
-  return ['GRID', 'PREMIUM_GRID'].includes(gameType)
-}
-
-const parsePremiumGridDatePartsAsTaipeiTimestamp = ({ year, month, day, hour, minute, second = 0 }) => {
-  const utcTimestamp = Date.UTC(
-    Number(year),
-    Number(month) - 1,
-    Number(day),
-    Number(hour),
-    Number(minute),
-    Number(second)
-  )
-
-  if (Number.isNaN(utcTimestamp)) return null
-
-  return utcTimestamp - PREMIUM_GRID_LOCAL_TIMEZONE_OFFSET_MINUTES * 60 * 1000
-}
-
-const parsePremiumGridWallTimeAsTaipeiTimestamp = (value) => {
-  if (!value) return null
-
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) return null
-
-    // Prisma 取回的 Date 可能是 2026-05-21T13:00:00.000Z。
-    // 這裡不能直接 value.getTime()，否則會被當作 UTC 13:00。
-    // 九宮格舊資料要把 UTC 欄位 13:00 視為商家後台輸入的台灣 13:00。
-    return parsePremiumGridDatePartsAsTaipeiTimestamp({
-      year: value.getUTCFullYear(),
-      month: value.getUTCMonth() + 1,
-      day: value.getUTCDate(),
-      hour: value.getUTCHours(),
-      minute: value.getUTCMinutes(),
-      second: value.getUTCSeconds()
-    })
-  }
-
-  const raw = String(value || '').trim()
-  if (!raw) return null
-
-  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/)
-
-  if (match) {
-    const [, year, month, day, hour, minute, second = '0'] = match
-
-    return parsePremiumGridDatePartsAsTaipeiTimestamp({
-      year,
-      month,
-      day,
-      hour,
-      minute,
-      second
-    })
-  }
-
-  const parsed = new Date(raw).getTime()
-  return Number.isNaN(parsed) ? null : parsed
-}
-
-const getPremiumGridGameConfigActivityTimeValue = (campaign = {}, key = 'startAt') => {
-  const settings = campaign?.gameConfig?.settings || {}
-  const activityTime = settings.activityTime || settings.activity || settings.timeSettings || {}
-
-  if (key === 'startAt') {
-    return activityTime.startAt || activityTime.startTime || activityTime.startedAt || null
-  }
-
-  return activityTime.endAt || activityTime.endTime || activityTime.endedAt || null
-}
-
-const getCampaignAvailabilityTimestamp = (campaign = {}, key = 'startAt') => {
-  const value = isPremiumGridCampaign(campaign)
-    ? (getPremiumGridGameConfigActivityTimeValue(campaign, key) || campaign?.[key])
-    : campaign?.[key]
-
-  if (!value) return null
-
-  if (isPremiumGridCampaign(campaign)) {
-    return parsePremiumGridWallTimeAsTaipeiTimestamp(value)
-  }
-
-  const timestamp = new Date(value).getTime()
-  return Number.isNaN(timestamp) ? null : timestamp
-}
-
 const createClaimCode = () => {
   const randomText = crypto.randomBytes(6).toString('hex').toUpperCase()
 
@@ -541,10 +450,7 @@ const isCampaignAvailable = (campaign) => {
     }
   }
 
-  const campaignStartTimestamp = getCampaignAvailabilityTimestamp(campaign, 'startAt')
-  const campaignEndTimestamp = getCampaignAvailabilityTimestamp(campaign, 'endAt')
-
-  if (campaignStartTimestamp && campaignStartTimestamp > now) {
+  if (campaign.startAt && new Date(campaign.startAt).getTime() > now) {
     return {
       ok: false,
       status: 409,
@@ -552,7 +458,7 @@ const isCampaignAvailable = (campaign) => {
     }
   }
 
-  if (campaignEndTimestamp && campaignEndTimestamp < now) {
+  if (campaign.endAt && new Date(campaign.endAt).getTime() < now) {
     return {
       ok: false,
       status: 409,
@@ -603,6 +509,139 @@ const isPrizeAvailable = (prize) => {
   }
 
   return getPrizeAvailableStock(prize) > 0
+}
+
+const getPrizeAwardLimit = (prize = {}) => {
+  const limit = Number(
+    prize.awardLimit ??
+      prize.maxAwardCount ??
+      prize.maxAwards ??
+      prize.sourcePayload?.awardLimit ??
+      prize.sourcePayload?.maxAwardCount ??
+      prize.sourcePayload?.maxAwards ??
+      0
+  )
+
+  return Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0
+}
+
+const getPrizeIdentityKeys = (prize = {}) => {
+  const keys = new Set()
+  const addKey = (value) => {
+    const key = normalizeComparableText(value)
+    if (key) keys.add(key)
+  }
+
+  addKey(prize.id)
+  addKey(prize.linkedPrizeId)
+  addKey(prize.title)
+  addKey(prize.shortName)
+  addKey(prize.prizeTableTitle)
+  addKey(prize.sourcePayload?.id)
+  addKey(prize.sourcePayload?.title)
+  addKey(prize.sourcePayload?.name)
+  addKey(prize.sourcePayload?.shortName)
+  addKey(prize.sourcePayload?.label)
+
+  return keys
+}
+
+const getPlayRecordIdentityKeys = (record = {}) => {
+  const payload = record.resultPayload || {}
+  const virtualPrize = payload.virtualPrize || {}
+  const keys = new Set()
+  const addKey = (value) => {
+    const key = normalizeComparableText(value)
+    if (key) keys.add(key)
+  }
+
+  addKey(record.prizeId)
+  addKey(payload.selectedPrizeId)
+  addKey(payload.selectedPrizeTableId)
+  addKey(payload.selectedPrizeTitle)
+  addKey(virtualPrize.id)
+  addKey(virtualPrize.linkedPrizeId)
+  addKey(virtualPrize.title)
+  addKey(virtualPrize.shortName)
+
+  return keys
+}
+
+const countIssuedForPrize = (prize = {}, records = []) => {
+  const linkedPrizeId = normalizeId(prize.linkedPrizeId)
+  const realPrizeId = prize.isVirtualGameConfigPrize ? linkedPrizeId : normalizeId(prize.id)
+  const prizeKeys = getPrizeIdentityKeys(prize)
+
+  return records.reduce((count, record) => {
+    if (realPrizeId && normalizeId(record.prizeId) === realPrizeId) {
+      return count + 1
+    }
+
+    const recordKeys = getPlayRecordIdentityKeys(record)
+
+    for (const key of prizeKeys) {
+      if (recordKeys.has(key)) {
+        return count + 1
+      }
+    }
+
+    return count
+  }, 0)
+}
+
+const applyPrizeAwardCaps = async (tx, campaign = {}, prizePool = []) => {
+  const gameType = normalizeGameType(campaign.gameType)
+
+  if (gameType !== 'GRID') return prizePool
+
+  const cappedWinPrizes = prizePool.filter((prize) => prize.type !== 'LOSE' && getPrizeAwardLimit(prize) > 0)
+
+  if (!cappedWinPrizes.length) return prizePool
+
+  const issuedRecords = await tx.playRecord.findMany({
+    where: {
+      campaignId: normalizeId(campaign.id),
+      isWin: true,
+      status: 'SUCCESS',
+      gameType: 'GRID'
+    },
+    select: {
+      prizeId: true,
+      resultPayload: true
+    }
+  })
+
+  return prizePool
+    .map((prize) => {
+      const awardLimit = getPrizeAwardLimit(prize)
+
+      if (prize.type === 'LOSE' || awardLimit <= 0) {
+        return {
+          ...prize,
+          awardLimit,
+          maxAwardCount: awardLimit,
+          awardUsed: 0,
+          remainingAwardLimit: awardLimit > 0 ? awardLimit : null
+        }
+      }
+
+      const awardUsed = countIssuedForPrize(prize, issuedRecords)
+      const remainingAwardLimit = Math.max(0, awardLimit - awardUsed)
+
+      return {
+        ...prize,
+        awardLimit,
+        maxAwardCount: awardLimit,
+        awardUsed,
+        remainingAwardLimit
+      }
+    })
+    .filter((prize) => {
+      if (prize.type === 'LOSE') return true
+      const awardLimit = getPrizeAwardLimit(prize)
+      if (awardLimit <= 0) return true
+      return Number(prize.remainingAwardLimit || 0) > 0
+    })
 }
 
 const pickPrizeByProbability = (prizes = []) => {
@@ -882,7 +921,8 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
     const serialUsageInfo = serialValidation?.usageInfo || null
     const trafficPayload = buildTrafficPayload(payload)
 
-    const prizePool = getCampaignPrizePool(campaign)
+    const rawPrizePool = getCampaignPrizePool(campaign)
+    const prizePool = await applyPrizeAwardCaps(tx, campaign, rawPrizePool)
     const prize = pickPrizeByProbability(prizePool)
 
     if (!prize) {
@@ -929,14 +969,12 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
           selectedPrizeId: prize.id,
           selectedPrizeTableId: prizeIdForWrite,
           selectedPrizeTitle: prize.title,
-          selectedPrizeName: prize.title,
-          selectedPrizeType: prize.type,
-          selectedPrizeIsWin: isWin,
           selectedPrizeProbability: prize.probability,
+          selectedPrizeAwardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
+          selectedPrizeAwardUsed: Number(prize.awardUsed || 0),
+          selectedPrizeRemainingAwardLimit: prize.remainingAwardLimit === undefined ? null : prize.remainingAwardLimit,
           selectedPrizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
           probabilityMode: 'BACKEND_DRAW_ENGINE',
-          routeFlow: payload.routeFlow || 'DRAW_ENGINE_ROUTE',
-          controllerFlow: payload.controllerFlow || 'playDrawHandler',
           virtualPrize: prize.isVirtualGameConfigPrize ? prizeForResponse : null
         }
       },
@@ -994,7 +1032,10 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         mode: 'BACKEND_DRAW_ENGINE',
         source: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
         selectedProbability: prize.probability,
-        totalProbability: prizePool.reduce((sum, item) => sum + Math.max(0, Number(item.probability || 0)), 0)
+        totalProbability: prizePool.reduce((sum, item) => sum + Math.max(0, Number(item.probability || 0)), 0),
+        awardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
+        awardUsed: Number(prize.awardUsed || 0),
+        remainingAwardLimit: prize.remainingAwardLimit === undefined ? null : prize.remainingAwardLimit
       },
       result: {
         isWin,
@@ -1003,6 +1044,9 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         prizeType: prize.type,
         prizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
         prizeProbability: prize.probability,
+        awardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
+        awardUsed: Number(prize.awardUsed || 0),
+        remainingAwardLimit: prize.remainingAwardLimit === undefined ? null : prize.remainingAwardLimit,
         probabilityMode: 'BACKEND_DRAW_ENGINE',
         virtualPrize: prize.isVirtualGameConfigPrize ? prizeForResponse : null,
         serialCodeUsed: !!serialCode,
@@ -1097,9 +1141,6 @@ export const verifySerialCodeForDraw = async (campaignId, code) => {
   const campaign = await prisma.campaign.findUnique({
     where: {
       id: normalizedCampaignId
-    },
-    include: {
-      gameConfig: true
     }
   })
 
