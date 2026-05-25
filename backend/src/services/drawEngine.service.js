@@ -1,4 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
+// 第 111601～112000 批：三遊戲虛擬獎項未連真實庫存 fallback 修正版
 // 第 110801～111200 批：三遊戲後端百分比抽獎精準修正版
 // 延續第 92001～92400 批：正式抽獎中獎後同步扣除獎項庫存修正版
 //
@@ -10,7 +11,8 @@
 // 2. 後台設定總和 <= 100 時，依照真實百分比抽；未命中的剩餘百分比自動視為未中獎。
 // 3. 後台設定總和 > 100 時，保留舊資料權重模式，避免舊活動直接壞掉。
 // 4. 九宮格仍優先讀 GameConfig.settings.gridItems；輪盤 / 金蛋也優先讀各自設定來源。
-// 5. 不改 DB schema / router / 前台玩家頁 / 報表中心。
+// 5. 不改 DB schema / router / 報表中心。
+// 6. 修正金蛋 / 九宮格 / 輪盤：GameConfig 虛擬中獎獎項尚未連結 Prize 真實庫存時，不再讓玩家直接卡 409。
 
 import crypto from 'crypto'
 import prisma from '../lib/prisma.js'
@@ -130,7 +132,9 @@ const normalizeGameConfigPrizeAwardLimit = (item = {}, gameType = '') => {
     return Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0
   }
 
-  if (normalizeGameType(gameType) !== 'GRID') return 0
+  // 第 111601～112000 批：三遊戲都可能從 GameConfig settings 建立虛擬獎項。
+  // 若商家後台有填庫存 / quantity，但尚未建立真實 Prize 連結，仍以設定值作為發獎上限，避免中獎後卡 409。
+  if (!['GRID', 'GOLDEN_EGG', 'WHEEL'].includes(normalizeGameType(gameType))) return 0
 
   const fallbackLimit = Number(
     item.quantity ??
@@ -592,7 +596,9 @@ const countIssuedForPrize = (prize = {}, records = []) => {
 const applyPrizeAwardCaps = async (tx, campaign = {}, prizePool = []) => {
   const gameType = normalizeGameType(campaign.gameType)
 
-  if (gameType !== 'GRID') return prizePool
+  // 第 111601～112000 批：不只九宮格，金蛋與輪盤若從 GameConfig settings 讀取虛擬獎項，
+  // 也要依後台庫存 / 最多發出數量計算已發出次數，避免小批量活動超發。
+  if (!['GRID', 'GOLDEN_EGG', 'WHEEL'].includes(gameType)) return prizePool
 
   const cappedWinPrizes = prizePool.filter((prize) => prize.type !== 'LOSE' && getPrizeAwardLimit(prize) > 0)
 
@@ -603,7 +609,7 @@ const applyPrizeAwardCaps = async (tx, campaign = {}, prizePool = []) => {
       campaignId: normalizeId(campaign.id),
       isWin: true,
       status: 'SUCCESS',
-      gameType: 'GRID'
+      gameType
     },
     select: {
       prizeId: true,
@@ -808,6 +814,29 @@ const reserveWinningPrizeStock = async (tx, prize) => {
     ? normalizeId(prize.linkedPrizeId)
     : normalizeId(prize.id)
 
+  // 第 111601～112000 批：GameConfig settings 產生的虛擬獎項，可能尚未連結 Prize 真實庫存表。
+  // 舊版會直接丟 409，造成玩家抽到中獎時看到 Request failed with status code 409。
+  // 新版先允許虛擬獎項完成中獎流程，發獎上限由 applyPrizeAwardCaps 依 PlayRecord 統計控管；
+  // 後續商家重新儲存獎項後仍會自動走真實 Prize 扣庫存。
+  if (!prizeIdForReserve && prize.isVirtualGameConfigPrize) {
+    console.warn('[draw-engine] virtual prize has no linked Prize stock, using GameConfig fallback:', {
+      campaignId: prize.campaignId,
+      title: prize.title,
+      shortName: prize.shortName,
+      probability: prize.probability,
+      awardLimit: prize.awardLimit,
+      source: prize.source
+    })
+
+    return {
+      ...prize,
+      virtualStockReserved: true,
+      stockUsed: Number(prize.stockUsed || 0) + 1,
+      remainStock: Math.max(0, Number(prize.remainStock || 0) - 1),
+      source: prize.source || 'GAME_CONFIG_SETTINGS'
+    }
+  }
+
   if (!prizeIdForReserve) {
     throw createHttpError('此獎項尚未連結真實庫存，請先到獎項管理重新儲存此活動獎項', 409)
   }
@@ -820,6 +849,25 @@ const reserveWinningPrizeStock = async (tx, prize) => {
       status: 'ACTIVE'
     }
   })
+
+  if (!currentPrize && prize.isVirtualGameConfigPrize) {
+    console.warn('[draw-engine] linked Prize stock not found, using GameConfig fallback:', {
+      campaignId: prize.campaignId,
+      linkedPrizeId: prizeIdForReserve,
+      title: prize.title,
+      probability: prize.probability,
+      awardLimit: prize.awardLimit,
+      source: prize.source
+    })
+
+    return {
+      ...prize,
+      virtualStockReserved: true,
+      stockUsed: Number(prize.stockUsed || 0) + 1,
+      remainStock: Math.max(0, Number(prize.remainStock || 0) - 1),
+      source: prize.source || 'GAME_CONFIG_SETTINGS'
+    }
+  }
 
   if (!currentPrize) {
     throw createHttpError('找不到此活動對應的真實獎項庫存，請重新整理獎項管理', 409)
@@ -1029,7 +1077,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
 
     let rewardRecord = null
 
-    if (isWin) {
+    if (isWin && prizeIdForWrite) {
       rewardRecord = await tx.rewardRecord.create({
         data: {
           campaignId: normalizedCampaignId,
@@ -1087,6 +1135,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         prizeType: prize.type,
         prizeSource: prize.source || (prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE'),
         prizeProbability: prize.probability,
+        virtualStockReserved: Boolean(updatedPrize?.virtualStockReserved),
         awardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
         awardUsed: Number(prize.awardUsed || 0),
         remainingAwardLimit: prize.remainingAwardLimit === undefined ? null : prize.remainingAwardLimit,

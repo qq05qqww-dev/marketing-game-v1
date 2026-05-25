@@ -1,4 +1,5 @@
 // Multi Game Platform V2.3 Tenant Edition
+// 第 111601～112000 批：金蛋 play 409 中文錯誤提示版
 // 第 110001～110400 批：金蛋左上 LOGO 圖片與大小同步顯示版
 // 第 90401～90800 批：金蛋正式玩家序號驗證後可敲擊防呆修正版
 //
@@ -763,6 +764,25 @@ const getSerialVerifyErrorMessage = (error) => {
   if (status === 'EXPIRED') return '此序號已過期，請更換新的抽獎序號。'
 
   return payload?.message || error?.message || campaign.serialRedeemErrorText || '序號驗證失敗，請稍後再試。'
+}
+
+
+
+const getGoldenEggPlayErrorMessage = (error) => {
+  const payload = error?.response?.data?.data || error?.response?.data || error?.data || null
+  const statusCode = Number(error?.response?.status || payload?.statusCode || payload?.status || 0)
+  const apiMessage = payload?.message || payload?.error || ''
+
+  if (apiMessage) return apiMessage
+
+  if (statusCode === 409) {
+    return '這次抽獎結果暫時無法發出，可能是獎項庫存尚未同步完成，請重新整理後再試一次。'
+  }
+
+  if (statusCode === 400) return '抽獎資料不完整，請重新驗證序號後再試一次。'
+  if (statusCode === 404) return '找不到此活動或序號資料，請確認活動連結是否正確。'
+
+  return error?.message || '正式抽獎失敗，請稍後再試。'
 }
 
 
@@ -2809,7 +2829,7 @@ const crackEggWithRemoteApi = async (egg) => {
     }))
     remoteDrawNotice.value = ''
     remoteSerialMessageType.value = 'error'
-    serialRedeemMessage.value = error.message || '正式抽獎失敗，請稍後再試。'
+    serialRedeemMessage.value = getGoldenEggPlayErrorMessage(error)
     isCracking.value = false
     activeEggId.value = ''
   }
