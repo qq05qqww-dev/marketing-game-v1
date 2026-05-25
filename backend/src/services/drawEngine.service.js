@@ -1,15 +1,15 @@
 // Multi Game Platform V2.3 Tenant Edition
-// 第 110401～110800 批：九宮格小批量抽獎券發獎上限與防超發控管版
+// 第 110801～111200 批：三遊戲後端百分比抽獎精準修正版
 // 延續第 92001～92400 批：正式抽獎中獎後同步扣除獎項庫存修正版
 //
 // 覆蓋位置：
 // backend/src/services/drawEngine.service.js
 //
 // 本批重點：
-// 1. 修正 GRID / PREMIUM_GRID 正式後端抽獎池來源順序。
-// 2. 九宮格後台目前設定的是 GameConfig.settings.gridItems，正式抽獎必須優先吃 gridItems。
-// 3. settings.prizes 只保留給舊活動 fallback，避免舊資料蓋過九宮格目前設定。
-// 4. 修正咖啡卷 5% 卻異常高、銘謝惠顧 41% 卻幾乎不中的來源錯誤。
+// 1. 修正 WHEEL / GRID / GOLDEN_EGG 正式後端抽獎百分比計算。
+// 2. 後台設定總和 <= 100 時，依照真實百分比抽；未命中的剩餘百分比自動視為未中獎。
+// 3. 後台設定總和 > 100 時，保留舊資料權重模式，避免舊活動直接壞掉。
+// 4. 九宮格仍優先讀 GameConfig.settings.gridItems；輪盤 / 金蛋也優先讀各自設定來源。
 // 5. 不改 DB schema / router / 前台玩家頁 / 報表中心。
 
 import crypto from 'crypto'
@@ -644,30 +644,73 @@ const applyPrizeAwardCaps = async (tx, campaign = {}, prizePool = []) => {
     })
 }
 
-const pickPrizeByProbability = (prizes = []) => {
+const createImplicitLosePrize = (campaign = {}, totalProbability = 0) => {
+  return {
+    id: `implicit-lose-${campaign.id || 'campaign'}`,
+    isVirtualGameConfigPrize: true,
+    campaignId: campaign.id || null,
+    tenantId: campaign.tenantId || null,
+    title: '未中獎',
+    shortName: '未中獎',
+    description: '後台設定百分比總和未滿 100%，剩餘百分比自動判定為未中獎。',
+    imageUrl: '',
+    icon: '🙏',
+    type: 'LOSE',
+    status: 'ACTIVE',
+    probability: Math.max(0, 100 - Math.max(0, Number(totalProbability || 0))),
+    awardLimit: 0,
+    maxAwardCount: 0,
+    awardUsed: 0,
+    remainingAwardLimit: null,
+    remainStock: 999999999,
+    stockTotal: 999999999,
+    stockUsed: 0,
+    sortOrder: 999999,
+    linkedPrizeId: null,
+    linkedPrize: null,
+    source: 'IMPLICIT_PERCENTAGE_LOSE',
+    sourcePayload: null
+  }
+}
+
+const calculatePrizePoolProbabilityTotal = (prizes = []) => {
+  return prizes.reduce((sum, prize) => {
+    return sum + Math.max(0, Number(prize.probability || 0))
+  }, 0)
+}
+
+const pickPrizeByProbability = (prizes = [], campaign = {}) => {
   const availablePrizes = prizes.filter(isPrizeAvailable)
 
   if (!availablePrizes.length) return null
 
-  const totalProbability = availablePrizes.reduce((sum, prize) => {
-    return sum + Math.max(0, Number(prize.probability || 0))
-  }, 0)
+  const totalProbability = calculatePrizePoolProbabilityTotal(availablePrizes)
 
   if (totalProbability <= 0) {
-    const randomIndex = Math.floor(Math.random() * availablePrizes.length)
-
-    return availablePrizes[randomIndex]
+    return createImplicitLosePrize(campaign, 0)
   }
 
-  const randomPoint = Math.random() * totalProbability
+  /**
+   * 三遊戲正式抽獎百分比規則：
+   * - 總和 <= 100：後台數字就是實際百分比，例如 10 / 3 / 41 就是 10% / 3% / 41%。
+   *   剩下未填滿的百分比自動變成未中獎，不再把 10 和 3 重新換算成 76.92% / 23.08%。
+   * - 總和 > 100：視為舊資料權重模式，維持向下相容。
+   */
+  const useExactPercentageMode = totalProbability <= 100
+  const randomBase = useExactPercentageMode ? 100 : totalProbability
+  const randomPoint = Math.random() * randomBase
   let cumulative = 0
 
   for (const prize of availablePrizes) {
     cumulative += Math.max(0, Number(prize.probability || 0))
 
-    if (randomPoint <= cumulative) {
+    if (randomPoint < cumulative) {
       return prize
     }
+  }
+
+  if (useExactPercentageMode) {
+    return createImplicitLosePrize(campaign, totalProbability)
   }
 
   return availablePrizes[availablePrizes.length - 1]
@@ -923,7 +966,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
 
     const rawPrizePool = getCampaignPrizePool(campaign)
     const prizePool = await applyPrizeAwardCaps(tx, campaign, rawPrizePool)
-    const prize = pickPrizeByProbability(prizePool)
+    const prize = pickPrizeByProbability(prizePool, campaign)
 
     if (!prize) {
       throw createHttpError('目前沒有可抽的獎項', 409)
@@ -973,7 +1016,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
           selectedPrizeAwardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
           selectedPrizeAwardUsed: Number(prize.awardUsed || 0),
           selectedPrizeRemainingAwardLimit: prize.remainingAwardLimit === undefined ? null : prize.remainingAwardLimit,
-          selectedPrizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
+          selectedPrizeSource: prize.source || (prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE'),
           probabilityMode: 'BACKEND_DRAW_ENGINE',
           virtualPrize: prize.isVirtualGameConfigPrize ? prizeForResponse : null
         }
@@ -1030,9 +1073,9 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
       },
       probability: {
         mode: 'BACKEND_DRAW_ENGINE',
-        source: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
+        source: prize.source || (prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE'),
         selectedProbability: prize.probability,
-        totalProbability: prizePool.reduce((sum, item) => sum + Math.max(0, Number(item.probability || 0)), 0),
+        totalProbability: calculatePrizePoolProbabilityTotal(prizePool),
         awardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
         awardUsed: Number(prize.awardUsed || 0),
         remainingAwardLimit: prize.remainingAwardLimit === undefined ? null : prize.remainingAwardLimit
@@ -1042,7 +1085,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         prizeId: prizeIdForWrite || prize.id,
         prizeTitle: prize.title,
         prizeType: prize.type,
-        prizeSource: prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
+        prizeSource: prize.source || (prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE'),
         prizeProbability: prize.probability,
         awardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
         awardUsed: Number(prize.awardUsed || 0),
@@ -1089,9 +1132,7 @@ export const previewDrawPool = async (campaignId) => {
   }
 
   const prizePool = getCampaignPrizePool(campaign)
-  const totalProbability = prizePool
-    .filter((prize) => prize.status === 'ACTIVE')
-    .reduce((sum, prize) => sum + Number(prize.probability || 0), 0)
+  const totalProbability = calculatePrizePoolProbabilityTotal(prizePool.filter((prize) => prize.status === 'ACTIVE'))
 
   return {
     campaign: {
