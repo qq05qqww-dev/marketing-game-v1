@@ -11,6 +11,7 @@
 // 2. 後台設定總和 <= 100 時，依照真實百分比抽；未命中的剩餘百分比自動視為未中獎。
 // 3. 後台設定總和 > 100 時，保留舊資料權重模式，避免舊活動直接壞掉。
 // 4. 九宮格仍優先讀 GameConfig.settings.gridItems；輪盤 / 金蛋也優先讀各自設定來源。
+// 第 112001～112400 批：原始設定總和為 100% 時，部分獎項達上限後由其餘可用獎項按比例承接，不再自動補系統未中獎。
 // 5. 不改 DB schema / router / 報表中心。
 // 6. 修正金蛋 / 九宮格 / 輪盤：GameConfig 虛擬中獎獎項尚未連結 Prize 真實庫存時，不再讓玩家直接卡 409。
 
@@ -685,25 +686,34 @@ const calculatePrizePoolProbabilityTotal = (prizes = []) => {
   }, 0)
 }
 
-const pickPrizeByProbability = (prizes = [], campaign = {}) => {
+const pickPrizeByProbability = (prizes = [], campaign = {}, options = {}) => {
   const availablePrizes = prizes.filter(isPrizeAvailable)
 
   if (!availablePrizes.length) return null
 
   const totalProbability = calculatePrizePoolProbabilityTotal(availablePrizes)
+  const originalTotalProbability = Math.max(
+    0,
+    Number(options.originalTotalProbability ?? totalProbability)
+  )
 
   if (totalProbability <= 0) {
-    return createImplicitLosePrize(campaign, 0)
+    return null
   }
 
   /**
    * 三遊戲正式抽獎百分比規則：
-   * - 總和 <= 100：後台數字就是實際百分比，例如 10 / 3 / 41 就是 10% / 3% / 41%。
-   *   剩下未填滿的百分比自動變成未中獎，不再把 10 和 3 重新換算成 76.92% / 23.08%。
-   * - 總和 > 100：視為舊資料權重模式，維持向下相容。
+   * - 原始設定總和 < 100：後台數字就是實際百分比，剩餘百分比自動視為未中獎。
+   * - 原始設定總和 = 100：不建立系統未中獎。若部分獎項因庫存 / 發出上限被排除，
+   *   由其餘仍可用獎項依原始比例承接；若全部不可用，回傳 null，由上層顯示沒有可抽獎項。
+   * - 原始設定總和 > 100：視為舊資料權重模式，維持向下相容。
    */
-  const useExactPercentageMode = totalProbability <= 100
-  const randomBase = useExactPercentageMode ? 100 : totalProbability
+  const isConfiguredFullPercentage =
+    originalTotalProbability >= 99.999 && originalTotalProbability <= 100.001
+  const useExactPercentageMode = originalTotalProbability < 99.999
+  const randomBase = isConfiguredFullPercentage || originalTotalProbability > 100
+    ? totalProbability
+    : 100
   const randomPoint = Math.random() * randomBase
   let cumulative = 0
 
@@ -716,7 +726,7 @@ const pickPrizeByProbability = (prizes = [], campaign = {}) => {
   }
 
   if (useExactPercentageMode) {
-    return createImplicitLosePrize(campaign, totalProbability)
+    return createImplicitLosePrize(campaign, originalTotalProbability)
   }
 
   return availablePrizes[availablePrizes.length - 1]
@@ -1013,8 +1023,13 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
     const trafficPayload = buildTrafficPayload(payload)
 
     const rawPrizePool = getCampaignPrizePool(campaign)
+    const originalTotalProbability = calculatePrizePoolProbabilityTotal(
+      rawPrizePool.filter(isPrizeAvailable)
+    )
     const prizePool = await applyPrizeAwardCaps(tx, campaign, rawPrizePool)
-    const prize = pickPrizeByProbability(prizePool, campaign)
+    const prize = pickPrizeByProbability(prizePool, campaign, {
+      originalTotalProbability
+    })
 
     if (!prize) {
       throw createHttpError('目前沒有可抽的獎項', 409)
