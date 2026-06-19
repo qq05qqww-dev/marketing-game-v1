@@ -1,5 +1,5 @@
 <script setup>
-// 第 113201～113600 批：九宮格首次進入與按「繼續抽獎」後獎項位置隨機洗牌版
+// 第 113601～114000 批：九宮格強化隨機換位（每個獎項必定離開原格）版
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
  * 第 96401～96800 批：九宮格移除重疊點擊與舊開始流程乾淨版。
@@ -2970,18 +2970,53 @@ const randomizePremiumGridPrizePositionsForDisplay = (reason = 'display') => {
     lastRandomizedReason: reason
   }))
 
-  for (let index = prizes.length - 1; index > 0; index -= 1) {
-    const swapIndex = Math.floor(Math.random() * (index + 1))
-    ;[prizes[index], prizes[swapIndex]] = [prizes[swapIndex], prizes[index]]
+  // 第 113601～114000 批：強化洗牌。
+  // 一般 Fisher–Yates 可能讓多個獎項留在原格，玩家看起來會覺得沒有變。
+  // 本版最多重洗 60 次，要求每個外圈獎項都離開上一輪位置；
+  // 若極端情況仍未成功，改用隨機位移 2～(格數-2) 格，保證所有獎項都換位。
+  const getPrizeKey = (item = {}, index = 0) =>
+    String(item.id ?? item.backendPrize?.id ?? item.name ?? item.title ?? index)
+
+  const shuffleOnce = (source = []) => {
+    const output = source.map((item) => ({ ...item }))
+
+    for (let index = output.length - 1; index > 0; index -= 1) {
+      const swapIndex = Math.floor(Math.random() * (index + 1))
+      ;[output[index], output[swapIndex]] = [output[swapIndex], output[index]]
+    }
+
+    return output
   }
 
-  // 避免剛好洗完完全沒變，玩家體感像位置沒有隨機。
-  const shuffledPrizeKeys = prizes.map((item, index) => String(item.id ?? item.backendPrize?.id ?? item.name ?? item.title ?? index))
-  const unchanged = originalPrizeKeys.every((key, index) => key === shuffledPrizeKeys[index])
+  let shuffledPrizes = prizes
+  let fullyMoved = false
 
-  if (unchanged && prizes.length > 1) {
-    prizes.push(prizes.shift())
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const candidate = shuffleOnce(prizes)
+    const everyPrizeMoved = candidate.every((item, index) => {
+      return getPrizeKey(item, index) !== originalPrizeKeys[index]
+    })
+
+    if (everyPrizeMoved) {
+      shuffledPrizes = candidate
+      fullyMoved = true
+      break
+    }
   }
+
+  if (!fullyMoved) {
+    const minimumOffset = prizes.length >= 4 ? 2 : 1
+    const maximumOffset = Math.max(minimumOffset, prizes.length - 2)
+    const offset = minimumOffset + Math.floor(Math.random() * (maximumOffset - minimumOffset + 1))
+    const useReverseDirection = Math.random() >= 0.5
+    const source = useReverseDirection ? [...prizes].reverse() : [...prizes]
+
+    shuffledPrizes = source.map((_, index) => {
+      return source[(index + offset) % source.length]
+    })
+  }
+
+  prizes.splice(0, prizes.length, ...shuffledPrizes)
 
   gridItems.value = gridItems.value.map((item, index) => {
     const prizeIndex = prizeIndexes.indexOf(index)
