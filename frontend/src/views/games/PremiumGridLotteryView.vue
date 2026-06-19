@@ -1,5 +1,4 @@
 <script setup>
-// 第 113601～114000 批：九宮格強化隨機換位（每個獎項必定離開原格）版
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
  * 第 96401～96800 批：九宮格移除重疊點擊與舊開始流程乾淨版。
@@ -2885,47 +2884,54 @@ const getPremiumGridRandomIndex = (indexes = [], previousIndex = -1) => {
   return pool[Math.floor(Math.random() * pool.length)]
 }
 
-const buildPremiumGridRandomJumpPath = (targetIndex, totalSteps) => {
+const shufflePremiumGridIndexes = (indexes = [], previousIndex = -1) => {
+  const shuffled = [...indexes]
+
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(Math.random() * (index + 1))
+    ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
+  }
+
+  // 避免新一輪第一格與上一輪最後一格相同，讓跑燈更平均、也不會原地連亮。
+  if (shuffled.length > 1 && shuffled[0] === previousIndex) {
+    const swapIndex = 1 + Math.floor(Math.random() * (shuffled.length - 1))
+    ;[shuffled[0], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[0]]
+  }
+
+  return shuffled
+}
+
+const buildPremiumGridBalancedRandomPath = (targetIndex, totalSteps) => {
   const indexes = getPremiumGridPlayableIndexes()
   const finalTargetIndex = indexes.includes(targetIndex)
     ? targetIndex
     : (indexes[indexes.length - 1] ?? targetIndex)
   const path = []
+  const safeTotalSteps = Math.max(indexes.length * 3, totalSteps)
   let previousIndex = activeIndex.value >= 0 ? activeIndex.value : -1
-  const safeTotalSteps = Math.max(8, totalSteps)
 
-  // 第 100401～100800 批：跑燈過程不可再刻意避開最終中獎格。
-  // 舊版在前 78% 跑燈避開 target，玩家會看出「很少亮到的格子最後一定中」。
-  // 新版讓最終中獎格在過程中自然出現數次，只保留最後一步停在後端結果。
-  for (let step = 0; step < Math.max(1, safeTotalSteps - 1); step += 1) {
-    const nextIndex = getPremiumGridRandomIndex(indexes, previousIndex)
+  // 第 114001～114400 批：跑燈改為「每輪八格都走一次，再隨機下一輪順序」。
+  // 每一完整輪內不重複格子，各格累積亮燈次數差距最多 1 次，避免某一格視覺上特別常亮。
+  while (path.length < Math.max(1, safeTotalSteps - 1)) {
+    const round = shufflePremiumGridIndexes(indexes, previousIndex)
 
-    path.push(nextIndex)
-    previousIndex = nextIndex
-  }
+    for (const index of round) {
+      if (path.length >= safeTotalSteps - 1) break
+      if (index === previousIndex && indexes.length > 1) continue
 
-  const injectableIndexes = path
-    .map((_, index) => index)
-    .filter((index) => index > 1 && index < path.length - 2)
-  const targetPreviewCount = Math.min(
-    4,
-    Math.max(2, Math.floor(path.length / Math.max(indexes.length * 2, 1)))
-  )
-
-  for (let count = 0; count < targetPreviewCount && injectableIndexes.length; count += 1) {
-    const randomSlotIndex = Math.floor(Math.random() * injectableIndexes.length)
-    const pathIndex = injectableIndexes.splice(randomSlotIndex, 1)[0]
-
-    if (path[pathIndex - 1] !== finalTargetIndex && path[pathIndex + 1] !== finalTargetIndex) {
-      path[pathIndex] = finalTargetIndex
+      path.push(index)
+      previousIndex = index
     }
   }
 
-  if (path[path.length - 1] === finalTargetIndex) {
-    path[path.length - 1] = getPremiumGridRandomIndex(
-      indexes.filter((index) => index !== finalTargetIndex),
-      path[path.length - 2] ?? -1
-    )
+  // 最後一步只停在後端實際抽中的格子；若前一步剛好同格，先插入另一格再回到結果格。
+  if (path[path.length - 1] === finalTargetIndex && indexes.length > 1) {
+    const bridgeIndex = indexes.find((index) => index !== finalTargetIndex && index !== path[path.length - 2])
+      ?? indexes.find((index) => index !== finalTargetIndex)
+
+    if (bridgeIndex !== undefined) {
+      path[path.length - 1] = bridgeIndex
+    }
   }
 
   path.push(finalTargetIndex)
@@ -2943,10 +2949,6 @@ const shouldRandomizePremiumGridPrizeDisplay = () => {
 
 const randomizePremiumGridPrizePositionsForDisplay = (reason = 'display') => {
   if (!shouldRandomizePremiumGridPrizeDisplay()) return false
-
-  // 第 113201～113600 批：抽獎動畫與結果視窗顯示期間禁止洗牌，
-  // 避免玩家看到獎項在抽獎途中或揭曉後突然換位。
-  if (isDrawing.value || showResultModal.value) return false
 
   // 第 100001～100400 批：只洗九宮格外圈獎項，中心「開始抽獎」固定在第 5 格。
   // 這裡只改玩家畫面的顯示順序，不改後台資料庫、不改機率、不改庫存、不改後端抽獎結果。
@@ -2970,53 +2972,43 @@ const randomizePremiumGridPrizePositionsForDisplay = (reason = 'display') => {
     lastRandomizedReason: reason
   }))
 
-  // 第 113601～114000 批：強化洗牌。
-  // 一般 Fisher–Yates 可能讓多個獎項留在原格，玩家看起來會覺得沒有變。
-  // 本版最多重洗 60 次，要求每個外圈獎項都離開上一輪位置；
-  // 若極端情況仍未成功，改用隨機位移 2～(格數-2) 格，保證所有獎項都換位。
-  const getPrizeKey = (item = {}, index = 0) =>
-    String(item.id ?? item.backendPrize?.id ?? item.name ?? item.title ?? index)
+  const shufflePrizeList = (items = []) => {
+    const shuffled = [...items]
 
-  const shuffleOnce = (source = []) => {
-    const output = source.map((item) => ({ ...item }))
-
-    for (let index = output.length - 1; index > 0; index -= 1) {
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
       const swapIndex = Math.floor(Math.random() * (index + 1))
-      ;[output[index], output[swapIndex]] = [output[swapIndex], output[index]]
+      ;[shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]]
     }
 
-    return output
+    return shuffled
   }
 
-  let shuffledPrizes = prizes
-  let fullyMoved = false
+  let randomizedPrizes = prizes
+  let foundFullPositionChange = false
 
+  // 第 113601～114000 批延續：最多重洗 60 次，要求每一個獎項都離開上一輪所在格。
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    const candidate = shuffleOnce(prizes)
-    const everyPrizeMoved = candidate.every((item, index) => {
-      return getPrizeKey(item, index) !== originalPrizeKeys[index]
-    })
+    const candidate = shufflePrizeList(prizes)
+    const candidateKeys = candidate.map((item, index) => String(item.id ?? item.backendPrize?.id ?? item.name ?? item.title ?? index))
+    const everyPrizeMoved = originalPrizeKeys.every((key, index) => key !== candidateKeys[index])
 
     if (everyPrizeMoved) {
-      shuffledPrizes = candidate
-      fullyMoved = true
+      randomizedPrizes = candidate
+      foundFullPositionChange = true
       break
     }
   }
 
-  if (!fullyMoved) {
-    const minimumOffset = prizes.length >= 4 ? 2 : 1
-    const maximumOffset = Math.max(minimumOffset, prizes.length - 2)
-    const offset = minimumOffset + Math.floor(Math.random() * (maximumOffset - minimumOffset + 1))
-    const useReverseDirection = Math.random() >= 0.5
-    const source = useReverseDirection ? [...prizes].reverse() : [...prizes]
+  // 極端情況使用 2～6 格的隨機位移，保證所有獎項離開原格。
+  if (!foundFullPositionChange && prizes.length > 1) {
+    const minimumShift = prizes.length > 3 ? 2 : 1
+    const maximumShift = Math.max(minimumShift, prizes.length - 2)
+    const shift = minimumShift + Math.floor(Math.random() * (maximumShift - minimumShift + 1))
 
-    shuffledPrizes = source.map((_, index) => {
-      return source[(index + offset) % source.length]
-    })
+    randomizedPrizes = prizes.map((_, index) => prizes[(index + shift) % prizes.length])
   }
 
-  prizes.splice(0, prizes.length, ...shuffledPrizes)
+  prizes.splice(0, prizes.length, ...randomizedPrizes)
 
   gridItems.value = gridItems.value.map((item, index) => {
     const prizeIndex = prizeIndexes.indexOf(index)
@@ -3033,8 +3025,8 @@ const randomizePremiumGridPrizePositionsForDisplay = (reason = 'display') => {
   return true
 }
 
-const shufflePremiumGridPrizePositionsForNextDraw = () => {
-  return randomizePremiumGridPrizePositionsForDisplay('continue-next-draw')
+const shufflePremiumGridPrizePositionsForDraw = () => {
+  return randomizePremiumGridPrizePositionsForDisplay('before-draw')
 }
 
 const runPremiumGridSpinAnimation = async (targetIndex) => {
@@ -3044,7 +3036,7 @@ const runPremiumGridSpinAnimation = async (targetIndex) => {
     : (playableIndexes[playableIndexes.length - 1] ?? drawPath[drawPath.length - 1])
   const baseRounds = gridSpinTuning.minRounds + Math.floor(Math.random() * (gridSpinTuning.extraRounds + 1))
   const totalSteps = baseRounds * playableIndexes.length + 10 + Math.floor(Math.random() * 8)
-  const randomJumpPath = buildPremiumGridRandomJumpPath(normalizedTargetIndex, totalSteps)
+  const randomJumpPath = buildPremiumGridBalancedRandomPath(normalizedTargetIndex, totalSteps)
 
   drawPerformancePhase.value = 'spinning'
 
@@ -3403,82 +3395,37 @@ const playTenantPremiumGridDraw = async () => {
 
   setGridSerialChanceAfterPlay(apiRemainingChance, beforeChance)
 
-  // 第 112401～112800 批：
-  // 正式九宮格抽獎結果必須優先使用後端回傳的 GameConfig virtualPrize。
-  // 實體 Prize 只負責庫存連結，名稱與 ID 可能和商家九宮格格子不同，
-  // 若只用 payload.prize 比對，會找不到格子並錯誤顯示「再接再厲」。
-  const virtualPrize =
-    result?.virtualPrize ||
-    payload?.result?.virtualPrize ||
-    payload?.playRecord?.resultPayload?.virtualPrize ||
-    payload?.resultPayload?.virtualPrize ||
-    {}
-
-  const apiPrize = payload?.prize || result?.prize || payload?.playRecord?.prize || {}
-  const selectedPrizeId =
-    virtualPrize?.id ||
-    result?.prizeId ||
-    payload?.prize?.id ||
-    payload?.playRecord?.prizeId
-  const selectedPrizeTitle =
-    virtualPrize?.title ||
-    virtualPrize?.name ||
-    result?.prizeTitle ||
-    payload?.prize?.title ||
-    payload?.playRecord?.prize?.title ||
-    ''
-  const selectedPrizeSortOrder = Number(virtualPrize?.sortOrder)
-  const selectedPrizeIsWin =
-    result?.isWin !== false &&
-    payload?.playRecord?.isWin !== false &&
-    String(virtualPrize?.type || result?.prizeType || apiPrize?.type || 'WIN').toUpperCase() !== 'LOSE'
+  const selectedPrizeId = result?.prizeId || payload?.prize?.id || payload?.playRecord?.prizeId
+  const selectedPrizeTitle = result?.prizeTitle || payload?.prize?.title || payload?.playRecord?.prize?.title || ''
 
   tenantPremiumGridLastDraw.value = payload
 
-  const matchedPrize = gridItems.value.find((item, index) => {
+  const matchedPrize = gridItems.value.find((item) => {
     if (item.isButton) return false
 
-    const itemId = String(item.id ?? '')
-    const itemName = String(item.name ?? item.title ?? '').trim()
-    const itemSortOrder = Number(item.sortOrder ?? item.position ?? index + 1)
-
-    return (
-      (selectedPrizeId && itemId === String(selectedPrizeId)) ||
-      (Number.isFinite(selectedPrizeSortOrder) && selectedPrizeSortOrder > 0 && itemSortOrder === selectedPrizeSortOrder) ||
-      (selectedPrizeTitle && itemName === String(selectedPrizeTitle).trim())
-    )
+    return String(item.id) === String(selectedPrizeId) || String(item.name) === String(selectedPrizeTitle)
   })
 
   if (matchedPrize) {
     return {
       ...matchedPrize,
-      isWin: selectedPrizeIsWin,
-      type: virtualPrize?.type || matchedPrize.type || apiPrize.type || 'WIN',
-      name: virtualPrize?.title || virtualPrize?.name || matchedPrize.name || matchedPrize.title,
-      shortName: virtualPrize?.shortName || matchedPrize.shortName || virtualPrize?.title || matchedPrize.name,
-      icon: virtualPrize?.icon || matchedPrize.icon || apiPrize.icon || '🎁',
-      imageUrl: virtualPrize?.imageUrl || matchedPrize.imageUrl || apiPrize.imageUrl || '',
-      backendVirtualPrize: virtualPrize,
-      backendPrize: apiPrize,
       backendProbabilitySource: result?.prizeSource || payload?.result?.prizeSource || 'DRAW_ENGINE',
       backendProbabilityMode: 'BACKEND_DRAW_ENGINE'
     }
   }
 
+  const apiPrize = payload?.prize || result?.prize || payload?.playRecord?.prize || {}
   const apiPrizeTitle = selectedPrizeTitle || apiPrize.title || apiPrize.name
 
   if (apiPrizeTitle) {
     return {
       id: selectedPrizeId || apiPrize.id || `remote-grid-result-${Date.now()}`,
       name: apiPrizeTitle,
-      shortName: virtualPrize?.shortName || apiPrize.shortName || apiPrizeTitle,
-      icon: virtualPrize?.icon || apiPrize.icon || apiPrize.emoji || '🎁',
-      imageUrl: virtualPrize?.imageUrl || apiPrize.imageUrl || '',
-      type: virtualPrize?.type || result?.prizeType || apiPrize.type || 'WIN',
-      isWin: selectedPrizeIsWin,
-      weight: Number(virtualPrize?.probability || apiPrize.weight || apiPrize.probability || 1),
-      quantity: Number(virtualPrize?.remainStock || apiPrize.quantity || apiPrize.stock || 9999),
-      backendVirtualPrize: virtualPrize,
+      shortName: apiPrize.shortName || apiPrizeTitle,
+      icon: apiPrize.icon || apiPrize.emoji || '🎁',
+      imageUrl: apiPrize.imageUrl || '',
+      weight: Number(apiPrize.weight || apiPrize.probability || 1),
+      quantity: Number(apiPrize.quantity || apiPrize.stock || 9999),
       backendPrize: apiPrize,
       backendProbabilitySource: result?.prizeSource || payload?.result?.prizeSource || 'DRAW_ENGINE',
       backendProbabilityMode: 'BACKEND_DRAW_ENGINE'
@@ -3933,13 +3880,13 @@ const startDraw = async () => {
     return
   }
 
-  // 第 113201～113600 批：本次抽獎沿用玩家按下按鈕前看到的排列。
-  // 不在按下開始後再洗牌，避免玩家感覺獎項位置被臨時更動。
+  shufflePremiumGridPrizePositionsForDraw()
+
   isDrawing.value = true
   drawPerformancePhase.value = 'submitting'
   drawPerformanceMessage.value = isTenantPremiumGridMode.value
-    ? '已收到抽獎，正在送出後端正式抽獎。'
-    : '已收到抽獎，正在準備正式結果。'
+    ? '已收到抽獎，正在洗牌並送出後端正式抽獎。'
+    : '已收到抽獎，正在洗牌並準備正式結果。'
   resultPrize.value = null
   showResultModal.value = false
 
@@ -4112,21 +4059,9 @@ const resetDemo = () => {
 }
 
 const closeResultAndContinue = () => {
-  const shouldPrepareNextDraw = effectiveGridChances.value > 0
-
   showResultModal.value = false
   resultPrize.value = null
   activeIndex.value = -1
-  drawPerformancePhase.value = 'idle'
-  drawPerformanceMessage.value = ''
-
-  // 第 113201～113600 批：只有玩家按「繼續抽獎」並且仍有次數時，
-  // 才為下一次抽獎重新洗牌；結果視窗顯示期間維持中獎位置不變。
-  if (shouldPrepareNextDraw) {
-    nextTick(() => {
-      shufflePremiumGridPrizePositionsForNextDraw()
-    })
-  }
 }
 
 const goGameHistory = () => {
