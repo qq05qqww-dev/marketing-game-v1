@@ -12,6 +12,7 @@
 // 3. 後台設定總和 > 100 時，保留舊資料權重模式，避免舊活動直接壞掉。
 // 4. 九宮格仍優先讀 GameConfig.settings.gridItems；輪盤 / 金蛋也優先讀各自設定來源。
 // 第 112001～112400 批：原始設定總和為 100% 時，部分獎項達上限後由其餘可用獎項按比例承接，不再自動補系統未中獎。
+// 第 112801～113200 批：九宮格原始設定總和改由未過濾的 gridItems 計算，避免 100% 因庫存/上限先被排除後誤判成 79% 並補未中獎。
 // 5. 不改 DB schema / router / 報表中心。
 // 6. 修正金蛋 / 九宮格 / 輪盤：GameConfig 虛擬中獎獎項尚未連結 Prize 真實庫存時，不再讓玩家直接卡 409。
 
@@ -686,6 +687,26 @@ const calculatePrizePoolProbabilityTotal = (prizes = []) => {
   }, 0)
 }
 
+// 第 112801～113200 批：原始設定總和必須在庫存、真實 Prize 連結與發獎上限過濾之前計算。
+// 否則九宮格後台雖為 100%，只要其中一格暫時不可發，舊邏輯就會把剩餘 79% 誤當原始設定並補 21% 未中獎。
+const calculateConfiguredGameProbabilityTotal = (campaign = {}) => {
+  const settings = campaign.gameConfig?.settings || {}
+  const gameType = normalizeGameType(campaign.gameType)
+  const configuredItems = extractGameConfigPrizeItems(settings, gameType)
+
+  if (!configuredItems.length) {
+    return calculatePrizePoolProbabilityTotal(
+      Array.isArray(campaign.prizes) ? campaign.prizes.filter((prize) => prize?.status === 'ACTIVE') : []
+    )
+  }
+
+  return configuredItems
+    .filter(isGameConfigItemEnabled)
+    .reduce((sum, item) => {
+      return sum + normalizeGameConfigPrizeProbability(item)
+    }, 0)
+}
+
 const pickPrizeByProbability = (prizes = [], campaign = {}, options = {}) => {
   const availablePrizes = prizes.filter(isPrizeAvailable)
 
@@ -1023,9 +1044,10 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
     const trafficPayload = buildTrafficPayload(payload)
 
     const rawPrizePool = getCampaignPrizePool(campaign)
-    const originalTotalProbability = calculatePrizePoolProbabilityTotal(
-      rawPrizePool.filter(isPrizeAvailable)
-    )
+
+    // 必須直接從未過濾的商家後台設定計算原始總和。
+    // rawPrizePool 在此之前可能已因庫存 / linked Prize 狀態排除獎項，不能拿來判斷商家是否設定滿 100%。
+    const originalTotalProbability = calculateConfiguredGameProbabilityTotal(campaign)
     const prizePool = await applyPrizeAwardCaps(tx, campaign, rawPrizePool)
     const prize = pickPrizeByProbability(prizePool, campaign, {
       originalTotalProbability
@@ -1138,7 +1160,14 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         mode: 'BACKEND_DRAW_ENGINE',
         source: prize.source || (prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE'),
         selectedProbability: prize.probability,
+        // totalProbability 保留為目前可抽池總和；configuredTotalProbability 顯示商家原始設定總和。
         totalProbability: calculatePrizePoolProbabilityTotal(prizePool),
+        configuredTotalProbability: originalTotalProbability,
+        effectiveTotalProbability: calculatePrizePoolProbabilityTotal(prizePool),
+        redistributedToAvailablePrizes:
+          originalTotalProbability >= 99.999 &&
+          originalTotalProbability <= 100.001 &&
+          calculatePrizePoolProbabilityTotal(prizePool) < 99.999,
         awardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
         awardUsed: Number(prize.awardUsed || 0),
         remainingAwardLimit: prize.remainingAwardLimit === undefined ? null : prize.remainingAwardLimit
@@ -1197,6 +1226,7 @@ export const previewDrawPool = async (campaignId) => {
 
   const prizePool = getCampaignPrizePool(campaign)
   const totalProbability = calculatePrizePoolProbabilityTotal(prizePool.filter((prize) => prize.status === 'ACTIVE'))
+  const configuredTotalProbability = calculateConfiguredGameProbabilityTotal(campaign)
 
   return {
     campaign: {
@@ -1210,6 +1240,12 @@ export const previewDrawPool = async (campaignId) => {
       availability: isCampaignAvailable(campaign)
     },
     totalProbability,
+    configuredTotalProbability,
+    effectiveTotalProbability: totalProbability,
+    redistributedToAvailablePrizes:
+      configuredTotalProbability >= 99.999 &&
+      configuredTotalProbability <= 100.001 &&
+      totalProbability < 99.999,
     probabilityMode: 'BACKEND_DRAW_ENGINE',
     prizeSource: getCampaignPrizePool(campaign).some((prize) => prize.isVirtualGameConfigPrize) ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
     prizes: prizePool.map((prize) => ({
