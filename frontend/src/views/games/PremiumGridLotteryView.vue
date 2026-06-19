@@ -3363,37 +3363,82 @@ const playTenantPremiumGridDraw = async () => {
 
   setGridSerialChanceAfterPlay(apiRemainingChance, beforeChance)
 
-  const selectedPrizeId = result?.prizeId || payload?.prize?.id || payload?.playRecord?.prizeId
-  const selectedPrizeTitle = result?.prizeTitle || payload?.prize?.title || payload?.playRecord?.prize?.title || ''
+  // 第 112401～112800 批：
+  // 正式九宮格抽獎結果必須優先使用後端回傳的 GameConfig virtualPrize。
+  // 實體 Prize 只負責庫存連結，名稱與 ID 可能和商家九宮格格子不同，
+  // 若只用 payload.prize 比對，會找不到格子並錯誤顯示「再接再厲」。
+  const virtualPrize =
+    result?.virtualPrize ||
+    payload?.result?.virtualPrize ||
+    payload?.playRecord?.resultPayload?.virtualPrize ||
+    payload?.resultPayload?.virtualPrize ||
+    {}
+
+  const apiPrize = payload?.prize || result?.prize || payload?.playRecord?.prize || {}
+  const selectedPrizeId =
+    virtualPrize?.id ||
+    result?.prizeId ||
+    payload?.prize?.id ||
+    payload?.playRecord?.prizeId
+  const selectedPrizeTitle =
+    virtualPrize?.title ||
+    virtualPrize?.name ||
+    result?.prizeTitle ||
+    payload?.prize?.title ||
+    payload?.playRecord?.prize?.title ||
+    ''
+  const selectedPrizeSortOrder = Number(virtualPrize?.sortOrder)
+  const selectedPrizeIsWin =
+    result?.isWin !== false &&
+    payload?.playRecord?.isWin !== false &&
+    String(virtualPrize?.type || result?.prizeType || apiPrize?.type || 'WIN').toUpperCase() !== 'LOSE'
 
   tenantPremiumGridLastDraw.value = payload
 
-  const matchedPrize = gridItems.value.find((item) => {
+  const matchedPrize = gridItems.value.find((item, index) => {
     if (item.isButton) return false
 
-    return String(item.id) === String(selectedPrizeId) || String(item.name) === String(selectedPrizeTitle)
+    const itemId = String(item.id ?? '')
+    const itemName = String(item.name ?? item.title ?? '').trim()
+    const itemSortOrder = Number(item.sortOrder ?? item.position ?? index + 1)
+
+    return (
+      (selectedPrizeId && itemId === String(selectedPrizeId)) ||
+      (Number.isFinite(selectedPrizeSortOrder) && selectedPrizeSortOrder > 0 && itemSortOrder === selectedPrizeSortOrder) ||
+      (selectedPrizeTitle && itemName === String(selectedPrizeTitle).trim())
+    )
   })
 
   if (matchedPrize) {
     return {
       ...matchedPrize,
+      isWin: selectedPrizeIsWin,
+      type: virtualPrize?.type || matchedPrize.type || apiPrize.type || 'WIN',
+      name: virtualPrize?.title || virtualPrize?.name || matchedPrize.name || matchedPrize.title,
+      shortName: virtualPrize?.shortName || matchedPrize.shortName || virtualPrize?.title || matchedPrize.name,
+      icon: virtualPrize?.icon || matchedPrize.icon || apiPrize.icon || '🎁',
+      imageUrl: virtualPrize?.imageUrl || matchedPrize.imageUrl || apiPrize.imageUrl || '',
+      backendVirtualPrize: virtualPrize,
+      backendPrize: apiPrize,
       backendProbabilitySource: result?.prizeSource || payload?.result?.prizeSource || 'DRAW_ENGINE',
       backendProbabilityMode: 'BACKEND_DRAW_ENGINE'
     }
   }
 
-  const apiPrize = payload?.prize || result?.prize || payload?.playRecord?.prize || {}
   const apiPrizeTitle = selectedPrizeTitle || apiPrize.title || apiPrize.name
 
   if (apiPrizeTitle) {
     return {
       id: selectedPrizeId || apiPrize.id || `remote-grid-result-${Date.now()}`,
       name: apiPrizeTitle,
-      shortName: apiPrize.shortName || apiPrizeTitle,
-      icon: apiPrize.icon || apiPrize.emoji || '🎁',
-      imageUrl: apiPrize.imageUrl || '',
-      weight: Number(apiPrize.weight || apiPrize.probability || 1),
-      quantity: Number(apiPrize.quantity || apiPrize.stock || 9999),
+      shortName: virtualPrize?.shortName || apiPrize.shortName || apiPrizeTitle,
+      icon: virtualPrize?.icon || apiPrize.icon || apiPrize.emoji || '🎁',
+      imageUrl: virtualPrize?.imageUrl || apiPrize.imageUrl || '',
+      type: virtualPrize?.type || result?.prizeType || apiPrize.type || 'WIN',
+      isWin: selectedPrizeIsWin,
+      weight: Number(virtualPrize?.probability || apiPrize.weight || apiPrize.probability || 1),
+      quantity: Number(virtualPrize?.remainStock || apiPrize.quantity || apiPrize.stock || 9999),
+      backendVirtualPrize: virtualPrize,
       backendPrize: apiPrize,
       backendProbabilitySource: result?.prizeSource || payload?.result?.prizeSource || 'DRAW_ENGINE',
       backendProbabilityMode: 'BACKEND_DRAW_ENGINE'
