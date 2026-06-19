@@ -12,7 +12,7 @@
 // 3. 後台設定總和 > 100 時，保留舊資料權重模式，避免舊活動直接壞掉。
 // 4. 九宮格仍優先讀 GameConfig.settings.gridItems；輪盤 / 金蛋也優先讀各自設定來源。
 // 第 112001～112400 批：原始設定總和為 100% 時，部分獎項達上限後由其餘可用獎項按比例承接，不再自動補系統未中獎。
-// 第 112801～113200 批：九宮格原始設定總和改由未過濾的 gridItems 計算，避免 100% 因庫存/上限先被排除後誤判成 79% 並補未中獎。
+// 第 114401～114800 批：九宮格獎項類型與 GameConfig 庫存優先修正版。
 // 5. 不改 DB schema / router / 報表中心。
 // 6. 修正金蛋 / 九宮格 / 輪盤：GameConfig 虛擬中獎獎項尚未連結 Prize 真實庫存時，不再讓玩家直接卡 409。
 
@@ -217,13 +217,20 @@ const attachPrizeTableLinkToVirtualPrize = (virtualPrize = {}, campaignPrizes = 
     return virtualPrize
   }
 
+  const configuredRemainStock = Number(virtualPrize.remainStock || 0)
+  const configuredStockTotal = Number(virtualPrize.stockTotal || configuredRemainStock || 0)
+  const configuredStockUsed = Number(virtualPrize.stockUsed || 0)
+
   return {
     ...virtualPrize,
     linkedPrizeId: matchedPrize.id,
     linkedPrize: matchedPrize,
-    remainStock: getPrizeAvailableStock(matchedPrize),
-    stockTotal: matchedPrize.stockTotal,
-    stockUsed: matchedPrize.stockUsed,
+    remainStock: configuredRemainStock,
+    stockTotal: configuredStockTotal,
+    stockUsed: configuredStockUsed,
+    linkedPrizeAvailableStock: getPrizeAvailableStock(matchedPrize),
+    linkedPrizeStockTotal: Number(matchedPrize.stockTotal || 0),
+    linkedPrizeStockUsed: Number(matchedPrize.stockUsed || 0),
     prizeTableTitle: matchedPrize.title
   }
 }
@@ -293,16 +300,42 @@ const extractGameConfigPrizeItems = (settings = {}, gameType = '') => {
 const normalizeGameConfigPrize = (item = {}, index = 0, campaign = {}) => {
   const gameType = normalizeGameType(campaign.gameType)
   const title = normalizeGameConfigPrizeTitle(item, index)
-  const prizeType = normalizeGameConfigPrizeType(item.type || item.rewardType)
+  const normalizedSourceType = normalizeGameConfigPrizeType(item.type || item.rewardType)
   const remainStock = normalizeGameConfigPrizeStock(item, gameType)
   const probability = normalizeGameConfigPrizeProbability(item)
   const awardLimit = normalizeGameConfigPrizeAwardLimit(item, gameType)
+  const rawTitle = normalizeComparableText(title)
+  const isExplicitButton =
+    item.isButton === true ||
+    String(item.type || '').toUpperCase() === 'BUTTON' ||
+    String(item.rewardType || '').toUpperCase() === 'BUTTON'
+  const isExplicitLoseTitle =
+    rawTitle.includes('未中獎') ||
+    rawTitle.includes('銘謝') ||
+    rawTitle.includes('再接再厲') ||
+    rawTitle.includes('謝謝參加')
+  const hasRewardMaterial =
+    probability > 0 &&
+    (
+      hasExplicitGameConfigStock(item) ||
+      awardLimit > 0 ||
+      Boolean(item.imageUrl || item.image || item.prizeImageUrl)
+    )
+
+  const prizeType =
+    gameType === 'GRID' &&
+    !isExplicitButton &&
+    !isExplicitLoseTitle &&
+    hasRewardMaterial
+      ? 'WIN'
+      : normalizedSourceType
 
   return {
     id: `game-config-${campaign.id || 'campaign'}-${item.position || index + 1}`,
     isVirtualGameConfigPrize: true,
     campaignId: campaign.id,
     tenantId: campaign.tenantId || null,
+    gameType,
     title,
     shortName: item.shortName || item.label || title,
     description: item.description || item.note || '',
@@ -687,26 +720,6 @@ const calculatePrizePoolProbabilityTotal = (prizes = []) => {
   }, 0)
 }
 
-// 第 112801～113200 批：原始設定總和必須在庫存、真實 Prize 連結與發獎上限過濾之前計算。
-// 否則九宮格後台雖為 100%，只要其中一格暫時不可發，舊邏輯就會把剩餘 79% 誤當原始設定並補 21% 未中獎。
-const calculateConfiguredGameProbabilityTotal = (campaign = {}) => {
-  const settings = campaign.gameConfig?.settings || {}
-  const gameType = normalizeGameType(campaign.gameType)
-  const configuredItems = extractGameConfigPrizeItems(settings, gameType)
-
-  if (!configuredItems.length) {
-    return calculatePrizePoolProbabilityTotal(
-      Array.isArray(campaign.prizes) ? campaign.prizes.filter((prize) => prize?.status === 'ACTIVE') : []
-    )
-  }
-
-  return configuredItems
-    .filter(isGameConfigItemEnabled)
-    .reduce((sum, item) => {
-      return sum + normalizeGameConfigPrizeProbability(item)
-    }, 0)
-}
-
 const pickPrizeByProbability = (prizes = [], campaign = {}, options = {}) => {
   const availablePrizes = prizes.filter(isPrizeAvailable)
 
@@ -836,6 +849,26 @@ const validateSerialCodeForDraw = async (tx, campaignId, payload = {}) => {
   }
 }
 
+const reserveVirtualGameConfigPrizeStock = (prize = {}, reason = '') => {
+  console.warn('[draw-engine] using GameConfig virtual stock fallback:', {
+    campaignId: prize.campaignId,
+    linkedPrizeId: prize.linkedPrizeId || null,
+    title: prize.title,
+    probability: prize.probability,
+    awardLimit: prize.awardLimit,
+    remainStock: prize.remainStock,
+    reason
+  })
+
+  return {
+    ...prize,
+    virtualStockReserved: true,
+    stockUsed: Number(prize.stockUsed || 0) + 1,
+    remainStock: Math.max(0, Number(prize.remainStock || 0) - 1),
+    source: prize.source || 'GAME_CONFIG_SETTINGS'
+  }
+}
+
 const reserveWinningPrizeStock = async (tx, prize) => {
   if (!prize || prize.type === 'LOSE') {
     return prize
@@ -859,13 +892,7 @@ const reserveWinningPrizeStock = async (tx, prize) => {
       source: prize.source
     })
 
-    return {
-      ...prize,
-      virtualStockReserved: true,
-      stockUsed: Number(prize.stockUsed || 0) + 1,
-      remainStock: Math.max(0, Number(prize.remainStock || 0) - 1),
-      source: prize.source || 'GAME_CONFIG_SETTINGS'
-    }
+    return reserveVirtualGameConfigPrizeStock(prize, 'GAMECONFIG_FALLBACK')
   }
 
   if (!prizeIdForReserve) {
@@ -891,13 +918,7 @@ const reserveWinningPrizeStock = async (tx, prize) => {
       source: prize.source
     })
 
-    return {
-      ...prize,
-      virtualStockReserved: true,
-      stockUsed: Number(prize.stockUsed || 0) + 1,
-      remainStock: Math.max(0, Number(prize.remainStock || 0) - 1),
-      source: prize.source || 'GAME_CONFIG_SETTINGS'
-    }
+    return reserveVirtualGameConfigPrizeStock(prize, 'GAMECONFIG_FALLBACK')
   }
 
   if (!currentPrize) {
@@ -905,6 +926,10 @@ const reserveWinningPrizeStock = async (tx, prize) => {
   }
 
   const stockTotal = Number(currentPrize.stockTotal || 0)
+
+  if (prize.isVirtualGameConfigPrize && getPrizeAvailableStock(currentPrize) <= 0) {
+    return reserveVirtualGameConfigPrizeStock(prize, 'LINKED_PRIZE_STOCK_EXHAUSTED')
+  }
 
   if (stockTotal > 0) {
     const result = await tx.prize.updateMany({
@@ -931,6 +956,10 @@ const reserveWinningPrizeStock = async (tx, prize) => {
     })
 
     if (result.count <= 0) {
+      if (prize.isVirtualGameConfigPrize) {
+        return reserveVirtualGameConfigPrizeStock(prize, 'LINKED_PRIZE_UPDATE_CONFLICT')
+      }
+
       throw createHttpError('此獎項庫存已不足，請重新抽獎', 409)
     }
 
@@ -962,6 +991,10 @@ const reserveWinningPrizeStock = async (tx, prize) => {
   })
 
   if (result.count <= 0) {
+    if (prize.isVirtualGameConfigPrize) {
+      return reserveVirtualGameConfigPrizeStock(prize, 'LINKED_PRIZE_UPDATE_CONFLICT')
+    }
+
     throw createHttpError('此獎項庫存已不足，請重新抽獎', 409)
   }
 
@@ -1044,10 +1077,9 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
     const trafficPayload = buildTrafficPayload(payload)
 
     const rawPrizePool = getCampaignPrizePool(campaign)
-
-    // 必須直接從未過濾的商家後台設定計算原始總和。
-    // rawPrizePool 在此之前可能已因庫存 / linked Prize 狀態排除獎項，不能拿來判斷商家是否設定滿 100%。
-    const originalTotalProbability = calculateConfiguredGameProbabilityTotal(campaign)
+    const originalTotalProbability = calculatePrizePoolProbabilityTotal(
+      rawPrizePool.filter(isPrizeAvailable)
+    )
     const prizePool = await applyPrizeAwardCaps(tx, campaign, rawPrizePool)
     const prize = pickPrizeByProbability(prizePool, campaign, {
       originalTotalProbability
@@ -1160,14 +1192,7 @@ export const runDrawEngine = async (campaignId, payload = {}) => {
         mode: 'BACKEND_DRAW_ENGINE',
         source: prize.source || (prize.isVirtualGameConfigPrize ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE'),
         selectedProbability: prize.probability,
-        // totalProbability 保留為目前可抽池總和；configuredTotalProbability 顯示商家原始設定總和。
         totalProbability: calculatePrizePoolProbabilityTotal(prizePool),
-        configuredTotalProbability: originalTotalProbability,
-        effectiveTotalProbability: calculatePrizePoolProbabilityTotal(prizePool),
-        redistributedToAvailablePrizes:
-          originalTotalProbability >= 99.999 &&
-          originalTotalProbability <= 100.001 &&
-          calculatePrizePoolProbabilityTotal(prizePool) < 99.999,
         awardLimit: Number(prize.awardLimit || prize.maxAwardCount || 0),
         awardUsed: Number(prize.awardUsed || 0),
         remainingAwardLimit: prize.remainingAwardLimit === undefined ? null : prize.remainingAwardLimit
@@ -1226,7 +1251,6 @@ export const previewDrawPool = async (campaignId) => {
 
   const prizePool = getCampaignPrizePool(campaign)
   const totalProbability = calculatePrizePoolProbabilityTotal(prizePool.filter((prize) => prize.status === 'ACTIVE'))
-  const configuredTotalProbability = calculateConfiguredGameProbabilityTotal(campaign)
 
   return {
     campaign: {
@@ -1240,12 +1264,6 @@ export const previewDrawPool = async (campaignId) => {
       availability: isCampaignAvailable(campaign)
     },
     totalProbability,
-    configuredTotalProbability,
-    effectiveTotalProbability: totalProbability,
-    redistributedToAvailablePrizes:
-      configuredTotalProbability >= 99.999 &&
-      configuredTotalProbability <= 100.001 &&
-      totalProbability < 99.999,
     probabilityMode: 'BACKEND_DRAW_ENGINE',
     prizeSource: getCampaignPrizePool(campaign).some((prize) => prize.isVirtualGameConfigPrize) ? 'GAME_CONFIG_SETTINGS' : 'PRIZE_TABLE',
     prizes: prizePool.map((prize) => ({
