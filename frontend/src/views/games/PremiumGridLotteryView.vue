@@ -1,4 +1,5 @@
 <script setup>
+// 第 113201～113600 批：九宮格首次進入與按「繼續抽獎」後獎項位置隨機洗牌版
 // 第 80401～80800 批：九宮格即時預覽文字同步修正版
 /*
  * 第 96401～96800 批：九宮格移除重疊點擊與舊開始流程乾淨版。
@@ -2943,6 +2944,10 @@ const shouldRandomizePremiumGridPrizeDisplay = () => {
 const randomizePremiumGridPrizePositionsForDisplay = (reason = 'display') => {
   if (!shouldRandomizePremiumGridPrizeDisplay()) return false
 
+  // 第 113201～113600 批：抽獎動畫與結果視窗顯示期間禁止洗牌，
+  // 避免玩家看到獎項在抽獎途中或揭曉後突然換位。
+  if (isDrawing.value || showResultModal.value) return false
+
   // 第 100001～100400 批：只洗九宮格外圈獎項，中心「開始抽獎」固定在第 5 格。
   // 這裡只改玩家畫面的顯示順序，不改後台資料庫、不改機率、不改庫存、不改後端抽獎結果。
   const prizeIndexes = drawPath.filter((index) => {
@@ -2993,8 +2998,8 @@ const randomizePremiumGridPrizePositionsForDisplay = (reason = 'display') => {
   return true
 }
 
-const shufflePremiumGridPrizePositionsForDraw = () => {
-  return randomizePremiumGridPrizePositionsForDisplay('before-draw')
+const shufflePremiumGridPrizePositionsForNextDraw = () => {
+  return randomizePremiumGridPrizePositionsForDisplay('continue-next-draw')
 }
 
 const runPremiumGridSpinAnimation = async (targetIndex) => {
@@ -3893,13 +3898,13 @@ const startDraw = async () => {
     return
   }
 
-  shufflePremiumGridPrizePositionsForDraw()
-
+  // 第 113201～113600 批：本次抽獎沿用玩家按下按鈕前看到的排列。
+  // 不在按下開始後再洗牌，避免玩家感覺獎項位置被臨時更動。
   isDrawing.value = true
   drawPerformancePhase.value = 'submitting'
   drawPerformanceMessage.value = isTenantPremiumGridMode.value
-    ? '已收到抽獎，正在洗牌並送出後端正式抽獎。'
-    : '已收到抽獎，正在洗牌並準備正式結果。'
+    ? '已收到抽獎，正在送出後端正式抽獎。'
+    : '已收到抽獎，正在準備正式結果。'
   resultPrize.value = null
   showResultModal.value = false
 
@@ -4072,9 +4077,21 @@ const resetDemo = () => {
 }
 
 const closeResultAndContinue = () => {
+  const shouldPrepareNextDraw = effectiveGridChances.value > 0
+
   showResultModal.value = false
   resultPrize.value = null
   activeIndex.value = -1
+  drawPerformancePhase.value = 'idle'
+  drawPerformanceMessage.value = ''
+
+  // 第 113201～113600 批：只有玩家按「繼續抽獎」並且仍有次數時，
+  // 才為下一次抽獎重新洗牌；結果視窗顯示期間維持中獎位置不變。
+  if (shouldPrepareNextDraw) {
+    nextTick(() => {
+      shufflePremiumGridPrizePositionsForNextDraw()
+    })
+  }
 }
 
 const goGameHistory = () => {
