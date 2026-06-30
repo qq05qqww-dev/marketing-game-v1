@@ -62,9 +62,6 @@ export const getCampaignGameConfigApi = (id) => {
     return http.get(url, {
       params: {
         _ts: Date.now()
-      },
-      headers: {
-        'Cache-Control': 'no-cache'
       }
     })
   })
@@ -130,9 +127,6 @@ export const getTenantPremiumGridCampaignApi = (tenantSlug) => {
       gameType: 'GRID',
       status: 'ACTIVE',
       _ts: Date.now()
-    },
-    headers: {
-      'Cache-Control': 'no-cache'
     }
   })
 }
