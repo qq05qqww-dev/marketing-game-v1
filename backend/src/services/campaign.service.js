@@ -1419,6 +1419,40 @@ const buildCampaignPatchFromSettings = (settings = {}) => {
   return data
 }
 
+const stripGameConfigBackupMeta = (settings = {}) => {
+  const cloned = deepClone(settings) || {}
+
+  if (cloned.__meta && typeof cloned.__meta === 'object') {
+    const {
+      previousSettingsBackup: _previousSettingsBackup,
+      previousSettingsBackups: _previousSettingsBackups,
+      ...restMeta
+    } = cloned.__meta
+
+    cloned.__meta = restMeta
+  }
+
+  return cloned
+}
+
+const attachPreviousGameConfigBackup = (nextSettings = {}, previousSettings = null, campaignId = null) => {
+  if (!previousSettings || typeof previousSettings !== 'object' || !Object.keys(previousSettings).length) {
+    return nextSettings
+  }
+
+  return {
+    ...nextSettings,
+    __meta: {
+      ...(nextSettings.__meta || {}),
+      previousSettingsBackup: {
+        campaignId,
+        backedUpAt: new Date().toISOString(),
+        settings: stripGameConfigBackupMeta(previousSettings)
+      }
+    }
+  }
+}
+
 export const getCampaigns = async (query = {}, user = null) => {
   return prisma.campaign.findMany({
     where: await buildCampaignWhere(query, user),
@@ -1654,6 +1688,20 @@ export const upsertGameConfigByCampaignId = async (id, settings = {}, user = nul
   const campaignPatch = buildCampaignPatchFromSettings(normalizedSettings)
 
   return prisma.$transaction(async (tx) => {
+    const existingGameConfig = await tx.gameConfig.findUnique({
+      where: {
+        campaignId
+      },
+      select: {
+        settings: true
+      }
+    })
+    const settingsForSave = attachPreviousGameConfigBackup(
+      normalizedSettings,
+      existingGameConfig?.settings,
+      campaignId
+    )
+
     if (Object.keys(campaignPatch).length) {
       await tx.campaign.update({
         where: {
@@ -1669,12 +1717,12 @@ export const upsertGameConfigByCampaignId = async (id, settings = {}, user = nul
       },
       update: {
         tenantId: campaign.tenantId || null,
-        settings: normalizedSettings
+        settings: settingsForSave
       },
       create: {
         campaignId,
         tenantId: campaign.tenantId || null,
-        settings: normalizedSettings
+        settings: settingsForSave
       },
       include: {
         tenant: {
@@ -1710,7 +1758,7 @@ export const upsertGameConfigByCampaignId = async (id, settings = {}, user = nul
 
     return {
       ...gameConfig,
-      settings: normalizedSettings,
+      settings: settingsForSave,
       savedAt: new Date().toISOString()
     }
   })

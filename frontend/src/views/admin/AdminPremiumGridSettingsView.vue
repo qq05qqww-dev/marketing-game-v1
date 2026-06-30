@@ -31,6 +31,8 @@ const configLoading = ref(false)
 const configSaving = ref(false)
 const configLoadedAt = ref('')
 const configSavedAt = ref('')
+const hasLoadedGameConfigFromDatabase = ref(false)
+const configLoadFailed = ref(false)
 const configModeMessage = ref('目前是正式資料庫模式。若網址包含活動 ID，例如 /admin/premium-grid-settings/1，儲存會寫入 GameConfig settings 並重新讀取確認。')
 const previewTenantSlug = ref('a-shop')
 const previewRefreshKey = ref(1)
@@ -1000,6 +1002,8 @@ const savePlatformTemplateToDatabase = async () => {
 
 const loadPlatformTemplateFromDatabase = async () => {
   configLoading.value = true
+  hasLoadedGameConfigFromDatabase.value = false
+  configLoadFailed.value = false
   savedMessage.value = ''
   warningMessage.value = ''
   inlineSaveMessage.value = ''
@@ -1094,16 +1098,22 @@ const loadSettingsFromGameConfig = async () => {
     if (loadedSettings && Object.keys(loadedSettings).length) {
       mergeSettingsIntoDraft(loadedSettings)
       configLoadedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
+      hasLoadedGameConfigFromDatabase.value = true
+      configLoadFailed.value = false
       savedMessage.value = `已讀取活動 #${normalizedCampaignId.value} 的 GameConfig settings。`
       configModeMessage.value = '目前設定已從後端 GameConfig settings 載入，修改後可按「儲存設定」。'
       syncDraftToPreviewStorage({ refresh: true })
     } else {
       configLoadedAt.value = new Date().toLocaleString('zh-TW', { hour12: false })
+      hasLoadedGameConfigFromDatabase.value = true
+      configLoadFailed.value = false
       savedMessage.value = `活動 #${normalizedCampaignId.value} 尚未有設定，已保留目前預設草稿。`
       configModeMessage.value = '後端目前沒有既有 settings，按「儲存設定」即可建立。'
     }
   } catch (error) {
     console.error('讀取九宮格設定失敗:', error)
+    hasLoadedGameConfigFromDatabase.value = false
+    configLoadFailed.value = true
     warningMessage.value = error?.response?.data?.message || '讀取九宮格設定失敗，請確認後端與權限。'
   } finally {
     configLoading.value = false
@@ -1115,6 +1125,15 @@ const saveSettingsToGameConfig = async () => {
 
   if (!canUseGameConfigApi.value) {
     await savePlatformTemplateToDatabase()
+    return
+  }
+
+  if (!hasLoadedGameConfigFromDatabase.value) {
+    warningMessage.value = configLoadFailed.value
+      ? '剛才讀取資料庫設定失敗，已阻止儲存，避免用預設草稿覆蓋原本獎項。請重新讀取成功後再儲存。'
+      : '正式資料庫設定尚未讀取完成，請先按「讀取設定」成功後再儲存。'
+    inlineSaveMessage.value = warningMessage.value
+    configModeMessage.value = '儲存已被保護機制阻止：尚未成功讀取 GameConfig settings。'
     return
   }
 
@@ -1469,9 +1488,8 @@ onMounted(() => {
     loadSettingsFromGameConfig()
   } else {
     loadPlatformTemplateFromDatabase()
+    syncDraftToPreviewStorage({ refresh: true })
   }
-
-  syncDraftToPreviewStorage({ refresh: true })
 })
 
 </script>
@@ -1507,7 +1525,7 @@ onMounted(() => {
             </button>
             <button
               type="button"
-              :disabled="configSaving"
+              :disabled="configSaving || (canUseGameConfigApi && !hasLoadedGameConfigFromDatabase)"
               class="rounded-2xl bg-emerald-600 px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               @click="saveSettingsToGameConfig"
             >
