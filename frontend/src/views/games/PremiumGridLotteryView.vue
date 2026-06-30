@@ -178,6 +178,7 @@ const tenantPremiumGridLoading = ref(false)
 const tenantPremiumGridError = ref('')
 const tenantPremiumGridLoadedAt = ref('')
 const tenantPremiumGridLastDraw = ref(null)
+const tenantPremiumGridRefreshTimer = ref(null)
 const premiumGridGameConfigSettings = ref(null)
 const premiumGridGameConfigLoading = ref(false)
 const premiumGridGameConfigError = ref('')
@@ -3156,11 +3157,14 @@ const applyTenantPremiumGridCampaign = (campaignData = {}) => {
   tenantPremiumGridLoadedAt.value = new Date().toLocaleString('zh-TW')
 }
 
-const loadTenantPremiumGridCampaign = async () => {
+const loadTenantPremiumGridCampaign = async ({ silent = false } = {}) => {
   if (!isTenantPremiumGridMode.value) return
+  if (tenantPremiumGridLoading.value && silent) return
 
-  tenantPremiumGridLoading.value = true
-  tenantPremiumGridError.value = ''
+  if (!silent) {
+    tenantPremiumGridLoading.value = true
+    tenantPremiumGridError.value = ''
+  }
 
   try {
     const response = await getTenantPremiumGridCampaignApi(tenantSlug.value)
@@ -3169,7 +3173,9 @@ const loadTenantPremiumGridCampaign = async () => {
 
     if (!activeCampaign?.id) {
       tenantPremiumGridCampaign.value = null
-      tenantPremiumGridError.value = '目前商家尚未建立精緻九宮格活動，請聯絡平台管理員建立 GRID 活動。'
+      if (!silent) {
+        tenantPremiumGridError.value = '目前商家尚未建立精緻九宮格活動，請聯絡平台管理員建立 GRID 活動。'
+      }
       return
     }
 
@@ -3178,11 +3184,45 @@ const loadTenantPremiumGridCampaign = async () => {
     applyAdminPreviewDraftToCampaign()
   } catch (error) {
     console.error('載入商家精緻九宮格活動失敗：', error)
-    tenantPremiumGridCampaign.value = null
-    tenantPremiumGridError.value = '載入商家精緻九宮格活動失敗，請稍後再試。'
+    if (!silent) {
+      tenantPremiumGridCampaign.value = null
+      tenantPremiumGridError.value = '載入商家精緻九宮格活動失敗，請稍後再試。'
+    }
   } finally {
-    tenantPremiumGridLoading.value = false
+    if (!silent) {
+      tenantPremiumGridLoading.value = false
+    }
   }
+}
+
+const refreshTenantPremiumGridCampaignIfIdle = async () => {
+  if (!isTenantPremiumGridMode.value || isDrawing.value) return
+  await loadTenantPremiumGridCampaign({ silent: true })
+}
+
+const handleTenantPremiumGridFocusRefresh = () => {
+  refreshTenantPremiumGridCampaignIfIdle()
+}
+
+const handleTenantPremiumGridVisibilityRefresh = () => {
+  if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+  refreshTenantPremiumGridCampaignIfIdle()
+}
+
+const startTenantPremiumGridAutoRefresh = () => {
+  if (!isTenantPremiumGridMode.value || typeof window === 'undefined') return
+
+  window.clearInterval(tenantPremiumGridRefreshTimer.value)
+  tenantPremiumGridRefreshTimer.value = window.setInterval(() => {
+    refreshTenantPremiumGridCampaignIfIdle()
+  }, 15000)
+}
+
+const stopTenantPremiumGridAutoRefresh = () => {
+  if (typeof window === 'undefined') return
+
+  window.clearInterval(tenantPremiumGridRefreshTimer.value)
+  tenantPremiumGridRefreshTimer.value = null
 }
 
 
@@ -3865,6 +3905,10 @@ const startDraw = async () => {
     return
   }
 
+  if (isTenantPremiumGridMode.value) {
+    await refreshTenantPremiumGridCampaignIfIdle()
+  }
+
   if (hasTenantPremiumGridBlock.value) {
     showShareSuccess(tenantPremiumGridStatusInfo.value?.message || '目前活動尚未開放。')
     return
@@ -3942,33 +3986,39 @@ const startDraw = async () => {
       (prizePosition > 0 && itemPosition === prizePosition)
   })
 
-  drawPerformanceMessage.value = '後端結果已確認，九宮格開始正式跑燈。'
-  await runPremiumGridSpinAnimation(targetIndex)
+  try {
+    drawPerformanceMessage.value = '後端結果已確認，九宮格開始正式跑燈。'
+    await runPremiumGridSpinAnimation(targetIndex)
 
-  prize.quantity = Math.max(0, Number(prize.quantity || 0) - 1)
-  resultPrize.value = prize
+    prize.quantity = Math.max(0, Number(prize.quantity || 0) - 1)
+    resultPrize.value = prize
 
-  drawLogs.value.unshift({
-    id: `draw_${Date.now()}`,
-    prizeName: prize.name,
-    icon: prize.icon,
-    createdAt: new Date().toLocaleString('zh-TW', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
+    drawLogs.value.unshift({
+      id: `draw_${Date.now()}`,
+      prizeName: prize.name,
+      icon: prize.icon,
+      createdAt: new Date().toLocaleString('zh-TW', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
     })
-  })
 
-  drawLogs.value = drawLogs.value.slice(0, 8)
-  addDrawHistory(prize)
-  savePremiumGridState()
+    drawLogs.value = drawLogs.value.slice(0, 8)
+    addDrawHistory(prize)
+    savePremiumGridState()
 
-  await sleep(180)
-  showResultModal.value = true
-  isDrawing.value = false
-  drawPerformanceMessage.value = ''
-  drawPerformancePhase.value = 'idle'
+    await sleep(180)
+    showResultModal.value = true
+  } catch (error) {
+    console.error('精緻九宮格結果動畫或紀錄更新失敗：', error)
+    showShareSuccess('抽獎結果已送出，但畫面更新失敗，請重新整理後查看紀錄。')
+  } finally {
+    isDrawing.value = false
+    drawPerformanceMessage.value = ''
+    drawPerformancePhase.value = 'idle'
+  }
 }
 
 
@@ -4198,6 +4248,9 @@ onMounted(() => {
 
   if (isTenantPremiumGridMode.value) {
     loadTenantPremiumGridCampaign()
+    startTenantPremiumGridAutoRefresh()
+    window.addEventListener('focus', handleTenantPremiumGridFocusRefresh)
+    document.addEventListener('visibilitychange', handleTenantPremiumGridVisibilityRefresh)
   } else if (tenantCampaignId.value) {
     loadPremiumGridGameConfigSettings(tenantCampaignId.value)
   } else {
@@ -4212,14 +4265,22 @@ onBeforeUnmount(() => {
 
   window.removeEventListener('storage', handlePremiumGridStorageSync)
   window.removeEventListener('message', handlePremiumGridAdminDraftMessage)
+  window.removeEventListener('focus', handleTenantPremiumGridFocusRefresh)
+  document.removeEventListener('visibilitychange', handleTenantPremiumGridVisibilityRefresh)
+  stopTenantPremiumGridAutoRefresh()
 })
 
 watch(
   () => route.fullPath,
   () => {
     loadPremiumGridState()
-    if (shouldLoadPlatformPremiumGridTemplate.value) {
+    if (isTenantPremiumGridMode.value) {
+      loadTenantPremiumGridCampaign()
+      startTenantPremiumGridAutoRefresh()
+    } else if (shouldLoadPlatformPremiumGridTemplate.value) {
       loadPlatformPremiumGridTemplateSettings()
+    } else if (tenantCampaignId.value) {
+      loadPremiumGridGameConfigSettings(tenantCampaignId.value)
     }
     applyAdminPreviewDraftToCampaign()
   }

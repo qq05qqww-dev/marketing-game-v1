@@ -128,6 +128,10 @@ const handleTenantAwareError = (res, error, fallbackMessage) => {
 
 export const listCampaigns = async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
+
     const user = getRequestUser(req)
     const campaigns = req.query.active === 'true'
       ? await getActiveCampaigns(user)
@@ -142,6 +146,10 @@ export const listCampaigns = async (req, res) => {
 
 export const campaignDetail = async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
+
     const campaign = await getCampaignById(req.params.id, getRequestUser(req))
 
     if (!campaign) {
@@ -190,6 +198,10 @@ export const deleteCampaignHandler = async (req, res) => {
 
 export const getGameConfigHandler = async (req, res) => {
   try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
+    res.set('Pragma', 'no-cache')
+    res.set('Expires', '0')
+
     const gameConfig = await getGameConfigByCampaignId(req.params.id, getRequestUser(req))
 
     if (!gameConfig) {

@@ -59,7 +59,14 @@ const requestWithFallback = async (candidates = [], requestFactory) => {
 
 export const getCampaignGameConfigApi = (id) => {
   return requestWithFallback(GAME_CONFIG_GET_CANDIDATE_URLS(id), async (url) => {
-    return http.get(url)
+    return http.get(url, {
+      params: {
+        _ts: Date.now()
+      },
+      headers: {
+        'Cache-Control': 'no-cache'
+      }
+    })
   })
 }
 
@@ -121,7 +128,11 @@ export const getTenantPremiumGridCampaignApi = (tenantSlug) => {
     params: {
       tenantSlug,
       gameType: 'GRID',
-      status: 'ACTIVE'
+      status: 'ACTIVE',
+      _ts: Date.now()
+    },
+    headers: {
+      'Cache-Control': 'no-cache'
     }
   })
 }

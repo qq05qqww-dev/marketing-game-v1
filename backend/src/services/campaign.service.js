@@ -1392,11 +1392,28 @@ const buildCampaignPatchFromSettings = (settings = {}) => {
 
   const pageTitle = String(settings?.basicText?.pageTitle || '').trim()
   const headline = String(settings?.basicText?.headline || '').trim()
+  const activityTime = settings?.activityTime || settings?.activity || settings?.timeSettings || {}
 
   if (pageTitle) {
     data.title = pageTitle
   } else if (headline) {
     data.title = headline
+  }
+
+  if (
+    activityTime.startAt !== undefined ||
+    activityTime.startTime !== undefined ||
+    activityTime.startedAt !== undefined
+  ) {
+    data.startAt = sanitizeDate(activityTime.startAt || activityTime.startTime || activityTime.startedAt)
+  }
+
+  if (
+    activityTime.endAt !== undefined ||
+    activityTime.endTime !== undefined ||
+    activityTime.endedAt !== undefined
+  ) {
+    data.endAt = sanitizeDate(activityTime.endAt || activityTime.endTime || activityTime.endedAt)
   }
 
   return data
@@ -1674,6 +1691,9 @@ export const upsertGameConfigByCampaignId = async (id, settings = {}, user = nul
             title: true,
             gameType: true,
             status: true,
+            startAt: true,
+            endAt: true,
+            updatedAt: true,
             tenantId: true,
             tenant: {
               select: {
